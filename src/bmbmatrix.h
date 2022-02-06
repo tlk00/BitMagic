@@ -116,6 +116,9 @@ public:
     /*! Copy content */
     void copy_from(const basic_bmatrix<BV>& bbm);
 
+    /*! Freeze content into read-only mode drop editing overhead */
+    void freeze();
+
     ///@}
 
     // ------------------------------------------------------------
@@ -591,6 +594,11 @@ protected:
      */
     void merge_matr(bmatrix_type& bmatr);
 
+    /**
+        Turn on RO mode
+     */
+    void freeze_matr() { bmatr_.freeze(); is_ro_ = true; }
+
     /*!
         clear column in all value planes
         \param plane_idx - row (plane index to start from)
@@ -654,9 +662,10 @@ protected:
 
 protected:
     bmatrix_type             bmatr_;              ///< bit-transposed matrix
-    unsigned_value_type      slice_mask_;        ///< slice presence bit-mask
-    size_type                size_;               ///< array size
-    unsigned                 effective_slices_;
+    unsigned_value_type      slice_mask_ = 0;     ///< slice presence bit-mask
+    size_type                size_ = 0;           ///< array size
+    unsigned                 effective_slices_=0; ///< number of bit slices actually allocated
+    bool                     is_ro_=false; ///< read-only
 };
 
 //---------------------------------------------------------------------
@@ -1414,6 +1423,16 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
 //---------------------------------------------------------------------
 
 template<typename BV>
+void basic_bmatrix<BV>::freeze()
+{
+    for (unsigned k = 0; k < rsize_; ++k)
+        if (bvector_type* bv = get_row(k))
+            bv->freeze();
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
 void basic_bmatrix<BV>::calc_stat(typename bvector_type::statistics& st,
                                   size_type rsize) const BMNOEXCEPT
 {
@@ -1454,12 +1473,8 @@ void basic_bmatrix<BV>::optimize_block(block_idx_type nb)
 
 template<class Val, class BV, unsigned MAX_SIZE>
 base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector()
-: bmatr_(sv_slices, allocation_policy_type(), bm::id_max, allocator_type()),
-  slice_mask_(0),
-  size_(0),
-  effective_slices_(0)
-{
-}
+: bmatr_(sv_slices, allocation_policy_type(), bm::id_max, allocator_type())
+{}
 
 //---------------------------------------------------------------------
 
@@ -1469,10 +1484,7 @@ base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
         allocation_policy_type  ap,
         size_type               bv_max_size,
         const allocator_type&       alloc)
-: bmatr_(sv_slices, ap, bv_max_size, alloc),
-  slice_mask_(0),
-  size_(0),
-  effective_slices_(0)
+: bmatr_(sv_slices, ap, bv_max_size, alloc)
 {
     if (null_able == bm::use_null)
     {
@@ -1492,8 +1504,7 @@ base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
   slice_mask_(bsv.slice_mask_),
   size_(bsv.size_),
   effective_slices_(bsv.effective_slices_)
-{
-}
+{}
 
 //---------------------------------------------------------------------
 

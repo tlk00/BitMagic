@@ -841,7 +841,17 @@ public:
         struct str_sparse_vector<CharType, BV, STR_SIZE>::statistics* st
         ) const BMNOEXCEPT;
     
-    
+    /**
+        @brief Turn sparse vector into immutable mode
+        Read-only (immutable) vector uses less memory and allows faster searches.
+        Before freezing it is recommenede to call optimize() to get full memory saving effect
+        @sa optimize, remap
+     */
+    void freeze() { this->freeze_matr(); }
+
+    /** Returns true if vector is read-only */
+    bool is_ro() const BMNOEXCEPT { return this->is_ro_; }
+
     ///@}
 
     // ------------------------------------------------------------
