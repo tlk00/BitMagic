@@ -7645,7 +7645,7 @@ void AndOperationsTest()
 
             {
                 bvect bv_ro0(bv0, bm::BM_READONLY);
-                bm::id_t pcount1 = bm::count_and(bv_ro0, bv_i);
+                auto pcount1 = bm::count_and(bv_ro0, bv_i);
                 assert(pcount1 == predicted_count);
 
                 bv11.bit_and(bv_ro0);

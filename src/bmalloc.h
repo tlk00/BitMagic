@@ -322,7 +322,7 @@ public:
 
     /*! @brief Frees bit block allocated by alloc_bit_block.
     */
-    void free_bit_block(bm::word_t* block, unsigned alloc_factor = 1) BMNOEXCEPT
+    void free_bit_block(bm::word_t* block, size_t alloc_factor = 1) BMNOEXCEPT
     {
         BM_ASSERT(IS_VALID_ADDR(block));
         if (alloc_pool_p_ && alloc_factor == 1)
