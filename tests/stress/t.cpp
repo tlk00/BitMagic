@@ -21820,6 +21820,10 @@ void TestSparseVector()
         assert(!sv3.is_nullable());
         bvp = sv4.get_null_bvector();
         assert(bvp);
+
+        assert(!sv1.is_ro());
+        sv1.freeze();
+        assert(sv1.is_ro());
     }}
 
     // global set_null
@@ -22191,6 +22195,7 @@ void TestSparseVector()
                 }
             }
             sv.optimize();
+            sv.freeze();
         } // for
 
     }}
@@ -22763,6 +22768,7 @@ void TestSparseVector()
            bi.flush();
         }
         sv.optimize(tb);
+        sv.freeze();
 
        for (unsigned i = 0; i < 100000; i+=2)
        {
@@ -27838,6 +27844,8 @@ void TestStrSparseVector()
         BM_DECLARE_TEMP_BLOCK(tb);
         str_vector.remap();
         str_vector.optimize(tb);
+        str_vector.freeze();
+        assert(str_vector.is_ro());
 
         str_vector.get(3, str, sizeof(str));
         cmp = ::strcmp(str, "VÉGE");
@@ -34742,6 +34750,8 @@ void TestCompressSparseVector()
         assert(!exists);
 
         csv.optimize();
+        csv.freeze();
+        assert(csv.is_ro());
 
         csv.sync();
         exists = csv.try_get(1000, v);
@@ -37736,13 +37746,12 @@ int main(int argc, char *argv[])
     
     if (is_all || is_str_sv)
     {
-/*
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
          TestStrSparseVectorAlgo();
          CheckAllocLeaks(false);
-*/
+
          TestStrSparseVectorSerial();
          CheckAllocLeaks(false);
 
