@@ -919,6 +919,7 @@ public:
         should not be modified (should be read-only).
 
         \param str_sv - source sparse vector (assumed it is not remapped)
+        \so remap, freeze
     */
     void remap_from(const str_sparse_vector& str_sv);
 
@@ -1972,25 +1973,27 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::recalc_remap_matrix2()
 {
     BM_ASSERT(remap_flags_);
 
-    remap_matrix2_.resize(remap_matrix1_.rows(), remap_matrix1_.cols(), false);
-    remap_matrix2_.set_zero();
-
-    //remap_matrix2_.init(true);
-
-    for (unsigned i = 0; i < remap_matrix1_.rows(); ++i)
+    auto rows = remap_matrix1_.rows();
+    remap_matrix2_.resize(rows, remap_matrix1_.cols(), false);
+    if (rows)
     {
-        const unsigned char* remap_row1 = remap_matrix1_.row(i);
-              unsigned char* remap_row2 = remap_matrix2_.row(i);
-        for (unsigned j = 1; j < remap_matrix1_.cols(); ++j)
+        remap_matrix2_.set_zero();
+        //remap_matrix2_.init(true);
+        for (unsigned i = 0; i < remap_matrix1_.rows(); ++i)
         {
-            if (remap_row1[j])
+            const unsigned char* remap_row1 = remap_matrix1_.row(i);
+                  unsigned char* remap_row2 = remap_matrix2_.row(i);
+            for (unsigned j = 1; j < remap_matrix1_.cols(); ++j)
             {
-                unsigned ch_code = remap_row1[j];
-                remap_row2[ch_code] = (unsigned char)j;
-                BM_ASSERT(ch_code < 256);
-            }
-        } // for j
-    } // for i
+                if (remap_row1[j])
+                {
+                    unsigned ch_code = remap_row1[j];
+                    remap_row2[ch_code] = (unsigned char)j;
+                    BM_ASSERT(ch_code < 256);
+                }
+            } // for j
+        } // for i
+    } // if rows
 }
 
 //---------------------------------------------------------------------
