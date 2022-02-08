@@ -27854,6 +27854,50 @@ void TestStrSparseVector()
         CheckStrSVCompare(str_vector);
     }
 
+    // test from Andrea Asztalos
+    {
+        using bvector_type = bm::bvector<>;
+        using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
+
+        TSparseStrVector vec_A(bm::use_null);
+        auto iter_1 = vec_A.get_back_inserter();
+        iter_1.add_null(10);
+        iter_1.flush();
+
+        BM_DECLARE_TEMP_BLOCK(tb);
+        vec_A.remap();
+        vec_A.optimize(tb);
+        vec_A.freeze();
+
+        using TLayout = bm::sparse_vector_serial_layout<TSparseStrVector>;
+        auto layout_a = make_unique<TLayout>();
+
+        bm::sparse_vector_serializer<TSparseStrVector> str_serializer;
+
+        str_serializer.set_bookmarks(true, 16);
+        str_serializer.enable_xor_compression();
+        assert(str_serializer.is_xor_ref());
+
+        str_serializer.serialize(vec_A, *layout_a.get());
+
+        vector<unsigned char>* buffer = new vector<unsigned char>(layout_a->size());
+
+        {
+            // store the serialized data
+            unsigned char* buf_ptr = buffer->data();
+            memcpy(buf_ptr, layout_a->data(), layout_a->size());
+        }
+
+         // deserialize it
+        unsigned char* data_ptr = buffer->data();
+
+        bm::sparse_vector_deserializer<TSparseStrVector> deserializer;
+
+        TSparseStrVector des_vec_A(bm::use_null);
+
+        deserializer.deserialize(des_vec_A, data_ptr);  //<--- runs into assertion
+    }
+
     // bug fix for not clearing value on set_null
     {
         using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
