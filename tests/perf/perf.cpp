@@ -61,7 +61,7 @@ For more information please visit:  http://bitmagic.io
 
 using namespace std;
 
-const unsigned int BSIZE = 150000000;
+const unsigned int BSIZE = 130000000;
 const unsigned int REPEATS = 1200;
 
 typedef  bitset<BSIZE>  test_bitset;
@@ -2977,7 +2977,7 @@ void SparseVectorAccessTest()
     target_v.resize(idx.size());
     {
         bm::chrono_taker tt(cout, "sparse_vectot<>::gather() UNSORTED ", REPEATS/5 );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        for (unsigned i = 0; i < REPEATS/5; ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
@@ -2998,19 +2998,19 @@ void SparseVectorAccessTest()
     {
         bm::chrono_taker tt(cout, "sparse_vector<>::decode()", REPEATS / 5);
         auto from = gather_from;
-        for (unsigned i = 0; i < REPEATS / 10; ++i)
+        for (unsigned i = 0; i < REPEATS; ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
             from += (dsize % 123);
         }
     }
-    target_v.resize(0);
-    target_v.shrink_to_fit();
 
+    target2.resize(idx.size());
 
+    unsigned long long cnt1 = 0, cnt2 = 0;
     {
         bm::chrono_taker tt(cout, "sparse_vector const_iterator test", REPEATS );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        for (unsigned i = 0; i < REPEATS; ++i)
         {
             auto it = sv1.begin();
             auto it_end = sv1.end();
@@ -3018,13 +3018,12 @@ void SparseVectorAccessTest()
             for (unsigned k = 0; it != it_end && k < sz; ++it, ++k)
             {
                 auto v = *it;
-                target2[k] = v;
+                cnt1 += target2[k] = v;
             }
         }
     }
 
-
-    // check 
+    // check
     //
     size_t sz = min(target1.size(), target2.size());
     for (unsigned j = 0; j < sz; ++j)
@@ -3038,6 +3037,46 @@ void SparseVectorAccessTest()
             exit(1);
         }
     }
+
+    sv1.freeze();
+    target_v.resize(idx.size());
+
+    {
+        bm::chrono_taker tt(cout, "sparse_vectot<>::gather() UNSORTED (RO) ", REPEATS/5 );
+        for (unsigned i = 0; i < REPEATS/5; ++i)
+        {
+            sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
+        }
+    }
+
+    {
+        bm::chrono_taker tt(cout, "sparse_vector<>::decode() (RO)", REPEATS / 5);
+        auto from = gather_from;
+        for (unsigned i = 0; i < REPEATS ; ++i)
+        {
+            auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
+            from += (dsize % 123);
+        }
+    }
+
+    {
+        bm::chrono_taker tt(cout, "sparse_vector const_iterator test (RO)", REPEATS );
+        for (unsigned i = 0; i < REPEATS; ++i)
+        {
+            auto it = sv1.begin();
+            auto it_end = sv1.end();
+            auto tsz = target2.size();
+            for (unsigned k = 0; it != it_end && k < tsz; ++it, ++k)
+            {
+                auto v = *it;
+                cnt2 += target2[k] = v;
+            }
+        }
+    }
+
+    assert(cnt1 == cnt2);
+
+
 
     
     char buf[256];
@@ -3313,7 +3352,7 @@ void RSC_SparseVectorRandomAccesTest()
     idx_buf_vec.resize(test_idx.size());
     test_arr.resize(test_idx.size());
 
-    unsigned long long sum1 = 0, sum2 = 0, sum1d = 0, sum1g = 0;
+    unsigned long long sum1 = 0, sum2 = 0, sum1d = 0, sum1g = 0, sum1g_ro = 0;
 
     {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (DENSE)", REPEATS*10 );
@@ -3455,11 +3494,40 @@ void RSC_SparseVectorRandomAccesTest()
         }
     }
 
+
+    sv1.freeze();
+    {
+        sum1g_ro = 0;
+        {
+        bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (GAP) (RO)", REPEATS*10 );
+        unsigned sz = (unsigned)test_idx.size();
+        sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
+        }
+
+        // validate
+        for (unsigned i = 0; i < test_idx.size(); ++i)
+        {
+            unsigned v = test_arr[i];
+            sum1g_ro += v;
+            unsigned v1;
+            if (sv1.try_get_sync(test_idx[i], v1))
+            {
+                assert(v1 == v);
+            }
+            else
+            {
+                assert(!v);
+            }
+        }
+    }
+
     if (sum3 != sum4 || sum2 != sum3 || sum4 != sum5 || sum5 != sum1g)
     {
         cerr << "Error! RSC random access check failed!" << endl;
         assert(0);exit(1);
     }
+
+
 }
 
 
@@ -3901,6 +3969,23 @@ void Set2SetTransformTest()
             cnt += bv_out.any();
         }
     }
+
+    bv_sample.freeze();
+    sv.freeze();
+
+    int cnt2 = 0;
+    {
+        bm::chrono_taker tt(cout, "set2set_11_transform::run() (RO)", REPEATS/10);
+        for (unsigned i = 0; i < REPEATS/10; ++i)
+        {
+            bvect bv_out;
+            set2set.run(bv_sample, sv, bv_out);
+            cnt2 += bv_out.any();
+        }
+    }
+
+    assert(cnt == cnt2);
+
 
     /*
     {
@@ -4774,7 +4859,7 @@ void SparseVectorScannerTest()
 
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
 
-    bvect bv_res1, bv_res2, bv_res3;
+    bvect bv_res1, bv_res2, bv_res3, bv_res4;
 
     unsigned search_repeats = REPEATS;
     {
@@ -4821,6 +4906,23 @@ void SparseVectorScannerTest()
         std::cerr << "2. Sparse scanner integrity check failed!" << std::endl;
         exit(1);
     }
+
+    sv.freeze();
+    {
+    bm::chrono_taker tt(cout, "sparse vector scanner find_eq() (RO)", search_repeats);
+    {
+        scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res4);
+    } // for
+    }
+
+    res = bv_res4.compare(bv_res1);
+    if (res != 0)
+    {
+        std::cerr << "3. Sparse scanner integrity check failed! (RO)" << std::endl;
+        exit(1);
+    }
+
+
 }
 
 
@@ -4993,6 +5095,33 @@ void SparseVectorPipelineScannerTest()
         assert(0);
         exit(1);
     }
+
+    bv_or.clear(true);
+    str_sv.freeze();
+
+    bm::sparse_vector_scanner<str_svect_type>::pipeline<scanner_custom_opt4> pipe5(str_sv);
+    {
+        bm::chrono_taker tt(cout, "scanner::pipeline find_eq_str()-count-OR (RO)", search_repeats);
+        pipe5.set_or_target(&bv_or); // Assign OR aggregation target
+
+        for (bvect::size_type i = 0; i < test_runs; ++i)
+        {
+            const string& str = str_test_coll[i];
+            pipe5.add(str.c_str());
+        }
+        pipe5.complete(); // finish the pipeline construction with this call
+        scanner.find_eq_str(pipe5); // run the search pipeline
+    }
+
+    match = bv_or.equal(bv_or_acc);
+    if (!match)
+    {
+        cerr << "scanner::pipeline<>-count-OR vector mismatch (RO)!" << endl;
+        assert(0);
+        exit(1);
+    }
+
+
 
     {
         auto& res_vect = pipe.get_bv_res_vector();
@@ -5544,7 +5673,6 @@ int main(void)
 
         Set2SetTransformTest();
         cout << endl;
-
 
         SerializationTest();
         cout << endl;
