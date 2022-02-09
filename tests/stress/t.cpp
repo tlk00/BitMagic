@@ -22194,8 +22194,11 @@ void TestSparseVector()
                     assert(mc_01.nb == 256);
                 }
             }
-            sv.optimize();
-            sv.freeze();
+            if (!sv.is_ro())
+            {
+                sv.optimize();
+                sv.freeze();
+            }
         } // for
 
     }}
