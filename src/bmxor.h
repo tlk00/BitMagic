@@ -727,11 +727,8 @@ public:
     {
         size_type rows = bmatr.rows();
         for (size_type r = 0; r < rows; ++r)
-        {
-            bvector_type_const_ptr bv = bmatr.get_row(r);
-            if (bv)
+            if (bvector_type_const_ptr bv = bmatr.get_row(r))
                 add(bv, rows_acc_ + r);
-        } // for r
         rows_acc_ += unsigned(rows);
     }
 
