@@ -16481,6 +16481,10 @@ void FreezeTest()
 
         eq = bv.equal(bv_ro);
         assert(eq);
+
+        bv_ro.clear(true);
+        assert(!bv_ro.is_ro());
+        assert(bv_ro.count() == 0);
     }
 
     // merge
@@ -37302,6 +37306,76 @@ int main(int argc, char *argv[])
     }
 */
 
+/*
+    {
+    const string file_name = "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/HG_Ref_column.txt";
+    ifstream instr(file_name.c_str(), ios_base::in);
+    if (!instr.good() || !instr.is_open()) {
+        cout << "Failed to read file" << endl;
+        assert(0);
+    }
+
+    cout << "Reading " << file_name << endl;
+    using bvector_type = bm::bvector<>;
+    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
+    TSparseStrVector ref(bm::use_null);
+
+    unsigned num_lines = 0;
+    {
+        auto start = chrono::steady_clock::now();
+        auto vec_it = ref.get_back_inserter();
+        string line;
+
+        while (getline(instr, line)) {
+            if (line.empty() || (!line.empty() && line[0] == '#')) {
+                continue;
+            }
+            ++num_lines;
+            vec_it = line;
+        }
+        vec_it.flush();
+        auto diff = chrono::steady_clock::now() - start;
+        cout << "Reading took "
+            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
+    }
+
+        cout << "Lines: " << num_lines << ", " << ref.size() << endl;
+    {
+        cout << "Remapping..." << endl;
+        auto start = chrono::steady_clock::now();
+        ref.remap();
+        auto diff = chrono::steady_clock::now() - start;
+        cout << "Remap took "
+            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
+    }
+    {
+        cout << "Optimizing..." << endl;
+        auto start = chrono::steady_clock::now();
+        BM_DECLARE_TEMP_BLOCK(tb);
+        ref.optimize(tb);
+        auto diff = chrono::steady_clock::now() - start;
+        cout << "Optimization took "
+            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
+    }
+
+    using TLayout = bm::sparse_vector_serial_layout<TSparseStrVector>;
+    auto layout = make_unique<TLayout>();
+
+    bm::sparse_vector_serializer<TSparseStrVector> str_serializer;
+
+    str_serializer.set_bookmarks(true, 16);
+    str_serializer.enable_xor_compression();
+    assert(str_serializer.is_xor_ref());
+    {
+        cout << "Serializing..." << endl;
+        auto start = chrono::steady_clock::now();
+        str_serializer.serialize(ref, *layout.get());
+        auto diff = chrono::steady_clock::now() - start;
+        cout << "Serialization took "
+            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
+    }
+    }
+*/
 //avx2_i32_shift();
 //return 0;
 
@@ -37424,6 +37498,7 @@ int main(int argc, char *argv[])
 
         if (is_all || is_bvbasic || is_bvb0)
         {
+
              ExportTest();
              CheckAllocLeaks(false);
 
