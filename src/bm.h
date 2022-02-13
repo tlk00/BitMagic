@@ -1270,13 +1270,13 @@ public:
        \param free_mem if "true" (default) bvector frees the memory,
        otherwise sets blocks to 0.
     */
-    void clear(bool free_mem = true) { blockman_.set_all_zero(free_mem); }
+    void clear(bool free_mem = true) BMNOEXCEPT;
 
     /*!
        \brief Clears every bit in the bitvector.
        \return *this;
     */
-    bvector<Alloc>& reset() { clear(true); return *this; }
+    bvector<Alloc>& reset() BMNOEXCEPT { clear(true); return *this; }
     
     /*!
        \brief Flips bit n
@@ -4117,6 +4117,20 @@ void bvector<Alloc>::keep(const size_type* ids, size_type ids_size,
         BM_ASSERT(0);
         clear();
     }
+}
+
+// -----------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::clear(bool free_mem) BMNOEXCEPT
+{
+    if (is_ro())
+    {
+        BM_ASSERT(free_mem);
+        blockman_.destroy_arena();
+    }
+    else
+        blockman_.set_all_zero(free_mem);
 }
 
 // -----------------------------------------------------------------------
