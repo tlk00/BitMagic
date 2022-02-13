@@ -705,7 +705,7 @@ public:
     /**
         set all-Zero block pointers for [start..end]
     */
-    void set_all_zero(block_idx_type nb, block_idx_type nb_to)
+    void set_all_zero(block_idx_type nb, block_idx_type nb_to) BMNOEXCEPT
     {
         BM_ASSERT(nb <= nb_to);
         
@@ -1599,7 +1599,7 @@ public:
     /**
         Free block, make it zero pointer in the tree
     */
-    void zero_block(block_idx_type nb)
+    void zero_block(block_idx_type nb) BMNOEXCEPT
     {
         unsigned i, j;
         get_block_coord(nb, i, j);
@@ -1612,7 +1612,7 @@ public:
     /**
     Free block, make it zero pointer in the tree
     */
-    void zero_block(unsigned i, unsigned j)
+    void zero_block(unsigned i, unsigned j) BMNOEXCEPT
     {
         BM_ASSERT(top_blocks_ && i < top_block_size_);
         
