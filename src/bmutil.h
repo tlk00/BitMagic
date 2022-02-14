@@ -30,11 +30,8 @@ For more information please visit:  http://bitmagic.io
 #else
     #if defined(_M_AMD64) || defined(_M_X64)
     #include <intrin.h>
-    #elif defined(BMSSE2OPT) || defined(BMSSE42OPT)
-    #include <emmintrin.h>
-    #elif defined(BMAVX2OPT)
-    #include <emmintrin.h>
-    #include <avx2intrin.h>
+    #elif defined(__x86_64__)
+    #include <x86intrin.h>
     #endif
 #endif
 
