@@ -250,6 +250,8 @@ template<bool T> const char _copyright<T>::_p[] =
 template<bool T> const unsigned _copyright<T>::_v[3] =
                     { BM_VERSION_MAJOR, BM_VERSION_MINOR, BM_VERSION_PATCH };
 
+#define BM_SCALAR_VERSION (((BM_VERSION_MAJOR) << 16) + ((BM_VERSION_MINOR) << 8) + (BM_VERSION_PATCH))
+
 
 /**
     DeBruijn majic table
