@@ -188,6 +188,8 @@ int BM_bvector_construct(BM_BVHANDLE* h, unsigned int bv_max)
     return BM_OK;
 }
 
+
+
 // -----------------------------------------------------------------
 
 int BM_bvector_init(BM_BVHANDLE h)
@@ -235,6 +237,63 @@ int BM_bvector_construct_copy(BM_BVHANDLE* h, BM_BVHANDLE hfrom)
     return BM_OK;
 }
 
+// -----------------------------------------------------------------
+
+BM_API_EXPORT int BM_bvector_construct_copy_ro(BM_BVHANDLE* h, BM_BVHANDLE hfrom)
+{
+    if (h == 0 || !hfrom)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        void* mem = ::malloc(sizeof(TBM_bvector));
+        if (mem == 0)
+        {
+            *h = 0;
+            return BM_ERR_BADALLOC;
+        }
+        const TBM_bvector* bv_from = (TBM_bvector*)hfrom;
+
+        // placement new just to call the constructor
+        TBM_bvector* bv = new(mem) TBM_bvector(*bv_from, bm::BM_READONLY);
+        *h = bv;
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        *h = 0;
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+BM_API_EXPORT int BM_bvector_construct_copy_rw(BM_BVHANDLE* h, BM_BVHANDLE hfrom)
+{
+    if (h == 0 || !hfrom)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        void* mem = ::malloc(sizeof(TBM_bvector));
+        if (mem == 0)
+        {
+            *h = 0;
+            return BM_ERR_BADALLOC;
+        }
+        const TBM_bvector* bv_from = (TBM_bvector*)hfrom;
+
+        // placement new just to call the constructor
+        TBM_bvector* bv = new(mem) TBM_bvector(*bv_from, bm::BM_READWRITE);
+        *h = bv;
+    }
+    CATCH (BM_ERR_BADALLOC)
+    {
+        *h = 0;
+        return BM_ERR_BADALLOC;
+    }
+    ETRY;
+    return BM_OK;
+}
 
 // -----------------------------------------------------------------
 
@@ -778,6 +837,38 @@ int BM_bvector_optimize(BM_BVHANDLE            h,
     BM_CATCH_ALL
     ETRY;
     return BM_OK;    
+}
+
+// -----------------------------------------------------------------
+
+BM_API_EXPORT int BM_bvector_freeze(BM_BVHANDLE h)
+{
+    if (!h)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->freeze();
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
+// -----------------------------------------------------------------
+
+BM_API_EXPORT int BM_bvector_is_ro(BM_BVHANDLE h, int* pval)
+{
+    if (!h || !pval)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        *pval = bv->is_ro();
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
 }
 
 // -----------------------------------------------------------------

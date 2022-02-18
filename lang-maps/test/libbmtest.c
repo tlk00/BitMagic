@@ -109,6 +109,107 @@ int ConstructionTest()
 }
 
 static
+int FreezeTest()
+{
+    int res = 0;
+    int val;
+    BM_BVHANDLE bmh = 0;
+    BM_BVHANDLE bmh2 = 0;
+    BM_BVHANDLE bmh3 = 0;
+
+    res = BM_bvector_construct(&bmh, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+
+    res = BM_bvector_is_ro(bmh, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_is_ro()", free_mem);
+    if (val)
+    {
+        printf("BM_bvector_is_ro incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_set_bit(bmh, 10, BM_TRUE); // vector has to be not empty to freeze
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+
+    res = BM_bvector_construct_copy_ro(&bmh2, bmh);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+
+    res = BM_bvector_is_ro(bmh2, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_is_ro()", free_mem);
+    if (!val)
+    {
+        printf("BM_bvector_is_ro (bmh2) incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+
+    res = BM_bvector_freeze(bmh);
+    BMERR_CHECK_GOTO(res, "BM_bvector_freeze()", free_mem);
+
+    res = BM_bvector_is_ro(bmh, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_is_ro()", free_mem);
+    if (!val)
+    {
+        printf("BM_bvector_is_ro incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_get_bit(bmh, 10, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (!val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_get_bit(bmh2, 10, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (!val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+
+
+    res = BM_bvector_construct_copy_rw(&bmh3, bmh2);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+    if (!bmh3)
+    {
+        printf("BM_bvector_construct_copy_rw incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_is_ro(bmh3, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_is_ro()", free_mem);
+    printf("%i\n", val);
+    if (val)
+    {
+        printf("BM_bvector_is_ro incorrect value \n");
+        res = 1; goto free_mem;
+    }
+    res = BM_bvector_get_bit(bmh3, 10, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (!val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+free_mem:
+    res = BM_bvector_free(bmh);
+    BMERR_CHECK(res, "BM_bvector_free()");
+    res = BM_bvector_free(bmh2);
+    BMERR_CHECK(res, "BM_bvector_free()");
+    res = BM_bvector_free(bmh3);
+    BMERR_CHECK(res, "BM_bvector_free()");
+
+    return res;
+}
+
+
+
+static
 int ResizeTest()
 {
     int res = 0;
@@ -1327,6 +1428,13 @@ int main(void)
     }
     printf("\n---------------------------------- GetNextTest OK\n");
 
+    res = FreezeTest();
+    if (res != 0)
+    {
+        printf("\nFreezeTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- FreezeTest OK\n");
 
     res = OperationsTest_AND();
     if (res != 0)

@@ -163,6 +163,16 @@ BM_API_EXPORT int BM_bvector_init(BM_BVHANDLE h);
 */
 BM_API_EXPORT int BM_bvector_construct_copy(BM_BVHANDLE* h, BM_BVHANDLE hfrom);
 
+/* construct bvector handle as a read-only copy
+   hfrom - another handle to copy from
+*/
+BM_API_EXPORT int BM_bvector_construct_copy_ro(BM_BVHANDLE* h, BM_BVHANDLE hfrom);
+
+/* construct bvector handle as a read-write copy
+   hfrom - another handle to copy from
+*/
+BM_API_EXPORT int BM_bvector_construct_copy_rw(BM_BVHANDLE* h, BM_BVHANDLE hfrom);
+
 
 /* destroy bvector handle */
 BM_API_EXPORT int BM_bvector_free(BM_BVHANDLE h);
@@ -387,7 +397,17 @@ BM_API_EXPORT
 int BM_bvector_optimize(BM_BVHANDLE h,
                         int opt_mode,
                         struct BM_bvector_statistics* pstat);
-    
+
+/* freeze bit-vector into read-only mode. bit-vector becomes immutable.
+*/
+BM_API_EXPORT int BM_bvector_freeze(BM_BVHANDLE h);
+
+/* Check if bit-vector is read-only.
+   bit-vector becomes read-only after BM_bvector_freeze()
+*/
+BM_API_EXPORT int BM_bvector_is_ro(BM_BVHANDLE h, int* pval);
+
+
 /* Perform calculate bit vector statistics
    pstat - bit vector statistics
 */
