@@ -42,7 +42,7 @@ BitMagic library is a high performance library, implementing optimizations for v
 
 - x86 (platform specific available bit-scan instructions)
 - x86 SIMD: SSE2, SSE4.2(POPCNT, LZCNT), AVX2 (BMI1/BMI2), AVX-512(work in progress)
-- ARM SIMD: Neon
+- Arm SIMD: Neon
 - WebAssembly (use of WebAsm built-ins and platform specific tricks)
 - WebAssembly SIMD
 
@@ -165,9 +165,10 @@ efficient store of associations for graphs, etc.
 - search algorithms for sorted and unsorted succinct vectors (vectors of ints or strings)
 - algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
 - all containers are serializable with compression (XOR coding, binary interpolative coding, elias gamma coding)
+- support for succinct immutable vectors. Vectors can be turned read-only, sparse memory blocks rearranged to defragment the heap, save memory and facilitate better CPU cache resue
 
 #### Serialization and versioning
-BitMagic supports serialization evolution - if serialization format changes, 
+BitMagic supports serialization (protocol) evolution - if serialization format changes, 
 old saved data remains readable by the new code. Old code will NOT be able to read new BLOBs.
 BitMagic changes major version number when serialization format changes.
 
@@ -192,25 +193,25 @@ BitMagic compiles and work with WebAssmbly (emscripten). Latest versions include
 multiple tweaks, specific for the platform. Performance numbers are close to native code 
 without SIMD (sometimes afster). Sample compile line would look like:
 
-`emcc -std=c++11 -s ALLOW_MEMORY_GROWTH=1 -O2 -s WASM=1 ... `
+`emcc -std=c++17 -s ALLOW_MEMORY_GROWTH=1 -O2 -s WASM=1 ... `
 
 WebAssembly SIMD is supported but it is not ON by default.
 Use:
 	`#define BMWASMSIMDOPT`
 to enable it. Emscripten cmd example:
 
-`emcc -std=c++11 -s ALLOW_MEMORY_GROWTH=1 -O2 -msse4.2 -msimd128 -D BMWASMSIMDOPT -s WASM=1 -s DISABLE_EXCEPTION_CATCHING=0 -fno-rtti`
+`emcc -std=c++17 -s ALLOW_MEMORY_GROWTH=1 -O2 -msse4.2 -msimd128 -D BMWASMSIMDOPT -s WASM=1 -s DISABLE_EXCEPTION_CATCHING=0 -fno-rtti`
 
 Current implementation uses SSE4.2 trans-compilation (via intrinsics), so `-msse4.2` is necessary.
 
-### ARM
+### Arm
 
 BitMagic fully supports ARM CPU. All releases are stress tested with Raspberry Pi 4.
 BitMagic implements some algorithmic tweaks and improvements specific for ARM 
 (like use of LZCNT instruction). BitMagic succinct containers can be very useful on embedded 
 systems for edge computing with limited amount of available memory.
 
-ARM NEON SIMD support is available (thanks to SSE2NEON project).
+Arm Neon SIMD support is available (via SSE2NEON library).
 
 
 ### C-library interface:
@@ -226,10 +227,6 @@ scale development (Java, Scala) via JNI.
 - compressed binary relational and adjacency matrixes and operations on matrixes for 
 Entity-Relationship acceleration, graph operations, social analyticsm materialized RDBMS joins, etc 
 
-- succinct data structures and containers based on bit-transposed data representation and 
-rank-select compression
-
-- memory efficient dictionaries of strings as an alternative to suffix trees
 
 ### How to start with BitMagic?
 ---
@@ -341,7 +338,7 @@ MSVC - solution and projects are available via CMAKE.
 ###### MacOS
 ---
 
-XCODE - project files are available via CMAKE.
+Xcode - project files are available via CMAKE.
 
 ---
 
@@ -379,14 +376,14 @@ Next public version will use CXX-17 (constexpr ifs, etc).
 All BitMagic fine tuning parameters are controlled by the preprocessor defines (and 
 target arch. specific compiler keys for code generation). 
 
-| #define      | Description                                             | Width    |
-| ------------ | ------------------------------------------------------- | ---------
-| BMSSE2OPT    | Turn ON SSE2 code optimizations                         | 128-bit  |
-| BMSSE42OPT   | Turn ON SSE4.2 code optimizations plus POPCNT, BSF, etc | 128-bit  |
-| BMAVX2OPT    | Turn on AVX2, POPCNT, LZCNT, BMI1, BMI2 optimizations   | 256-bit  |
-| BMAVX512OPT  | Turn on AVX-512, (experimental)                         | 512-bit  |
-| BMWASMSIMDOPT| Turn on WebAssembly SIMD optimizations                  | 128-bit  |
-| DBMNEONOPT   | Turn on ARM NEON SIMD optimizations (uses SSE2 translation)| 128-bit  |
+| #define      | Description                                       | Width    |
+| ------------ | --------------------------------------------------| ---------
+| BMSSE2OPT    | SSE2 code optimizations                           | 128-bit  |
+| BMSSE42OPT   | SSE4.2 code optimizations plus POPCNT, BSF, etc   | 128-bit  |
+| BMAVX2OPT    | AVX2, POPCNT, LZCNT, BMI1, BMI2 optimizations     | 256-bit  |
+| BMAVX512OPT  | AVX-512, (experimental)                           | 512-bit  |
+| BMWASMSIMDOPT| WebAssembly SIMD optimizations (via SSE4.2)       | 128-bit  |
+| DBMNEONOPT   | Arm Neon SIMD optimizations (via SSE2 translation)| 128-bit  |
 
 ####Limitations:
 
