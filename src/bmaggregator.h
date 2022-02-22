@@ -2235,7 +2235,7 @@ void aggregator<BV>::combine_or_horizontal(bvector_type& bv_target,
         return;
     }
     const bvector_type* bv = bv_src[0];
-    bv_target.copy(*bv, bm::BM_READWRITE);
+    bv_target.copy(*bv, bm::finalization::READWRITE);
     for (unsigned i = 1; i < src_size; ++i)
     {
         bv = bv_src[i];
@@ -2259,7 +2259,7 @@ void aggregator<BV>::combine_and_horizontal(bvector_type& bv_target,
         return;
     }
     const bvector_type* bv = bv_src[0];
-    bv_target.copy(*bv, bm::BM_READWRITE);
+    bv_target.copy(*bv, bm::finalization::READWRITE);
     
     for (unsigned i = 1; i < src_size; ++i)
     {

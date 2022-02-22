@@ -101,7 +101,7 @@ int main(void)
         // 1. construct a new vector as a READ_ONLY copy (drop the old one)
         // 2. Use bm::bvector<>::freeze()
 
-        bm::bvector<>   bv1_ro(bv1, bm::BM_READONLY);
+        bm::bvector<>   bv1_ro(bv1, bm::finalization::READONLY);
         assert(bv1_ro.is_ro());
         bv2.freeze();
         cout << bv2.is_ro() << endl; // 1 - yes it is now READ_ONLY
@@ -133,7 +133,7 @@ int main(void)
         {
         assert(bv2.is_ro()); // bv2 is immutable
 
-        bm::bvector<>   bv21(bv2, bm::BM_READWRITE);
+        bm::bvector<>   bv21(bv2, bm::finalization::READWRITE);
         bv2.swap(bv21);
         assert(!bv2.is_ro()); // bv2 is now a mutable vector again
 

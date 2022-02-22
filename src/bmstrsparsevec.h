@@ -45,6 +45,12 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+enum class remap_setup
+{
+    COPY_RTABLES,   //!<  copy remap tables only (without data)
+};
+
+
 /*!
    \brief succinct sparse vector for strings with compression using bit-slicing ( transposition) method
  
@@ -358,11 +364,26 @@ public:
             BM_ASSERT(bi.empty());
             buf_matrix_.init_resize(
                 bi.buf_matrix_.rows(), bi.buf_matrix_.cols());
-            this->flush(); sv_ = bi.sv_;
+            this->flush_impl(); sv_ = bi.sv_;
             return *this;
         }
 
         ~back_insert_iterator();
+
+        /**
+            Method to configure back inserter to collect statistics on optimal character codes.
+            This methos makes back inserter slower, but can be used to accelerate later remap() of
+            the sparse vector. Use flush at the end to apply the remapping.
+            By default inserter does not collect additional statistics.
+
+            Important! You should NOT use intermediate flush if you set remapping!
+
+            @sa flush
+         */
+        void set_remap(bool flag) { remap_flags_ = flag; }
+
+        /// Get curent remap state flags
+        unsigned get_remap() const BMNOEXCEPT { return remap_flags_; }
         
         /** push value to the vector */
         back_insert_iterator& operator=(const value_type* v)
@@ -392,8 +413,20 @@ public:
         /** add a series of consequitve NULLs (no-value) to the container */
         void add_null(size_type count);
 
-        /** flush the accumulated buffer */
+        /** flush the accumulated buffer. It is important to call flush at the end, before destruction of the
+           inserter. Flush may throw exceptions, which will be possible to intercept.
+           Otherwise inserter is flushed in the destructor.
+        */
         void flush();
+
+        // access to internals
+        //
+
+        /// Get octet frequence matrix
+        ///  @internal
+        const octet_freq_matrix_type& get_octet_matrix() const noexcept
+            { return omatrix_; }
+
     protected:
         /** return true if insertion buffer is empty */
         bool empty() const BMNOEXCEPT;
@@ -406,19 +439,30 @@ public:
         */
         void add_value(const value_type* v);
 
+        /**
+            account new value as remap statistics
+         */
+        void add_remap_stat(const value_type* v);
+
+        void flush_impl();
+
     private:
         enum buf_size_e
         {
             n_buf_size = str_sparse_vector_type::ins_buf_size // 1024 * 8
         };
         typedef bm::dynamic_heap_matrix<CharType, allocator_type> buffer_matrix_type;
+        friend class str_sparse_vector;
 
-    private:
+    protected:
         str_sparse_vector_type*  sv_;         ///!< pointer on the parent vector
         bvector_type*            bv_null_;    ///!< not NULL vector pointer
         buffer_matrix_type       buf_matrix_; ///!< value buffer
         size_type                pos_in_buf_; ///!< buffer position
         block_idx_type           prev_nb_;    ///!< previous block added
+        ///
+        unsigned                 remap_flags_ = 0; ///< target remapping
+        octet_freq_matrix_type   omatrix_; ///< octet frequency matrix
     };
 
 
@@ -447,7 +491,14 @@ public:
 
     /*! copy-ctor */
     str_sparse_vector(const str_sparse_vector& str_sv);
-    
+
+    /*! construct empty sparse vector, copying the remap tables from another vector
+        \param str_sv - source vector to take the remap tables from (assumed to be remaped)
+        \param remap_mode - remap table copy param
+    */
+    str_sparse_vector(const str_sparse_vector& str_sv, bm::remap_setup remap_mode);
+
+
     /*! copy assignmment operator */
     str_sparse_vector<CharType, BV, STR_SIZE>& operator = (
                 const str_sparse_vector<CharType, BV, STR_SIZE>& str_sv)
@@ -474,9 +525,7 @@ public:
             (str_sparse_vector<CharType, BV, STR_SIZE>&& str_sv) BMNOEXCEPT
     {
         if (this != &str_sv)
-        {
             this->swap(str_sv);
-        }
         return *this;
     }
 #endif
@@ -919,9 +968,11 @@ public:
         should not be modified (should be read-only).
 
         \param str_sv - source sparse vector (assumed it is not remapped)
+        \param omatrix - pointer to externall computed char freaquency matrix (optional)
         \so remap, freeze
     */
-    void remap_from(const str_sparse_vector& str_sv);
+    void remap_from(const str_sparse_vector& str_sv,
+                    octet_freq_matrix_type* omatrix = 0);
 
     /**
         Build remapping profile and re-load content to save memory
@@ -1455,6 +1506,11 @@ protected:
     remap_matrix_type* get_remap_matrix()
         { return &remap_matrix1_; }
 
+    /**
+        reamp using statistics table from inserter
+    */
+    void remap(back_insert_iterator& iit);
+
 protected:
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
@@ -1495,6 +1551,23 @@ str_sparse_vector<CharType, BV, STR_SIZE>::str_sparse_vector(
 {
     static_assert(STR_SIZE > 1,
         "BM:: String vector size must be > 1 (to accomodate 0 terminator)");
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+str_sparse_vector<CharType, BV, STR_SIZE>::str_sparse_vector(
+              const str_sparse_vector& str_sv, bm::remap_setup remap_mode)
+: parent_type(str_sv.get_null_support()),
+  remap_flags_(str_sv.remap_flags_),
+  remap_matrix1_(str_sv.remap_matrix1_),
+  remap_matrix2_(str_sv.remap_matrix2_)
+{
+    BM_ASSERT(str_sv.remap_flags_); // source vector should be remapped
+    BM_ASSERT(remap_mode == bm::remap_setup::COPY_RTABLES);
+    static_assert(STR_SIZE > 1,
+        "BM:: String vector size must be > 1 (to accomodate 0 terminator)");
+    (void) remap_mode;
 }
 
 //---------------------------------------------------------------------
@@ -2063,10 +2136,29 @@ void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap()
 
 //---------------------------------------------------------------------
 
+template<class CharType, class BV, unsigned MAX_STR_SIZE>
+void str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap(
+                                    back_insert_iterator& iit)
+{
+    if (iit.remap_flags_ && iit.omatrix_.rows())
+    {
+        str_sparse_vector<CharType, BV, MAX_STR_SIZE>
+                                    sv_tmp(this->get_null_support());
+        sv_tmp.remap_from(*this, &iit.omatrix_);
+        sv_tmp.swap(*this);
+    }
+    else
+        remap();
+}
+
+
+//---------------------------------------------------------------------
+
 template<class CharType, class BV, unsigned STR_SIZE>
 void
 str_sparse_vector<CharType, BV, STR_SIZE>::remap_from(
-                                            const str_sparse_vector& str_sv)
+                                    const str_sparse_vector& str_sv,
+                                    octet_freq_matrix_type* omatrix)
 {
     if (str_sv.is_remap())
     {
@@ -2077,10 +2169,15 @@ str_sparse_vector<CharType, BV, STR_SIZE>::remap_from(
     if (str_sv.empty()) // no content to remap
         return;
 
-    octet_freq_matrix_type omatrix; // occupancy map
-    str_sv.calc_octet_stat(omatrix);
+    octet_freq_matrix_type occ_matrix; // occupancy map
+    if (!omatrix)
+    {
+        str_sv.calc_octet_stat(occ_matrix);
+        omatrix = &occ_matrix;
+    }
+
     
-    str_sv.build_octet_remap(remap_matrix1_, remap_matrix2_, omatrix);
+    str_sv.build_octet_remap(remap_matrix1_, remap_matrix2_, *omatrix);
     remap_flags_ = 1; // turn ON remapped mode
     
     const unsigned buffer_size = ins_buf_size; // 1024 * 8;
@@ -2464,7 +2561,8 @@ template<class CharType, class BV, unsigned STR_SIZE>
 str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::back_insert_iterator(
 const str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator& bi) BMNOEXCEPT
 : sv_(bi.sv_), bv_null_(bi.bv_null_), buf_matrix_(bi.buf_matrix_.rows(), bi.buf_matrix_.cols()),
-  pos_in_buf_(~size_type(0)), prev_nb_(bi.prev_nb_)
+  pos_in_buf_(~size_type(0)), prev_nb_(bi.prev_nb_),
+  remap_flags_(bi.remap_flags_), omatrix_(bi.omatrix_)
 {
     BM_ASSERT(bi.empty());
 }
@@ -2492,6 +2590,19 @@ str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::empty()
 template<class CharType, class BV, unsigned STR_SIZE>
 void str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::flush()
 {
+    flush_impl();
+    if (remap_flags_)
+    {
+        sv_->remap(*this);
+        remap_flags_ = 0;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+void str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::flush_impl()
+{
     if (this->empty())
         return;
 
@@ -2506,6 +2617,7 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::flush()
         prev_nb_ = nb;
     }
 }
+
 
 //---------------------------------------------------------------------
 
@@ -2546,6 +2658,47 @@ typename str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::size_t
 
 //---------------------------------------------------------------------
 
+
+template<class CharType, class BV, unsigned STR_SIZE>
+void
+str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::add_remap_stat(
+const str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::value_type* v)
+{
+    BM_ASSERT(remap_flags_);
+
+    size_t slen = ::strlen(v);
+
+    auto orows = omatrix_.rows();
+    if (slen > orows)
+    {
+        if (!orows)
+        {
+            omatrix_.resize(slen, 256, false);
+            omatrix_.set_zero();
+        }
+        else
+        {
+            omatrix_.resize(slen, 256, true);
+            for (; orows < omatrix_.rows(); ++orows)
+            {
+                typename
+                octet_freq_matrix_type::value_type* r = omatrix_.row(orows);
+                ::memset(r, 0, 256 * sizeof(r[0]));
+            } // for orows
+        }
+    }
+    for (size_t i = 0; i < slen; ++i)
+    {
+        value_type ch = v[i];
+        typename
+        octet_freq_matrix_type::value_type* row = omatrix_.row(i);
+        unsigned ch_idx = (unsigned char)ch;
+        row[ch_idx] += 1;
+    } // for i
+}
+
+//---------------------------------------------------------------------
+
 template<class CharType, class BV, unsigned STR_SIZE>
 void
 str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::add_value(
@@ -2560,13 +2713,16 @@ const str_sparse_vector<CharType, BV, STR_SIZE>::back_insert_iterator::value_typ
         if (pos_in_buf_ == ~size_type(0) && (!buf_matrix_.is_init()))
             buf_matrix_.init();
         else
-            this->flush();
+            this->flush_impl();
         pos_in_buf_ = 0; buf_matrix_.set_zero();
     }
     else
     {
         ++pos_in_buf_;
     }
+
+    if (remap_flags_)
+        add_remap_stat(v);
 
     value_type* r = buf_matrix_.row(pos_in_buf_);
 

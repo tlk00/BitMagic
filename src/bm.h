@@ -930,7 +930,7 @@ public:
     {
         if (!bvect.blockman_.is_init())
             return;
-        if (is_final == bm::BM_READONLY)
+        if (is_final == bm::finalization::READONLY)
             blockman_.copy_to_arena(bvect.blockman_);
         else
             blockman_.copy(bvect.blockman_);
@@ -949,7 +949,7 @@ public:
     */
     bvector& operator=(const bvector<Alloc>& bvect)
     {
-        this->copy(bvect, bm::BM_UNDEFINED);
+        this->copy(bvect, bm::finalization::UNDEFINED);
         return *this;
     }
 
@@ -2305,7 +2305,7 @@ void bvector<Alloc>::copy(const bvector<Alloc>& bvect, bm::finalization is_final
         blockman_.deinit_tree();
         switch (is_final)
         {
-        case bm::BM_UNDEFINED:
+        case bm::finalization::UNDEFINED:
             if (bvect.is_ro())
             {
                 blockman_.copy_to_arena(bvect.blockman_);
@@ -2317,11 +2317,11 @@ void bvector<Alloc>::copy(const bvector<Alloc>& bvect, bm::finalization is_final
                 resize(bvect.size());
             }
             break;
-        case bm::BM_READONLY:
+        case bm::finalization::READONLY:
             blockman_.copy_to_arena(bvect.blockman_);
             size_ = bvect.size();
             break;
-        case bm::BM_READWRITE:
+        case bm::finalization::READWRITE:
             blockman_.copy(bvect.blockman_);
             resize(bvect.size());
             break;
@@ -7842,7 +7842,7 @@ void bvector<Alloc>::freeze()
 {
     if (is_ro())
         return; // nothing to do read-only vector already
-    bvector<Alloc> bv_ro(*this, BM_READONLY);
+    bvector<Alloc> bv_ro(*this, bm::finalization::READONLY);
     swap(bv_ro);
 }
 

@@ -603,7 +603,7 @@ void FreezeTest()
     bool eq;
     {
         bvect bv;
-        bvect bv_ro(bv, bm::BM_READONLY);
+        bvect bv_ro(bv, bm::finalization::READONLY);
         assert(!bv.is_ro());
         assert(!bv_ro.is_ro());
     }
@@ -611,7 +611,7 @@ void FreezeTest()
     // swap test
     {
         bvect bv {0};
-        bvect bv_ro(bv, bm::BM_READONLY);
+        bvect bv_ro(bv, bm::finalization::READONLY);
 
         assert(!bv.is_ro());
         assert(bv_ro.is_ro());
@@ -633,7 +633,7 @@ void FreezeTest()
         bv.invert();
 
         {
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
 
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
@@ -643,7 +643,7 @@ void FreezeTest()
         }
         bv.optimize();
         {
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
 
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
@@ -658,7 +658,7 @@ void FreezeTest()
         bv.set_range(256*65536, bm::id_max/2 + 10);
 
         {
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
 
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
@@ -666,7 +666,7 @@ void FreezeTest()
             eq = bv.equal(bv_ro);
             assert(eq); // copy-ctor
             {
-                bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                bvect bv_ro2(bv_ro, bm::finalization::READONLY);
                 assert(bv_ro2.is_ro());
                 eq = bv.equal(bv_ro2);
                 assert(eq);
@@ -706,7 +706,7 @@ void FreezeTest()
             {
                 for (int pass = 0; pass < 2; ++pass)
                 {
-                    bvect bv_ro(bv, bm::BM_READONLY);
+                    bvect bv_ro(bv, bm::finalization::READONLY);
                     assert(!bv.is_ro());
                     assert(bv_ro.is_ro());
                     eq = bv.equal(bv_ro);
@@ -717,7 +717,7 @@ void FreezeTest()
                     assert(pos == idx);
 
                     { // freezing copyctor
-                    bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                    bvect bv_ro2(bv_ro, bm::finalization::READONLY);
                     assert(bv_ro2.is_ro());
                     eq = bv.equal(bv_ro2);
                     assert(eq);
@@ -763,7 +763,7 @@ void FreezeTest()
             bv.set(bm::id_max/2);
             bv.optimize();
 
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
             eq = bv.equal(bv_ro);
@@ -7279,15 +7279,15 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
 
         bool agg_check = false;
 
-        bvect bvt(bv1, bm::BM_READWRITE);
+        bvect bvt(bv1, bm::finalization::READWRITE);
         switch(op)
         {
         case bm::set_OR:
             {
-                bvect bvc(bv1, bm::BM_READWRITE);
+                bvect bvc(bv1, bm::finalization::READWRITE);
                 bvc |= bv2;
-                bvect bv_merge1(bv1, bm::BM_READWRITE);
-                bvect bv_merge2(bv2, bm::BM_READWRITE);
+                bvect bv_merge1(bv1, bm::finalization::READWRITE);
+                bvect bv_merge2(bv2, bm::finalization::READWRITE);
                 bv_merge1.merge(bv_merge2);
                 
                 if (bv_merge1 != bvc)
@@ -7323,7 +7323,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             bvt ^= bv2;
             // 2-way
             {
-                bvect bvc(bv1, bm::BM_READWRITE);
+                bvect bvc(bv1, bm::finalization::READWRITE);
                 bvc ^= bv2;
                 
                 bvect bvt1;
@@ -7371,7 +7371,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             
             // 2-way
             {
-                bvect bvc(bv1, bm::BM_READWRITE);
+                bvect bvc(bv1, bm::finalization::READWRITE);
                 bvc &= bv2;
                 
                 bvect bvt1;
@@ -7409,8 +7409,8 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             agg_check = true;
             // 2-way
             {
-                bvect bvc1(bv1, bm::BM_READWRITE);
-                bvect bvc2(bv2, bm::BM_READWRITE);
+                bvect bvc1(bv1, bm::finalization::READWRITE);
+                bvect bvc2(bv2, bm::finalization::READWRITE);
                 bvc1 -= bv2;
                 bvc2 -= bv1;
                 
@@ -7522,8 +7522,8 @@ void SerializationOperation2Test(bvect*        bv_target,
 
     bvect::size_type scount1;
 
-    bvect bv_ro1(bv1, bm::BM_READONLY);
-    bvect bv_ro2(bv2, bm::BM_READONLY);
+    bvect bv_ro1(bv1, bm::finalization::READONLY);
+    bvect bv_ro2(bv2, bm::finalization::READONLY);
     bvect bv_target2(*bv_target);
 
 
@@ -7613,7 +7613,7 @@ void AndOperationsTest()
         
         bvect bv_i;
         bv_i.invert();
-        bvect bv_ro_i(bv_i, bm::BM_READONLY);
+        bvect bv_ro_i(bv_i, bm::finalization::READONLY);
 
         for (unsigned i = 0; i < 2; ++i)
         {
@@ -7644,7 +7644,7 @@ void AndOperationsTest()
             compare_BV_set_ref(bv1, vect);
 
             {
-                bvect bv_ro0(bv0, bm::BM_READONLY);
+                bvect bv_ro0(bv0, bm::finalization::READONLY);
                 auto pcount1 = bm::count_and(bv_ro0, bv_i);
                 assert(pcount1 == predicted_count);
 

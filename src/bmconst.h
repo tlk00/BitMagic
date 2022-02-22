@@ -151,11 +151,11 @@ enum strategy
    @brief copy strategy
    @ingroup bvector
 */
-enum finalization
+enum class finalization
 {
-    BM_UNDEFINED = 0,
-    BM_READONLY = 1,   //!<  immutable (read-only object)
-    BM_READWRITE = 2,  //!<  mutable (read-write object)
+    UNDEFINED = 0,
+    READONLY = 1,   //!<  immutable (read-only object)
+    READWRITE = 2,  //!<  mutable (read-write object)
 };
 
 

@@ -2418,8 +2418,8 @@ void TI_MetricTest()
     }
 
     {
-        bvect bv1_ro(*bv1, bm::BM_READONLY);
-        bvect bv2_ro(*bv2, bm::BM_READONLY);
+        bvect bv1_ro(*bv1, bm::finalization::READONLY);
+        bvect bv2_ro(*bv2, bm::finalization::READONLY);
 
         {
         bm::chrono_taker tt(cout, "Dice metric bvector test (RO)", REPEATS);

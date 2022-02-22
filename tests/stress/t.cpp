@@ -1100,15 +1100,15 @@ unsigned SerializationOperation(bvect*             bv_target,
 
         bool agg_check = false;
 
-        bvect bvt(bv1, BM_READWRITE);
+        bvect bvt(bv1, bm::finalization::READWRITE);
         switch(op)
         {
         case bm::set_OR:
             {
-                bvect bvc(bv1, BM_READWRITE);
+                bvect bvc(bv1, bm::finalization::READWRITE);
                 bvc |= bv2;
-                bvect bv_merge1(bv1, BM_READWRITE);
-                bvect bv_merge2(bv2, BM_READWRITE);
+                bvect bv_merge1(bv1, bm::finalization::READWRITE);
+                bvect bv_merge2(bv2, bm::finalization::READWRITE);
                 bv_merge1.merge(bv_merge2);
                 
                 if (bv_merge1 != bvc)
@@ -1142,7 +1142,7 @@ unsigned SerializationOperation(bvect*             bv_target,
             bvt ^= bv2;
             // 2-way
             {
-                bvect bvc(bv1, BM_READWRITE);
+                bvect bvc(bv1, bm::finalization::READWRITE);
                 bvc ^= bv2;
                 
                 bvect bvt1;
@@ -1189,11 +1189,11 @@ unsigned SerializationOperation(bvect*             bv_target,
             
             // 2-way
             {
-                bvect bvc(bv1, BM_READWRITE);
+                bvect bvc(bv1, bm::finalization::READWRITE);
                 bvc &= bv2;
 
-                bvect bv_ro1(bv1, bm::BM_READONLY);
-                bvect bv_ro2(bv2, bm::BM_READONLY);
+                bvect bv_ro1(bv1, bm::finalization::READONLY);
+                bvect bv_ro2(bv2, bm::finalization::READONLY);
 
                 bvect bvt1;
                 bvt1.bit_and(bv1, bv2, bvect::opt_none);
@@ -1244,8 +1244,8 @@ unsigned SerializationOperation(bvect*             bv_target,
             agg_check = true;
             // 2-way
             {
-                bvect bvc1(bv1, BM_READWRITE);
-                bvect bvc2(bv2, BM_READWRITE);
+                bvect bvc1(bv1, bm::finalization::READWRITE);
+                bvect bvc2(bv2, bm::finalization::READWRITE);
                 bvc1 -= bv2;
                 bvc2 -= bv1;
                 
@@ -1390,8 +1390,8 @@ void SerializationOperation2Test(bvect*        bv_target,
 {
     bv_target->clear(true);
 
-    bvect bv_ro1(bv1, BM_READONLY);
-    bvect bv_ro2(bv2, BM_READONLY);
+    bvect bv_ro1(bv1, bm::finalization::READONLY);
+    bvect bv_ro2(bv2, bm::finalization::READONLY);
 
     cout << "Serialization operation count..." << endl;
 
@@ -6348,11 +6348,11 @@ void AndOperationsTest(bool detailed)
     }
 
     {
-        bvect bv_ro1(bvect_full1, bm::BM_READONLY);
+        bvect bv_ro1(bvect_full1, bm::finalization::READONLY);
         bm::id_t pcount1 = bm::count_and(bv_ro1, bvect_full2);
         assert(pcount1 == predicted_count);
 
-        bvect bv_ro2(bvect_full2, bm::BM_READONLY);
+        bvect bv_ro2(bvect_full2, bm::finalization::READONLY);
         bm::id_t pcount2 = bm::count_and(bvect_full1, bv_ro2);
         assert(pcount2 == predicted_count);
 
@@ -6388,7 +6388,7 @@ void AndOperationsTest(bool detailed)
         }
 
         {
-        bvect bv_ro1(bvect_full1, bm::BM_READONLY);
+        bvect bv_ro1(bvect_full1, bm::finalization::READONLY);
         bvect::rs_index_type rs_idx_ro1;
         bv_ro1.build_rs_index(&rs_idx_ro1);
         CheckCountRange(bv_ro1, rs_idx_ro1, 0, 256);
@@ -6821,8 +6821,8 @@ void CheckBV_AND_OR(BV& bv_target, const BV& bv1, const BV& bv2)
     BV bv_t_copy(bv_target);
     BV bv_t_copy1(bv_target);
 
-    BV bv_ro1(bv1, BM_READONLY);
-    BV bv_ro2(bv2, BM_READONLY);
+    BV bv_ro1(bv1, bm::finalization::READONLY);
+    BV bv_ro2(bv2, bm::finalization::READONLY);
 
     {
         BV bv_and;
@@ -16458,7 +16458,7 @@ void FreezeTest()
     bool eq;
     {
         bvect bv;
-        bvect bv_ro(bv, bm::BM_READONLY);
+        bvect bv_ro(bv, bm::finalization::READONLY);
         assert(!bv.is_ro());
         assert(!bv_ro.is_ro());
     }
@@ -16466,7 +16466,7 @@ void FreezeTest()
     // swap test
     {
         bvect bv {0};
-        bvect bv_ro(bv, bm::BM_READONLY);
+        bvect bv_ro(bv, bm::finalization::READONLY);
 
         assert(!bv.is_ro());
         assert(bv_ro.is_ro());
@@ -16537,7 +16537,7 @@ void FreezeTest()
         bv.invert();
 
         {
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
 
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
@@ -16547,7 +16547,7 @@ void FreezeTest()
         }
         bv.optimize();
         {
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
 
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
@@ -16562,7 +16562,7 @@ void FreezeTest()
         bv.set_range(256*65536, bm::id_max/2 + 10);
 
         {
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
 
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
@@ -16570,7 +16570,7 @@ void FreezeTest()
             eq = bv.equal(bv_ro);
             assert(eq); // copy-ctor
             {
-                bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                bvect bv_ro2(bv_ro, bm::finalization::READONLY);
                 assert(bv_ro2.is_ro());
                 eq = bv.equal(bv_ro2);
                 assert(eq);
@@ -16610,7 +16610,7 @@ void FreezeTest()
             {
                 for (int pass = 0; pass < 2; ++pass)
                 {
-                    bvect bv_ro(bv, bm::BM_READONLY);
+                    bvect bv_ro(bv, bm::finalization::READONLY);
                     assert(!bv.is_ro());
                     assert(bv_ro.is_ro());
                     eq = bv.equal(bv_ro);
@@ -16621,7 +16621,7 @@ void FreezeTest()
                     assert(pos == idx);
 
                     { // freezing copyctor
-                    bvect bv_ro2(bv_ro, bm::BM_READONLY);
+                    bvect bv_ro2(bv_ro, bm::finalization::READONLY);
                     assert(bv_ro2.is_ro());
                     eq = bv.equal(bv_ro2);
                     assert(eq);
@@ -16667,7 +16667,7 @@ void FreezeTest()
             bv.set(bm::id_max/2);
             bv.optimize();
 
-            bvect bv_ro(bv, bm::BM_READONLY);
+            bvect bv_ro(bv, bm::finalization::READONLY);
             assert(!bv.is_ro());
             assert(bv_ro.is_ro());
             eq = bv.equal(bv_ro);
@@ -27825,6 +27825,112 @@ void TestStrSparseVector()
         ssv1.get(0, s);
         assert(s == "s1");
     }
+
+    // use of remap back iserter
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector str_sv1, str_sv0;
+        auto iit1 = str_sv1.get_back_inserter();
+        iit1.set_remap(true);
+
+        auto iit0 = str_sv0.get_back_inserter();
+
+        assert(1 == iit1.get_remap());
+
+        *iit1 = "1";
+        *iit1 = "10";
+        *iit1 = "10a";
+        *iit1 = "2100";
+
+        {
+            auto omatr = iit1.get_octet_matrix();
+            const auto* r0 = omatr.row(0);
+            const auto* r1 = omatr.row(1);
+            const auto* r2 = omatr.row(2);
+
+            assert(r0[int('1')] == 3);
+            assert(r0[int('0')] == 0);
+            assert(r0[int('2')] == 1);
+
+            assert(r1[int('1')] == 1);
+            assert(r1[int('0')] == 2);
+
+            assert(r2[int('a')] == 1);
+            assert(r2[int('0')] == 1);
+        }
+
+        iit1.flush();
+
+        *iit0 = "1";
+        *iit0 = "10";
+        *iit0 = "10a";
+        *iit0 = "2100";
+
+        assert(0 == iit0.get_remap());
+
+        iit0.flush();
+
+        assert(str_sv1.is_remap());
+        str_sv0.remap();
+        assert(str_sv0.is_remap());
+
+        bool b = str_sv0.equal(str_sv1);
+        assert(b);
+
+        // derive remapping
+        {
+            TSparseOptVector str_sv2(str_sv0, bm::remap_setup::COPY_RTABLES);
+            assert(str_sv2.size()==0);
+            assert(str_sv2.is_remap());
+
+            auto iit2 = str_sv2.get_back_inserter();
+            *iit2 = "1";
+            *iit2 = "10";
+            *iit2 = "10a";
+            *iit2 = "2100";
+
+            iit2.flush();
+
+            b = str_sv0.equal(str_sv2);
+            assert(b);
+        }
+
+    }
+
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector str_sv1, str_sv0;
+        {
+        auto iit1 = str_sv1.get_back_inserter();
+        iit1.set_remap(true);
+
+        for (unsigned i = 0; i < 100000; ++i)
+        {
+            iit1 = "1";
+            iit1 = "123";
+        }
+
+        iit1 = "abcd";
+        iit1.flush();
+        }
+
+        {
+        auto iit0 = str_sv0.get_back_inserter();
+        for (unsigned i = 0; i < 100000; ++i)
+        {
+            iit0 = "1";
+            iit0 = "123";
+        }
+
+        iit0 = "abcd";
+        iit0.flush();
+        }
+        str_sv0.remap();
+        bool b = str_sv0.equal(str_sv1);
+        assert(b);
+    }
+
+
 
     // test from Andrea Asztalos
     {

@@ -1542,17 +1542,6 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, bvector_type& bv_out)
     bv_out.invert();
     bv_out.resize(old_sz);
     correct_nulls(sv, bv_out);
-    /*
-    bv_out.invert();
-    const bvector_type* bv_null = sv.get_null_bvector();
-    if (bv_null) // correct result to only use not NULL elements
-        bv_out &= *bv_null;
-    else
-    {
-        // TODO: use the shorter range to clear the tail
-        bv_out.set_range(sv.size(), bm::id_max - 1, false);
-    }
-    */
 }
 
 //----------------------------------------------------------------------------

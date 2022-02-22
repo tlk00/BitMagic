@@ -362,9 +362,9 @@ public:
     base_sparse_vector();
 
     base_sparse_vector(bm::null_support        null_able,
-                       allocation_policy_type  ap,
-                       size_type               bv_max_size,
-                       const allocator_type&   alloc);
+                       allocation_policy_type  ap = allocation_policy_type(),
+                       size_type               bv_max_size = bm::id_max,
+                       const allocator_type&   alloc = allocator_type());
     
     base_sparse_vector(const base_sparse_vector<Val, BV, MAX_SIZE>& bsv);
 
