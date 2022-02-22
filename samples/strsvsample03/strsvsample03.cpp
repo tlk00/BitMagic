@@ -26,7 +26,7 @@ For more information please visit:  http://bitmagic.io
 /*! \file strsvsample03.cpp
     \brief Example: str_sparse_vector<> back insert iterator example
  
-    This example loads sparse vector from an STL container uses re-mapping
+    This example loads sparse vector from an STL container uses character re-mapping
     to compress, serialize and save container to disk.
     Example also illustrates how to check memory footprint.
 */
@@ -143,6 +143,68 @@ int main(void)
             cout << "Used memory after remap and optimization: "
                  << st.memory_used
                  << std::endl;
+
+
+            // a slightly different way to do the reampped loading
+            // iterator in this case is used to collect character frequency
+            // tables and do remap on flush() (which is a bit faster)
+            //
+            // another option here is to turn vector into read-only mode
+            // which runs an embedded memory defragmentation algorithm
+            //
+            {
+                str_sv_type str_sv1;
+                str_sv_type::back_insert_iterator bi =
+                                        str_sv1.get_back_inserter();
+                bi.set_remap(true);
+                for (auto str : str_vec)
+                    bi = str;
+                bi.flush();
+
+
+                str_sv1.optimize(tb);
+
+                // freeze is used to turn the vector into read-only (immutable)
+                //
+                str_sv1.freeze();
+
+                assert(str_sv1.is_ro());
+                bool eq = str_sv1.equal(str_sv);
+                assert(eq);
+
+                str_sv1.calc_stat(&st);
+                cout << "Used memory after remap / optimization / freeze: "
+                     << st.memory_used
+                     << std::endl;
+
+                // construct a vector with remap table derived from another
+                // we can just add the same data into the new vector
+                // or part of the same data (projection) or reorderd data.
+                //
+                // the key thing is that we have to guarantee that the
+                // remapping tables will be the same
+                //
+                {
+                str_sv_type str_sv2(str_sv1, bm::remap_setup::COPY_RTABLES);
+                {
+                    unsigned cnt = 0;
+                    str_sv_type::back_insert_iterator bi =
+                                            str_sv2.get_back_inserter();
+                    for (auto str : str_vec)
+                    {
+                        bi = str;
+                        if (++cnt >= 10)
+                            break; // pick first 10
+                    }
+                    bi.flush();
+                }
+                str_sv2.optimize();
+                cout << "size2=" << str_sv2.size() << endl; // 10
+                }
+
+            }
+
+
         }
         
         // serialize and save
