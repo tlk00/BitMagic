@@ -59,7 +59,8 @@ public:
     /// @internal
     struct arena
     {
-        bm::word_t***            top_blocks_;  /// top descriptor
+        void*                    a_ptr_;       ///< main allocated pointer
+        bm::word_t***            top_blocks_;  ///< top descriptor
         bm::word_t*              blocks_;      ///< bit-blocks area
         bm::gap_word_t*          gap_blocks_;  ///< GAP blocks area
         bm::word_t**             blk_blks_;    ///< PTR sub-blocks area
@@ -67,7 +68,7 @@ public:
 
         /// Set all arena fields to zero
         void reset()
-            { top_blocks_ = 0; blocks_ = 0; gap_blocks_ = 0; blk_blks_ = 0;
+            { a_ptr_ = 0; top_blocks_ = 0; blocks_ = 0; gap_blocks_ = 0; blk_blks_ = 0;
               st_.reset(); }
     };
 
@@ -2500,29 +2501,37 @@ public:
         BM_ASSERT(ar);
         ar->st_ = st;
 
-        ar->top_blocks_ = (bm::word_t***)alloc.alloc_ptr(st.top_block_size);
-        for (unsigned i = 0; i < ar->st_.top_block_size; ++i) // init as NULLs
-            ar->top_blocks_[i] = 0;
+        // compute total allocation size in bytes
+        size_t alloc_sz = st.get_alloc_size();
+        // size to alloc in pointers
+        size_t alloc_sz_v = (alloc_sz + (sizeof(void*)-1)) / sizeof(void*);
 
-        if (st.ptr_sub_blocks_sz)
-            ar->blk_blks_ = (bm::word_t**) alloc.alloc_ptr(st.ptr_sub_blocks_sz);
-        else
-            ar->blk_blks_ = 0;
+        char* arena_mem_ptr = (char*) alloc.alloc_ptr(alloc_sz_v);
+        ar->a_ptr_ = arena_mem_ptr;
 
-        size_t alloc_factor = st.bit_blocks_sz / bm::set_block_size;
-        BM_ASSERT(alloc_factor <= unsigned(~0u) );
         if (st.bit_blocks_sz)
-            ar->blocks_ = alloc.alloc_bit_block(unsigned(alloc_factor));
+        {
+            ar->blocks_ = (bm::word_t*)arena_mem_ptr;
+            arena_mem_ptr += st.bit_blocks_sz * sizeof(bm::word_t);
+        }
         else
             ar->blocks_ = 0;
 
-        if (st.gap_blocks_sz)
+        ar->top_blocks_ = (bm::word_t***) arena_mem_ptr;
+        for (unsigned i = 0; i < ar->st_.top_block_size; ++i) // init as NULLs
+            ar->top_blocks_[i] = 0;
+        arena_mem_ptr += st.top_block_size * sizeof(void*);
+
+        if (st.ptr_sub_blocks_sz)
         {
-            // rounded up (to word_t, as used as aligned allocation size unit)
-            size_t gap_alloc_len =
-                (3+st.gap_blocks_sz) / (sizeof(bm::word_t) / sizeof(bm::gap_word_t));
-            ar->gap_blocks_ = (bm::gap_word_t*)alloc.get_block_alloc().allocate(gap_alloc_len, 0);
+            ar->blk_blks_ = (bm::word_t**) arena_mem_ptr;
+            arena_mem_ptr += st.ptr_sub_blocks_sz * sizeof(void*);
         }
+        else
+            ar->blk_blks_ = 0;
+
+        if (st.gap_blocks_sz)
+            ar->gap_blocks_ = (bm::gap_word_t*)arena_mem_ptr;
         else
             ar->gap_blocks_ = 0;
     }
@@ -2537,21 +2546,12 @@ public:
     void free_arena(arena* ar, allocator_type& alloc) BMNOEXCEPT
     {
         BM_ASSERT(ar);
-
-        if (ar->top_blocks_)
-            alloc.free_ptr(ar->top_blocks_, ar->st_.top_block_size);
-        if (ar->blk_blks_)
-            alloc.free_ptr(ar->blk_blks_, ar->st_.ptr_sub_blocks_sz);
-
-        if ( ar->blocks_)
-            alloc.free_bit_block(ar->blocks_,
-                    size_type(ar->st_.bit_blocks_sz / bm::set_block_size));
-        if ( ar->gap_blocks_)
+        if (ar->a_ptr_)
         {
-            // rounded up (to word_t, as used as aligned allocation size unit)
-            size_t gap_alloc_len =
-                (3+ar->st_.gap_blocks_sz) / (sizeof(bm::word_t) / sizeof(bm::gap_word_t));
-            alloc.get_block_alloc().deallocate((bm::word_t*)ar->gap_blocks_, gap_alloc_len);
+            size_t alloc_sz = ar->st_.get_alloc_size();
+            // size to alloc in pointers
+            size_t alloc_sz_v = (alloc_sz + (sizeof(void*)-1)) / sizeof(void*);
+            alloc.free_ptr(ar->a_ptr_, alloc_sz_v);
         }
     }
 
