@@ -443,6 +443,13 @@ public:
     bool combine_and_sub(bvector_type& bv_target, bool any);
 
     /**
+        Aggregate added group of vectors using fused logical AND-SUB.
+        search traget is back_inserter
+     */
+    template<typename BII>
+    bool combine_and_sub_bi(BII bi);
+
+    /**
         Aggregate added group of vectors using fused logical AND-SUB,
         find the first match
 
@@ -520,7 +527,13 @@ public:
                      const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
                      bool any);
-    
+
+    template<typename BII>
+    bool combine_and_sub(BII bi,
+                     const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
+                     const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size);
+
+
     bool find_first_and_sub(size_type& idx,
                      const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
                      const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size);
@@ -1024,6 +1037,17 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target, bool any)
 
 // ------------------------------------------------------------------------
 
+template<typename BV> template<typename BII>
+bool aggregator<BV>::combine_and_sub_bi(BII bi)
+{
+    return combine_and_sub(bi,
+                    ag_.arg_bv0.data(), ag_.arg_bv0.size(),
+                    ag_.arg_bv1.data(), ag_.arg_bv1.size());
+}
+
+
+// ------------------------------------------------------------------------
+
 template<typename BV>
 bool aggregator<BV>::find_first_and_sub(size_type& idx)
 {
@@ -1167,6 +1191,73 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
     } // for i
     return global_found;
 }
+
+// ------------------------------------------------------------------------
+
+template<typename BV> template<typename BII>
+bool aggregator<BV>::combine_and_sub(BII bi,
+                 const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
+                 const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size)
+{
+    bool global_found = false;
+
+    if (!bv_src_and || !src_and_size)
+        return false;
+
+    unsigned top_blocks = 0;
+
+    // pre-scan to calculate top size
+    for (unsigned i = 0; i < src_and_size; ++i)
+    {
+        const bvector_type* bv = bv_src_and[i];
+        BM_ASSERT(bv);
+        unsigned arg_top_blocks = bv->get_blocks_manager().top_block_size();
+        if (arg_top_blocks > top_blocks)
+            top_blocks = arg_top_blocks;
+    } // for i
+    for (unsigned i = 0; i < src_sub_size; ++i)
+    {
+        const bvector_type* bv = bv_src_sub[i];
+        BM_ASSERT(bv);
+        unsigned arg_top_blocks = bv->get_blocks_manager().top_block_size();
+        if (arg_top_blocks > top_blocks)
+            top_blocks = arg_top_blocks;
+    } // for i
+
+    bm::bit_visitor_back_inserter_adaptor<BII, size_type> bit_functor(bi);
+    for (unsigned i = 0; i < top_blocks; ++i)
+    {
+        const unsigned set_array_max =
+            find_effective_sub_block_size(i, bv_src_and, src_and_size,
+                                             bv_src_sub, src_sub_size);
+        for (unsigned j = 0; j < set_array_max; ++j)
+        {
+            int is_res_full;
+            digest_type digest = combine_and_sub(i, j,
+                                                0, bv_src_and, src_and_size,
+                                                0, bv_src_sub, src_sub_size,
+                                                &is_res_full);
+            size_type r = size_type(i) * bm::set_sub_array_size;
+            size_type base_idx = (r+j)*bm::bits_in_block;
+            if (is_res_full)
+            {
+                for (size_type k = 0; k < 65536; ++k)
+                    *bi = base_idx + k;
+            }
+            else
+            {
+                bool found = digest;
+                global_found |= found;
+                if (found)
+                    bm::for_each_bit_blk(tb_ar_->tb1, base_idx, bit_functor);
+            }
+        } // for j
+    } // for i
+    return global_found;
+
+}
+
+
 
 // ------------------------------------------------------------------------
 

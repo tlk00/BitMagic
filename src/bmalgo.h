@@ -319,6 +319,35 @@ struct bit_visitor_callback_adaptor
     bit_visitor_callback_type func_;
 };
 
+/// functor-adaptor for back-inserter
+///
+/// @internal
+///
+template <class BII, class size_type>
+struct bit_visitor_back_inserter_adaptor
+{
+
+    bit_visitor_back_inserter_adaptor(BII bi)
+        : bi_(bi)
+    {}
+
+    int add_bits(size_type offset, const unsigned char* bits, unsigned size)
+    {
+        for (unsigned i = 0; i < size; ++i)
+            *bi_ = offset + bits[i];
+        return 0;
+    }
+    int add_range(size_type offset, size_type size)
+    {
+        for (size_type i = 0; i < size; ++i)
+            *bi_ = offset + i;
+        return 0;
+    }
+
+    BII bi_;
+};
+
+
 
 /// Functor for bit-copy (for testing)
 ///

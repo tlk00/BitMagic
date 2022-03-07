@@ -659,6 +659,20 @@ public:
     */
     void find_eq(const SV&  sv, value_type  value, bvector_type& bv_out);
 
+
+    /**
+        \brief find all sparse vector elements EQ to search value
+
+        Find all sparse vector elements equivalent to specified value
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bi - back insert iterator for the search results
+    */
+    template<typename BII>
+    void find_eq(const SV&  sv, value_type  value, BII bi);
+
+
     /**
         \brief find first sparse vector element
 
@@ -2780,6 +2794,39 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
     decompress(sv, bv_out);
     correct_nulls(sv, bv_out);
 }
+
+//----------------------------------------------------------------------------
+
+template<typename SV> template<typename BII>
+void sparse_vector_scanner<SV>::find_eq(const SV&  sv, value_type  value, BII bi)
+{
+    static_assert(!SV::is_compressed(), "BM:find_eq on RSC vector not implemented");
+
+    if (sv.empty())
+        return; // nothing to do
+    if (!value)
+    {
+        // TODO: better implementation for 0 value seach
+        typename SV::bvector_type bv_out;
+        find_zero(sv, bv_out);
+        typename SV::bvector_type::enumerator en = bv_out.get_enumerator(0);
+        for (; en.valid(); ++en)
+            *bi = *en;
+        return;
+    }
+
+    // search for value with aggregator
+    //
+    agg_.reset();
+
+    bool found = prepare_and_sub_aggregator(sv, value);
+    if (!found)
+        return; // impossible value
+
+    found = agg_.combine_and_sub_bi(bi);
+    agg_.reset();
+}
+
 
 //----------------------------------------------------------------------------
 
