@@ -175,6 +175,11 @@ public:
             return 0;
         return pool_ptr_[--size_];
     }
+
+    /// return stack size
+    ///
+    unsigned size() const BMNOEXCEPT { return size_; }
+
 private:
     void allocate_pool(size_t pool_size)
     {
@@ -190,7 +195,7 @@ private:
     }
 private:
     void**     pool_ptr_;  ///< array of pointers in the pool
-    unsigned  size_;                  ///< current size 
+    unsigned   size_;      ///< current size
 };
 
 /**
@@ -236,6 +241,10 @@ public:
                 block_alloc_.deallocate(block, bm::set_block_size);
         } while (block);
     }
+
+    /// return stack size
+    ///
+    unsigned size() const BMNOEXCEPT { return block_pool_.size(); }
 
 protected:
     pointer_pool_array  block_pool_;

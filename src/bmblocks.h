@@ -1401,19 +1401,9 @@ public:
     }
 
     /**
-        Optimize bit-block
-    */
-    void optimize_bit_block(block_idx_type nb)
-    {
-        unsigned i, j;
-        bm::get_block_coord(nb, i, j);
-        optimize_bit_block(i, j);
-    }
-
-    /**
         Optimize bit-block at i-j position
     */
-    void optimize_bit_block(unsigned i, unsigned j)
+    void optimize_bit_block(unsigned i, unsigned j, int opt_mode)
     {
         bm::word_t* block = get_block_ptr(i, j);
         if (IS_VALID_ADDR(block))
@@ -1428,6 +1418,9 @@ public:
                 return_tempblock(block);
                 return;
             }
+            if (opt_mode < 3) // less than opt_compress
+                return;
+
             unsigned threashold = this->glen(bm::gap_max_level)-4;
             if (gap_count < threashold) // compressable
             {
@@ -1624,14 +1617,19 @@ public:
                 blk_blk = alloc_top_subblock(i, FULL_BLOCK_FAKE_ADDR);
             
             bm::word_t* block = blk_blk[j];
+            blk_blk[j] = 0;
             if (IS_VALID_ADDR(block))
             {
                 if (BM_IS_GAP(block))
+                {
                     alloc_.free_gap_block(BMGAP_PTR(block), glen());
+                }
                 else
+                {
                     alloc_.free_bit_block(block);
+                }
             }
-            blk_blk[j] = 0;
+
             if (j == bm::set_sub_array_size-1)
             {
                 // back scan if top sub-block can also be dropped
@@ -2803,6 +2801,49 @@ private:
     BlocksManager& bman_;
     bm::word_t*    block_;
 };
+
+/*!
+    Resource guard for PCLASS::set_allocator_pool()
+    @ingroup bvector
+    @internal
+*/
+template<typename POOL, typename PCLASS>
+class alloc_pool_guard
+{
+public:
+    alloc_pool_guard() BMNOEXCEPT : optr_(0)
+    {}
+
+    alloc_pool_guard(POOL& pool, PCLASS& obj) BMNOEXCEPT
+        : optr_(&obj)
+    {
+        obj.set_allocator_pool(&pool);
+    }
+    ~alloc_pool_guard() BMNOEXCEPT
+    {
+        if (optr_)
+            optr_->set_allocator_pool(0);
+    }
+
+    /// check if vector has no assigned allocator and set one
+    void assign_if_not_set(POOL& pool,
+                           PCLASS& obj) BMNOEXCEPT
+    {
+        if (!obj.get_allocator_pool()) // alloc pool not set yet
+        {
+            BM_ASSERT(!optr_);
+            optr_ = &obj;
+            optr_->set_allocator_pool(&pool);
+        }
+    }
+
+private:
+    alloc_pool_guard(const alloc_pool_guard&) = delete;
+    void operator=(const alloc_pool_guard&) = delete;
+private:
+    PCLASS*  optr_; ///< garded object
+};
+
 
 
 }

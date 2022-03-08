@@ -786,42 +786,8 @@ public:
         @ingroup bvector
         @internal
     */
-    class mem_pool_guard
-    {
-    public:
-        mem_pool_guard() BMNOEXCEPT : bv_(0)
-        {}
-
-        mem_pool_guard(allocator_pool_type& pool, bvector<Alloc>& bv) BMNOEXCEPT
-            : bv_(&bv)
-        {
-            bv.set_allocator_pool(&pool);
-        }
-        ~mem_pool_guard()
-        {
-            if (bv_)
-                bv_->set_allocator_pool(0);
-        }
-
-        /// check if vector has no assigned allocator and set one
-        void assign_if_not_set(allocator_pool_type& pool,
-                               bvector<Alloc>& bv) BMNOEXCEPT
-        {
-            if (!bv.get_allocator_pool()) // alloc pool not set yet
-            {
-                BM_ASSERT(!bv_);
-                bv_ = &bv;
-                bv_->set_allocator_pool(&pool);
-            }
-        }
-
-    private:
-        mem_pool_guard(const mem_pool_guard&) = delete;
-        void operator=(const mem_pool_guard&) = delete;
-    private:
-        bvector<Alloc>* bv_; ///< garded object
-    };
-
+    typedef
+    bm::alloc_pool_guard<allocator_pool_type, bvector<Alloc> > mem_pool_guard;
 
     friend class iterator_base;
     friend class enumerator;
@@ -2089,7 +2055,19 @@ public:
         Import sorted integers (set bits). (Fast, no checks).
         @internal
     */
-    void import_sorted(const size_type* ids, const size_type ids_size);
+    void import_sorted(const size_type* ids,
+                       const size_type ids_size, bool opt_flag);
+
+    /**
+       \brief Set range without validity/bounds checking
+    */
+    void set_range_no_check(size_type left,
+                            size_type right);
+    /**
+        \brief Clear range without validity/bounds checking
+    */
+    void clear_range_no_check(size_type left,
+                              size_type right);
 
 
     //@}
@@ -2107,7 +2085,7 @@ protected:
     void import_block(const size_type* ids,
                       block_idx_type nblock, size_type start, size_type stop);
 
-//private:
+
 
     size_type check_or_next(size_type prev) const BMNOEXCEPT;
     
@@ -2192,17 +2170,6 @@ protected:
                              size_type right);
 
 private:
-    /**
-       \brief Set range without validity/bounds checking
-    */
-    void set_range_no_check(size_type left,
-                            size_type right);
-    /**
-        \brief Clear range without validity/bounds checking
-    */
-    void clear_range_no_check(size_type left,
-                              size_type right);
-
     /**
         \brief Clear outside the range without validity/bounds checking
     */
@@ -3641,7 +3608,7 @@ void bvector<Alloc>::optimize(bm::word_t* temp_block,
     {
         stat->reset();
         ::memcpy(stat->gap_levels,
-                blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
+                 blockman_.glen(), sizeof(gap_word_t) * bm::gap_levels);
         stat->max_serialize_mem = (unsigned)sizeof(bm::id_t) * 4;
     }
     blockman_.optimize_tree(temp_block, opt_mode, stat);
@@ -4278,7 +4245,8 @@ void bvector<Alloc>::import(const size_type* ids, size_type size_in,
 
 template<class Alloc>
 void bvector<Alloc>::import_sorted(const size_type* ids,
-                                   const size_type size_in)
+                                   const size_type size_in,
+                                   bool opt_flag)
 {
     BM_ASSERT(size_in);
     BM_ASSERT(ids[0] < bm::id_max); // limit is 2^31-1 (for 32-bit mode)
@@ -4295,11 +4263,11 @@ void bvector<Alloc>::import_sorted(const size_type* ids,
     {
         import_block(ids, nblock, 0, stop);
         unsigned nbit = unsigned(ids[size_in-1] & bm::set_block_mask);
-        if (nbit == 65535) // last bit in block
+        if (opt_flag && nbit == 65535) // last bit in block
         {
             unsigned i, j;
             bm::get_block_coord(nblock, i, j);
-            blockman_.optimize_bit_block(i, j);
+            blockman_.optimize_bit_block(i, j, opt_compress);
         }
     }
     else
@@ -4319,18 +4287,21 @@ void bvector<Alloc>::import_sorted(const size_type* ids,
             nblock = (ids[stop] >> bm::set_block_shift);
         } while (start < size_in);
 
-        // multi-block sorted import, lets optimize
-        n = ids[start];
-        nblock = (n >> bm::set_block_shift);
-        nblock_end = (ids[size_in-1] >> bm::set_block_shift);
-        unsigned nbit = unsigned(ids[size_in-1] & bm::set_block_mask);
-        nblock_end += bool(nbit == 65535);
-        do
+
+        if (opt_flag) // multi-block sorted import, lets optimize
         {
-            unsigned i, j;
-            bm::get_block_coord(nblock++, i, j);
-            blockman_.optimize_bit_block(i, j);
-        } while (nblock < nblock_end);
+            n = ids[start];
+            nblock = (n >> bm::set_block_shift);
+            nblock_end = (ids[size_in-1] >> bm::set_block_shift);
+            unsigned nbit = unsigned(ids[size_in-1] & bm::set_block_mask);
+            nblock_end += bool(nbit == 65535);
+            do
+            {
+                unsigned i, j;
+                bm::get_block_coord(nblock++, i, j);
+                blockman_.optimize_bit_block(i, j, opt_compress);
+            } while (nblock < nblock_end);
+        }
 
     }
 }
@@ -5766,7 +5737,7 @@ bvector<Alloc>::bit_or(const bm::bvector<Alloc>& bv1,
                 continue;
             bool need_opt = combine_operation_block_or(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
-                blockman_.optimize_bit_block(i, j);
+                blockman_.optimize_bit_block(i, j, opt_mode);
             any_blocks |= bool(blk_blk[j]);
         } while (++j < bm::set_sub_array_size);
         
@@ -5879,7 +5850,7 @@ bvector<Alloc>::bit_xor(const bm::bvector<Alloc>& bv1,
             
             bool need_opt = combine_operation_block_xor(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
-                blockman_.optimize_bit_block(i, j);
+                blockman_.optimize_bit_block(i, j, opt_mode);
             any_blocks |= bool(blk_blk[j]);
         } while (++j < bm::set_sub_array_size);
         
@@ -5974,7 +5945,7 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
 
             bool need_opt = combine_operation_block_and(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
-                blockman_.optimize_bit_block(i, j);
+                blockman_.optimize_bit_block(i, j, opt_mode);
             any_blocks |= bool(blk_blk[j]);
         } while (++j < bm::set_sub_array_size);
         
@@ -6087,7 +6058,7 @@ bvector<Alloc>::bit_or_and(const bm::bvector<Alloc>& bv1,
                     combine_operation_block_and_or(i, j, arg_blk1, arg_blk2);
             }
             if (need_opt && opt_mode == opt_compress)
-                blockman_.optimize_bit_block(i, j);
+                blockman_.optimize_bit_block(i, j, opt_mode);
 
             any_blocks |= bool(blk_blk[j]);
 
@@ -6181,7 +6152,7 @@ bvector<Alloc>::bit_sub(const bm::bvector<Alloc>& bv1,
             
             bool need_opt = combine_operation_block_sub(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
-                blockman_.optimize_bit_block(i, j);
+                blockman_.optimize_bit_block(i, j, opt_mode);
             any_blocks |= bool(blk_blk[j]);
         } while (++j < bm::set_sub_array_size);
         
@@ -6371,7 +6342,7 @@ void bvector<Alloc>::combine_operation_xor(const bm::bvector<Alloc>& bv)
         { \
             combine_operation_block_and(i, j+x, blk, arg_blk); \
             if (opt_mode == opt_compress) \
-                blockman_.optimize_bit_block(i, j+x); \
+                blockman_.optimize_bit_block(i, j+x, opt_mode); \
         } \
         else \
             blockman_.zero_block(i, j+x); \

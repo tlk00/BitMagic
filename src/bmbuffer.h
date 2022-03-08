@@ -267,7 +267,20 @@ public:
         return sizeof(capacity_) + sizeof(alloc_factor_) +
                capacity();
     }
-    
+
+    /**
+        Free mmemory
+        @internal
+     */
+    void free_buffer()
+    {
+        if (byte_buf_)
+        {
+            allocator_type::deallocate((bm::word_t*)byte_buf_, alloc_factor_);
+            this->byte_buf_ = 0;
+        }
+    }
+
 private:
     /// Override from the base class
     void set_buf(unsigned char* buf, size_t size);
@@ -295,15 +308,7 @@ private:
         capacity_ = alloc_factor_ * sizeof(bm::word_t);
     }
 
-    void free_buffer()
-    {
-        if (byte_buf_)
-        {
-            allocator_type::deallocate((bm::word_t*)byte_buf_, alloc_factor_);
-            this->byte_buf_ = 0;
-        }
-    }
-    
+
 private:
     size_t         capacity_;     ///< current capacity
     size_t         alloc_factor_; ///< number of blocks allocated for buffer
@@ -725,6 +730,14 @@ public:
         buffer_.resize(size_in_bytes());
         if (set_z && size_in_bytes())
             set_zero();
+    }
+
+    /**
+        Free memory
+     */
+    void free() BMNOEXCEPT
+    {
+        buffer_.free_buffer();
     }
 
     size_type rows() const BMNOEXCEPT { return rows_; }

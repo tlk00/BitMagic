@@ -664,9 +664,12 @@ void print_svector_stat(TOut& tout, const SV& svect, bool print_sim = false)
     
     bm::build_jaccard_similarity_batch(sbatch, svect);
     
-    sbatch.calculate();
-    sbatch.sort();
-    
+    if (print_sim)
+    {
+        sbatch.calculate();
+        sbatch.sort();
+    }
+
     typename similarity_batch_type::vector_type& sim_vec = sbatch.descr_vect_;
     if (print_sim)
     {

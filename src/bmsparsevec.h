@@ -1239,7 +1239,7 @@ void sparse_vector<Val, BV>::import_u_nocheck
 
                 const size_type* r = tm.row(p);
                 row_len[p] = 0;
-                bv->import_sorted(r, rl);
+                bv->import_sorted(r, rl, false);
 
             }
         } // for j
@@ -1256,7 +1256,7 @@ void sparse_vector<Val, BV>::import_u_nocheck
             if (!bv)
                 bv = this->get_create_slice(k);
             const size_type* row = tm.row(k);
-            bv->import_sorted(row, rl);
+            bv->import_sorted(row, rl, false);
         }
     } // for k
 
