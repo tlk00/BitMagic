@@ -4227,6 +4227,20 @@ void BasicFunctionalityTest()
         }
     }
 
+
+    // clear_range with memory de-allocation
+    {
+        bvect::statistics st;
+        bvect bv { 65536, 65538};
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 1);
+
+        bv.clear_range(65536, 65536+65535);
+        bv.calc_stat(&st);
+        assert(st.bit_blocks == 0);
+
+    }
+
     // filling vectors with regular values
     
     cout << "test data generation... " << endl;
@@ -16456,6 +16470,7 @@ void FreezeTest()
     cout << "----------------------------- FreezeTest()" << endl;
 
     bool eq;
+
     {
         bvect bv;
         bvect bv_ro(bv, bm::finalization::READONLY);
@@ -16502,7 +16517,6 @@ void FreezeTest()
         eq = bv3.equal(bv1);
         assert(eq);
     }
-
     // move
     {
         bvect bv1 {0}, bv2 {65536, bm::id_max-1};
@@ -16517,18 +16531,21 @@ void FreezeTest()
         assert(eq);
     }
 
+
     // calc_stat
     {
         bvect bv1 {1, bm::id_max-1};
         bv1.optimize();
-        bvect bv2(bv1);
-        bv2.freeze();
-
         bvect::statistics st1, st2;
         bv1.calc_stat(&st1);
-        bv2.calc_stat(&st2);
+        {
+            bvect bv2(bv1);
+            bv2.freeze();
 
+            bv2.calc_stat(&st2);
+        }
         assert(st2.memory_used < st1.memory_used);
+
     }
 
 
@@ -26044,6 +26061,7 @@ void TestSparseVectorScan()
     cout << " --------------- Test sparse_vector<> scan algo TestSparseVectorScan()" << endl;
     
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+    bm::sparse_vector_scanner<sparse_vector_i32> iscanner;
     bm::sparse_vector_scanner<sparse_vector_u64> scanner_64;
     bm::sparse_vector_scanner<rsc_sparse_vector_u32> rsc_scanner;
 
@@ -26055,6 +26073,100 @@ void TestSparseVectorScan()
         scanner.invert(sv, bv_control);
         assert(!bv_control.any());
     }
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        bvect bv_control;
+        for (unsigned i = 0; i < 20; ++i)
+        {
+            sv.set(i, 0);
+        }
+        sv.set(bm::id_max/2, 25);
+        sv.set(bm::id_max-1, 25);
+
+        scanner.find_eq(sv, 0, bv_control);
+        unsigned found = bv_control.count();
+        assert(found == 20);
+        scanner.invert(sv, bv_control);
+        found = bv_control.count();
+        assert(found==2);
+
+        scanner.find_eq(sv, 25, bv_control);
+        found = bv_control.count();
+        assert(found == 2);
+
+        {
+        std::vector<unsigned> v_control;
+        {
+        auto bi = std::back_inserter(v_control);
+        scanner.find_eq(sv, 25, bi);
+        }
+        auto sz = v_control.size();
+        assert(sz == 2);
+        assert(v_control[0] == bm::id_max/2);
+        assert(v_control[1] == bm::id_max-1);
+        }
+
+    }
+
+    {
+        sparse_vector_i32 sv(bm::use_null);
+        bvect bv_control;
+        for (unsigned i = 0; i < 20; ++i)
+        {
+            sv.set(i, 0);
+        }
+        sv.set(bm::id_max/2, -25);
+        sv.set(bm::id_max-1, -25);
+
+        iscanner.find_eq(sv, 0, bv_control);
+        unsigned found = bv_control.count();
+        assert(found == 20);
+        iscanner.invert(sv, bv_control);
+        found = bv_control.count();
+        assert(found==2);
+
+        iscanner.find_eq(sv, -25, bv_control);
+        found = bv_control.count();
+        assert(found == 2);
+
+        {
+        std::vector<unsigned> v_control;
+        {
+        auto bi = std::back_inserter(v_control);
+        iscanner.find_eq(sv, -25, bi);
+        }
+        auto sz = v_control.size();
+        assert(sz == 2);
+        assert(v_control[0] == bm::id_max/2);
+        assert(v_control[1] == bm::id_max-1);
+        }
+
+    }
+
+
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        bvect bv_control;
+        for (unsigned i = 65536; i < 65536*2; ++i)
+            sv.set(i, 3);
+        sv.optimize();
+
+        std::vector<unsigned> v_control;
+        {
+        auto bi = std::back_inserter(v_control);
+        scanner.find_eq(sv, 3, bi);
+        }
+        auto sz = v_control.size();
+        assert(sz = 65536);
+        unsigned idx(0);
+        for (unsigned i = 65536; i < 65536*2; ++i, ++idx)
+        {
+            auto v = v_control[idx];
+            assert(v == i);
+        }
+    }
+
 
     {
         sparse_vector_u32 sv;
@@ -26071,15 +26183,17 @@ void TestSparseVectorScan()
         assert(!found);
     }
 
+
     {
         cout << endl << "Unique search check" << endl;
         sparse_vector_u32 sv(bm::use_null);
         rsc_sparse_vector_u32 csv(bm::use_null);
 
-        bvect bv_control, bv_control2;
+        bvect bv_control, bv_control2, bv_control3;
         bvect::allocator_pool_type pool;
         bvect::mem_pool_guard g1(pool, bv_control);
         bvect::mem_pool_guard g2(pool, bv_control2);
+        bvect::mem_pool_guard g3(pool, bv_control3);
 
         unsigned sv_size = 1256000;
         {
@@ -26097,13 +26211,28 @@ void TestSparseVectorScan()
             for (unsigned j = 0; j < sv_size; ++j)
             {
                 scanner.find_eq(sv, j, bv_control);
-                
                 if (bv_control.count()!= 1)
                 {
                     cerr << "1. Unique search discrepancy at value=" << j
                          << " count = " << bv_control.count() << endl;
                     exit(1);
                 }
+
+                bv_control3.clear();
+                scanner.find_eq(sv, j, bvect::insert_iterator(bv_control3));
+                if (bv_control3.count()!= 1)
+                {
+                    cerr << "1.1 Unique search discrepancy at value=" << j
+                         << " count = " << bv_control3.count() << endl;
+                    exit(1);
+                }
+
+                {
+                    bool eq = bv_control.equal(bv_control3);
+                    assert(eq);
+                }
+
+
                 unsigned v1, v2;
                 bool b = bv_control.find_range(v1, v2);
                 assert(b);
@@ -27903,11 +28032,12 @@ void TestStrSparseVector()
         {
         auto iit1 = str_sv1.get_back_inserter();
         iit1.set_remap(true);
+        //iit1.set_optimize(bvect::opt_compress);
 
         for (unsigned i = 0; i < 100000; ++i)
         {
             iit1 = "1";
-            iit1 = "123";
+            iit1 = "723";
         }
 
         iit1 = "abcd";
@@ -27919,7 +28049,7 @@ void TestStrSparseVector()
         for (unsigned i = 0; i < 100000; ++i)
         {
             iit0 = "1";
-            iit0 = "123";
+            iit0 = "723";
         }
 
         iit0 = "abcd";
@@ -29064,6 +29194,7 @@ void TestStrSparseVector()
        str_sparse_vector<char, bvect, 2> str_sv0;
        {
            auto bi = str_sv0.get_back_inserter();
+           bi.set_optimize(bvect::opt_compress);
            for (unsigned i = 0; i < 65536; ++i)
            {
                 bi = "123";
@@ -37332,7 +37463,7 @@ int main(int argc, char *argv[])
     cout << "MEM_DEBUG defined. " << endl;
 #endif
 
-#ifdef MEM_DEBUG
+#ifdef MEM_DEBUG_x
     {
         {
             bvect bv1;
@@ -37713,7 +37844,6 @@ int main(int argc, char *argv[])
      }
 
 
-
     if (is_all || is_bvser || is_bvbasic)
     {
         SerializationCompressionLevelsTest();
@@ -37867,6 +37997,7 @@ int main(int argc, char *argv[])
 
     if (is_all || is_sv || is_sv0 || is_sv1)
     {
+
         if (is_all || is_sv || is_sv0)
         {
 
@@ -37904,6 +38035,7 @@ int main(int argc, char *argv[])
 
         if (is_all || is_sv || is_sv1)
         {
+
             TestSparseVectorRange();
              CheckAllocLeaks(false);
 
