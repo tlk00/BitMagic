@@ -1099,42 +1099,66 @@ public:
     struct sv_decode_visitor_func
     {
         sv_decode_visitor_func(CharMatrix& cmatr) BMNOEXCEPT2
-            : cmatr_(cmatr), mask_(0), sv_off_(0)
+            : cmatr_(cmatr)
         {}
 
         int add_bits(size_type bv_offset,
-                      const unsigned char* BMRESTRICT bits, unsigned bits_size) BMNOEXCEPT
+                     const unsigned char* BMRESTRICT bits,
+                     unsigned bits_size) BMNOEXCEPT
         {
+            BM_ASSERT(bits_size);
+
             // can be negative (-1) when bv base offset = 0 and sv = 1,2..
             size_type base = bv_offset - sv_off_;
-            unsigned_value_type m = mask_;
+            const unsigned_value_type m = mask_;
             const unsigned i = substr_i_;
+            unsigned j = 0;
+            do
+            {
+                size_type idx = bits[j] + base;
+                value_type* BMRESTRICT str = cmatr_.row(idx);
+                str[i] |= m;
+            } while (++j < bits_size);
+/*
             for (unsigned j = 0; j < bits_size; ++j)
             {
                 size_type idx = bits[j] + base;
                 value_type* BMRESTRICT str = cmatr_.row(idx);
                 str[i] |= m;
-            } // for i
+            } // for j
+*/
             return 0;
         }
+
         int add_range(size_type bv_offset, size_type sz) BMNOEXCEPT
         {
+            BM_ASSERT(sz);
+
             auto base = bv_offset - sv_off_;
-            unsigned_value_type m = mask_;
+            const unsigned_value_type m = mask_;
             const unsigned i = substr_i_;
+            size_type j = 0;
+            do
+            {
+                size_type idx = j + base;
+                value_type* BMRESTRICT str = cmatr_.row(idx);
+                str[i] |= m;
+            } while(++j < sz);
+/*
             for (size_type j = 0; j < sz; ++j)
             {
                 size_type idx = j + base;
                 value_type* BMRESTRICT str = cmatr_.row(idx);
                 str[i] |= m;
-            } // for i
+            } // for j
+*/
             return 0;
         }
 
-        CharMatrix&            cmatr_;     ///< target array for reverse transpose
-        unsigned_value_type             mask_;      ///< bit-plane mask
-        unsigned               substr_i_;  ///< i
-        size_type              sv_off_;    ///< SV read offset
+        CharMatrix&            cmatr_;        ///< target array for reverse transpose
+        unsigned_value_type    mask_ = 0;     ///< bit-plane mask
+        unsigned               substr_i_= 0;  ///< i
+        size_type              sv_off_ = 0;   ///< SV read offset
     };
 
 
@@ -2201,6 +2225,9 @@ str_sparse_vector<CharType, BV, STR_SIZE>::remap_from_impl(
         str_sparse_vector& sv = const_cast<str_sparse_vector&>(str_sv);
         g1.assign_if_not_set(pool, *this);
         g2.assign_if_not_set(pool, sv);
+
+        auto r = sv.get_bmatrix().rows();
+        pool.set_block_limit(r + 10);
     }
 
     this->clear_all(true);

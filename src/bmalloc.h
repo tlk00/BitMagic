@@ -211,10 +211,10 @@ public:
 public:
 
     alloc_pool() {}
-    ~alloc_pool() 
-    {
-        free_pools();
-    }
+    ~alloc_pool() { free_pools(); }
+
+    void set_block_limit(size_t limit) BMNOEXCEPT
+        { block_limit_ = limit; }
 
     bm::word_t* alloc_bit_block()
     {
@@ -227,6 +227,14 @@ public:
     void free_bit_block(bm::word_t* block) BMNOEXCEPT
     {
         BM_ASSERT(IS_VALID_ADDR(block));
+        if (block_limit_) // soft limit set
+        {
+            if (block_pool_.size() >= block_limit_)
+            {
+                block_alloc_.deallocate(block, bm::set_block_size);
+                return;
+            }
+        }
         if (!block_pool_.push(block))
             block_alloc_.deallocate(block, bm::set_block_size);
     }
@@ -249,6 +257,7 @@ public:
 protected:
     pointer_pool_array  block_pool_;
     BA                  block_alloc_;
+    size_t              block_limit_ = 0; ///< soft limit for the pool of blocks
 };
 
 

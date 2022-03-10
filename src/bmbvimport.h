@@ -77,9 +77,9 @@ void bit_import_u32(BV& bv,
         bm::bit_block_copy_unalign(block, bit_arr_block_ptr);
         if (optimize)
         {
-            unsigned i, j;
-            bm::get_block_coord(nb, i, j);
-            bman.optimize_bit_block(i, j, BV::opt_compress); // returns tem_block if needed
+            unsigned i0, j0;
+            bm::get_block_coord(nb, i0, j0);
+            bman.optimize_bit_block(i0, j0, BV::opt_compress); // returns tem_block if needed
         }
     } // for nb
 
@@ -99,9 +99,9 @@ void bit_import_u32(BV& bv,
             block[k++] = 0;
         if (optimize)
         {
-            unsigned i, j;
-            bm::get_block_coord(nb, i, j);
-            bman.optimize_bit_block(i, j, BV::opt_compress); // returns tem_block if needed
+            unsigned i0, j0;
+            bm::get_block_coord(nb, i0, j0);
+            bman.optimize_bit_block(i0, j0, BV::opt_compress); // returns tem_block if needed
         }
     }
     if (optimize)
