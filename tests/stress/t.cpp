@@ -22808,6 +22808,7 @@ void TestSparseVector()
 
     
     // test automatic optimization with back_insert iterator
+    /*
     {
        bm::sparse_vector<unsigned, bm::bvector<> > sv;
        {
@@ -22838,6 +22839,7 @@ void TestSparseVector()
        assert(st.bit_blocks == 0);
        assert(st.gap_blocks == 0);
     }
+    */
 
     
     // test insert() / erase()
@@ -37431,6 +37433,45 @@ bool CheckAllocLeaks(bool details = false, bool abort = true)
     return false;
 }
 
+template<class STR_SV, class HASH_SV>
+void ReadTestData(STR_SV&      str_sv,
+                  HASH_SV&  sv_hash,
+                  unsigned hash_bitcnt,
+                  const string& fname)
+{
+    std::ifstream fin(fname.c_str(), std::ios::in);
+    if (!fin.good())
+        return;
+    unsigned shift = sizeof(unsigned) * 8 - hash_bitcnt;
+
+    auto bi(str_sv.get_back_inserter());
+//    bi.set_remap(true);
+    bi.set_optimize(bvect::opt_free_01); // minimal optimization
+//    bi.set_optimize(bvect::opt_none); // no optimization
+
+    auto bi_h(sv_hash.get_back_inserter());
+
+    std::string line;
+    for (unsigned i = 0; std::getline(fin, line); ++i)
+    {
+        if (line.empty())
+            continue;
+        bi = line;
+        unsigned hash = 0;
+        hash >>= shift; // reduce hash size
+        bi_h = hash;
+
+        if (i%1000000 == 0)
+            cout << "\r" << i/1000000 << "M" << flush;
+if (i > 1000000 * 80)
+    break;
+
+    } // for
+
+    bi.flush();
+    bi_h.flush();
+}
+
 
 
 #define BM_EXPAND(x)  x ## 1
@@ -37613,6 +37654,26 @@ int main(int argc, char *argv[])
     }
     }
 */
+/*
+{
+typedef bm::str_sparse_vector<char, bvect, 8> str_sv_type;
+typedef bm::sparse_vector<uint32_t, bvect >   sv_uint_32_type;
+
+    str_sv_type      str_sv0; // sparse-succinct vector
+    sv_uint_32_type  sv_hash0;
+    ReadTestData(str_sv0, sv_hash0, 22, "/Volumes/DATAFAT32/spotnames/read_names2.txt");
+    cout << "remap..." << endl;
+    str_sv0.remap();
+    BM_DECLARE_TEMP_BLOCK(tb)
+    str_sv0.optimize(tb); // optimize the succinct vector
+    str_sv0.freeze();
+
+    cout << 1 << endl;
+}
+         CheckAllocLeaks(false);
+*/
+
+
 //avx2_i32_shift();
 //return 0;
 
