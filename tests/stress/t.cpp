@@ -22808,7 +22808,7 @@ void TestSparseVector()
 
     
     // test automatic optimization with back_insert iterator
-    /*
+
     {
        bm::sparse_vector<unsigned, bm::bvector<> > sv;
        {
@@ -22839,7 +22839,7 @@ void TestSparseVector()
        assert(st.bit_blocks == 0);
        assert(st.gap_blocks == 0);
     }
-    */
+    
 
     
     // test insert() / erase()
