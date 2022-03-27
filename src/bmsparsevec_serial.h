@@ -1218,6 +1218,8 @@ void sparse_vector_deserializer<SV>::deserialize_structure(SV& sv,
 
     unsigned char matr_s_ser = 0;
     unsigned planes = load_header(dec, sv, matr_s_ser);
+    if (planes == 0)
+        return;
 
     // bm::id64_t sv_size = dec.get_64();
     load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
