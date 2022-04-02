@@ -49,7 +49,7 @@ rm -f *.log
 PID_ARR=()
 declare -a OPT_MAP
 
-TEST_OPT="-ll -s -bvb0 -bvb1 -bvser -bvl0 -bvl1 -bvl2 -bvs -rc -agg -sv0 -sv1 -sort -csv0 -csv1 -strsv -cc -ser -allsvser"
+TEST_OPT="-ll -s -bvb0 -bvb1 -bvser -bvl0 -bvl1 -bvl2 -bvs -rc -agg -sv0 "
 for OPT in $TEST_OPT;
 do
     LOG_OPT=${RUN_NAME}${OPT}.log
@@ -64,6 +64,66 @@ do
 done
 
 #echo ${OPT_MAP[*]}
+echo "----------------------"
+echo "waiting for test cases.."
+
+ERR_FLAG="0"
+
+for PID in ${PID_ARR[*]};
+do
+    LOG=${OPT_MAP[$PID]}
+    echo ${PID} ${LOG}
+    wait ${PID}
+    RET=$?
+
+    if test "$RET" != "0"; then
+        ERR_FLAG="1"
+        echo
+        echo "Error: test case failed! log file:" $LOG
+        echo "==============================================================="
+        echo "-------------------------------------------------------------->8"
+        tail -10 $LOG
+        echo "==============================================================="
+        echo "-------------------------------------------------------------->8"
+        echo
+    else
+        echo "$LOG OK!"
+    fi
+    echo
+    echo
+done
+
+
+if test "$ERR_FLAG" != "0"; then
+    echo "======================"
+    echo "BUILD=" ${BUILD_TYPE}
+    echo "ERROR(s) detected!"
+    exit 1
+fi
+
+unset PID_ARR
+unset OPT_ARR
+unset OPT_MAP
+
+PID_ARR=()
+declare -a OPT_MAP
+
+TEST_OPT="-sv1 -sort -csv0 -csv1 -strsv -cc -ser -allsvser"
+for OPT in $TEST_OPT;
+do
+    LOG_OPT=${RUN_NAME}${OPT}.log
+    echo ${RUN_NAME} ${OPT} ">" ${LOG_OPT}
+
+    ./${RUN_NAME} ${OPT} -silent &> ${LOG_OPT} &
+    PID=$!
+    PID_ARR+=($PID)
+    OPT_ARR+=($LOG_OPT)
+    echo "pid="${PID}
+    OPT_MAP[$PID]=${LOG_OPT}
+done
+
+#echo ${OPT_MAP[*]}
+echo "----------------------"
 echo "waiting for test cases.."
 
 ERR_FLAG="0"
@@ -101,3 +161,4 @@ if test "$ERR_FLAG" != "0"; then
 else
     echo "DONE     " ${RUN_NAME}
 fi
+
