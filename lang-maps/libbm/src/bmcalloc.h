@@ -75,19 +75,44 @@ public:
 class ptr_allocator
 {
 public:
+    /**
+    The member function allocates storage for an array of n void*
+    elements, by calling malloc.
+    @return pointer to the allocated memory.
+    */
     static void* allocate(size_t n, const void *)
     {
-        void* ptr = ::malloc(n * sizeof(void*));
+        void* ptr;
+#if defined(BM_ALLOC_ALIGN)
+    #ifdef _MSC_VER
+        ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(void*), BM_ALLOC_ALIGN);
+    #else
+        ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(void*), BM_ALLOC_ALIGN);
+    #endif
+#else
+        ptr = (bm::word_t*) ::malloc(n * sizeof(void*));
+#endif
+//        void* ptr = ::malloc(n * sizeof(void*));
         if (!ptr)
-        {
-            BM_THROW( BM_ERR_BADALLOC );
-        }
+            throw std::bad_alloc();
         return ptr;
     }
 
-    static void deallocate(void* p, size_t)
+    /**
+    The member function frees storage for an array of n bm::word_t
+    elements, by calling free.
+    */
+    static void deallocate(void* p, size_t) BMNOEXCEPT
     {
+#ifdef BM_ALLOC_ALIGN
+    # ifdef _MSC_VER
+            ::_aligned_free(p);
+    #else
+            ::_mm_free(p);
+    # endif
+#else
         ::free(p);
+#endif
     }
 };
 

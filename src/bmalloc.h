@@ -115,7 +115,17 @@ public:
     */
     static void* allocate(size_t n, const void *)
     {
-        void* ptr = ::malloc(n * sizeof(void*));
+        void* ptr;
+#if defined(BM_ALLOC_ALIGN)
+    #ifdef _MSC_VER
+        ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(void*), BM_ALLOC_ALIGN);
+    #else
+        ptr = (bm::word_t*) ::_mm_malloc(n * sizeof(void*), BM_ALLOC_ALIGN);
+    #endif
+#else
+        ptr = (bm::word_t*) ::malloc(n * sizeof(void*));
+#endif
+//        void* ptr = ::malloc(n * sizeof(void*));
         if (!ptr)
             throw std::bad_alloc();
         return ptr;
@@ -127,7 +137,15 @@ public:
     */
     static void deallocate(void* p, size_t) BMNOEXCEPT
     {
+#ifdef BM_ALLOC_ALIGN
+    # ifdef _MSC_VER
+            ::_aligned_free(p);
+    #else
+            ::_mm_free(p);
+    # endif
+#else
         ::free(p);
+#endif
     }
 };
 
