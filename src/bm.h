@@ -2941,6 +2941,13 @@ bvector<Alloc>::gap_count_to(const bm::gap_word_t* gap_block,
     }
 */
     bm::id64_t sub = rs_idx.sub_count(nb);
+    if (!sub)
+    {
+        c = 0;
+        BM_ASSERT(c == bm::gap_bit_count_to(gap_block, (gap_word_t)nbit_right));
+        return c;
+    }
+
     unsigned sub_cnt = unsigned(sub);
     unsigned first =  bm::gap_word_t(sub_cnt);
     unsigned second = (sub_cnt >> 16);
@@ -3498,6 +3505,7 @@ bvector<Alloc>::count_range_no_check(size_type left,
     else
         cnt_l = left; // == 0
     cnt_r = this->count_to(right, rs_idx);
+    BM_ASSERT(cnt_r >= cnt_l);
     return cnt_r - cnt_l;
 }
 

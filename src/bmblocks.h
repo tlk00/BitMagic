@@ -2510,6 +2510,7 @@ public:
         if (st.bit_blocks_sz)
         {
             ar->blocks_ = (bm::word_t*)arena_mem_ptr;
+            BM_ASSERT(bm::is_aligned(ar->blocks_));
             arena_mem_ptr += st.bit_blocks_sz * sizeof(bm::word_t);
         }
         else

@@ -22,6 +22,7 @@ For more information please visit:  http://bitmagic.io
     \brief Bit manipulation primitives (internal)
 */
 
+
 #include "bmdef.h"
 #include "bmconst.h"
 
@@ -619,6 +620,20 @@ unsigned word_bitcount64(bm::id64_t x) BMNOEXCEPT
 #endif
 }
 
+/**
+    Check pointer alignment
+    @internal
+ */
+template< typename T >
+bool is_aligned(T* p)
+{
+#if defined (BM_ALLOC_ALIGN)
+    return !(reinterpret_cast<unsigned int*>(p) % BM_ALLOC_ALIGN);
+#else
+    (void)p;
+    return true;
+#endif
+}
 
 
 } // bm
