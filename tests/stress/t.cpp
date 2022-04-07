@@ -845,6 +845,7 @@ void FillSetsRandomMethod(bvect_mini* bvect_min,
     {
         method = rand() % 7;
     }
+//method = 2;
     unsigned factor;
     switch (method)
     {
@@ -1753,7 +1754,7 @@ void CheckCountRange(const T& vect, const bvect::rs_index_type& bc_arr,
         unsigned cnt_to_r = vect.count_to(right, bc_arr);
         cnt1 = vect.count_range(left, right, bc_arr);
         unsigned cnt_to_l = left ? vect.count_to(left - 1, bc_arr) : 0;
-                 cnt2 = cnt_to_r - cnt_to_l;
+        cnt2 = cnt_to_r - cnt_to_l;
         if (cnt1 != cnt2)
         {
             cout << "Bitcount range TO failed!" << " left=" << left
@@ -1768,8 +1769,11 @@ void CheckCountRange(const T& vect, const bvect::rs_index_type& bc_arr,
         {
             cerr << "Impossible count_range detected!" << endl;
             cerr << " range = " << range << endl;
-            cerr << " cnt1 = " << cnt1 << endl;
+            cerr << " cnt1  = " << cnt1 << endl;
+            cerr << " left  = " << left << endl;
+            cerr << " right = " << right << endl;
             cnt1 = vect.count_range(left, right, bc_arr);
+            cerr << " cnt1  = " << cnt1 << endl;
             assert(0); exit(1);
         }
         
@@ -11068,7 +11072,8 @@ void TestAND_OR(bm::random_subset<bvect>& rsub,
 
 
 static
-void StressTest(unsigned repetitions, int set_operation, bool detailed)
+void StressTest(unsigned repetitions, int set_operation, bool detailed,
+                int method = -1)
 {
 
    unsigned RatioSum = 0;
@@ -11149,8 +11154,8 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed)
             break;
         }
        
-        FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt);
-        FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt);
+        FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt, method);
+        FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt, method);
 
         unsigned arr[bm::set_total_blocks]={0,};
         bm::id_t cnt = bvect_full1->count();
@@ -26160,7 +26165,7 @@ void TestSparseVectorScan()
         scanner.find_eq(sv, 3, bi);
         }
         auto sz = v_control.size();
-        assert(sz = 65536);
+        assert(sz == 65536);
         unsigned idx(0);
         for (unsigned i = 65536; i < 65536*2; ++i, ++idx)
         {
@@ -37472,6 +37477,335 @@ if (i > 1000000 * 80)
     bi_h.flush();
 }
 
+/*
+size_t NcbiStreamToString(string* str, ifstream& is, size_t pos=0)
+ {
+     if (!is.good()) {
+         // Can't extract anything
+         if (str)
+             str->resize(pos);
+//         is.setstate(NcbiFailbit);
+         return 0;
+     }
+
+     char   buf[5120];
+     size_t buf_size = sizeof(buf);
+     size_t str_size;
+
+     if (str) {
+         str_size = pos;
+         if (str->size() < str_size + buf_size)
+             str->resize(str_size + buf_size);
+     } else
+         str_size = pos = 0;
+
+     do {
+         try {
+             is.read(str ? &(*str)[str_size] : buf, buf_size);
+         } catch (...) {
+             if (str)
+                 str->resize(str_size);
+             throw;
+         }
+         streamsize count = is.gcount();
+         str_size += (size_t) count;
+         if (str) {
+             if ((size_t) count == buf_size) {
+                 if (buf_size < (1UL << 20))
+                     buf_size <<= 1;
+                 str->resize(str_size + buf_size);
+             } else
+                 assert(!is.good());
+         }
+     } while (is.good());
+
+     assert(str_size >= pos);
+     if (str)
+         str->resize(str_size);
+
+     if (!(str_size -= pos)) {
+         // Nothing extracted
+         //is.setstate(NcbiFailbit);
+         assert(0);
+         return 0;
+     }
+
+     // NB: istream::read() sets both bits at EOF (27.6.1.3.28)
+#if 0
+     IOS_BASE::iostate iostate = is.rdstate();
+     if (iostate != (NcbiFailbit | NcbiEofbit))
+         return 0;
+     is.clear(iostate & ~NcbiFailbit);
+#endif
+     return str_size;
+ }
+*/
+template<typename T>
+static void s_READ_NUMERIC_BUFF(const string& data, size_t& pos, T& var)
+{
+    var = *(T*)&data[pos];
+    pos += sizeof(var);
+}
+/*
+void LoadTestAlignData(const string& input_file)
+{
+    ifstream aln_data_ifstr(input_file, ios::binary);
+
+
+    string aln_data;
+    size_t aln_data_size(NcbiStreamToString(&aln_data, aln_data_ifstr));
+    cout << "Align data bytes read: " << aln_data_size << "/" << aln_data.size() << endl;
+
+    using svector_u32 = bm::sparse_vector<unsigned, bm::bvector<>>;
+    using TDataType = bm::rsc_sparse_vector<unsigned, svector_u32>;
+    vector<TDataType> alignments;
+
+    size_t pos = 0;
+    uint32_t num_rows = 0;
+    s_READ_NUMERIC_BUFF(aln_data, pos, num_rows);
+    cout << "num_rows = " << num_rows << endl;
+
+    vector<uint32_t> sizes(num_rows, 0);
+    for (size_t i = 0; i < num_rows; ++i) {
+        s_READ_NUMERIC_BUFF(aln_data, pos, sizes[i]);
+    }
+
+    size_t align_data_size = 0;
+    size_t index_sz = 0;
+    cout << "Printing sizes \n";
+    for (auto it : sizes) {
+        align_data_size += it;
+        cout << "align_size(" << index_sz << ") = " << it << endl;
+        ++index_sz;
+    }
+    cout << "Complete align_data_size: " << align_data_size << endl;
+
+    typedef bm::sparse_vector_deserializer<TDataType> csv_deserializer_type;
+    csv_deserializer_type csv_deserializer;
+    int buff_index = pos;
+    for (size_t i = 0; i < num_rows; ++i) {
+        alignments.push_back(TDataType(bm::use_null));
+        TDataType& csv = alignments.back();
+        if (i == 3)
+            cout << i << endl;
+        csv_deserializer.deserialize_structure(csv, (const unsigned char*)&aln_data[buff_index]);
+        buff_index += sizes[i];
+    }
+
+    cout << "Deserialized structure\n";
+    csv_deserializer_type::bv_ref_vector_type bv_ref;
+    for (int i = num_rows - 1; i >= 0; --i) {
+        bv_ref.add_vectors(alignments[i].get_bmatrix());
+    }
+    csv_deserializer.set_xor_ref(&bv_ref);
+    for (size_t i = 0; i < num_rows; ++i) {
+        csv_deserializer.deserialize(alignments[i], (const unsigned char*)&aln_data[pos], false);
+        pos += sizes[i];
+    }
+
+    cout << "Completely deserialized\n";
+}
+*/
+/*
+inline
+unsigned Residue2int(char bp)
+{
+    unsigned v = 0;
+    switch (bp) {
+    case '.': v = 0; break; //00000
+    case 'A': v = 1; break; // 0001
+    case 'C': v = 2; break; // 00010
+    case 'G': v = 3; break; // 00011
+    case 'T': v = 4; break; // 00100
+    case 'N': v = 5; break; // 00101
+    case 'F': v = 6; break; // 00110
+    case 'B': v = 7; break; // 00111
+    case 'H': v = 8; break; // 01000
+    case 'I': v = 9; break; // 01001
+    case 'J': v = 10; break; // 01010
+    case 'K': v = 11; break; // 01011
+    case 'L': v = 12; break; // 01100
+    case 'M': v = 13; break; // 01101
+    case 'E': v = 14; break; // 01110
+    case 'P': v = 15; break; // 01111
+    case 'Q': v = 16; break; // 10000
+    case 'R': v = 17; break; // 10001
+    case 'S': v = 18; break; // 10010
+    case 'D': v = 19; break; // 10011
+    case 'U': v = 20; break; // 10100
+    case 'V': v = 21; break; // 10101
+    case 'W': v = 22; break; // 10110
+    case 'X': v = 23; break; // 10111
+    case 'Y': v = 24; break; // 11000
+    case 'Z': v = 25; break; // 11001
+    case '-': v = 26; break; // 11010
+    case '*': v = 27; break; // 11011
+    case '?': v = 28; break; // 11100
+    case 'O': v = 29; break; // 11101
+
+    default:
+        throw runtime_error("Unknown residue '" + string(1, bp) + "'");
+    }
+    return v;
+}
+
+inline
+char Int2Residue(unsigned v)
+{
+    char bp = ' ';
+    switch (v) {
+    case 0: bp = '.'; break; //00000
+    case 1: bp = 'A'; break; // 0001
+    case 2: bp = 'C'; break; // 00010
+    case 3: bp = 'G'; break; // 00011
+    case 4: bp = 'T'; break; // 00100
+    case 5: bp = 'N'; break; // 00101
+    case 6: bp = 'F'; break; // 00110
+    case 7: bp = 'B'; break; // 00111
+    case 8: bp = 'H'; break; // 01000
+    case 9: bp = 'I'; break; // 01001
+    case 10: bp = 'J'; break; // 01010
+    case 11: bp = 'K'; break; // 01011
+    case 12: bp = 'L'; break; // 01100
+    case 13: bp = 'M'; break; // 01101
+    case 14: bp = 'E'; break; // 01110
+    case 15: bp = 'P'; break; // 01111
+    case 16: bp = 'Q'; break; // 10000
+    case 17: bp = 'R'; break; // 10001
+    case 18: bp = 'S'; break; // 10010
+    case 19: bp = 'D'; break; // 10011
+    case 20: bp = 'U'; break; // 10100
+    case 21: bp = 'V'; break; // 10101
+    case 22: bp = 'W'; break; // 10110
+    case 23: bp = 'X'; break; // 10111
+    case 24: bp = 'Y'; break; // 11000
+    case 25: bp = 'Z'; break; // 11001
+    case 26: bp = '-'; break; // 11010
+    case 27: bp = '*'; break; // 11011
+    case 28: bp = '?'; break; // 11100
+    case 29: bp = 'O'; break; // 11101
+    default:
+        throw runtime_error("Unknown value '" + to_string(v) + "'");
+    }
+    return bp;
+}
+
+
+int main2 ()
+{
+    string test_file {"rsc_test.dat"};
+    typedef bm::sparse_vector<unsigned, bm::bvector<> > svector_u32;
+    typedef bm::rsc_sparse_vector<unsigned, svector_u32 >  rsc_svector_u32;
+    bm::sparse_vector_scanner<rsc_svector_u32::sparse_vector_type> scanner;
+
+    {
+        rsc_svector_u32 row_data;
+        auto bit = row_data.get_back_inserter();
+
+        string seq1{".....C.T..---------------------T.-.---.-C-.-.-G....-----.....-T.-.A....C........-.......C.-..A..GC...G.A.......-.....G.C....A..G-CCT.G----------------...C....C....T."};
+        {
+            size_t matches = std::count(seq1.begin(), seq1.end(), '.');
+            size_t gaps = std::count(seq1.begin(), seq1.end(), '-');
+            size_t mismatches = seq1.size() - matches - gaps;
+            cout << "Statistics calculated from string:" << endl;
+            cout << "\tMatches: " << matches << endl;
+            cout << "\tMismatches: " << mismatches << endl;
+            cout << "\tGaps: " << gaps << endl;
+        }
+
+        for(char& c : seq1) {
+            if (c == '-')
+                bit.add_null(1);
+            else
+                bit = Residue2int(c);
+        }
+        bit.flush();
+
+        cout << "Input data:" << endl;
+        for (size_t i=0; i<row_data.size(); ++i) {
+            if (row_data.is_null(i)) {
+                cout << '-';
+            } else {
+                cout << Int2Residue(row_data[i]);
+            }
+        }
+        cout << endl;
+
+        typedef bm::sparse_vector_serializer<rsc_svector_u32> sv_serializer_type;
+        sv_serializer_type sv_serializer;
+        bm::sparse_vector_serial_layout<rsc_svector_u32> sv_lay;
+
+        sv_serializer.serialize(row_data, sv_lay);
+
+        std::ofstream ofs (test_file, std::ofstream::out | std::ofstream::binary);
+        ofs.write((const char*)sv_lay.buf() , sv_lay.size());
+        ofs.close();
+    }
+
+    {
+        ifstream is (test_file, std::ifstream::binary);
+        if (!is) {
+            cerr << "Failed to open file" << endl;
+        }
+        // get length of file:
+        is.seekg (0, is.end);
+        size_t length = is.tellg();
+        is.seekg (0, is.beg);
+
+        char * buffer = new char [length];
+
+        // read data as a block:
+        is.read (buffer,length);
+        is.close();
+
+        BM_DECLARE_TEMP_BLOCK(TB)
+        rsc_svector_u32 row_data(bm::use_null);
+        sparse_vector_deserialize(row_data, (const unsigned char*)buffer, TB);
+        cout << "Output data:" << endl;
+        for (size_t i=0; i<row_data.size(); ++i) {
+            if (row_data.is_null(i)) {
+                cout << '-';
+            } else {
+                cout << Int2Residue(row_data[i]);
+            }
+        }
+        cout << endl;
+
+        {
+            auto null_vec = row_data.get_null_bvector();
+            int num_aligned = null_vec->count();
+            //cout << "num_aligned: " << num_aligned << endl;
+            //int alignment_length = aligned_seq_len;
+            int num_gaps = row_data.size() - num_aligned;
+            //cout << "num_gaps: " << num_gaps << endl;
+            //alignment_length += num_gaps;
+            //strm << "alignment_length: " << aligned_seq_len << endl;
+
+            const auto& sv = row_data.get_sv();
+            int num_matches = num_aligned;
+
+            bm::bvector<> bv_found;
+            auto vs = Residue2int('.');
+            scanner.find_eq(sv, vs, bv_found);
+            num_matches = bv_found.count();
+            //cout << "num_matches: " << num_matches << endl;
+            //num_matches += num_gaps;
+            //cout << "matches+gaps: " << num_matches << endl;
+            int num_mismatches = sv.size() - num_matches;
+            //cout << "sv.size(): " << sv.size() << endl;
+            cout << "Statistics calculated from sparce vector:" << endl;
+            cout << "\tMatches: " << num_matches << endl;
+            cout << "\tMismatches: " << num_mismatches << endl;
+            cout << "\tGaps: " << num_gaps << endl;
+        }
+
+
+        delete[] buffer;
+    }
+
+    return 0;
+}
+*/
 
 
 #define BM_EXPAND(x)  x ## 1
@@ -37680,6 +38014,13 @@ typedef bm::sparse_vector<uint32_t, bvect >   sv_uint_32_type;
 //unsigned long long a = 9223372036854775807ULL;
 //unsigned long long a = 281474976710655ULL;
 //a = a / (65536 * 256);
+/*
+LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/woXOR_ser_align_5736.bin");
+
+LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
+*/
+//    return main2();
+
 
     if (is_all || is_low_level)
     {
@@ -37967,7 +38308,13 @@ typedef bm::sparse_vector<uint32_t, bvect >   sv_uint_32_type;
 
     if (is_bvops1)
     {
+        StressTest(250, 0, false, 2); // OR - detailed check disabled, method = 2
+         CheckAllocLeaks(false);
+
         StressTest(150, 0, false); // OR - detailed check disabled
+         CheckAllocLeaks(false);
+
+        StressTest(250, 3, false, 2); // AND - detailed check disabled, method = 2
          CheckAllocLeaks(false);
 
         StressTest(150, 3, false); // AND
