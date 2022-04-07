@@ -1638,7 +1638,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::swap(
 template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
 {
-    unsigned slices = bmatr_.rows();
+    auto slices = bmatr_.rows();
     bvector_type* bv_null = this->get_null_bvect();
     for (size_type i = 0; i < slices; ++i)
         if (bvector_type* bv = this->bmatr_.get_row(i))
