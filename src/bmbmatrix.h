@@ -1659,7 +1659,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
 {
     if (right < left)
         return clear_range(right, left, set_null);
-    unsigned planes = bmatr_.rows();
+    auto planes = bmatr_.rows();
     bvector_type* bv_null = this->get_null_bvect();
     for (unsigned i = 0; i < planes; ++i)
     {
