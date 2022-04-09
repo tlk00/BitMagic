@@ -2497,27 +2497,27 @@ void CountRangeTest()
         bvect::rs_index_type bc_arr;
         bv1.build_rs_index(&bc_arr);
         assert(bc_arr.count() == 2);
-        
+
         assert(bc_arr.rcount(bm::set_total_blocks-1) == 2);
         for (bvect::size_type i = 0; i < bm::set_total_blocks-1; ++i)
         {
             assert(bc_arr.rcount(i) == 0);
         } // for
-        
+
         VerifyCountRange(bv1, bc_arr, 0, 200000);
         
         bv1.optimize();
         bvect::rs_index_type bc_arr1;
         bv1.build_rs_index(&bc_arr1);
-        
+
         assert(bc_arr.rcount(bm::set_total_blocks-1) == 2);
         for (bvect::size_type i = 0; i < bm::set_total_blocks-1; ++i)
         {
             assert(bc_arr1.rcount(i) == 0);
         } // for
-        
+
         VerifyCountRange(bv1, bc_arr1, 0, 200000);
-        VerifyCountRange(bv1, bc_arr, bm::id_max-2000, bm::id_max-1);
+        VerifyCountRange(bv1, bc_arr1, bm::id_max-2000, bm::id_max-1);
     }}
 
     cout << "Stage 2" << endl;
@@ -19838,6 +19838,7 @@ int main(int argc, char *argv[])
     
     if (is_all || is_bvbasic)
     {
+
         SyntaxTest();
         CheckAllocLeaks(false);
 
