@@ -664,6 +664,9 @@ protected:
     void optimize_block(block_idx_type nb, typename BV::optmode opt_mode)
         { bmatr_.optimize_block(nb, opt_mode); }
 
+    /// Sybc read-only state
+    void sync_ro() BMNOEXCEPT;
+
     /**
         Perform copy_range() on a set of planes
     */
@@ -1498,6 +1501,7 @@ void basic_bmatrix<BV>::optimize_block(block_idx_type nb,
 }
 
 //---------------------------------------------------------------------
+//
 //---------------------------------------------------------------------
 
 
@@ -1647,6 +1651,7 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
     slice_mask_ = 0; size_ = 0;
     if (bv_null)
         bv_null->clear(true);
+    is_ro_ = false;
 }
 
 //---------------------------------------------------------------------
@@ -1901,6 +1906,25 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::equal(
             return false;
     }
     return true;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::sync_ro() BMNOEXCEPT
+{
+    unsigned slices = (unsigned) this->bmatr_.rows();
+    for (unsigned j = 0; j < slices; ++j)
+    {
+        if (const bvector_type* bv = this->bmatr_.get_row(j))
+        {
+            if (bv->is_ro())
+            {
+                is_ro_ = true;
+                break;
+            }
+        }
+    } // for j
 }
 
 //---------------------------------------------------------------------

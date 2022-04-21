@@ -2291,6 +2291,7 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::sync(bool /*force*/)
 {
     if (remap_flags_)
         recalc_remap_matrix2();
+    this->sync_ro();
 }
 
 //---------------------------------------------------------------------
