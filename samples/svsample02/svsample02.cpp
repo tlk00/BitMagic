@@ -108,11 +108,16 @@ void SDemo2()
     sparse_vector_u32 sv1(bm::use_null); // NULL-able vector
     sparse_vector_u32 sv2(bm::use_null);
 
+    // not the fastest way to init the vector but it will do for an example
+    //
     for (unsigned i = 0; i < 128000; i+=2)
-    {
         sv1.set(i, 8);
-    }
-    sv1.optimize();
+    for (unsigned i = 128000; i < 128000*4; i+=256)
+        sv1.set(i, 7);
+
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    sv1.optimize(tb);
     sv2 = sv1; // copy sv1
 
     sv_serializer_type sv_ser;
@@ -137,6 +142,39 @@ void SDemo2()
         sparse_vector_u32 sv3(bm::use_null);
         sv_dser.deserialize(sv3, buf);
         assert(sv3.equal(sv1));
+
+        // here we do read-only deserialization
+        // RO vector is immutable (which is ok in many cases)
+        //
+        // Immutable vectors drops the over-allocation overhead
+        // necessary for fast modifications which makes it more succinct.
+        //
+        // Another advantage or RO vectors is that it may be a bit faster
+        // due to reduced memory fragmentation.
+        //
+        // Please note that RO deserialization will be a bit slower
+        //
+
+        sparse_vector_u32 sv4(bm::use_null);
+        {
+            sv_deserializer_type sv_dser_ro;
+            sv_dser_ro.set_finalization(bm::finalization::READONLY);
+            sv_dser_ro.deserialize(sv4, buf);
+        }
+
+        assert(sv4.is_ro());
+        bool eq = sv3.equal(sv4);
+        assert(eq);
+
+        // compute memory profile for RO and RW vectors
+        // to illustrate the case when RO takes less RAM
+        //
+        sparse_vector_u32::statistics st3, st4;
+        sv3.calc_stat(&st3);
+        sv4.calc_stat(&st4);
+
+        cout << "RW vector mem=" << st3.memory_used << endl;
+        cout << "RO vector mem=" << st4.memory_used << endl;
     }
 
 
