@@ -2560,7 +2560,7 @@ public:
     void destroy_arena() BMNOEXCEPT
     {
         free_arena(arena_, alloc_);
-        ::free(arena_); arena_ = 0;
+        ::free(arena_); arena_ = 0; top_blocks_ = 0; top_block_size_ = 0;
     }
 
     // ----------------------------------------------------------------
