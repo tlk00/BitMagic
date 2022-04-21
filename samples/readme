@@ -56,6 +56,7 @@ Sparse vector (bit-transposed vector) for scalar integer types.
 ./svsample01 - basic example of sparse_vector<> container
 ./svsample02 - sparse_vector<> serialization example, also shows how to turn on 
                XOR compression (for more details: http://bitmagic.io/bm-xor.html)
+               Example shows how to deserialize into read-only (immutable) succinct vector
 ./svsample03 - sparse_vector<> import, join, extract methods
 ./svsample04 - sparse_vector<> operations with NULL-able vectors and values
 ./svsample05 - set transformation algorithm (image) to translate one set to another
