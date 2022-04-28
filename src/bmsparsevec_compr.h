@@ -956,10 +956,9 @@ private:
     void throw_no_rsc_index();
 
 protected:
-    template<class SVect> friend class sparse_vector_scanner;
+    template<class SVect, unsigned S_FACTOR> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
-    template<class SVect> friend class sparse_vector_scanner;
 
 
 private:

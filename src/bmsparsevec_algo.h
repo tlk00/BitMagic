@@ -491,11 +491,17 @@ void sparse_vector_find_mismatch(typename SV1::bvector_type& bv,
     Class uses fast algorithms based on properties of bit-planes.
     This is NOT a brute force, direct scan, scanner uses search space pruning and cache optimizations
     to run the search.
+
+    S_FACTOR - Sampling factor for search. Can be: [ 4, 8, 16, 32, 64 ]. Default: 16.
+      Lower sampling facor (4, 8) lowers memory footprint for the scanner class instance
+      Higher - improves search performance (at the expense for memory for sampled elements)
+      Sampling factor is used for binary search in bound string sparse vector, so memory consumption
+      depends on sampling and max string length.
  
     @ingroup svalgo
     @ingroup setalgo
 */
-template<typename SV>
+template<typename SV, unsigned S_FACTOR>
 class sparse_vector_scanner
 {
 public:
@@ -508,7 +514,7 @@ public:
     typedef typename bvector_type::allocator_type        allocator_type;
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
 
-    typedef bm::aggregator<bvector_type>    aggregator_type;
+    typedef bm::aggregator<bvector_type>                 aggregator_type;
     typedef
     bm::heap_vector<value_type, typename bvector_type::allocator_type, true>
                                                     remap_vector_type;
@@ -989,7 +995,8 @@ protected:
     void decompress(const SV&   sv, bvector_type& bv_out);
 
     /// compare sv[idx] with input str
-    int compare_str(const SV& sv, size_type idx, const value_type* str);
+    int compare_str(const SV& sv, size_type idx,
+                    const value_type* str) const BMNOEXCEPT;
 
     /// compare sv[idx] with input value
     int compare(const SV& sv, size_type idx, const value_type val) BMNOEXCEPT;
@@ -1078,6 +1085,10 @@ protected:
     }
 
 private:
+    const unsigned sub_bfind_block_cnt = S_FACTOR;
+    const unsigned sub_block_l1_size =
+        bm::gap_max_bits / sub_bfind_block_cnt; // size in bits/elements
+
     allocator_pool_type                pool_;
     bvector_type                       bv_tmp_;
     aggregator_type                    agg_;
@@ -1088,8 +1099,8 @@ private:
     bool                               mask_set_;
     
     const SV*                          bound_sv_;
-    heap_matrix_type                   block0_elements_cache_; ///< cache for elements[0] of each block
-    heap_matrix_type                   block3_elements_cache_; ///< cache for elements[16384x] of each block
+    heap_matrix_type                   block_l0_cache_; ///< cache for elements[0] of each block
+    heap_matrix_type                   block_l1_cache_; ///< cache for elements[x]
     size_type                          effective_str_max_;
     
     remap_vector_type                  remap_value_vect_; ///< remap buffer
@@ -1446,8 +1457,8 @@ void set2set_11_transform<SV>::one_pass_run(const bvector_type&        bv_in,
 //
 //----------------------------------------------------------------------------
 
-template<typename SV>
-sparse_vector_scanner<SV>::sparse_vector_scanner()
+template<typename SV, unsigned S_FACTOR>
+sparse_vector_scanner<SV, S_FACTOR>::sparse_vector_scanner()
 {
     mask_set_ = false;
     mask_from_ = mask_to_ = bm::id_max;
@@ -1458,9 +1469,13 @@ sparse_vector_scanner<SV>::sparse_vector_scanner()
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::bind(const SV&  sv, bool sorted)
 {
+    static_assert(S_FACTOR == 4 || S_FACTOR == 8 || S_FACTOR == 16
+                  || S_FACTOR == 32 || S_FACTOR == 64,
+    "BM: sparse_vector_scanner<> incorrect sampling factor template parameter");
+
     (void)sorted; // MSVC warning over if constexpr variable "not-referenced"
     bound_sv_ = &sv;
 
@@ -1473,24 +1488,25 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
             BM_ASSERT(sv_sz);
             size_type total_nb = sv_sz / bm::gap_max_bits + 1;
 
-            block0_elements_cache_.resize(total_nb, effective_str_max_+1);
-            block0_elements_cache_.set_zero();
+            block_l0_cache_.resize(total_nb, effective_str_max_+1);
+            block_l0_cache_.set_zero();
 
-            block3_elements_cache_.resize(total_nb * 3, effective_str_max_+1);
-            block3_elements_cache_.set_zero();
+            block_l1_cache_.resize(total_nb * (sub_bfind_block_cnt-1),
+                                   effective_str_max_+1);
+            block_l1_cache_.set_zero();
 
             // fill in elements cache
             for (size_type i = 0; i < sv_sz; i+= bm::gap_max_bits)
             {
                 size_type nb = (i >> bm::set_block_shift);
-                value_type* s0 = block0_elements_cache_.row(nb);
-                sv.get(i, s0, size_type(block0_elements_cache_.cols()));
+                value_type* s0 = block_l0_cache_.row(nb);
+                sv.get(i, s0, size_type(block_l0_cache_.cols()));
 
-                for (size_type k = 0; k < 3; ++k)
+                for (size_type k = 0; k < sub_bfind_block_cnt-1; ++k)
                 {
-                    value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
-                    size_type idx = i + (k+1) * bm::sub_block3_size;
-                    sv.get(idx, s1, size_type(block3_elements_cache_.cols()));
+                    value_type* s1 = block_l1_cache_.row(nb * (sub_bfind_block_cnt-1) + k);
+                    size_type idx = i + ((k+1) * sub_block_l1_size);
+                    sv.get(idx, s1, size_type(block_l1_cache_.cols()));
                 } // for k
             } // for i
         }
@@ -1506,8 +1522,8 @@ void sparse_vector_scanner<SV>::bind(const SV&  sv, bool sorted)
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::reset_binding() BMNOEXCEPT
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::reset_binding() BMNOEXCEPT
 {
     bound_sv_ = 0;
     effective_str_max_ = 0;
@@ -1515,8 +1531,8 @@ void sparse_vector_scanner<SV>::reset_binding() BMNOEXCEPT
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_zero(const SV&     sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_zero(const SV&     sv,
                                           bvector_type& bv_out,
                                           bool null_correct)
 {
@@ -1542,8 +1558,8 @@ void sparse_vector_scanner<SV>::find_zero(const SV&     sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::invert(const SV& sv, bvector_type& bv_out)
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::invert(const SV& sv, bvector_type& bv_out)
 {
     if (sv.size() == 0)
     {
@@ -1560,8 +1576,8 @@ void sparse_vector_scanner<SV>::invert(const SV& sv, bvector_type& bv_out)
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::correct_nulls(const SV&   sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::correct_nulls(const SV&   sv,
                                               bvector_type& bv_out)
 {
     const bvector_type* bv_null = sv.get_null_bvector();
@@ -1571,8 +1587,8 @@ void sparse_vector_scanner<SV>::correct_nulls(const SV&   sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_with_nulls(const SV&    sv,
                                     value_type     value,
                                     bvector_type&  bv_out,
                                     size_type      search_limit)
@@ -1602,8 +1618,8 @@ bool sparse_vector_scanner<SV>::find_eq_with_nulls(const SV&    sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(const SV&   sv,
                                             value_type    value,
                                             size_type&    idx)
 {
@@ -1626,8 +1642,8 @@ bool sparse_vector_scanner<SV>::find_first_eq(const SV&   sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_first_eq(
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
                                 const SV&                       sv,
                                 const value_type*               str,
                                 size_type&                      idx,
@@ -1675,11 +1691,12 @@ bool sparse_vector_scanner<SV>::find_first_eq(
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
+                                      const SV&  sv,
                                       const value_type*  str,
-                                      unsigned octet_start,
-                                      bool prefix_sub)
+                                      unsigned           octet_start,
+                                      bool               prefix_sub)
 {
     int len = 0;
     for (; str[len] != 0; ++len)
@@ -1687,14 +1704,14 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
     BM_ASSERT(len);
 
     // use reverse order (faster for sorted arrays)
-    for (int octet_idx = len-1; octet_idx >= 0; --octet_idx)
+    // octet_start is the common prefix length (end index)
+    for (int octet_idx = len-1; octet_idx >= int(octet_start); --octet_idx)
     {
-        if (unsigned(octet_idx) < octet_start) // common prefix
-            break;
+//        if (unsigned(octet_idx) < octet_start) // common prefix
+//            break;
 
-        unsigned value = unsigned(str[octet_idx]) & 0xFF;
+        unsigned value = unsigned(str[octet_idx]) & 0xFFu;
         BM_ASSERT(value != 0);
-        
         bm::id64_t planes_mask;
         if (&sv == bound_sv_)
             planes_mask = vector_plane_masks_[unsigned(octet_idx)];
@@ -1724,9 +1741,10 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&  sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
-                                                           value_type   value)
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
+                                                        const SV&   sv,
+                                                        value_type   value)
 {
     using unsigned_value_type = typename SV::unsigned_value_type;
 
@@ -1764,8 +1782,8 @@ bool sparse_vector_scanner<SV>::prepare_and_sub_aggregator(const SV&   sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_eq_with_nulls_horizontal(
                                   const SV&     sv,
                                   value_type    value,
                                   bvector_type& bv_out)
@@ -1816,8 +1834,9 @@ void sparse_vector_scanner<SV>::find_eq_with_nulls_horizontal(
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_gt(const SV&      sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_gt(
+                                        const SV&      sv,
                                         value_type     val,
                                         bvector_type&  bv_out)
 {
@@ -1827,8 +1846,9 @@ void sparse_vector_scanner<SV>::find_gt(const SV&      sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_ge(const SV&      sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_ge(
+                                        const SV&      sv,
                                         value_type     val,
                                         bvector_type&  bv_out)
 {
@@ -1865,8 +1885,9 @@ void sparse_vector_scanner<SV>::find_ge(const SV&      sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_lt(const SV&      sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_lt(
+                                        const SV&      sv,
                                         value_type     val,
                                         bvector_type&  bv_out)
 {
@@ -1876,10 +1897,10 @@ void sparse_vector_scanner<SV>::find_lt(const SV&      sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_le(const SV& sv,
-                                        value_type val,
-                                        bvector_type&  bv_out)
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_le(const SV& sv,
+                                                  value_type val,
+                                                  bvector_type&  bv_out)
 {
     find_gt(sv, val, bv_out);
     invert(sv, bv_out);
@@ -1887,8 +1908,8 @@ void sparse_vector_scanner<SV>::find_le(const SV& sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_range(const SV&  sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_range(const SV&  sv,
                                            value_type from, value_type to,
                                            bvector_type&  bv_out)
 {
@@ -1905,8 +1926,8 @@ void sparse_vector_scanner<SV>::find_range(const SV&  sv,
 //----------------------------------------------------------------------------
 
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal(const SV&   sv,
                                                    value_type     value,
                                                    bvector_type&  bv_out,
                                                    bool null_correct)
@@ -2091,8 +2112,8 @@ void sparse_vector_scanner<SV>::find_gt_horizontal(const SV&   sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::aggregate_OR_slices(
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::aggregate_OR_slices(
                 bvector_type& bv_target,
                 const SV& sv,
                 unsigned from, unsigned total_planes)
@@ -2110,8 +2131,8 @@ void sparse_vector_scanner<SV>::aggregate_OR_slices(
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::aggregate_AND_OR_slices(bvector_type& bv_target,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::aggregate_AND_OR_slices(bvector_type& bv_target,
             const bvector_type& bv_mask,
             const SV& sv,
             unsigned from, unsigned total_planes)
@@ -2128,8 +2149,8 @@ void sparse_vector_scanner<SV>::aggregate_AND_OR_slices(bvector_type& bv_target,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_str_prefix(const SV&   sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str_prefix(const SV&   sv,
                                 const typename SV::value_type* str,
                                 typename SV::bvector_type&     bv_out)
 {
@@ -2139,9 +2160,10 @@ bool sparse_vector_scanner<SV>::find_eq_str_prefix(const SV&   sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
-                                            typename SV::size_type&        pos)
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(
+                                        const typename SV::value_type* str,
+                                        typename SV::size_type&        pos)
 {
     BM_ASSERT(bound_sv_);
     return this->find_eq_str(*bound_sv_, str, pos);
@@ -2149,10 +2171,11 @@ bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
-                                            const typename SV::value_type* str,
-                                            typename SV::size_type&        pos)
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(
+                                const SV&                      sv,
+                                const typename SV::value_type* str,
+                                typename SV::size_type&        pos)
 {
     bool found = false;
     if (sv.empty())
@@ -2198,9 +2221,10 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
-                                            typename SV::bvector_type& bv_out)
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(
+                                        const typename SV::value_type* str,
+                                        typename SV::bvector_type& bv_out)
 {
     BM_ASSERT(bound_sv_);
     return find_eq_str(*bound_sv_, str, bv_out);
@@ -2208,8 +2232,9 @@ bool sparse_vector_scanner<SV>::find_eq_str(const typename SV::value_type* str,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(
+                                            const SV&                      sv,
                                             const typename SV::value_type* str,
                                             typename SV::bvector_type& bv_out)
 {
@@ -2218,8 +2243,8 @@ bool sparse_vector_scanner<SV>::find_eq_str(const SV&                      sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::remap_tosv(
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::remap_tosv(
                                 remap_vector_type& remap_vect_target,
                                 const typename SV::value_type* str,
                                 const SV& sv)
@@ -2232,8 +2257,9 @@ bool sparse_vector_scanner<SV>::remap_tosv(
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq_str_impl(const SV&  sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str_impl(
+                             const SV&  sv,
                              const typename SV::value_type* str,
                              typename SV::bvector_type& bv_out,
                              bool prefix_sub)
@@ -2283,8 +2309,8 @@ bool sparse_vector_scanner<SV>::find_eq_str_impl(const SV&  sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV> template<class TPipe>
-void sparse_vector_scanner<SV>::find_eq_str(TPipe& pipe)
+template<typename SV, unsigned S_FACTOR> template<class TPipe>
+void sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(TPipe& pipe)
 {
     if (pipe.bv_and_mask_)
     {
@@ -2300,8 +2326,8 @@ void sparse_vector_scanner<SV>::find_eq_str(TPipe& pipe)
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::bfind_eq_str(
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
                                     const SV&                      sv,
                                     const typename SV::value_type* str,
                                     typename SV::size_type&        pos)
@@ -2367,33 +2393,20 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(
                     size_type max_nb = sv.size() >> bm::set_block_shift;
                     if (nb_l != max_nb)
                     {
-                        // linear in-place fixed depth scan to identify the sub-range
-                        size_type mid = nb_r * bm::gap_max_bits + bm::sub_block3_size;
-                        int cmp = this->compare_str(sv, mid, str);
-                        if (cmp < 0)
+                        // linear scan to identify the sub-range
+                        size_type mid = nb_r * bm::gap_max_bits + sub_block_l1_size;
+                        for (unsigned i = 0; i < (sub_bfind_block_cnt-1);
+                                             ++i, mid += sub_block_l1_size)
                         {
-                            l = mid;
-                            mid = nb_r * bm::gap_max_bits + bm::sub_block3_size * 2;
-                            cmp = this->compare_str(sv, mid, str);
+                            int cmp = this->compare_str(sv, mid, str);
                             if (cmp < 0)
-                            {
                                 l = mid;
-                                mid = nb_r * bm::gap_max_bits + bm::sub_block3_size * 3;
-                                cmp = this->compare_str(sv, mid, str);
-                                if (cmp < 0)
-                                    l = mid;
-                                else
-                                    r = mid;
-                            }
                             else
                             {
                                 r = mid;
+                                break;
                             }
-                        }
-                        else
-                        {
-                            r = mid;
-                        }
+                        } // for i
                     }
                 }
                 
@@ -2449,9 +2462,10 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
-                                             typename SV::size_type&        pos)
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
+                                            const typename SV::value_type* str,
+                                            typename SV::size_type&        pos)
 {
     BM_ASSERT(bound_sv_);
     return bfind_eq_str(*bound_sv_, str, pos);
@@ -2459,8 +2473,9 @@ bool sparse_vector_scanner<SV>::bfind_eq_str(const typename SV::value_type* str,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::bfind(const SV&                      sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::bfind(
+                                      const SV&                      sv,
                                       const typename SV::value_type  val,
                                       typename SV::size_type&        pos)
 {
@@ -2579,8 +2594,8 @@ bool sparse_vector_scanner<SV>::bfind(const SV&                      sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::lower_bound_str(
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::lower_bound_str(
                                         const SV&  sv,
                                         const typename SV::value_type* str,
                                         typename SV::size_type&        pos)
@@ -2713,42 +2728,42 @@ bool sparse_vector_scanner<SV>::lower_bound_str(
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-int sparse_vector_scanner<SV>::compare_str(const SV& sv,
+template<typename SV, unsigned S_FACTOR>
+int sparse_vector_scanner<SV, S_FACTOR>::compare_str(
+                                           const SV& sv,
                                            size_type idx,
-                                           const value_type* str)
+                                           const value_type* BMRESTRICT str
+                                           ) const BMNOEXCEPT
 {
     if (bound_sv_ == &sv)
     {
         size_type nb = (idx >> bm::set_block_shift);
         size_type nbit = (idx & bm::set_block_mask);
+        int res = 0;
+        unsigned cols;
+        const value_type* BMRESTRICT s0;
         if (nbit == 0) // access to sentinel, first block element
         {
-            value_type* s0 = block0_elements_cache_.row(nb);
-            if (*s0 == 0) // uninitialized element
-            {
-                sv.get(idx, s0, size_type(block0_elements_cache_.cols()));
-            }
-            int res = 0;
-            for (unsigned i = 0; i < block0_elements_cache_.cols(); ++i)
-            {
-                char octet = str[i]; char value = s0[i];
-                res = (value > octet) - (value < octet);
-                if (res || !octet)
-                    break;
-            } // for i
-            return res;
+            s0 = block_l0_cache_.row(nb);
+            cols = (unsigned) block_l0_cache_.cols();
+            goto str_cmp;
         }
         else
         {
-            if (nbit % bm::sub_block3_size == 0) // TODO: use AND mask here
+            if (nbit % sub_block_l1_size == 0) // TODO: use AND mask here
             {
-                size_type k = nbit / bm::sub_block3_size - 1;
-                value_type* s1 = block3_elements_cache_.row(nb * 3 + k);
-                int res = 0;
-                for (unsigned i = 0; i < block3_elements_cache_.cols(); ++i)
                 {
-                    char octet = str[i]; char value = s1[i];
+                size_type k =
+                (nb * (sub_bfind_block_cnt-1)) + (nbit / sub_block_l1_size - 1);
+                s0 = block_l1_cache_.row(k);
+                }
+                cols = (unsigned) block_l1_cache_.cols();
+
+                str_cmp:
+                for (unsigned i = 0; true; ++i)
+                {
+                    BM_ASSERT(i < cols);
+                    char octet = str[i]; char value = s0[i];
                     res = (value > octet) - (value < octet);
                     if (res || !octet)
                         break;
@@ -2762,10 +2777,11 @@ int sparse_vector_scanner<SV>::compare_str(const SV& sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-int sparse_vector_scanner<SV>::compare(const SV& sv,
-                                       size_type idx,
-                                       const value_type val) BMNOEXCEPT
+template<typename SV, unsigned S_FACTOR>
+int sparse_vector_scanner<SV, S_FACTOR>::compare(
+                                        const SV& sv,
+                                        size_type idx,
+                                        const value_type val) BMNOEXCEPT
 {
     // TODO: implement sentinel elements cache (similar to compare_str())
     return sv.compare(idx, val);
@@ -2773,8 +2789,9 @@ int sparse_vector_scanner<SV>::compare(const SV& sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_eq(
+                                        const SV&                  sv,
                                         typename SV::value_type    value,
                                         typename SV::bvector_type& bv_out)
 {
@@ -2797,8 +2814,9 @@ void sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV> template<typename BII>
-void sparse_vector_scanner<SV>::find_eq(const SV&  sv, value_type  value, BII bi)
+template<typename SV, unsigned S_FACTOR> template<typename BII>
+void sparse_vector_scanner<SV, S_FACTOR>::find_eq(
+                            const SV&  sv, value_type  value, BII bi)
 {
     static_assert(!SV::is_compressed(), "BM:find_eq on RSC vector not implemented");
 
@@ -2830,8 +2848,9 @@ void sparse_vector_scanner<SV>::find_eq(const SV&  sv, value_type  value, BII bi
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::find_eq(
+                                        const SV&                  sv,
                                         typename SV::value_type    value,
                                         typename SV::size_type&    pos)
 {
@@ -2859,9 +2878,10 @@ bool sparse_vector_scanner<SV>::find_eq(const SV&                  sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_nonzero(const SV& sv, 
-                                             typename SV::bvector_type& bv_out)
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_nonzero(
+                                        const    SV&               sv,
+                                        typename SV::bvector_type& bv_out)
 {
     agg_.reset(); // in case if previous scan was interrupted
     auto sz = sv.effective_slices(); // sv.slices();
@@ -2873,8 +2893,9 @@ void sparse_vector_scanner<SV>::find_nonzero(const SV& sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::find_positive(const SV& sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_positive(
+                                     const SV&                  sv,
                                      typename SV::bvector_type& bv_out)
 {
     BM_ASSERT(sv.size());
@@ -2888,8 +2909,9 @@ void sparse_vector_scanner<SV>::find_positive(const SV& sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::decompress(const SV&   sv,
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::decompress(
+                                           const SV&   sv,
                                            typename SV::bvector_type& bv_out)
 {
     if constexpr (SV::is_compressed())
@@ -2909,8 +2931,9 @@ void sparse_vector_scanner<SV>::decompress(const SV&   sv,
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::set_search_range(size_type from, size_type to)
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::set_search_range(
+                                            size_type from, size_type to)
 {
     BM_ASSERT(from < to);
     mask_from_ = from;
@@ -2920,8 +2943,8 @@ void sparse_vector_scanner<SV>::set_search_range(size_type from, size_type to)
 
 //----------------------------------------------------------------------------
 
-template<typename SV>
-void sparse_vector_scanner<SV>::reset_search_range()
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::reset_search_range()
 {
     mask_set_ = false;
     mask_from_ = mask_to_ = bm::id_max;
@@ -2929,12 +2952,13 @@ void sparse_vector_scanner<SV>::reset_search_range()
 
 
 //----------------------------------------------------------------------------
-// sparse_vector_scanner<SV>::pipeline<Opt>
+// sparse_vector_scanner<SV, S_FACTOR>::pipeline<Opt>
 //----------------------------------------------------------------------------
 
-template<typename SV> template<class Opt>
+template<typename SV, unsigned S_FACTOR> template<class Opt>
 void
-sparse_vector_scanner<SV>::pipeline<Opt>::set_search_mask(const bvector_type* bv_mask) BMNOEXCEPT
+sparse_vector_scanner<SV, S_FACTOR>::pipeline<Opt>::set_search_mask(
+                                const bvector_type* bv_mask) BMNOEXCEPT
 {
     static_assert(Opt::is_masks(),
                   "BM: Search masking needs to be enabled in template parameter options before function call. see bm::agg_run_options<> ");
@@ -2943,9 +2967,10 @@ sparse_vector_scanner<SV>::pipeline<Opt>::set_search_mask(const bvector_type* bv
 
 //----------------------------------------------------------------------------
 
-template<typename SV> template<class Opt>
+template<typename SV, unsigned S_FACTOR> template<class Opt>
 void
-sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str)
+sparse_vector_scanner<SV, S_FACTOR>::pipeline<Opt>::add(
+                                    const typename SV::value_type* str)
 {
     BM_ASSERT(str);
 
@@ -3005,7 +3030,7 @@ sparse_vector_scanner<SV>::pipeline<Opt>::add(const typename SV::value_type* str
     //if (prefix_sub)
     {
         unsigned plane_idx = unsigned(len * 8);
-        // SUB group should NOt include not NULL bvector
+        // SUB group should not include not NULL bvector
         size_type planes = size_type(this->eff_slices_);
         for (; plane_idx < planes; ++plane_idx)
         {

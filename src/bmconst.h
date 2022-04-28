@@ -123,8 +123,9 @@ const unsigned rs3_border0_1 = rs3_border0 + rs3_half_span; // intermed pnt 1
 const unsigned rs3_border1_1 = rs3_border1 + rs3_half_span; // intermed pnt 2
 
 // misc parameters for sparse vec algorithms
-const unsigned sub_block3_size = bm::gap_max_bits / 4;
-
+//const unsigned sub_bfind_block_cnt = 32; // bfind discretization factor
+//const unsigned sub_block_l1_size =
+//        bm::gap_max_bits / bm::sub_bfind_block_cnt; // size in bits/elements
 
 #if defined(BM64OPT) || defined(BM64_SSE4)
 typedef id64_t  wordop_t;

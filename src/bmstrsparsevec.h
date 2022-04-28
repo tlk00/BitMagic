@@ -1960,7 +1960,7 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
 }
 
 //---------------------------------------------------------------------
-
+/*
 template<class CharType, class BV, unsigned STR_SIZE>
 unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
                                 size_type idx1, size_type idx2) const BMNOEXCEPT
@@ -1982,6 +1982,30 @@ unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
 
     return i;
 }
+*/
+
+template<class CharType, class BV, unsigned STR_SIZE>
+unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
+                                size_type idx1, size_type idx2) const BMNOEXCEPT
+{
+    unsigned i = 0;
+    CharType ch1 = CharType(this->bmatr_.get_octet(idx1, i));
+    CharType ch2 = CharType(this->bmatr_.get_octet(idx2, i));
+    if (ch1 == ch2 && (ch1|ch2))
+    {
+        for (++i; true; ++i)
+        {
+            ch1 = CharType(this->bmatr_.get_octet(idx1, i));
+            ch2 = CharType(this->bmatr_.get_octet(idx2, i));
+            if (ch1 != ch2)
+                return i;
+            if (!(ch1|ch2)) // both zeroes
+                return i;
+        } // for i
+    }
+    return i;
+}
+
 
 //---------------------------------------------------------------------
 

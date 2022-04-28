@@ -1021,8 +1021,8 @@ bm::id64_t digest_mask(unsigned from, unsigned to) BMNOEXCEPT
     
     bm::id64_t digest_from = from >> bm::set_block_digest_pos_shift;
     bm::id64_t digest_to = to >> bm::set_block_digest_pos_shift;;
-    bm::id64_t mask(~0ull);
-    mask = (mask >> (63 - (digest_to - digest_from))) << digest_from;
+    bm::id64_t mask =
+        ((~0ull) >> (63 - (digest_to - digest_from))) << digest_from;
 
     //BM_ASSERT(mask == bm::dm_control(from, to));
 
@@ -1042,7 +1042,7 @@ bm::id64_t digest_mask(unsigned from, unsigned to) BMNOEXCEPT
    @ingroup bitfunc
    @internal
 */
-inline
+BMFORCEINLINE
 bool check_zero_digest(bm::id64_t digest,
                        unsigned bitpos_from, unsigned bitpos_to) BMNOEXCEPT
 {
@@ -3747,8 +3747,6 @@ unsigned test_bit(const unsigned* block, unsigned  bitpos) BMNOEXCEPT
 inline
 void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
 {
-    const unsigned maskFF = ~0u;
-    
     dest += unsigned(bitpos >> bm::set_word_shift); // nword
     bitpos &= bm::set_word_mask;
 
@@ -3758,11 +3756,11 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
         return;
     }
 
-    if (bitpos) // starting pos is not aligned
+     const unsigned maskFF = ~0u;
+   if (bitpos) // starting pos is not aligned
     {
         unsigned mask_r = maskFF << bitpos;
-        unsigned right_margin = bitpos + bitcount;
-        if (right_margin < 32)
+        if (unsigned right_margin = bitpos + bitcount; right_margin < 32)
         {
             *dest |= (maskFF >> (32 - right_margin)) & mask_r;
             return;
@@ -3794,22 +3792,20 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
 inline
 void sub_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
 {
-    const unsigned maskFF = ~0u;
-    
+    BM_ASSERT(bitcount);
+
     dest += unsigned(bitpos >> bm::set_word_shift); // nword
     bitpos &= bm::set_word_mask;
-
     if (bitcount == 1u)  // special case (only 1 bit to set)
     {
-        *dest &= ~(1u << bitpos);
+        *dest &= ~(bitcount << bitpos);
         return;
     }
-
+    const unsigned maskFF = ~0u;
     if (bitpos) // starting pos is not aligned
     {
         unsigned mask_r = maskFF << bitpos;
-        unsigned right_margin = bitpos + bitcount;
-        if (right_margin < 32)
+        if (unsigned right_margin = bitpos + bitcount; right_margin < 32)
         {
             *dest &= ~((maskFF >> (32 - right_margin)) & mask_r);
             return;
@@ -3824,9 +3820,7 @@ void sub_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEP
         *dest++ = 0u; bitcount -= 32;
     }
     if (bitcount)
-    {
         *dest &= ~(maskFF >> (32 - bitcount));
-    }
 }
 
 

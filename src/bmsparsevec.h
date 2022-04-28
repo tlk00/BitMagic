@@ -1066,10 +1066,9 @@ protected:
 
 protected:
     template<class V, class SV> friend class rsc_sparse_vector;
-    template<class SVect> friend class sparse_vector_scanner;
+    template<class SVect, unsigned S_FACTOR> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_serializer;
     template<class SVect> friend class sparse_vector_deserializer;
-
 
 };
 
