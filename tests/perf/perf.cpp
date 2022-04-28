@@ -258,6 +258,31 @@ void GenerateTestCollection(std::vector<bvect>* target,
 }
 
 static
+void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
+{
+    string prefix = "az";
+    string str;
+    for (unsigned i = 0; i < max_coll; ++i)
+    {
+        str = prefix;
+        str.append(to_string(i));
+        str_coll.emplace_back(str);
+
+        if (i % 1024 == 0) // generate new prefix
+        {
+            prefix.clear();
+            unsigned prefix_len = (unsigned)rand() % 5;
+            for (unsigned j = 0; j < prefix_len; ++j)
+            {
+                char cch = char('a' + (unsigned)rand() % 26);
+                prefix.push_back(cch);
+            } // for j
+        }
+    } // for i
+}
+
+
+static
 void MemCpyTest()
 {
     unsigned* m1 = new unsigned[BSIZE/32];
@@ -5326,30 +5351,6 @@ void SparseVectorRangeDeserializationTest()
 
 
 
-static
-void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
-{
-    string prefix = "az";
-    string str;
-    for (unsigned i = 0; i < max_coll; ++i)
-    {
-        str = prefix;
-        str.append(to_string(i));
-        str_coll.emplace_back(str);
-        
-        {
-            prefix.clear();
-            unsigned prefix_len = (unsigned)rand() % 5;
-            for (unsigned j = 0; j < prefix_len; ++j)
-            {
-                char cch = char('a' + rand() % 26);
-                prefix.push_back(cch);
-            } // for j
-        }
-    } // for i
-    
-}
-
 
 static
 void StrSparseVectorTest()
@@ -5364,7 +5365,7 @@ void StrSparseVectorTest()
    str_svect_type str_sv;
 
    GenerateTestStrCollection(str_coll, max_coll);
-   
+
     {
        bm::chrono_taker tt(cout, "bm::str_sparse_vector<>::push_back() ", 1);
        for (auto str : str_coll)
@@ -5466,6 +5467,196 @@ void StrSparseVectorTest()
             {
                 cerr << "String random access check failure!" << endl;
                 exit(1);
+            }
+        }
+    }
+
+
+
+    // ---------
+    // test on sorted collection
+
+    std::sort(str_coll.begin(), str_coll.end());
+
+    std::vector<string> str_coll_test1;
+    std::vector<string> str_coll_test2;
+
+    for (unsigned i = 0; i < unsigned(str_coll.size()/5); ++i)
+    {
+        const string& s = str_coll[i];
+        str_coll_test1.push_back(s);
+        string s_imposs = s;
+
+        if (rand() & 1)
+            s_imposs.append("ATGCCCqz");
+        else
+            s_imposs = "1200ATGCCCqz";
+
+        str_coll_test2.push_back(s_imposs);
+    }
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(str_coll_test1.begin(), str_coll_test1.end(), g);
+
+
+   str_svect_type str_sv_srt;
+   {
+       str_svect_type::back_insert_iterator bi = str_sv_srt.get_back_inserter();
+       for (auto str : str_coll)
+           bi = str;
+       bi.flush();
+   }
+   str_sv_srt.remap();
+   str_sv_srt.optimize();
+   str_sv_srt.freeze();
+/*
+    {
+       unsigned k =0;
+       for (auto str : str_coll)
+       {
+           string s;
+           str_sv_srt.get(k, s);
+           assert(str == s);
+           ++k;
+       }
+    }
+*/
+
+
+    bm::id64_t  f_sum1{0}, f_sum2_4{0}, f_sum2_8{0}, f_sum2_16{0},
+                f_sum2_32{0}, f_sum2_64{0};
+    unsigned pos2;
+
+    {
+        bm::chrono_taker tt(cout, "std::lower_bound()", 1);
+
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            auto it = std::lower_bound(str_coll.begin(), str_coll.end(), s);
+            assert(it != str_coll.end());
+            auto pos1 = it - str_coll.begin();
+            f_sum1 += (unsigned)pos1;
+        }
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 4> scanner_4;
+    scanner_4.bind(str_sv_srt, true); // bind sorted vector
+
+        bm::chrono_taker tt(cout, "bm::sparse_vector_scanner<>::bfind_eq_str() [4] (sort/remap/ro)", 1);
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            bool found2 = scanner_4.bfind_eq_str(s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+            f_sum2_4 += pos2;
+        }
+        assert(f_sum2_4 == f_sum1);
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 8> scanner_8;
+    scanner_8.bind(str_sv_srt, true); // bind sorted vector
+
+        bm::chrono_taker tt(cout, "bm::sparse_vector_scanner<>::bfind_eq_str() [8] (sort/remap/ro)", 1);
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            bool found2 = scanner_8.bfind_eq_str(s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+            f_sum2_8 += pos2;
+        }
+        assert(f_sum2_8 == f_sum1);
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 16> scanner_16;
+    scanner_16.bind(str_sv_srt, true); // bind sorted vector
+
+        bm::chrono_taker tt(cout, "bm::sparse_vector_scanner<>::bfind_eq_str() [16] (sort/remap/ro)", 1);
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            bool found2 = scanner_16.bfind_eq_str(s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+            f_sum2_16 += pos2;
+        }
+        assert(f_sum2_16 == f_sum1);
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 32> scanner_32;
+    scanner_32.bind(str_sv_srt, true); // bind sorted vector
+
+        bm::chrono_taker tt(cout, "bm::sparse_vector_scanner<>::bfind_eq_str() [32] (sort/remap/ro)", 1);
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            bool found2 = scanner_32.bfind_eq_str(s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+            f_sum2_32 += pos2;
+        }
+        assert(f_sum2_32 == f_sum1);
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 64> scanner_64;
+    scanner_64.bind(str_sv_srt, true); // bind sorted vector
+
+        bm::chrono_taker tt(cout, "bm::sparse_vector_scanner<>::bfind_eq_str() [64] (sort/remap/ro)", 1);
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            bool found2 = scanner_64.bfind_eq_str(s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+            f_sum2_64 += pos2;
+        }
+        assert(f_sum2_64 == f_sum1);
+    }
+
+    if (f_sum1 != f_sum2_4 || f_sum1 != f_sum2_8 ||
+        f_sum1 != f_sum2_16 || f_sum1 != f_sum2_32 || f_sum1 != f_sum2_64)
+    {
+        cerr << "Search positions sum mismatch" << endl;
+        assert(0); exit(1);
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 16> scanner_16;
+    scanner_16.bind(str_sv_srt, true); // bind sorted vector
+
+        bm::chrono_taker tt(cout, "bm::bm::sparse_vector_scanner<>::bfind_eq_str() [16] (sort/remap/ro) (not-found)", 1);
+
+        for (unsigned i = 0; i < unsigned(str_coll_test2.size()); ++i)
+        {
+            const string& s = str_coll_test2[i];
+            bool found2 = scanner_16.bfind_eq_str(s.c_str(), pos2);
+            if (found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
             }
         }
     }
