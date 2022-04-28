@@ -2740,12 +2740,10 @@ int sparse_vector_scanner<SV, S_FACTOR>::compare_str(
         size_type nb = (idx >> bm::set_block_shift);
         size_type nbit = (idx & bm::set_block_mask);
         int res = 0;
-        unsigned cols;
         const value_type* BMRESTRICT s0;
         if (nbit == 0) // access to sentinel, first block element
         {
             s0 = block_l0_cache_.row(nb);
-            cols = (unsigned) block_l0_cache_.cols();
             goto str_cmp;
         }
         else
@@ -2757,12 +2755,10 @@ int sparse_vector_scanner<SV, S_FACTOR>::compare_str(
                 (nb * (sub_bfind_block_cnt-1)) + (nbit / sub_block_l1_size - 1);
                 s0 = block_l1_cache_.row(k);
                 }
-                cols = (unsigned) block_l1_cache_.cols();
 
                 str_cmp:
                 for (unsigned i = 0; true; ++i)
                 {
-                    BM_ASSERT(i < cols);
                     char octet = str[i]; char value = s0[i];
                     res = (value > octet) - (value < octet);
                     if (res || !octet)
