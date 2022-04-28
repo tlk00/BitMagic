@@ -31,12 +31,14 @@ For more information please visit:  http://bitmagic.io
     Example also illustrates how to check memory footprint.
 */
 
+#include <assert.h>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <random>
 #include <algorithm>
 #include <fstream>
+
 
 #include "bm.h"
 #include "bmstrsparsevec.h"
@@ -65,7 +67,7 @@ void generate_string_set(vector<string>& str_vec)
    
     str_vec.resize(0);
     string str;
-    for (unsigned i = 10; i < max_coll; i += rand() % 3)
+    for (unsigned i = 10; i < max_coll; i += (unsigned)rand() % 3)
     {
         str = to_string(i);
         str_vec.emplace_back(str);
@@ -154,12 +156,14 @@ int main(void)
             //
             {
                 str_sv_type str_sv1;
+                {
                 str_sv_type::back_insert_iterator bi =
                                         str_sv1.get_back_inserter();
                 bi.set_remap(true);
                 for (auto str : str_vec)
                     bi = str;
                 bi.flush();
+                }
 
 
                 str_sv1.optimize(tb);
