@@ -779,9 +779,11 @@ public:
     
     /**
         \brief Find size of common prefix between two vector elements in octets
+        @param prefix_buf - optional param for keeping the common prefix string (without remap decode)
         \return size of common prefix
     */
-    unsigned common_prefix_length(size_type idx1, size_type idx2) const BMNOEXCEPT;
+    unsigned common_prefix_length(size_type idx1, size_type idx2,
+                                  value_type* prefix_buf =0) const BMNOEXCEPT;
 
     /**
         Variant of compare for remapped vectors. Caller MUST guarantee vector is remapped.
@@ -1960,39 +1962,19 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
 }
 
 //---------------------------------------------------------------------
-/*
-template<class CharType, class BV, unsigned STR_SIZE>
-unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
-                                size_type idx1, size_type idx2) const BMNOEXCEPT
-{
-    unsigned i = 0;
-    for (; true; ++i)
-    {
-        CharType ch1 = CharType(this->bmatr_.get_octet(idx1, i));
-        CharType ch2 = CharType(this->bmatr_.get_octet(idx2, i));
-        if (!ch1 || !ch2)
-        {
-            if (i) 
-                --i;
-            break;
-        }
-        if (ch1 != ch2)
-            break;
-    } // for
-
-    return i;
-}
-*/
 
 template<class CharType, class BV, unsigned STR_SIZE>
 unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
-                                size_type idx1, size_type idx2) const BMNOEXCEPT
+                                size_type idx1, size_type idx2,
+                                value_type* prefix_buf) const BMNOEXCEPT
 {
     unsigned i = 0;
     CharType ch1 = CharType(this->bmatr_.get_octet(idx1, i));
     CharType ch2 = CharType(this->bmatr_.get_octet(idx2, i));
     if (ch1 == ch2 && (ch1|ch2))
     {
+        if (prefix_buf)
+            *prefix_buf++ = ch1;
         for (++i; true; ++i)
         {
             ch1 = CharType(this->bmatr_.get_octet(idx1, i));
@@ -2001,6 +1983,8 @@ unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
                 return i;
             if (!(ch1|ch2)) // both zeroes
                 return i;
+            if (prefix_buf)
+                *prefix_buf++ = ch1;
         } // for i
     }
     return i;

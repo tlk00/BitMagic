@@ -30635,6 +30635,7 @@ void StressTestStrSparseVector()
        }
        bi.flush();
    }
+
     cout << "  Testing compare(i, j)..." << endl;
     CheckStrSVCompare(str_sv, max_coll / 100);
     cout << "  OK" << endl;
@@ -30660,7 +30661,7 @@ void StressTestStrSparseVector()
     str_sv_remap.remap_from(str_sv_sorted);
     cout << "Build re-mapped vector... OK" << endl;
 
-    
+
     // -----------------------------------------------------------
 
    //print_svector_stat(str_sv);
@@ -30751,20 +30752,17 @@ void StressTestStrSparseVector()
             unsigned octet_idx = 0;
             for (;true; ++octet_idx)
             {
-                if (!str1[octet_idx])
-                {
-                    if (octet_idx)
-                        --octet_idx;
-                    break;
-                }
-                if (!str2[octet_idx])
-                {
-                    if (octet_idx)
-                        --octet_idx;
-                    break;
-                }
                 if (str1[octet_idx] != str2[octet_idx])
                     break;
+                if (!str1[octet_idx] || !str2[octet_idx])
+                    break;
+            }
+            if (octet_idx)
+            {
+                for (unsigned i0 = 0; i0 < octet_idx; ++i0)
+                {
+                    assert(str1[i0] == str2[i0]);
+                }
             }
             unsigned common_prefix = str_sv_sorted.common_prefix_length(i, j);
             if (common_prefix != octet_idx)
@@ -30772,6 +30770,8 @@ void StressTestStrSparseVector()
                 cerr << "Common prefix length mismatch!" <<
                      common_prefix << " != " << octet_idx <<
                      " [" << str1 << "]-[" << str2 << "]" << endl;
+                common_prefix = str_sv_sorted.common_prefix_length(i, j);
+                assert(common_prefix == octet_idx);
                 exit(1);
             }
         } // for j
@@ -30785,6 +30785,8 @@ void StressTestStrSparseVector()
     
     }
    cout << "\nTest common prefix...ok." << endl;
+
+
    // ----------------------------------------------
 
    cout << "Test sorted search..." << endl;
@@ -30822,7 +30824,8 @@ void StressTestStrSparseVector()
             if (!found1)
             {
                 cerr << "Sorted scan failed at: " << i << " " << s << endl;
-                exit(1);
+                found1 = scanner.find_eq_str(str_sv_sorted, s.c_str(), pos1);
+                assert(0); exit(1);
             }
             if (pos1 != i)
             {
@@ -37896,6 +37899,76 @@ int main2 ()
 }
 */
 
+/*
+void BamLoVoTest()
+{
+
+    typedef bm::bvector<> bvector_type;
+    typedef bm::str_sparse_vector<char, bvector_type, 32> str_sv_type;
+    str_sv_type data;    ///<< sorted succinct spot names
+    ///
+    str_sv_type data2;
+    data2.push_back("E100027113L1C009R01304370475");
+    data2.push_back("E100027113L1C030R02304370475");
+    auto pl1 = data2.common_prefix_length(0, 1);
+    data2.remap();
+    data2.optimize();
+    auto pl2 = data2.common_prefix_length(0, 1);
+
+    std::string path = "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/";
+    std::string key = "E100027113L1C030R02304370475";
+    std::string file_name = path + key + ".batch";
+    bm::file_load_svector(data, file_name);
+
+    auto pl3 = data.common_prefix_length(49938432, 49999999);
+    string s3_l, s3_r;
+    data.get(49938432, s3_l);
+    data.get(49999999, s3_r);
+
+    str_sv_type::size_type pos = 0;
+    std::string found_key;
+
+    bm::sparse_vector_scanner<str_sv_type, 16> scanner2;
+
+    if (scanner2.find_eq_str(data, key.c_str(), pos)) {
+        data.get(pos, found_key);
+        if (found_key != key) {
+            std::cerr << pos << endl << key << "\n" << found_key << std::endl;
+        }
+        assert(0);
+    }
+    if (scanner2.bfind_eq_str(data, key.c_str(), pos)) {
+        data.get(pos, found_key);
+        if (found_key != key) {
+            std::cerr << pos << endl << key << "\n" << found_key << std::endl;
+        }
+        assert(0);
+    }
+
+    bm::sparse_vector_scanner<str_sv_type, 16> scanner;
+    scanner.bind(data, true);
+
+    if (scanner.bfind_eq_str(key.c_str(), pos)) {
+        data.get(pos, found_key);
+        if (found_key != key) {
+            std::cerr << "Found " << key << "  at " << pos << " but get returned " << found_key << std::endl;
+        }
+    }
+    auto it = data.begin();
+    std::string s;
+    while (it.valid()) {
+        auto s= it.get_string_view();
+        if (s == key) {
+            std::cerr << "Drat! Key " << s << " exists! (Should not happen)" << std::endl;
+            assert(0);
+        } else if (s == found_key) {
+            std::cerr << "Found_key " << s << " confirmed!" << std::endl;
+        }
+        it.advance();
+    }
+    std::cerr << "the end" << std::endl;
+}
+*/
 
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
@@ -37909,6 +37982,8 @@ int main(int argc, char *argv[])
     cerr << "Build error: Test build with undefined BM_ASSERT" << endl;
     exit(1);
 #endif
+
+//    BamLoVoTest();
 
     {
     auto ret = parse_args(argc, argv);

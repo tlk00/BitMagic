@@ -28,6 +28,7 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 #include <limits>
+#include <string.h>
 
 #include "bmdef.h"
 #include "bmsparsevec.h"
@@ -1104,6 +1105,7 @@ private:
     size_type                          effective_str_max_;
     
     remap_vector_type                  remap_value_vect_; ///< remap buffer
+    remap_vector_type                  remap_prefix_vect_; ///< common prefix buffer
     /// masks of allocated bit-planes (1 - means there is a bit-plane)
     mask_vector_type                   vector_plane_masks_;
     matrix_search_buf_type             hmatr_; ///< heap matrix for string search linear stage
@@ -1649,19 +1651,29 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
                                 size_type&                      idx,
                                 bool                            remaped)
 {
-    if (sv.empty())
-        return false; // nothing to do
     BM_ASSERT(*str);
 
+    if (sv.empty())
+        return false; // nothing to do
     if (!*str)
         return false;
-
     agg_.reset();
     unsigned common_prefix_len = 0;
-    if (mask_set_)
+    if (mask_set_) // it is assumed that the sv is SORTED so common prefix check
     {
         agg_.set_range_hint(mask_from_, mask_to_);
-        common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_);
+        value_type* pref = remap_prefix_vect_.data();
+        common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_, pref);
+        // compare remapped search string with the prefix to make sure it has a
+        // match. No match - string not found.
+        //
+        if (remaped)
+            str = remap_value_vect_.data();
+        for (unsigned i = 0; i < common_prefix_len; ++i)
+        {
+            if (str[i] != pref[i])
+                return false;
+        } // for i
     }
     
     if (remaped)
@@ -2335,18 +2347,23 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
     bool found = false;
     if (sv.empty())
         return found;
+    auto in_len = ::strlen(str);
 
     if (*str)
     {
         bool remaped = false;
+        auto sv_max_len = sv.effective_vector_max();
+        remap_prefix_vect_.resize(sv_max_len);
+
         // test search pre-condition based on remap tables
         if constexpr (SV::is_remap_support::value)
         {
             if (sv.is_remap() && (str != remap_value_vect_.data()))
             {
-                auto str_len = sv.effective_vector_max();
-                remap_value_vect_.resize(str_len);
-                remaped = sv.remap_tosv(remap_value_vect_.data(), str_len, str);
+                if (in_len > sv_max_len)
+                    return false; // impossible value
+                remap_value_vect_.resize(sv_max_len);
+                remaped = sv.remap_tosv(remap_value_vect_.data(), sv_max_len, str);
                 if (!remaped)
                     return remaped;
             }
@@ -2931,7 +2948,7 @@ template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::set_search_range(
                                             size_type from, size_type to)
 {
-    BM_ASSERT(from < to);
+    BM_ASSERT(from <= to);
     mask_from_ = from;
     mask_to_ = to;
     mask_set_ = true;

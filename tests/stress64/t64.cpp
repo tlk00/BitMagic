@@ -18109,7 +18109,7 @@ void StressTestStrSparseVector()
     
     str_sv.optimize();
 
-   print_svector_stat(cout,str_sv, true);
+   //print_svector_stat(cout,str_sv, true);
 
     cout << "ok. \n Verification..." << endl;
 
@@ -18191,20 +18191,17 @@ void StressTestStrSparseVector()
             unsigned octet_idx = 0;
             for (;true; ++octet_idx)
             {
-                if (!str1[octet_idx])
-                {
-                    if (octet_idx)
-                        --octet_idx;
-                    break;
-                }
-                if (!str2[octet_idx])
-                {
-                    if (octet_idx)
-                        --octet_idx;
-                    break;
-                }
                 if (str1[octet_idx] != str2[octet_idx])
                     break;
+                if (!str1[octet_idx] || !str2[octet_idx])
+                    break;
+            }
+            if (octet_idx)
+            {
+                for (unsigned i0 = 0; i0 < octet_idx; ++i0)
+                {
+                    assert(str1[i0] == str2[i0]);
+                }
             }
             unsigned common_prefix = str_sv_sorted.common_prefix_length(i, j);
             if (common_prefix != octet_idx)
