@@ -1674,6 +1674,11 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
             if (str[i] != pref[i])
                 return false;
         } // for i
+
+        // this is important to include first (always match) char into search
+        // to avoid false-negative searches
+        // (TODO: performance consequences to add-sub extra vectors)
+        common_prefix_len -= bool(common_prefix_len);
     }
     
     if (remaped)
@@ -2484,7 +2489,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
                                             const typename SV::value_type* str,
                                             typename SV::size_type&        pos)
 {
-    BM_ASSERT(bound_sv_);
+    BM_ASSERT(bound_sv_); // this function needs prior bind()    
     return bfind_eq_str(*bound_sv_, str, pos);
 }
 
