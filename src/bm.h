@@ -904,11 +904,25 @@ public:
 
     
     ~bvector() BMNOEXCEPT {}
+
     /*!
         \brief Explicit post-construction initialization.
         Must be caled to make sure safe use of *_no_check() methods
     */
     void init();
+
+    /*!
+        \brief Explicit post-construction initialization.
+        Must be caled right after construction strickly before any modificating calls
+        to make sure safe use of *_no_check() methods.
+        This init can do pre-allocation of top level structures.
+
+        @param top_size - request to do pre-allocation of the top level of a sparse bit-vector tree
+        (can be up to 256 for 32-bit mode)
+        @param alloc_subs - if true also allocates second level structures
+    */
+    void init(unsigned top_size, bool alloc_subs);
+
 
     /*! 
         \brief Copy assignment operator
@@ -2261,6 +2275,20 @@ void bvector<Alloc>::init()
     if (!blockman_.is_init())
         blockman_.init_tree();
 }
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::init(unsigned top_size, bool alloc_subs)
+{
+    BM_ASSERT(!is_ro());
+    if (!blockman_.is_init())
+        blockman_.init_tree(top_size);
+    if (alloc_subs)
+        for (unsigned nb = 0; nb < top_size; ++nb)
+            blockman_.alloc_top_subblock(nb);
+}
+
 
 // -----------------------------------------------------------------------
 
