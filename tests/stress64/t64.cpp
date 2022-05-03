@@ -18116,7 +18116,6 @@ void StressTestStrSparseVector()
     CompareStrSparseVector(str_sv, str_coll);
 
     cout << "ok. \n Verification of remap vector..." << endl;
-    
     CompareStrSparseVector(str_sv_remap, str_coll_sorted);
     
     cout << "Memory optimization" << endl;
@@ -18224,7 +18223,7 @@ void StressTestStrSparseVector()
 
    // ----------------------------------------------
    
-   cout << "Test sorted search..." << endl;
+   cout << "\n\nTest sorted search..." << endl;
    
    for (unsigned k = 0; k < 2; ++k)
    {
@@ -18270,6 +18269,7 @@ void StressTestStrSparseVector()
             bool found2 = scanner.bfind_eq_str(str_sv_sorted, s.c_str(), pos2);
             if (!found2)
             {
+                found2 = scanner.bfind_eq_str(str_sv_sorted, s.c_str(), pos2);
                 cerr << "Error! Sorted binary search failed at: " << i << " value='" << s << "'" << endl;
                 //cerr << "Dump file test.sv created." << endl;
                 //file_save_svector(str_sv_sorted, "test.sv");
@@ -18312,7 +18312,7 @@ void StressTestStrSparseVector()
 
    EraseStrCollection(str_sv_sorted);
    EraseStrCollection(str_sv_remap);
-   
+
    cout << "---------------------------- Bit-plain STR sparse vector stress test OK" << endl;
    cout << endl;
 }
@@ -18349,12 +18349,13 @@ void GeneratePipelineTestData(std::vector<string>& str_coll,
 static
 void TestSparseFindEqStrPipeline()
 {
-   cout << "---------------------------- TestSparseFindEqStrPipeline()" << endl;
+   cout << "\n---------------------------- TestSparseFindEqStrPipeline()" << endl;
    const unsigned max_coll = 8000000;
    std::vector<string> str_coll;
    str_svect_type      str_sv;
 
    cout << "   generate test set..." << flush;
+
 
    GeneratePipelineTestData(str_coll, str_sv, max_coll, 10);
 
@@ -18365,7 +18366,7 @@ void TestSparseFindEqStrPipeline()
 
    cout << "OK" << endl;
 
-    bm::print_svector_stat(cout,str_sv);
+    //bm::print_svector_stat(cout,str_sv);
 
     unsigned test_runs = 10000;
     std::vector<string> str_test_coll;
@@ -18381,6 +18382,7 @@ void TestSparseFindEqStrPipeline()
 
     std::vector<unique_ptr<bvect> > res_vec1;
     bm::sparse_vector_scanner<str_svect_type> scanner;
+
 
     {
     std::chrono::time_point<std::chrono::steady_clock> s;
@@ -18401,6 +18403,7 @@ void TestSparseFindEqStrPipeline()
 
     cout << "scanner::find_eq_str()  " << d << "ms" << endl;
     }
+
 
     bm::sparse_vector_scanner<str_svect_type>::pipeline<> pipe(str_sv);
     {
@@ -18423,6 +18426,7 @@ void TestSparseFindEqStrPipeline()
     cout << "scanner::pipeline:  " << d << "ms" << endl;
     }
 
+
     bm::sparse_vector_scanner<str_svect_type>::pipeline<bm::agg_opt_only_counts> pipe2(str_sv);
     {
     std::chrono::time_point<std::chrono::steady_clock> s;
@@ -18443,6 +18447,7 @@ void TestSparseFindEqStrPipeline()
     auto d = std::chrono::duration <double, std::milli> (diff).count();
     cout << "scanner::pipeline::count():  " << d << "ms" << endl;
     }
+
 
     cout << "  validation..." << flush;
     {
@@ -20106,7 +20111,6 @@ int main(int argc, char *argv[])
 
          TestSparseFindEqStrPipeline();
          CheckAllocLeaks(false);
-
          TestStrSparseSort();
          CheckAllocLeaks(false);
 
