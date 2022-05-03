@@ -499,7 +499,7 @@ public:
     void resize_no_copy(size_type new_size)
     {
         size_type v_size = value_size();
-        buffer_.resize(new_size * v_size);
+        buffer_.resize(new_size * v_size, false /*no copy content*/);
     }
 
     /**
