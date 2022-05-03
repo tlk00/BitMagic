@@ -4245,6 +4245,22 @@ void BasicFunctionalityTest()
 
     }
 
+
+    {
+        bvect::statistics st;
+        bvect bv;
+        bv.init(256, false/* NOT allocate secondary structures*/);
+        bv.calc_stat(&st);
+        assert(st.ptr_sub_blocks == 0);
+    }
+    {
+        bvect::statistics st;
+        bvect bv;
+        bv.init(256, true/*allocate secondary structures*/);
+        bv.calc_stat(&st);
+        assert(st.ptr_sub_blocks == 256);
+    }
+
     // filling vectors with regular values
     
     cout << "test data generation... " << endl;
@@ -29022,6 +29038,16 @@ void TestStrSparseVector()
            found = scanner.bfind_eq_str("11", pos);
            assert(found);
            assert(pos == 1);
+
+          {
+          pos = 0;
+            const char test_ch [] = "113";
+           found = scanner.bfind_eq_str(test_ch, 2, pos);
+           assert(found);
+           assert(pos == 1);
+
+          }
+
            found = scanner1.lower_bound_str(str_sv1, "11", pos1);
            assert(found);
            assert(pos == pos1);
