@@ -819,8 +819,11 @@ public:
     void find_eq_str(TPipe& pipe);
 
     /**
-        \brief binary find first sparse vector element (string)     
-        Sparse vector must be sorted.
+        \brief binary find first sparse vector element (string). Sparse vector must be sorted.
+
+        @param sv  - sparse vector of strings to search
+        @param str - string prefix to search for
+        @param pos - [out] first position found
     */
     bool bfind_eq_str(const SV& sv,
                       const value_type* str, size_type& pos);
@@ -842,10 +845,27 @@ public:
 
     /**
         \brief binary find first sparse vector element (string)
-        Sparse vector must be sorted and attached
+        Sparse vector must be sorted and attached (use method bind())
+
+        @param str - string prefix to search for
+        @param pos - [out] first position found
+
         @sa bind
     */
     bool bfind_eq_str(const value_type* str, size_type& pos);
+
+    /**
+        \brief binary find first sparse vector element (string)
+        Sparse vector must be sorted and attached (use method bind())
+
+        @param str - string prefix to search for
+        @param len - string length
+        @param pos - [out] first position found
+
+        @sa bind
+    */
+    bool bfind_eq_str(const value_type* str, size_t len, size_type& pos);
+
 
     //@}
 
@@ -1085,11 +1105,13 @@ protected:
         } // for
     }
 
-private:
-    const unsigned sub_bfind_block_cnt = S_FACTOR;
-    const unsigned sub_block_l1_size =
-        bm::gap_max_bits / sub_bfind_block_cnt; // size in bits/elements
+    enum code
+    {
+        sub_bfind_block_cnt = S_FACTOR,
+        sub_block_l1_size = bm::gap_max_bits / S_FACTOR // size in bits/elements
+    };
 
+private:
     allocator_pool_type                pool_;
     bvector_type                       bv_tmp_;
     aggregator_type                    agg_;
@@ -1104,7 +1126,8 @@ private:
     heap_matrix_type                   block_l1_cache_; ///< cache for elements[x]
     size_type                          effective_str_max_;
     
-    remap_vector_type                  remap_value_vect_; ///< remap buffer
+    remap_vector_type                  value_vect_;        ///< value buffer
+    remap_vector_type                  remap_value_vect_;  ///< remap buffer
     remap_vector_type                  remap_prefix_vect_; ///< common prefix buffer
     /// masks of allocated bit-planes (1 - means there is a bit-plane)
     mask_vector_type                   vector_plane_masks_;
@@ -1484,6 +1507,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::bind(const SV&  sv, bool sorted)
     if constexpr (SV::is_str()) // bindings for the string sparse vector
     {
         effective_str_max_ = sv.effective_vector_max();
+
+        value_vect_.reserve(effective_str_max_ * 2);
+        remap_value_vect_.reserve(effective_str_max_ * 2);
+        remap_prefix_vect_.reserve(effective_str_max_ * 2);
+
         if (sorted)
         {
             size_type sv_sz = sv.size();
@@ -2358,7 +2386,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
     {
         bool remaped = false;
         auto sv_max_len = sv.effective_vector_max();
-        remap_prefix_vect_.resize(sv_max_len);
+        remap_prefix_vect_.resize_no_copy(sv_max_len);
 
         // test search pre-condition based on remap tables
         if constexpr (SV::is_remap_support::value)
@@ -2367,7 +2395,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
             {
                 if (in_len > sv_max_len)
                     return false; // impossible value
-                remap_value_vect_.resize(sv_max_len);
+                remap_value_vect_.resize_no_copy(sv_max_len);
                 remaped = sv.remap_tosv(remap_value_vect_.data(), sv_max_len, str);
                 if (!remaped)
                     return remaped;
@@ -2452,7 +2480,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
             if (cmp == 0)
             {
                 found_pos = mid;
-                found = true;
+                //found = true;
                 set_search_range(l, mid);
                 break;
             }
@@ -2489,8 +2517,22 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
                                             const typename SV::value_type* str,
                                             typename SV::size_type&        pos)
 {
-    BM_ASSERT(bound_sv_); // this function needs prior bind()    
+    BM_ASSERT(bound_sv_); // this function needs prior bind()
     return bfind_eq_str(*bound_sv_, str, pos);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
+                        const value_type* str, size_t len, size_type& pos)
+{
+    BM_ASSERT(str);
+    value_vect_.resize_no_copy(len+1);
+    value_type* s = value_vect_.data();
+    ::strncpy(s, str, len);
+    value_vect_[len] = value_type(0);
+    return bfind_eq_str(*bound_sv_, s, pos);
 }
 
 //----------------------------------------------------------------------------
