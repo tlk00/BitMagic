@@ -103,6 +103,9 @@ String sparse vector (bit-transposed vector) for ASCII(z) strings
 ./strsvsample07 - bm::sparse_vector_scanner<>::pipeline to bulk search for a thousands of strings,
                   or calculate statistics, benchmarking various search modes and showing how to use 
                   succinct vector remapping to save RAM without loosing performance of search
+./strsvsample08 - bm::sparse_vector_scanner<>::bfind_eq_str() binary search with binding
+		 bm::str_sparse_vector<>::remap(), bm::str_sparse_vector<>::optimize(), 
+                  bm::str_sparse_vector<>::freeze() to reduce heap footprint
 
 
 

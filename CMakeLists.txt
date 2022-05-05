@@ -199,5 +199,6 @@ add_executable(strsvsample04 ${PROJECT_SOURCE_DIR}/samples/strsvsample04/strsvsa
 add_executable(strsvsample05 ${PROJECT_SOURCE_DIR}/samples/strsvsample05/strsvsample05.cpp ${BM_HEADERS})
 add_executable(strsvsample06 ${PROJECT_SOURCE_DIR}/samples/strsvsample06/strsvsample06.cpp ${BM_HEADERS})
 add_executable(strsvsample07 ${PROJECT_SOURCE_DIR}/samples/strsvsample07/strsvsample07.cpp ${BM_HEADERS})
+add_executable(strsvsample08 ${PROJECT_SOURCE_DIR}/samples/strsvsample08/strsvsample08.cpp ${BM_HEADERS})
 
 
