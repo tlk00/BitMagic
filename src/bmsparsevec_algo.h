@@ -2529,9 +2529,11 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
 {
     BM_ASSERT(str);
     value_vect_.resize_no_copy(len+1);
-    value_type* s = value_vect_.data();
-    ::strncpy(s, str, len);
-    value_vect_[len] = value_type(0);
+    value_type* s = value_vect_.data(); // copy to temp buffer, put zero end
+    for (size_t i = 0; i < len && *str; ++i)
+        s[i] = str[i];
+    s[len] = value_type(0);
+
     return bfind_eq_str(*bound_sv_, s, pos);
 }
 
