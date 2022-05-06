@@ -1271,7 +1271,7 @@ void assign_to_best_cluster(CSeqClusters& cluster_groups,
         bm::deserialize(bv_k_mer, buf, tb);
 
         bm::bvector<>::size_type best_score(0);
-        size_t cluster_idx(~0ull);
+        bm::bvector<>::size_type cluster_idx(~0ull);
 
         // analyse candidate's similarity to all clusters via representative
         //
@@ -1339,7 +1339,7 @@ void assign_to_best_cluster_union(CSeqClusters& cluster_groups,
         bm::deserialize(bv_k_mer, buf, tb);
 
         bm::bvector<>::size_type best_score(0);
-        size_t cluster_idx(~0ull);
+        bm::bvector<>::size_type cluster_idx(~0ull);
 
         {
             // try to extend search using UNION of all cluster k-mers

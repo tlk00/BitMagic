@@ -348,6 +348,7 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             for (const string& term : bench_vec_not_found)
             {
                 auto p = std::lower_bound(str_vec.begin(), str_vec.end(), term);
+                (void) p;
             } // for
         }
     }
