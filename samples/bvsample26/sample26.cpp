@@ -125,7 +125,7 @@ int main(void)
         bm::bvector<>   bv11(bv1_ro);
         assert(bv11.is_ro());
         bool eq = bv11.equal(bv1_ro);
-        assert(eq);
+        assert(eq); (void) eq;
         }
 
 

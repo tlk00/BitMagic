@@ -164,7 +164,7 @@ void SDemo2()
 
         assert(sv4.is_ro());
         bool eq = sv3.equal(sv4);
-        assert(eq);
+        assert(eq); (void)eq;
 
         // compute memory profile for RO and RW vectors
         // to illustrate the case when RO takes less RAM

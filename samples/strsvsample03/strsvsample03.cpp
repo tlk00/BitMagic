@@ -174,7 +174,7 @@ int main(void)
 
                 assert(str_sv1.is_ro());
                 bool eq = str_sv1.equal(str_sv);
-                assert(eq);
+                assert(eq); (void)eq;
 
                 str_sv1.calc_stat(&st);
                 cout << "Used memory after remap / optimization / freeze: "
