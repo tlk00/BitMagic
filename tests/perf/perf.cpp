@@ -5481,7 +5481,8 @@ void StrSparseVectorTest()
     std::vector<string> str_coll_test1;
     std::vector<string> str_coll_test2;
 
-    for (unsigned i = 0; i < unsigned(str_coll.size()/5); ++i)
+    const unsigned pick_factor = 5;
+    for (unsigned i = 0; i < unsigned(str_coll.size()); i+=pick_factor)
     {
         const string& s = str_coll[i];
         str_coll_test1.push_back(s);
@@ -5524,7 +5525,7 @@ void StrSparseVectorTest()
 */
 
 
-    bm::id64_t  f_sum1{0}, f_sum2_4{0}, f_sum2_8{0}, f_sum2_16{0},
+    bm::id64_t  f_sum4_0{0}, f_sum1{0}, f_sum2_4{0}, f_sum2_8{0}, f_sum2_16{0},
                 f_sum2_32{0}, f_sum2_64{0};
     unsigned pos2;
 
@@ -5539,6 +5540,23 @@ void StrSparseVectorTest()
             auto pos1 = it - str_coll.begin();
             f_sum1 += (unsigned)pos1;
         }
+    }
+
+    {
+    bm::sparse_vector_scanner<str_svect_type, 4> scanner_4;
+        bm::chrono_taker tt(cout, "bm::sparse_vector_scanner<>::bfind_eq_str() [no-bind] [4] (sort/remap/ro)", 1);
+        for (unsigned i = 0; i < unsigned(str_coll_test1.size()); ++i)
+        {
+            const string& s = str_coll_test1[i];
+            bool found2 = scanner_4.bfind_eq_str(str_sv_srt, s.c_str(), pos2);
+            if (!found2)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+            f_sum4_0 += pos2;
+        }
+        assert(f_sum4_0 == f_sum1);
     }
 
     {
@@ -5636,7 +5654,7 @@ void StrSparseVectorTest()
         assert(f_sum2_64 == f_sum1);
     }
 
-    if (f_sum1 != f_sum2_4 || f_sum1 != f_sum2_8 ||
+    if (f_sum1 != f_sum4_0 || f_sum1 != f_sum2_4 || f_sum1 != f_sum2_8 ||
         f_sum1 != f_sum2_16 || f_sum1 != f_sum2_32 || f_sum1 != f_sum2_64)
     {
         cerr << "Search positions sum mismatch" << endl;
@@ -5778,10 +5796,17 @@ void InterpolativeCodingTest()
 }
 
 
+
 int main(void)
 {
     cout << bm::_copyright<true>::_p << endl;
     cout << "SIMD code = " << bm::simd_version() << endl;
+    #if defined (BM64OPT)
+        cout << " 64-bit optimizations: ON" << endl;
+    #else
+        cout << " 64-bit optimizations: OFF" << endl;
+    #endif
+
 //    ptest();
 
     bm::chrono_taker tt(cout, "TOTAL", 1);
