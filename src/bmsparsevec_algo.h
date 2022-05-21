@@ -1695,12 +1695,13 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
     if (!*str)
         return false;
     agg_.reset();
-    unsigned common_prefix_len = 0;
+    //unsigned common_prefix_len = 0;
     if (mask_set_) // it is assumed that the sv is SORTED so common prefix check
     {
         agg_.set_range_hint(mask_from_, mask_to_);
+        /*
         value_type* pref = remap_prefix_vect_.data();
-        common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_, pref);
+        common_prefix_len = 0; //sv.common_prefix_length(mask_from_, mask_to_, pref);
         // compare remapped search string with the prefix to make sure it has a
         // match. No match - string not found.
         //
@@ -1716,6 +1717,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
         // to avoid false-negative searches
         // (TODO: performance consequences to add-sub extra vectors)
         common_prefix_len -= bool(common_prefix_len);
+        */
     }
     
     if (remaped)
@@ -1734,7 +1736,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
         }
     }
     
-    bool found = prepare_and_sub_aggregator(sv, str, common_prefix_len, true);
+    bool found = prepare_and_sub_aggregator(sv, str, 0/*common_prefix_len*/, true);
     if (!found)
         return found;
     
