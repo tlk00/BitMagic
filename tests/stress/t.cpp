@@ -19990,6 +19990,44 @@ void TestNibbleArr()
     cout << "---------------------------- TestNibbleArr() OK" << endl;
 }
 
+static
+void TestHasZeroByte()
+{
+    cout << "---------------------------- TestHasZeroByte()" << endl;
+
+    {
+        bool b;
+        b = bm::has_zero_byte_u64(0ULL);
+        assert(b);
+        b = bm::has_zero_byte_u64(1ULL);
+        assert(b);
+        for (unsigned i = 8; i < 64; i+=8)
+        {
+            b = bm::has_zero_byte_u64(1ULL << i);
+            assert(b);
+        }
+        b = bm::has_zero_byte_u64(~0ULL);
+        assert(!b);
+        b = bm::has_zero_byte_u64(0x0101010101010101ULL);
+        assert(!b);
+        b = bm::has_zero_byte_u64(0x0101000101010101ULL);
+        assert(b);
+        b = bm::has_zero_byte_u64(0x8080808080808080ULL);
+        assert(!b);
+
+        b = bm::has_zero_byte_u64(~0ULL ^ 0xFFULL);
+        assert(b);
+        for (unsigned i = 8; i < 64; i+=8)
+        {
+            b = bm::has_zero_byte_u64(~0ULL ^ (0xFFUL << i));
+            assert(b);
+        }
+    }
+
+    cout << "---------------------------- TestHasZeroByte() OK" << endl;
+}
+
+
 
 static
 void TestRecomb()
@@ -30646,7 +30684,7 @@ void StressTestStrSparseVector()
 {
    cout << "---------------------------- Bit-plane STR sparse vector stress test" << endl;
    
-   const unsigned max_coll = 2000000;
+   const unsigned max_coll = 20000000;
    std::vector<string> str_coll;
    str_svect_type str_sv;
 
@@ -30699,7 +30737,7 @@ void StressTestStrSparseVector()
 
     CompareStrSparseVector(str_sv, str_coll);
 
-   print_svector_stat(cout,str_sv, true);
+    //print_svector_stat(cout,str_sv, true);
 
     cout << "ok. \n Verification..." << endl;
 
@@ -30820,8 +30858,21 @@ void StressTestStrSparseVector()
    for (unsigned k = 0; k < 2; ++k)
    {
         bm::sparse_vector_scanner<str_svect_type> scanner;
-        bm::sparse_vector_scanner<str_svect_type> scanner2;
-        scanner2.bind(str_sv_remap, true); // bind sorted vector
+        bm::sparse_vector_scanner<str_svect_type, 4> scanner4;
+        scanner4.bind(str_sv_remap, true); // bind sorted vector
+
+        bm::sparse_vector_scanner<str_svect_type, 8> scanner8;
+        scanner8.bind(str_sv_remap, true); // bind sorted vector
+
+        bm::sparse_vector_scanner<str_svect_type, 16> scanner16;
+        scanner16.bind(str_sv_remap, true); // bind sorted vector
+
+        bm::sparse_vector_scanner<str_svect_type, 32> scanner32;
+        scanner32.bind(str_sv_remap, true); // bind sorted vector
+
+        bm::sparse_vector_scanner<str_svect_type, 64> scanner64;
+        scanner64.bind(str_sv_remap, true); // bind sorted vector
+
 
         for (unsigned i = 0; i < unsigned(str_coll_sorted.size()); ++i)
         {
@@ -30859,6 +30910,7 @@ void StressTestStrSparseVector()
                      << " " << s << endl;
                 assert(0);exit(1);
             }
+
             bool found2 = scanner.bfind_eq_str(str_sv_sorted, s.c_str(), pos2);
             if (!found2)
             {
@@ -30873,11 +30925,14 @@ void StressTestStrSparseVector()
                      << " " << s << endl;
                 assert(0);exit(1);
             }
+
+
             bool found4 = scanner.lower_bound_str(str_sv_sorted, s.c_str(), pos4);
             assert(found4);
             assert(pos2 == pos4);
 
-            bool found3 = scanner2.bfind_eq_str(s.c_str(), pos3);
+
+            bool found3 = scanner4.bfind_eq_str(s.c_str(), pos3);
             if (!found3)
             {
                 cerr << "Error! Sorted-remap binary search failed at: " << i << " value='" << s << "'" << endl;
@@ -30889,6 +30944,73 @@ void StressTestStrSparseVector()
                      << " value='" << s << "'" << endl;
                 assert(0);exit(1);
             }
+
+            // -----------------------------------------------
+            {
+                unsigned pos_x;
+                bool found_x = scanner8.bfind_eq_str(s.c_str(), pos_x);
+                if (!found_x)
+                {
+                    cerr << "Error! Sorted-remap binary search 8 failed at: " << i << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+                if (pos_x != i)
+                {
+                    cerr << "Error! Sorted-remap binary search 8 position mismatch at: " << i << "!=" << pos2
+                         << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+            }
+            // -----------------------------------------------
+            {
+                unsigned pos_x;
+                bool found_x = scanner16.bfind_eq_str(s.c_str(), pos_x);
+                if (!found_x)
+                {
+                    cerr << "Error! Sorted-remap binary search 16 failed at: " << i << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+                if (pos_x != i)
+                {
+                    cerr << "Error! Sorted-remap binary search 16 position mismatch at: " << i << "!=" << pos2
+                         << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+            }
+            // -----------------------------------------------
+            {
+                unsigned pos_x;
+                bool found_x = scanner32.bfind_eq_str(s.c_str(), pos_x);
+                if (!found_x)
+                {
+                    cerr << "Error! Sorted-remap binary search 32 failed at: " << i << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+                if (pos_x != i)
+                {
+                    cerr << "Error! Sorted-remap binary search 32 position mismatch at: " << i << "!=" << pos2
+                         << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+            }
+            // -----------------------------------------------
+            {
+                unsigned pos_x;
+                bool found_x = scanner64.bfind_eq_str(s.c_str(), pos_x);
+                if (!found_x)
+                {
+                    cerr << "Error! Sorted-remap binary search 64 failed at: " << i << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+                if (pos_x != i)
+                {
+                    cerr << "Error! Sorted-remap binary search 64 position mismatch at: " << i << "!=" << pos2
+                         << " value='" << s << "'" << endl;
+                    assert(0);exit(1);
+                }
+            }
+            // ---------------------------------------------------
+
             {
                 bvect bv_result;
                 bool found5 = scanner.find_eq_str(str_sv_sorted, s.c_str(), bv_result);
@@ -30906,7 +31028,7 @@ void StressTestStrSparseVector()
             }
             {
                 bvect bv_result;
-                bool found6 = scanner2.find_eq_str(s.c_str(), bv_result);
+                bool found6 = scanner4.find_eq_str(s.c_str(), bv_result);
                 if (!found6)
                 {
                     cerr << "Error! Scanner bvector search failed! at: " << i << endl;
@@ -30919,6 +31041,7 @@ void StressTestStrSparseVector()
                     assert(pos6 == i);
                 }
             }
+
             if (i % 65535 == 0)
             {
                 if (!is_silent)
@@ -31061,7 +31184,7 @@ void TestSparseFindEqStrPipeline()
 
    cout << "OK" << endl;
 
-    bm::print_svector_stat(cout,str_sv);
+    //bm::print_svector_stat(cout,str_sv);
 
     unsigned test_runs = 10000;
     std::vector<string> str_test_coll;
@@ -38216,6 +38339,8 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
     {
         TestNibbleArr();
 
+        TestHasZeroByte();
+
         TestRecomb();
 
         HMaskTest();
@@ -38704,6 +38829,7 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
