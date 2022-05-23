@@ -8478,7 +8478,7 @@ bool bit_find_first(const bm::word_t* BMRESTRICT block,
     BM_ASSERT(pos);
 
 #ifdef VECT_BIT_FIND_FIRST
-    return VECT_BIT_FIND_FIRST(block, pos);
+    return VECT_BIT_FIND_FIRST(block, 0, pos);
 #else
     for (unsigned i = 0; i < bm::set_block_size; ++i)
     {
@@ -8499,7 +8499,7 @@ bool bit_find_first(const bm::word_t* BMRESTRICT block,
 
     \param block - bit block buffer pointer
     \param first - index of the first 1 bit (out)
-   \param digest - known digest of dst block
+    \param digest - known digest of dst block
 
     \return 0 if not found
 
@@ -8515,20 +8515,43 @@ unsigned bit_find_first(const bm::word_t* BMRESTRICT block,
     BM_ASSERT(digest);
     
     bm::id64_t t = bm::bmi_blsi_u64(digest); // d & -d;
-
     unsigned wave = bm::word_bitcount64(t - 1);
-    unsigned off = wave * bm::set_block_digest_wave_size;
-    for (unsigned i = off; i < bm::set_block_size; ++i)
+    unsigned i = wave * bm::set_block_digest_wave_size;
+
+#ifdef VECT_BIT_FIND_FIRST
+    return VECT_BIT_FIND_FIRST(block, i, first);
+#else
+    do
     {
-        bm::word_t w = block[i];
-        if (w)
+        bm::id64_t w64 = block[i] | block[i+1];
+        if (w64)
         {
-            unsigned idx = bit_scan_forward32(w); // trailing zeros
-            *first = unsigned(idx + (i * 8u * unsigned(sizeof(bm::word_t))));
-            return w;
+            unsigned base = i * 8u * unsigned(sizeof(bm::word_t));
+            if (bm::word_t w0 = block[i])
+            {
+                *first = bm::bit_scan_forward32(w0) + base;
+                return w0;
+            }
+            BM_ASSERT(block[i+1]);
+            return *first = bm::bit_scan_forward32(block[i+1]) + base + 32;
         }
-    } // for i
+        i+=2;
+        w64 = block[i] | block[i+1];
+        if (w64)
+        {
+            unsigned base = i * 8u * unsigned(sizeof(bm::word_t));
+            if (bm::word_t w0 = block[i])
+            {
+                *first = bm::bit_scan_forward32(w0) + base;
+                return w0;
+            }
+            BM_ASSERT(block[i+1]);
+            return *first = bm::bit_scan_forward32(block[i+1]) + base + 32;
+        }
+        i+=2;
+    } while (i < bm::set_block_size);
     return 0u;
+#endif
 }
 
 

@@ -746,11 +746,12 @@ bool sse2_sub_digest_2way(__m128i* BMRESTRICT dst,
   @ingroup SSE2
 */
 inline
-bool sse2_bit_find_first(const __m128i* BMRESTRICT block,
+bool sse2_bit_find_first(const __m128i* BMRESTRICT block, unsigned off,
                           unsigned* pos) BMNOEXCEPT
 {
     unsigned BM_ALIGN32 simd_buf[4] BM_ALIGN32ATTR;
 
+    block = (const __m128i*)((bm::word_t*)(block) + off);
     const __m128i* block_end =
         (const __m128i*)((bm::word_t*)(block) + bm::set_block_size);
     const __m128i maskZ = _mm_setzero_si128();
@@ -775,7 +776,7 @@ bool sse2_bit_find_first(const __m128i* BMRESTRICT block,
                 unsigned widx = bsf >> 2; // (bsf / 4);
                 unsigned w = simd_buf[widx];
                 bsf = bm::bit_scan_forward32(w); // find first bit != 0
-                *pos = (simd_lane * 128) + (widx * 32) + bsf;
+                *pos = (off * 32) +(simd_lane * 128) + (widx * 32) + bsf;
                 return true;
             }
             unsigned mask = (_mm_movemask_epi8(_mm_cmpeq_epi32(mB, maskZ)));
@@ -786,7 +787,7 @@ bool sse2_bit_find_first(const __m128i* BMRESTRICT block,
             unsigned widx = bsf >> 2; // (bsf / 4);
             unsigned w = simd_buf[widx];
             bsf = bm::bit_scan_forward32(w); // find first bit != 0
-            *pos = ((++simd_lane) * 128) + (widx * 32) + bsf;
+            *pos = (off * 32) + ((++simd_lane) * 128) + (widx * 32) + bsf;
             return true;
         }
         simd_lane+=2;
@@ -1363,8 +1364,8 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
     sse2_shift_r1((__m128i*)b, acc, co)
 
 
-#define VECT_BIT_FIND_FIRST(src, pos) \
-    sse2_bit_find_first((__m128i*) src, pos)
+#define VECT_BIT_FIND_FIRST(src, off, pos) \
+    sse2_bit_find_first((__m128i*) src, off, pos)
 
 #define VECT_BIT_FIND_DIFF(src1, src2, pos) \
     sse2_bit_find_first_diff((__m128i*) src1, (__m128i*) (src2), pos)

@@ -2178,10 +2178,11 @@ bool avx2_bit_find_first_diff(const __m256i* BMRESTRICT block1,
   @ingroup AVX2
 */
 inline
-bool avx2_bit_find_first(const __m256i* BMRESTRICT block, unsigned* pos)
+bool avx2_bit_find_first(const __m256i* BMRESTRICT block, unsigned off, unsigned* pos)
 {
     unsigned BM_ALIGN32 simd_buf[8] BM_ALIGN32ATTR;
 
+    block = (const __m256i*)((bm::word_t*)(block) + off);
     const __m256i* block_end =
         (const __m256i*)((bm::word_t*)(block) + bm::set_block_size);
     __m256i maskZ = _mm256_setzero_si256();
@@ -2203,7 +2204,7 @@ bool avx2_bit_find_first(const __m256i* BMRESTRICT block, unsigned* pos)
                 unsigned widx = bsf >> 2; // (bsf / 4);
                 unsigned w = simd_buf[widx];
                 bsf = bm::bsf_asm32(w); // find first bit != 0
-                *pos = (simd_lane * 256) + (widx * 32) + bsf;
+                *pos = (off * 32) + (simd_lane * 256) + (widx * 32) + bsf;
                 return true;
             }
             // invert to fing (w != 0)
@@ -2214,7 +2215,7 @@ bool avx2_bit_find_first(const __m256i* BMRESTRICT block, unsigned* pos)
             unsigned widx = bsf >> 2; // (bsf / 4);
             unsigned w = simd_buf[widx];
             bsf = bm::bsf_asm32(w); // find first bit != 0
-            *pos = ((++simd_lane) * 256) + (widx * 32) + bsf;
+            *pos = (off * 32) + ((++simd_lane) * 256) + (widx * 32) + bsf;
             return true;
         }
 
@@ -3323,8 +3324,8 @@ void avx2_bit_block_xor_2way(bm::word_t* target_block,
 #define VECT_BIT_TO_GAP(dest, src, dest_len) \
     avx2_bit_to_gap(dest, src, dest_len)
 
-#define VECT_BIT_FIND_FIRST(src1, pos) \
-    avx2_bit_find_first((__m256i*) src1, pos)
+#define VECT_BIT_FIND_FIRST(src1, off, pos) \
+    avx2_bit_find_first((__m256i*) src1, off, pos)
 
 #define VECT_BIT_FIND_DIFF(src1, src2, pos) \
     avx2_bit_find_first_diff((__m256i*) src1, (__m256i*) (src2), pos)
