@@ -132,7 +132,13 @@ struct bv_arena_statistics
     size_t get_alloc_size() const BMNOEXCEPT
     {
         size_t sz = bit_blocks_sz * sizeof(bm::word_t);
-        sz += gap_blocks_sz * sizeof(bm::gap_word_t);
+
+        if (gap_blocks_sz) // add padding space for SIMD vect overread
+        {
+            sz += (gap_blocks_sz + bm::gap_len_table_min<true>::_len[0])
+                                                   * sizeof(bm::gap_word_t);
+        }
+
         sz += (ptr_sub_blocks_sz + top_block_size) * sizeof(void*);
         return sz;
     }

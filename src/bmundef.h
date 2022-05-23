@@ -104,4 +104,5 @@ For more information please visit:  http://bitmagic.io
 #undef BM_UNALIGNED_ACCESS_OK
 #undef BM_x86
 
+#undef BM_ALLOC_ALIGN
 
