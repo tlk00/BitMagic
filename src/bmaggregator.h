@@ -475,9 +475,10 @@ public:
     /**
         Set search hint for the range, where results needs to be searched
         (experimental for internal use).
+       @return true if range is one-block bound
        @internal
     */
-    void set_range_hint(size_type from, size_type to) BMNOEXCEPT;
+    bool set_range_hint(size_type from, size_type to) BMNOEXCEPT;
 
     /**
         Reset range hint to false
@@ -835,6 +836,8 @@ private:
     bool                 range_set_ = false; ///< range flag
     size_type            range_from_ = bm::id_max; ///< search from
     size_type            range_to_   = bm::id_max; ///< search to
+    bm::gap_word_t       range_gap_blk_[5] {0,}; ///< temp GAP range block
+
     
     typename bvector_type::optmode opt_mode_; ///< perform search result optimization
     bool                           compute_count_; ///< compute search result count
@@ -954,16 +957,33 @@ void aggregator<BV>::reset_range_hint() BMNOEXCEPT
 {
     range_set_ = false;
     range_from_ = range_to_ = bm::id_max;
+    range_gap_blk_[0] = 0;
 }
 
 
 // ------------------------------------------------------------------------
 
 template<typename BV>
-void aggregator<BV>::set_range_hint(size_type from, size_type to) BMNOEXCEPT
+bool aggregator<BV>::set_range_hint(size_type from, size_type to) BMNOEXCEPT
 {
     range_from_ = from; range_to_ = to;
     range_set_ = true;
+    typename bvector_type::block_idx_type
+        nb_from {from >> bm::set_block_shift}, nb_to {to >> bm::set_block_shift};
+    if (nb_from == nb_to)
+    {
+        gap_init_range_block<gap_word_t>(
+                        range_gap_blk_,
+                        (gap_word_t)unsigned(from & bm::set_block_mask),
+                        (gap_word_t)unsigned(to & bm::set_block_mask),
+                        (gap_word_t)1);
+        return true; // one block hit
+    }
+    else
+    {
+        range_gap_blk_[0] = 0;
+    }
+    return false; // range crosses the blocks boundaries
 }
 
 // ------------------------------------------------------------------------
@@ -2265,6 +2285,12 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(
         bit_arr[bc++] = arg_blk;
 
     } // for k
+
+    if (range_gap_blk_[0]) // block specific AND filter exists
+    {
+        BM_ASSERT(range_set_);
+        gap_arr[gc++] = range_gap_blk_;
+    }
 
     bit_v.resize_no_copy(bc);
     gap_v.resize_no_copy(gc);
