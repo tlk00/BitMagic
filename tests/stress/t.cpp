@@ -27925,7 +27925,7 @@ void CheckStrSVCompare(const STR_SV& str_sv,
 static
 void TestStrSparseVector()
 {
-   cout << "---------------------------- Bit-plane STR sparse vector test" << endl;
+   cout << "---------------------------- TestStrSparseVector()" << endl;
 
    typedef str_sparse_vector<char, bvect, 2> str_svect_type;
 
@@ -29220,6 +29220,7 @@ void TestStrSparseVector()
             int cmp = strcmp(s.c_str(), str);
             assert(cmp == 0);
         }
+
       cout << "  Testing compare(i, j)..." << endl;
       CheckStrSVCompare(str_sv0);
       cout << "  OK" << endl;
@@ -29414,7 +29415,7 @@ void TestStrSparseVector()
     }
     
     
-   cout << "---------------------------- Bit-plane STR sparse vector test OK" << endl;
+   cout << "---------------------------- TestStrSparseVector() OK" << endl;
 }
 
 static
@@ -30684,7 +30685,7 @@ void StressTestStrSparseVector()
 {
    cout << "---------------------------- Bit-plane STR sparse vector stress test" << endl;
    
-   const unsigned max_coll = 20000000;
+   const unsigned max_coll = 3000000;
    std::vector<string> str_coll;
    str_svect_type str_sv;
 
@@ -30747,10 +30748,6 @@ void StressTestStrSparseVector()
     
     CompareStrSparseVector(str_sv_remap, str_coll_sorted);
     
-
-    cout << "ok. \n Verification of remap vector..." << endl;
-    
-    CompareStrSparseVector(str_sv_remap, str_coll_sorted);
 
 
     // serialization check
@@ -31045,7 +31042,7 @@ void StressTestStrSparseVector()
             if (i % 65535 == 0)
             {
                 if (!is_silent)
-                    cout << "\r" << i << " / " << str_sv_sorted.size() << flush;
+                    cout << "\r" << (str_sv_sorted.size()-i) << flush;
             }
 
         } // for
