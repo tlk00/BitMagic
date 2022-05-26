@@ -5552,6 +5552,9 @@ void StrSparseVectorTest()
             if (!found2)
             {
                 cerr << "String bfind_eq_str() failure!" << endl;
+                cerr << s << endl;
+                bm::file_save_svector(str_sv_srt, "perf.str_sv");
+                cout << "debug dump created: " << "perf.str_sv" << endl;
                 assert(0); exit(1);
             }
             f_sum4_0 += pos2;
