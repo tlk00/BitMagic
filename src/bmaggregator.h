@@ -1455,9 +1455,6 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
                  const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
                  const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size)
 {
-    if (!bv_src_and || !src_and_size)
-        return false;
-
     unsigned top_blocks = max_top_blocks(bv_src_and, src_and_size);
     unsigned top_blocks2 = max_top_blocks(bv_src_sub, src_sub_size);
     
@@ -1731,7 +1728,6 @@ aggregator<BV>::combine_and_sub(
              const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
              int* is_result_full)
 {
-    BM_ASSERT(src_and_size);
     BM_ASSERT(is_result_full);
 
     *is_result_full = 0;

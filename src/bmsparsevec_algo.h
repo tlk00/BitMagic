@@ -1704,25 +1704,28 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
         if (one_nb)
         {
             value_type* pref = remap_prefix_vect_.data();
-            common_prefix_len = sv.common_prefix_length(mask_from_, mask_to_, pref);
-            // compare remapped search string with the prefix to make sure it has a
-            // match. No match - string not found.
-            //
-            if (remaped)
-                str = remap_value_vect_.data();
-            for (unsigned i = 0; i < common_prefix_len; ++i)
+            common_prefix_len =
+                sv.common_prefix_length(mask_from_, mask_to_, pref);
+            if (common_prefix_len)
             {
-                if (str[i] != pref[i])
-                    return false;
-            } // for i
-
-            // this is important to include first (always match) char into search
-            // to avoid false-negative searches
-            // (TODO: performance consequences to add-sub extra vectors)
-    //        common_prefix_len -= bool(common_prefix_len);
+                // compare remapped search string with the prefix
+                // to make sure it has a match. No match - string not found.
+                //
+                if (remaped)
+                    str = remap_value_vect_.data();
+                for (unsigned i = 0; i < common_prefix_len; ++i)
+                {
+                    if (str[i] != pref[i])
+                        return false;
+                } // for i
+                auto in_len = ::strlen(str);
+                // this is important to include first (always match) char
+                // into search to avoid false-negative searches
+                if (in_len == common_prefix_len)
+                    common_prefix_len--;
+            }
         }
 
-        //common_prefix_len = 0;
     }
 
     if (remaped)
@@ -3063,7 +3066,7 @@ template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::reset_search_range()
 {
     mask_set_ = false;
-    mask_from_ = mask_to_ = bm::id_max;
+    //mask_from_ = mask_to_ = bm::id_max;
 }
 
 
