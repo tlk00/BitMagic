@@ -2240,7 +2240,7 @@ bm::word_t* aggregator<BV>::sort_input_blocks_and(
     auto& bit_v = ar_->v_arg_and_blk;
     auto& gap_v = ar_->v_arg_and_blk_gap;
     bit_v.resize_no_copy(src_size);
-    gap_v.resize_no_copy(src_size);
+    gap_v.resize_no_copy(src_size + range_set_);
     size_t bc(0), gc(0);
 
     auto bit_arr = bit_v.data();
