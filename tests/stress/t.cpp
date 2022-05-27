@@ -20019,8 +20019,11 @@ void TestHasZeroByte()
         assert(b);
         for (unsigned i = 8; i < 64; i+=8)
         {
-            b = bm::has_zero_byte_u64(~0ULL ^ (0xFFUL << i));
-            assert(b);
+            auto v = ~0ULL ^ (0xFFUL << i);
+            cout << i << endl;
+            cout << hex << v << endl;
+            b = bm::has_zero_byte_u64(v);
+            assert(b || v == ~0ULL);
         }
     }
 
