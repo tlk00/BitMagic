@@ -64,6 +64,8 @@ struct bv_statistics
     gap_word_t  gap_levels[bm::gap_levels]; ///< GAP block lengths in the bvect
     unsigned long long gaps_by_level[bm::gap_levels]; ///< number of GAP blocks at each level
 
+    bv_statistics() BMNOEXCEPT { reset(); }
+
     /// cound bit block
     void add_bit_block() BMNOEXCEPT
     {
