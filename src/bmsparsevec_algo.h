@@ -2492,8 +2492,6 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
         
         reset_search_range();
         
-        // narrow down the search
-        const unsigned min_distance_cutoff = bm::gap_max_bits + bm::gap_max_bits / 2;
         size_type l, r;
         size_type found_pos;
 
@@ -2511,6 +2509,8 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
         }
         else
         {
+            // narrow down the search
+            const unsigned min_distance_cutoff = bm::gap_max_bits + bm::gap_max_bits / 2;
             size_type dist;
             l = 0; r = sv.size()-1;
 
@@ -2978,7 +2978,7 @@ int sparse_vector_scanner<SV, S_FACTOR>::compare_str(
         return res;
     }
     else
-#endif    
+#endif
     {
         return sv.compare(idx, str);
     }
