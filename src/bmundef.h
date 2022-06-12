@@ -85,6 +85,11 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_AND_DIGEST_5WAY
 #undef VECT_BLOCK_SET_DIGEST
 
+#undef VECT_SUB_DIGEST
+#undef VECT_SUB_DIGEST_5WAY
+#undef VECT_SUB_DIGEST_2WAY
+#undef VECT_SUB_BLOCK
+
 #undef VECT_BLOCK_XOR_CHANGE
 #undef VECT_BIT_BLOCK_XOR
 
