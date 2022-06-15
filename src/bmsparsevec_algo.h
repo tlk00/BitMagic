@@ -2652,7 +2652,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
         s[i] = str[i];
     s[len] = value_type(0);
 
-    return bfind_eq_str(*bound_sv_, s, pos);
+    return bfind_eq_str(s, pos);
 }
 
 //----------------------------------------------------------------------------
