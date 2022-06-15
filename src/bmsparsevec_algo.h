@@ -3277,6 +3277,7 @@ void sv_sample_index<SV>::construct(const SV& sv, unsigned s_factor)
         value_type* s_str = s_cache_.row(idx_size_);
         ++idx_size_;
         sv.get(i, s_str, cols);
+//std::cout << s_str << std::endl;
         i += s_step;
         if (i >= sv_size_) // add the last sampled element
         {
