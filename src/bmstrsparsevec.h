@@ -1889,7 +1889,7 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare_remap(
             break;
         }
         const unsigned char* remap_row = remap_matrix1_.row(i);
-        unsigned char remap_value1 = remap_row[unsigned(octet1)];
+        CharType remap_value1 = (CharType)remap_row[unsigned(octet1)];
         BM_ASSERT(remap_value1);
         res = (remap_value1 > octet2) - (remap_value1 < octet2);
         if (res || !octet2)

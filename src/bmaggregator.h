@@ -1832,7 +1832,8 @@ aggregator<BV>::process_gap_blocks_and(const arena& ar,
         case 0:
             return digest;
         case 1:
-            if ((is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest)))
+            is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest);
+            if (is_single_bit_)
             {
                 for (++k; k < arg_blk_gap_count; ++k)
                     if (!bm::gap_test_unr(ar.v_arg_and_blk_gap[k], single_bit_idx_))
@@ -1873,7 +1874,8 @@ aggregator<BV>::process_gap_blocks_sub(const arena& ar,
         case 0:
             return digest;
         case 1:
-            if ((is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest)))
+            is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest);
+            if (is_single_bit_)
             {
                 for (++k; k < arg_blk_gap_count; ++k)
                     if (bm::gap_test_unr(ar.v_arg_or_blk_gap[k], single_bit_idx_))
@@ -2007,13 +2009,13 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
         unsigned nbit_to = unsigned(range_to_ & bm::set_block_mask);
         digest_type digest0 = bm::digest_mask(nbit_from, nbit_to);
         digest &= digest0;
-/*
+
         if (arg_blk_count > 1) // 2 or more
         {
-            digest = bm::bit_block_and_2way(blk, args[k], args[k+1], digest);
+            digest = bm::bit_block_init_and_2way(blk, args[k], args[k+1], digest);
             k += 2;
         }
-        else */
+        else
         {
             bm::block_init_digest0(blk, digest);
         }
@@ -2046,7 +2048,8 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
         case 0:
             return 0;
         case 1:
-            if ((is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest)))
+            is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest);
+            if (is_single_bit_)
             {
                 k += unroll_factor;
                 sbit_check:
@@ -2080,7 +2083,9 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
         case 0:
             return digest;
         case 1:
-            if ((is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest)))
+            is_single_bit_ = bm::bit_find_first_if_1(blk,
+                                                     &single_bit_idx_, digest);
+            if (is_single_bit_)
             {
                 ++k;
                 goto sbit_check;
@@ -2120,12 +2125,16 @@ aggregator<BV>::process_bit_blocks_sub(const arena& ar,
         case 0:
             return digest;
         case 1:
-            if ((is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest)))
+            is_single_bit_ = bm::bit_find_first_if_1(blk,
+                                                     &single_bit_idx_, digest);
+            if (is_single_bit_)
             {
                 k += unroll_factor;
                 sbit_check:
-                const unsigned mask = 1u << (single_bit_idx_ & bm::set_word_mask);
-                const unsigned nword = unsigned(single_bit_idx_ >> bm::set_word_shift);
+                const unsigned mask =
+                                1u << (single_bit_idx_ & bm::set_word_mask);
+                const unsigned nword =
+                            unsigned(single_bit_idx_ >> bm::set_word_shift);
                 bm::word_t acc = 0;
                 for (; k + unroll_factor < arg_blk_count; k += unroll_factor)
                 {
@@ -2153,7 +2162,8 @@ aggregator<BV>::process_bit_blocks_sub(const arena& ar,
         case 0:
             return digest;
         case 1:
-            if ((is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest)))
+            is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest);
+            if (is_single_bit_)
             {
                 ++k;
                 goto sbit_check;
@@ -2162,7 +2172,6 @@ aggregator<BV>::process_bit_blocks_sub(const arena& ar,
         default: break;
         } // switch
     } // for
-
     return digest;
 }
 
@@ -2220,17 +2229,16 @@ aggregator<BV>::max_top_blocks(const bvector_type_const_ptr* bv_src,
                                size_t src_size) BMNOEXCEPT
 {
     unsigned top_blocks = 1;
-
-    // pre-scan to do target size harmonization
-    for (unsigned i = 0; i < src_size; ++i)
+    for (unsigned i = 0; i < src_size; ++i) // pre-scan: target size sync
     {
-        const bvector_type* bv = bv_src[i];
-        if (!bv)
-            continue;
-        const typename bvector_type::blocks_manager_type& bman_arg = bv->get_blocks_manager();
-        unsigned arg_top_blocks = bman_arg.top_block_size();
-        if (arg_top_blocks > top_blocks)
-            top_blocks = arg_top_blocks;
+        if (const bvector_type* bv = bv_src[i])
+        {
+            const typename bvector_type::blocks_manager_type& bman_arg =
+                                                    bv->get_blocks_manager();
+            unsigned arg_top_blocks = bman_arg.top_block_size();
+            if (arg_top_blocks > top_blocks)
+                top_blocks = arg_top_blocks;
+        }
     } // for i
     return top_blocks;
 }

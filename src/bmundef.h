@@ -47,7 +47,10 @@ For more information please visit:  http://bitmagic.io
 #undef BMVECTOPT
 #undef VECT_XOR_ARR_2_MASK
 #undef VECT_ANDNOT_ARR_2_MASK
+
 #undef VECT_BITCOUNT
+#undef VECT_BIT_COUNT_DIGEST
+
 #undef VECT_BITCOUNT_AND
 #undef VECT_BITCOUNT_OR
 #undef VECT_BITCOUNT_XOR
@@ -95,6 +98,8 @@ For more information please visit:  http://bitmagic.io
 
 #undef VECT_BIT_FIND_FIRST
 #undef VECT_BIT_FIND_DIFF
+#undef VECT_BIT_FIND_FIRST_IF_1
+
 #undef VECT_GAP_BFIND
 
 #undef BMI1_SELECT64

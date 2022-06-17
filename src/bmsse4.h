@@ -117,7 +117,44 @@ bm::id_t sse4_bit_count(const __m128i* block, const __m128i* block_end) BMNOEXCE
     return count;
 }
 
+#ifdef BM64_SSE4
 
+/*!
+    SSE4.2 optimized bitcounting, uses digest for positioning
+    @ingroup SSE4
+*/
+inline
+bm::id_t sse42_bit_count_digest(const bm::word_t* BMRESTRICT block,
+                                bm::id64_t                   digest) BMNOEXCEPT
+{
+    BM_ASSERT(digest);
+
+    bm::id_t count = 0;
+    bm::id64_t d = digest;
+    while (d)
+    {
+        const bm::id64_t t = bm::bmi_blsi_u64(d); // d & -d;
+        const unsigned wave = _mm_popcnt_u64(t - 1);
+        const unsigned off = wave * bm::set_block_digest_wave_size;
+
+        const bm::bit_block_t::bunion_t* BMRESTRICT src_u =
+                        (const bm::bit_block_t::bunion_t*)(&block[off]);
+        unsigned j = 0;
+        do
+        {
+            count +=
+                    unsigned( _mm_popcnt_u64(src_u->w64[j]) +
+                              _mm_popcnt_u64(src_u->w64[j+1]) +
+                              _mm_popcnt_u64(src_u->w64[j+2]) +
+                              _mm_popcnt_u64(src_u->w64[j+3]));
+        } while ((j+=4) < bm::set_block_digest_wave_size/2);
+
+        d = bm::bmi_bslr_u64(d); // d &= d - 1;
+    }  // while (d);
+    return count;
+}
+
+#endif
 
 /*!
 \internal
@@ -1892,7 +1929,12 @@ void sse42_bit_block_xor_2way(bm::word_t* target_block,
 
 #define VECT_BITCOUNT(first, last) \
     sse4_bit_count((__m128i*) (first), (__m128i*) (last))
-
+/*
+#ifdef BM64_SSE4
+#define VECT_BIT_COUNT_DIGEST(src, digest) \
+    sse42_bit_count_digest(src, digest)
+#endif
+*/
 #define VECT_BITCOUNT_AND(first, last, mask) \
     sse4_bit_count_op((__m128i*) (first), (__m128i*) (last), (__m128i*) (mask), sse2_and)
 

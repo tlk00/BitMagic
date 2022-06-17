@@ -1,7 +1,7 @@
 #ifndef BMSPARSEVEC_ALGO__H__INCLUDED__
 #define BMSPARSEVEC_ALGO__H__INCLUDED__
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2022 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -2501,10 +2501,11 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
             if (!found)
                 return found;
             range_idx_.recalc_range(str, l, r);
-            set_search_range(l, r);
-            
+            set_search_range(l, r); // r := r-1 (may happen here) [l..r] interval
+
             BM_ASSERT(this->compare_str<false>(sv, l, str) <= 0);
-            BM_ASSERT(this->compare_str<false>(sv, r, str) >= 0);
+            // bad assert, because of the r = r-1 correction in recalc_range()
+            //BM_ASSERT(this->compare_str<false>(sv, r, str) >= 0);
 
         }
         else
@@ -3277,7 +3278,6 @@ void sv_sample_index<SV>::construct(const SV& sv, unsigned s_factor)
         value_type* s_str = s_cache_.row(idx_size_);
         ++idx_size_;
         sv.get(i, s_str, cols);
-//std::cout << s_str << std::endl;
         i += s_step;
         if (i >= sv_size_) // add the last sampled element
         {
@@ -3299,7 +3299,7 @@ void sv_sample_index<SV>::construct(const SV& sv, unsigned s_factor)
     for(size_type i = 1; i < idx_size_; ++i)
     {
         const value_type* str_curr = s_cache_.row(i);
-        int cmp = ::strcmp(str_prev, str_curr);
+        int cmp = SV::compare_str(str_prev, str_curr);
         BM_ASSERT(cmp <= 0);
         if (cmp == 0) // duplicate
         {
@@ -3394,6 +3394,10 @@ void sv_sample_index<SV>::recalc_range(const value_type* search_str,
     BM_ASSERT(l <= r);
     BM_ASSERT(r < idx_size_);
 
+    // -1 correction here below is done to get it to the closed interval
+    // [from..to] when possible, because it reduces search space
+    // by one scan wave
+
     const size_type s_step = bm::gap_max_bits / s_factor_;
     if (r == idx_size_-1) // last element
     {
@@ -3411,7 +3415,7 @@ void sv_sample_index<SV>::recalc_range(const value_type* search_str,
         if (l == r)
         {
             l *= s_step;
-            r = l + s_step - 1;
+            r = l + s_step-1;
             if (r >= sv_size_)
                 r = sv_size_-1;
         }
@@ -3420,13 +3424,12 @@ void sv_sample_index<SV>::recalc_range(const value_type* search_str,
             const value_type* str = s_cache_.row(r);
             l *= s_step;
             r *= s_step;
-            int cmp = ::strcmp(search_str, str);
+            int cmp = SV::compare_str(search_str, str);
             BM_ASSERT(cmp <= 0);
             if (cmp != 0)
                 r -= (r && idx_unique_); // -1 correct
         }
     }
-
     BM_ASSERT(r <= sv_size_);
     BM_ASSERT(l <= r);
 }
