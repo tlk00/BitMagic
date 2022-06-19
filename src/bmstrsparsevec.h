@@ -786,8 +786,9 @@ public:
         @param prefix_buf - optional param for keeping the common prefix string (without remap decode)
         \return size of common prefix
     */
+    template<bool USE_PREFIX_BUF = false>
     unsigned common_prefix_length(size_type idx1, size_type idx2,
-                                  value_type* prefix_buf =0) const BMNOEXCEPT;
+                                  value_type* prefix_buf=0) const BMNOEXCEPT;
 
     /**
         Variant of compare for remapped vectors. Caller MUST guarantee vector is remapped.
@@ -1019,7 +1020,22 @@ public:
                     const value_type* BMRESTRICT str,
                     const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2
                     ) BMNOEXCEPT;
-    
+    /*!
+        remap string from external (ASCII) system to matrix internal code
+        also creates a zero terminated copy string
+        @return true if remapping was ok, false if found incorrect value
+                for the plane
+        @internal
+    */
+    static
+    bool remap_n_tosv_2way(
+       value_type*   BMRESTRICT     sv_str,
+       value_type*   BMRESTRICT     str_cp,
+       size_type                    buf_size,
+       const value_type* BMRESTRICT str,
+       size_t                       in_len,
+       const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT;
+
     /*!
         remap string from external (ASCII) system to matrix internal code
         @internal
@@ -1030,6 +1046,22 @@ public:
     {
         return remap_tosv(sv_str, buf_size, str, remap_matrix2_);
     }
+
+    /*!
+        remap string from external (ASCII) system to matrix internal code
+        @internal
+    */
+    bool remap_n_tosv_2way(
+                   value_type*   BMRESTRICT     sv_str,
+                   value_type*   BMRESTRICT     str_cp,
+                   size_type                    buf_size,
+                   const value_type* BMRESTRICT str,
+                   size_t                       in_len) const BMNOEXCEPT
+    {
+        return remap_n_tosv_2way(
+                    sv_str, str_cp, buf_size, str, in_len, remap_matrix2_);
+    }
+
     /*!
         remap string from internal code to external (ASCII) system
         @return true if remapping was ok, false if found incorrect value
@@ -1993,26 +2025,29 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned STR_SIZE>
+template<bool USE_PREFIX_BUF>
 unsigned str_sparse_vector<CharType, BV, STR_SIZE>::common_prefix_length(
                                 size_type idx1, size_type idx2,
                                 value_type* prefix_buf) const BMNOEXCEPT
 {
+    BM_ASSERT (!(prefix_buf && !USE_PREFIX_BUF));
     unsigned i = 0;
     CharType ch1 = CharType(this->bmatr_.get_octet(idx1, i));
     CharType ch2 = CharType(this->bmatr_.get_octet(idx2, i));
     if (ch1 == ch2 && (ch1|ch2))
     {
-        if (prefix_buf)
+        if constexpr(USE_PREFIX_BUF)
+        {
+            BM_ASSERT(prefix_buf);
             *prefix_buf++ = ch1;
+        }
         for (++i; true; ++i)
         {
             ch1 = CharType(this->bmatr_.get_octet(idx1, i));
             ch2 = CharType(this->bmatr_.get_octet(idx2, i));
-            if (ch1 != ch2)
+            if (ch1 != ch2 || (!(ch1|ch2))) // chs not the same or both zero
                 return i;
-            if (!(ch1|ch2)) // both zeroes
-                return i;
-            if (prefix_buf)
+            if constexpr(USE_PREFIX_BUF)
                 *prefix_buf++ = ch1;
         } // for i
     }
@@ -2170,6 +2205,38 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_tosv(
     } // for i
     return true;
 }
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_n_tosv_2way(
+       value_type*   BMRESTRICT     sv_str,
+       value_type*   BMRESTRICT     str_cp,
+       size_type                    buf_size,
+       const value_type* BMRESTRICT str,
+       size_t                       in_len,
+       const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
+{
+    BM_ASSERT(in_len <= buf_size); (void) buf_size;
+    for (unsigned i = 0; i < in_len; ++i)
+    {
+        CharType ch = str[i];
+        str_cp[i] = value_type(ch);
+        if (!ch)
+        {
+            sv_str[i] = ch;
+            break;
+        }
+        const unsigned char* remap_row = octet_remap_matrix2.row(i);
+        unsigned char remap_value = remap_row[unsigned(ch)];
+        if (!remap_value) // unknown dictionary element
+            return false;
+        sv_str[i] = CharType(remap_value);
+    } // for i
+    sv_str[in_len] = str_cp[in_len] = 0; // gurantee zero termination
+    return true;
+}
+
 
 //---------------------------------------------------------------------
 

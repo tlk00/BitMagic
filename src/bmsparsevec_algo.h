@@ -1033,7 +1033,9 @@ protected:
 
     template<bool BOUND>
     bool bfind_eq_str_impl(const SV& sv,
-                           const value_type* str, size_type& pos);
+                           const value_type* str, size_t in_len,
+                           bool remaped,
+                           size_type& pos);
 
 
     /// Remap input value into SV char encodings
@@ -1062,6 +1064,7 @@ protected:
     /// find first string value (may include NULL indexes)
     bool find_first_eq(const SV&          sv,
                        const value_type*  str,
+                       size_t             in_len,
                        size_type&         idx,
                        bool               remaped);
 
@@ -1110,6 +1113,13 @@ protected:
             return 1; // last plane
         else
             return 0;
+    }
+
+    void resize_buffers()
+    {
+        value_vect_.resize_no_copy(effective_str_max_ * 2);
+        remap_value_vect_.resize_no_copy(effective_str_max_ * 2);
+        remap_prefix_vect_.resize_no_copy(effective_str_max_ * 2);
     }
 
 
@@ -1580,10 +1590,12 @@ void sparse_vector_scanner<SV, S_FACTOR>::bind(const SV&  sv, bool sorted)
     if constexpr (SV::is_str()) // bindings for the string sparse vector
     {
         effective_str_max_ = sv.effective_vector_max();
-
+/*
         value_vect_.reserve(effective_str_max_ * 2);
         remap_value_vect_.reserve(effective_str_max_ * 2);
         remap_prefix_vect_.reserve(effective_str_max_ * 2);
+*/
+        resize_buffers();
 
         if (sorted)
         {
@@ -1756,13 +1768,13 @@ template<typename SV, unsigned S_FACTOR>
 bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
                                 const SV&                       sv,
                                 const value_type*               str,
+                                size_t                          in_len,
                                 size_type&                      idx,
                                 bool                            remaped)
 {
-    BM_ASSERT(*str);
+    BM_ASSERT(*str && in_len);
+    BM_ASSERT(in_len == ::strlen(str));
 
-    if (sv.empty())
-        return false; // nothing to do
     if (!*str)
         return false;
     agg_.reset();
@@ -1770,36 +1782,37 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
 
     if (mask_set_) // it is assumed that the sv is SORTED so common prefix check
     {
+        // if in range is exactly one block
         if (/*bool one_nb = */agg_.set_range_hint(mask_from_, mask_to_))
         {
             value_type* pref = remap_prefix_vect_.data();
             common_prefix_len =
-                sv.common_prefix_length(mask_from_, mask_to_, pref);
+                sv.template common_prefix_length<true>(mask_from_, mask_to_, pref);
             if (common_prefix_len)
             {
+                if (in_len < common_prefix_len)
+                    return false;
                 // compare remapped search string with the prefix
                 // to make sure it has a match. No match - string not found.
                 //
                 if (remaped)
                     str = remap_value_vect_.data();
+                // TODO: maybe loop unroll?
                 for (unsigned i = 0; i < common_prefix_len; ++i)
                 {
                     if (str[i] != pref[i])
                         return false;
                 } // for i
-                auto in_len = ::strlen(str);
-                // this is important to include first (always match) char
-                // into search to avoid false-negative searches
-                if (in_len == common_prefix_len)
-                    common_prefix_len--;
+
+                // post correction is important to include first (always match)
+                // char into search to avoid false-negative searches
+                common_prefix_len -= (in_len == common_prefix_len);
             }
         } // if one block hit
     }
 
     if (remaped)
-    {
         str = remap_value_vect_.data();
-    }
     else
     {
         if (sv.is_remap() && (str != remap_value_vect_.data()))
@@ -1813,10 +1826,9 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
     }
     
     bool found = prepare_and_sub_aggregator(sv, str, common_prefix_len, true);
-    if (!found)
-        return found;
-    
-    found = agg_.find_first_and_sub(idx);
+    if (found)
+        found = agg_.find_first_and_sub(idx);
+
     agg_.reset();
     return found;
 }
@@ -1839,9 +1851,6 @@ bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
     // octet_start is the common prefix length (end index)
     for (int octet_idx = len-1; octet_idx >= int(octet_start); --octet_idx)
     {
-//        if (unsigned(octet_idx) < octet_start) // common prefix
-//            break;
-
         unsigned value = unsigned(str[octet_idx]) & 0xFFu;
         BM_ASSERT(value != 0);
         bm::id64_t planes_mask;
@@ -1860,9 +1869,9 @@ bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
     //
     if (prefix_sub)
     {
-        unsigned plane_idx = unsigned(len * 8);
         typename SV::size_type planes = sv.get_bmatrix().rows_not_null();
-        for (; plane_idx < planes; ++plane_idx)
+        for (unsigned plane_idx = unsigned(len * 8);
+                            plane_idx < planes; ++plane_idx)
         {
             if (bvector_type_const_ptr bv = sv.get_slice(plane_idx))
                 agg_.add(bv, 1); // agg to SUB group
@@ -2328,9 +2337,10 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(
                 str = remap_value_vect_.data();
             }
         }
-    
+
+        size_t in_len = ::strlen(str);
         size_type found_pos;
-        found = find_first_eq(sv, str, found_pos, remaped);
+        found = find_first_eq(sv, str, in_len, found_pos, remaped);
         if (found)
         {
             pos = found_pos;
@@ -2463,15 +2473,19 @@ template<bool BOUND>
 bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
                                     const SV&                      sv,
                                     const typename SV::value_type* str,
+                                    size_t                         in_len,
+                                    bool                           remaped,
                                     typename SV::size_type&        pos)
 {
     bool found = false;
     if (sv.empty())
         return found;
-    auto in_len = ::strlen(str);
+//    auto in_len = ::strlen(str);
 
-    if (*str)
+    if (in_len)
     {
+
+/*
         bool remaped = false;
         auto sv_max_len = sv.effective_vector_max();
         remap_prefix_vect_.resize_no_copy(sv_max_len);
@@ -2489,7 +2503,8 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
                     return remaped;
             }
         }
-        
+*/
+
         reset_search_range();
         
         size_type l, r;
@@ -2601,7 +2616,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
         }
 
         // use linear search (range is set)
-        found = find_first_eq(sv, str, found_pos, remaped);
+        found = find_first_eq(sv, str, in_len, found_pos, remaped);
         if (found)
         {
             pos = found_pos;
@@ -2626,7 +2641,26 @@ template<typename SV, unsigned S_FACTOR>
 bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(const SV& sv,
                                     const value_type* str, size_type& pos)
 {
-    return bfind_eq_str_impl<false>(sv, str, pos);
+    size_t len = ::strlen(str);
+    effective_str_max_ = sv.effective_max_str();
+    if (len > effective_str_max_)
+        return false; // impossible value
+
+    resize_buffers();
+
+    bool remaped = false;
+    if constexpr (SV::is_remap_support::value)
+    {
+        if (sv.is_remap())
+        {
+            remap_value_vect_.resize_no_copy(len);
+            remaped = sv.remap_tosv(remap_value_vect_.data(),
+                                        effective_str_max_, str);
+            if (!remaped)
+                return remaped;
+        }
+    }
+    return bfind_eq_str_impl<false>(sv, str, len, remaped, pos);
 }
 
 //----------------------------------------------------------------------------
@@ -2637,7 +2671,22 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
                                             typename SV::size_type&        pos)
 {
     BM_ASSERT(bound_sv_); // this function needs prior bind()
-    return bfind_eq_str_impl<true>(*bound_sv_, str, pos);
+    size_t len = ::strlen(str);
+    if (len > effective_str_max_)
+        return false; // impossible value
+    bool remaped = false;
+    if constexpr (SV::is_remap_support::value)
+    {
+        if (bound_sv_->is_remap())
+        {
+            remap_value_vect_.resize_no_copy(len);
+            remaped = bound_sv_->remap_tosv(remap_value_vect_.data(),
+                                                 effective_str_max_, str);
+            if (!remaped)
+                return remaped;
+        }
+    }
+    return bfind_eq_str_impl<true>(*bound_sv_, str, len, remaped, pos);
 }
 
 //----------------------------------------------------------------------------
@@ -2647,13 +2696,38 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
                         const value_type* str, size_t len, size_type& pos)
 {
     BM_ASSERT(str);
+    BM_ASSERT(bound_sv_);
+
+    if (len > effective_str_max_)
+        return false; // impossible value
+
     value_vect_.resize_no_copy(len+1);
     value_type* s = value_vect_.data(); // copy to temp buffer, put zero end
-    for (size_t i = 0; i < len && *str; ++i)
-        s[i] = str[i];
-    s[len] = value_type(0);
 
-    return bfind_eq_str(s, pos);
+    bool remaped = false;
+    // test search pre-condition based on remap tables
+    if constexpr (SV::is_remap_support::value)
+    {
+        if (bound_sv_->is_remap())
+        {
+            remap_value_vect_.resize_no_copy(len);
+            remaped = bound_sv_->remap_n_tosv_2way(
+                                            remap_value_vect_.data(),
+                                            s,
+                                            effective_str_max_,
+                                            str,
+                                            len);
+            if (!remaped)
+                return remaped;
+        }
+    }
+    if (!remaped) // copy string, make sure it is zero terminated
+    {
+        for (size_t i = 0; i < len && *str; ++i)
+            s[i] = str[i];
+        s[len] = value_type(0);
+    }
+    return bfind_eq_str_impl<true>(*bound_sv_, s, len, remaped, pos);
 }
 
 //----------------------------------------------------------------------------
