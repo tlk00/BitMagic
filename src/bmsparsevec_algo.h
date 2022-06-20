@@ -528,6 +528,11 @@ public:
                      size_type&        l,
                      size_type&        r) const BMNOEXCEPT;
 
+    /// find common prefix between index elements and search string
+    ///
+    size_type common_prefix_length(const value_type* search_str,
+                                   size_type l, size_type r) const BMNOEXCEPT;
+
 
     /**
         recalculate range into SV coordinates range [from..to)
@@ -1066,7 +1071,8 @@ protected:
                        const value_type*  str,
                        size_t             in_len,
                        size_type&         idx,
-                       bool               remaped);
+                       bool               remaped,
+                       unsigned           prefix_len);
 
     /// find EQ str / prefix impl
     bool find_eq_str_impl(const SV&                      sv,
@@ -1770,7 +1776,8 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
                                 const value_type*               str,
                                 size_t                          in_len,
                                 size_type&                      idx,
-                                bool                            remaped)
+                                bool                            remaped,
+                                unsigned                        prefix_len)
 {
     BM_ASSERT(*str && in_len);
     BM_ASSERT(in_len == ::strlen(str));
@@ -1786,8 +1793,19 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
         if (/*bool one_nb = */agg_.set_range_hint(mask_from_, mask_to_))
         {
             value_type* pref = remap_prefix_vect_.data();
-            common_prefix_len =
-                sv.template common_prefix_length<true>(mask_from_, mask_to_, pref);
+            if (prefix_len == ~0u) // not valid (uncalculated) prefix len
+            {
+                common_prefix_len =
+                    sv.template common_prefix_length<true>(mask_from_, mask_to_, pref);
+            }
+            else
+            {
+                unsigned pl; (void)pl;
+                BM_ASSERT(prefix_len <=
+                                (pl=sv.template common_prefix_length<true>(
+                                                mask_from_, mask_to_, pref)));
+                common_prefix_len = prefix_len;
+            }
             if (common_prefix_len)
             {
                 if (in_len < common_prefix_len)
@@ -1798,11 +1816,13 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
                 if (remaped)
                     str = remap_value_vect_.data();
                 // TODO: maybe loop unroll?
+                /*
                 for (unsigned i = 0; i < common_prefix_len; ++i)
                 {
                     if (str[i] != pref[i])
                         return false;
                 } // for i
+                */
 
                 // post correction is important to include first (always match)
                 // char into search to avoid false-negative searches
@@ -2340,7 +2360,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_eq_str(
 
         size_t in_len = ::strlen(str);
         size_type found_pos;
-        found = find_first_eq(sv, str, in_len, found_pos, remaped);
+        found = find_first_eq(sv, str, in_len, found_pos, remaped, ~0u);
         if (found)
         {
             pos = found_pos;
@@ -2480,31 +2500,11 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
     bool found = false;
     if (sv.empty())
         return found;
-//    auto in_len = ::strlen(str);
+
+    unsigned prefix_len = ~0u;
 
     if (in_len)
     {
-
-/*
-        bool remaped = false;
-        auto sv_max_len = sv.effective_vector_max();
-        remap_prefix_vect_.resize_no_copy(sv_max_len);
-
-        // test search pre-condition based on remap tables
-        if constexpr (SV::is_remap_support::value)
-        {
-            if (sv.is_remap() && (str != remap_value_vect_.data()))
-            {
-                if (in_len > sv_max_len)
-                    return false; // impossible value
-                remap_value_vect_.resize_no_copy(sv_max_len);
-                remaped = sv.remap_tosv(remap_value_vect_.data(), sv_max_len, str);
-                if (!remaped)
-                    return remaped;
-            }
-        }
-*/
-
         reset_search_range();
         
         size_type l, r;
@@ -2515,6 +2515,16 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
             found = range_idx_.bfind_range(str, l, r);
             if (!found)
                 return found;
+
+            prefix_len = (unsigned) range_idx_.common_prefix_length(str, l, r);
+
+            if ((l == r) && (in_len == prefix_len))
+            {
+                range_idx_.recalc_range(str, l, r);
+                pos = l;
+                return found;
+            }
+
             range_idx_.recalc_range(str, l, r);
             set_search_range(l, r); // r := r-1 (may happen here) [l..r] interval
 
@@ -2616,7 +2626,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
         }
 
         // use linear search (range is set)
-        found = find_first_eq(sv, str, in_len, found_pos, remaped);
+        found = find_first_eq(sv, str, in_len, found_pos, remaped, prefix_len);
         if (found)
         {
             pos = found_pos;
@@ -3455,6 +3465,30 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
     } // while
 
     return true;
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV>
+typename sv_sample_index<SV>::size_type
+sv_sample_index<SV>::common_prefix_length(const value_type* search_str,
+                                          size_type l,
+                                          size_type r) const BMNOEXCEPT
+{
+    const value_type* str_l = s_cache_.row(l);
+    const value_type* str_r = s_cache_.row(r);
+
+    size_type i = 0;
+    for (; true; ++i)
+    {
+        auto ch1 = str_l[i]; auto ch2 = str_r[i];
+        if (ch1 != ch2 || (!(ch1|ch2))) // chars not the same or both zero
+            break;
+        auto chs = search_str[i];
+        if (ch1 != chs)
+            break;
+    } // for i
+    return i;
 }
 
 
