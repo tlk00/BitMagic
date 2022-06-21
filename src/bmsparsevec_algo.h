@@ -1787,16 +1787,25 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
     agg_.reset();
     unsigned common_prefix_len = 0;
 
+    value_type* pref = remap_prefix_vect_.data();
     if (mask_set_) // it is assumed that the sv is SORTED so common prefix check
     {
         // if in range is exactly one block
         if (/*bool one_nb = */agg_.set_range_hint(mask_from_, mask_to_))
         {
-            value_type* pref = remap_prefix_vect_.data();
             if (prefix_len == ~0u) // not valid (uncalculated) prefix len
             {
                 common_prefix_len =
                     sv.template common_prefix_length<true>(mask_from_, mask_to_, pref);
+                if (common_prefix_len)
+                {
+                    if (remaped)
+                        str = remap_value_vect_.data();
+                    // next comparison is in the remapped form
+                    for (unsigned i = 0; i < common_prefix_len; ++i)
+                        if (str[i] != pref[i])
+                            return false;
+                }
             }
             else
             {
@@ -1806,29 +1815,27 @@ bool sparse_vector_scanner<SV, S_FACTOR>::find_first_eq(
                                                 mask_from_, mask_to_, pref)));
                 common_prefix_len = prefix_len;
             }
-            if (common_prefix_len)
-            {
-                if (in_len < common_prefix_len)
-                    return false;
-                // compare remapped search string with the prefix
-                // to make sure it has a match. No match - string not found.
-                //
-                if (remaped)
-                    str = remap_value_vect_.data();
-                // TODO: maybe loop unroll?
-                /*
-                for (unsigned i = 0; i < common_prefix_len; ++i)
-                {
-                    if (str[i] != pref[i])
-                        return false;
-                } // for i
-                */
-
-                // post correction is important to include first (always match)
-                // char into search to avoid false-negative searches
-                common_prefix_len -= (in_len == common_prefix_len);
-            }
         } // if one block hit
+        else
+        {
+            if (prefix_len != ~0u) // not valid (uncalculated) prefix len
+            {
+                unsigned pl; (void)pl;
+                BM_ASSERT(prefix_len <=
+                                (pl=sv.template common_prefix_length<true>(
+                                                mask_from_, mask_to_, pref)));
+                common_prefix_len = prefix_len;
+            }
+        }
+    }
+
+    // prefix len checks
+    if (common_prefix_len && (in_len <= common_prefix_len))
+    {
+        if (in_len == common_prefix_len)
+            --common_prefix_len;
+        else // (in_len < common_prefix_len)
+            return false;
     }
 
     if (remaped)
@@ -3430,17 +3437,18 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
             {
                 const value_type* str_i = s_cache_.row(i);
                 cmp = SV::compare_str(search_str, str_i);
+                if (cmp > 0) // |----i-*--|----|
+                {
+                    l = i;
+                    continue; // continue searching
+                }
+                /*
                 if (cmp == 0)   // |----*----|----|
                 {
                     l = r = i;
                     return true;
                 }
-                if (cmp > 0) // |----i-*--|----|
-                {
-                    l = i;
-                    continue;
-                }
-                // not yet, continue searching...
+                */
                 // |--*-i----|----|
                 BM_ASSERT(i);
                 r = i;
@@ -3452,12 +3460,13 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
         size_type mid = (r-l) / 2 + l;
         const value_type* str_m = s_cache_.row(mid);
         cmp = SV::compare_str(str_m, search_str);
+/*
         if (cmp == 0)
         {
             l = r = mid;
             return true;
-        }
-        if (cmp < 0) // str_m < search_str
+        } */
+        if (cmp <= 0) // str_m < search_str
             l = mid;
         else         // str_m > search_str
             r = mid;
@@ -3471,7 +3480,7 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
 
 template<typename SV>
 typename sv_sample_index<SV>::size_type
-sv_sample_index<SV>::common_prefix_length(const value_type* search_str,
+sv_sample_index<SV>::common_prefix_length(const value_type* str_s,
                                           size_type l,
                                           size_type r) const BMNOEXCEPT
 {
@@ -3484,7 +3493,7 @@ sv_sample_index<SV>::common_prefix_length(const value_type* search_str,
         auto ch1 = str_l[i]; auto ch2 = str_r[i];
         if (ch1 != ch2 || (!(ch1|ch2))) // chars not the same or both zero
             break;
-        auto chs = search_str[i];
+        auto chs = str_s[i];
         if (ch1 != chs)
             break;
     } // for i
@@ -3509,14 +3518,16 @@ void sv_sample_index<SV>::recalc_range(const value_type* search_str,
     const size_type s_step = bm::gap_max_bits / s_factor_;
     if (r == idx_size_-1) // last element
     {
+        l *= s_step;
         if (l == r)
         {
-            l *= s_step;
             r = sv_size_-1;
             BM_ASSERT(l <= r);
             return;
         }
         r = sv_size_-1;
+        if (l > r)
+            l = 0;
     }
     else
     {
@@ -3536,6 +3547,11 @@ void sv_sample_index<SV>::recalc_range(const value_type* search_str,
             BM_ASSERT(cmp <= 0);
             if (cmp != 0)
                 r -= (r && idx_unique_); // -1 correct
+            else
+                if (idx_unique_)
+                {
+                    l = r;
+                }
         }
     }
     BM_ASSERT(r <= sv_size_);
