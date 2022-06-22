@@ -768,6 +768,8 @@ public:
     static
     int compare_str(const value_type* str1, const value_type* str2) BMNOEXCEPT;
 
+    static
+    int compare_str(const value_type* str1, const value_type* str2, size_t min_len) BMNOEXCEPT;
 
     /**
         \brief Compare two vector elements
@@ -1900,6 +1902,81 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare_str(
     return res;
 }
 
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+int str_sparse_vector<CharType, BV, STR_SIZE>::compare_str(
+    const value_type* str1, const value_type* str2, size_t min_len) BMNOEXCEPT
+{
+    BM_ASSERT(str1 && str2);
+
+    int res = 0;
+    size_t i = 0;
+
+    CharType octet2, octet1;
+    if (min_len >= 4)
+    {
+        for (; i < min_len-3; i+=4)
+        {
+            unsigned i2, i1;
+            ::memcpy(&i2, &str2[i], sizeof(i2));
+            ::memcpy(&i1, &str1[i], sizeof(i1));
+            BM_ASSERT(!bm::has_zero_byte_u64(bm::id64_t(i2) | (bm::id64_t(i1) << 32)));
+            if (i1 != i2)
+            {
+                octet2 = str2[i];
+                octet1 = str1[i];
+                res = (octet1 > octet2) - (octet1 < octet2);
+                if (res)
+                    return res;
+                octet2 = str2[i+1];
+                octet1 = str1[i+1];
+                res = (octet1 > octet2) - (octet1 < octet2);
+                if (res)
+                    return res;
+                octet2 = str2[i+2];
+                octet1 = str1[i+2];
+                res = (octet1 > octet2) - (octet1 < octet2);
+                if (res)
+                    return res;
+                octet2 = str2[i+3];
+                octet1 = str1[i+3];
+                res = (octet1 > octet2) - (octet1 < octet2);
+                if (res)
+                    return res;
+                BM_ASSERT(0);
+                break;
+            }
+        } // for i
+    }
+
+
+    for (; i < min_len; ++i)
+    {
+        octet2 = str2[i];
+        octet1 = str1[i];
+        BM_ASSERT(octet1 && octet2);
+        res = (octet1 > octet2) - (octet1 < octet2);
+        if (res)
+            return res;
+    } // for i
+
+    for (; true; ++i)
+    {
+        octet2 = str2[i];
+        octet1 = str1[i];
+        if (!octet1)
+        {
+            res = -octet2; // -1 || 0
+            break;
+        }
+        res = (octet1 > octet2) - (octet1 < octet2);
+        if (res || !octet2)
+            break;
+    } // for i
+    return res;
+}
+
 
 //---------------------------------------------------------------------
 
@@ -2189,7 +2266,8 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_tosv(
        const value_type* BMRESTRICT str,
        const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
 {
-    for (unsigned i = 0; i < buf_size; ++i)
+    const unsigned char* remap_row = octet_remap_matrix2.row(0);
+    for (unsigned i = 0; i < buf_size; ++i, remap_row += 256)
     {
         CharType ch = str[i];
         if (!ch)
@@ -2197,11 +2275,11 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_tosv(
             sv_str[i] = ch;
             break;
         }
-        const unsigned char* remap_row = octet_remap_matrix2.row(i);
+//        const unsigned char* remap_row = octet_remap_matrix2.row(i);
         unsigned char remap_value = remap_row[unsigned(ch)];
+        sv_str[i] = CharType(remap_value);
         if (!remap_value) // unknown dictionary element
             return false;
-        sv_str[i] = CharType(remap_value);
     } // for i
     return true;
 }
@@ -2218,20 +2296,17 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_n_tosv_2way(
        const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
 {
     BM_ASSERT(in_len <= buf_size); (void) buf_size;
-    for (unsigned i = 0; i < in_len; ++i)
+
+    const unsigned char* remap_row = octet_remap_matrix2.row(0);
+    for (unsigned i = 0; i < in_len; ++i, remap_row += 256)
     {
         CharType ch = str[i];
         str_cp[i] = value_type(ch);
-        if (!ch)
-        {
-            sv_str[i] = ch;
-            break;
-        }
-        const unsigned char* remap_row = octet_remap_matrix2.row(i);
+        BM_ASSERT(ch);
         unsigned char remap_value = remap_row[unsigned(ch)];
+        sv_str[i] = CharType(remap_value);
         if (!remap_value) // unknown dictionary element
             return false;
-        sv_str[i] = CharType(remap_value);
     } // for i
     sv_str[in_len] = str_cp[in_len] = 0; // gurantee zero termination
     return true;
@@ -2248,7 +2323,8 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
          const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix1
          ) BMNOEXCEPT
 {
-    for (unsigned i = 0; i < buf_size; ++i)
+    const unsigned char* remap_row = octet_remap_matrix1.row(0);
+    for (unsigned i = 0; i < buf_size; ++i, remap_row += 256)
     {
         CharType ch = sv_str[i];
         if (!ch)
@@ -2256,11 +2332,10 @@ bool str_sparse_vector<CharType, BV, MAX_STR_SIZE>::remap_fromsv(
             str[i] = ch;
             break;
         }
-        const unsigned char* remap_row = octet_remap_matrix1.row(i);
         unsigned char remap_value = remap_row[unsigned(ch)];
+        str[i] = CharType(remap_value);
         if (!remap_value) // unknown dictionary element
             return false;
-        str[i] = CharType(remap_value);
     } // for i
     return true;
 }

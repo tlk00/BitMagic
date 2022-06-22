@@ -525,12 +525,14 @@ public:
     /// find range (binary)
     /// @internal
     bool bfind_range(const value_type* search_str,
+                     size_t            in_len,
                      size_type&        l,
                      size_type&        r) const BMNOEXCEPT;
 
     /// find common prefix between index elements and search string
     ///
     size_type common_prefix_length(const value_type* search_str,
+                                   size_t in_len,
                                    size_type l, size_type r) const BMNOEXCEPT;
 
 
@@ -541,13 +543,18 @@ public:
                       size_type&        l,
                       size_type&        r) const BMNOEXCEPT;
 
+    /// Return length of minimal indexed string
+    size_t get_min_len() const BMNOEXCEPT { return min_key_len_; }
+
+
 
 private:
     heap_matrix_type      s_cache_; ///< cache for SV sampled elements
     unsigned              s_factor_ = 0;
-    size_type             sv_size_ = 0; ///< original sv size
-    size_type             idx_size_ = 0; ///< index size
+    size_type             sv_size_ = 0;       ///< original sv size
+    size_type             idx_size_ = 0;      ///< index size
     bool                  idx_unique_ = true; ///< inx value unique or there are dups?
+    size_t                min_key_len_ = 0;   ///< minimal key size in index
 };
 
 
@@ -1596,47 +1603,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::bind(const SV&  sv, bool sorted)
     if constexpr (SV::is_str()) // bindings for the string sparse vector
     {
         effective_str_max_ = sv.effective_vector_max();
-/*
-        value_vect_.reserve(effective_str_max_ * 2);
-        remap_value_vect_.reserve(effective_str_max_ * 2);
-        remap_prefix_vect_.reserve(effective_str_max_ * 2);
-*/
         resize_buffers();
 
         if (sorted)
         {
             range_idx_.construct(sv, S_FACTOR);
-
-/*
-            size_type sv_sz = sv.size();
-            BM_ASSERT(sv_sz);
-            size_type total_nb = sv_sz / bm::gap_max_bits + 1;
-
-            block_l0_cache_.init_resize(total_nb + 8, effective_str_max_+1);
-            block_l0_cache_.resize(total_nb, effective_str_max_+1, false);
-            block_l0_cache_.set_zero();
-
-            block_l1_cache_.init_resize(total_nb * (sub_bfind_block_cnt-1) + 8,
-                                   effective_str_max_+1);
-            block_l1_cache_.resize(total_nb * (sub_bfind_block_cnt-1),
-                                   effective_str_max_+1, false);
-            block_l1_cache_.set_zero();
-
-            // fill in elements cache
-            for (size_type i = 0; i < sv_sz; i+= bm::gap_max_bits)
-            {
-                size_type nb = (i >> bm::set_block_shift);
-                value_type* s0 = block_l0_cache_.row(nb);
-                sv.get(i, s0, size_type(block_l0_cache_.cols()));
-
-                for (size_type k = 0; k < sub_bfind_block_cnt-1; ++k)
-                {
-                    value_type* s1 = block_l1_cache_.row(nb * (sub_bfind_block_cnt-1) + k);
-                    size_type idx = i + ((k+1) * sub_block_l1_size);
-                    sv.get(idx, s1, size_type(block_l1_cache_.cols()));
-                } // for k
-            } // for i
-*/
         }
         // pre-calculate vector plane masks
         //
@@ -2519,11 +2490,12 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str_impl(
 
         if constexpr (BOUND)
         {
-            found = range_idx_.bfind_range(str, l, r);
+            found = range_idx_.bfind_range(str, in_len, l, r);
             if (!found)
                 return found;
 
-            prefix_len = (unsigned) range_idx_.common_prefix_length(str, l, r);
+            prefix_len =
+                (unsigned) range_idx_.common_prefix_length(str, in_len, l, r);
 
             if ((l == r) && (in_len == prefix_len))
             {
@@ -2696,7 +2668,6 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
     {
         if (bound_sv_->is_remap())
         {
-            remap_value_vect_.resize_no_copy(len);
             remaped = bound_sv_->remap_tosv(remap_value_vect_.data(),
                                                  effective_str_max_, str);
             if (!remaped)
@@ -2710,15 +2681,14 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
 
 template<typename SV, unsigned S_FACTOR>
 bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
-                        const value_type* str, size_t len, size_type& pos)
+                        const value_type* str, size_t in_len, size_type& pos)
 {
     BM_ASSERT(str);
     BM_ASSERT(bound_sv_);
 
-    if (len > effective_str_max_)
+    if (in_len > effective_str_max_)
         return false; // impossible value
 
-    value_vect_.resize_no_copy(len+1);
     value_type* s = value_vect_.data(); // copy to temp buffer, put zero end
 
     bool remaped = false;
@@ -2727,24 +2697,23 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
     {
         if (bound_sv_->is_remap())
         {
-            remap_value_vect_.resize_no_copy(len);
             remaped = bound_sv_->remap_n_tosv_2way(
                                             remap_value_vect_.data(),
                                             s,
                                             effective_str_max_,
                                             str,
-                                            len);
+                                            in_len);
             if (!remaped)
                 return remaped;
         }
     }
     if (!remaped) // copy string, make sure it is zero terminated
     {
-        for (size_t i = 0; i < len && *str; ++i)
+        for (size_t i = 0; i < in_len && *str; ++i)
             s[i] = str[i];
-        s[len] = value_type(0);
+        s[in_len] = value_type(0);
     }
-    return bfind_eq_str_impl<true>(*bound_sv_, s, len, remaped, pos);
+    return bfind_eq_str_impl<true>(*bound_sv_, s, in_len, remaped, pos);
 }
 
 //----------------------------------------------------------------------------
@@ -3383,13 +3352,23 @@ void sv_sample_index<SV>::construct(const SV& sv, unsigned s_factor)
         }
     } // for i
 
-    // find index duplicates
+    size_t min_len = 0;
+    {
+        const value_type* s = s_cache_.row(0);
+        min_len = ::strlen(s);
+    }
+
+    // find index duplicates, minimum key size, ...
     //
     idx_unique_ = true;
     const value_type* str_prev = s_cache_.row(0);
     for(size_type i = 1; i < idx_size_; ++i)
     {
         const value_type* str_curr = s_cache_.row(i);
+        size_t curr_len = ::strlen(str_curr);
+        if (curr_len < min_len)
+            min_len = curr_len;
+
         int cmp = SV::compare_str(str_prev, str_curr);
         BM_ASSERT(cmp <= 0);
         if (cmp == 0) // duplicate
@@ -3400,12 +3379,15 @@ void sv_sample_index<SV>::construct(const SV& sv, unsigned s_factor)
         str_prev = str_curr;
     } // for i
 
+    min_key_len_ = min_len;
+
 }
 
 //----------------------------------------------------------------------------
 
 template<typename SV>
 bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
+                                      size_t            in_len,
                                       size_type&        l,
                                       size_type&        r) const BMNOEXCEPT
 {
@@ -3415,15 +3397,19 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
     l = 0; r = idx_size_ - 1;
     int cmp;
 
+    size_t min_len = this->min_key_len_;
+    if (in_len < min_len)
+        min_len = in_len;
+
     // check the left-right boundaries
     {
         const value_type* str = s_cache_.row(l);
-        cmp = SV::compare_str(search_str, str);
+        cmp = SV::compare_str(search_str, str, min_len);
         if (cmp < 0)
             return false;
 
         str = s_cache_.row(r);
-        cmp = SV::compare_str(search_str, str);
+        cmp = SV::compare_str(search_str, str, min_len);
         if (cmp > 0)
             return false;
     }
@@ -3436,9 +3422,9 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
             for (size_type i = l+1; i < r; ++i)
             {
                 const value_type* str_i = s_cache_.row(i);
-                cmp = SV::compare_str(search_str, str_i);
+                cmp = SV::compare_str(search_str, str_i, min_len);
                 if (cmp > 0) // |----i-*--|----|
-                {
+                {            // |----*----|----|
                     l = i;
                     continue; // continue searching
                 }
@@ -3459,7 +3445,7 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
 
         size_type mid = (r-l) / 2 + l;
         const value_type* str_m = s_cache_.row(mid);
-        cmp = SV::compare_str(str_m, search_str);
+        cmp = SV::compare_str(str_m, search_str, min_len);
 /*
         if (cmp == 0)
         {
@@ -3481,13 +3467,34 @@ bool sv_sample_index<SV>::bfind_range(const value_type* search_str,
 template<typename SV>
 typename sv_sample_index<SV>::size_type
 sv_sample_index<SV>::common_prefix_length(const value_type* str_s,
+                                          size_t            in_len,
                                           size_type l,
                                           size_type r) const BMNOEXCEPT
 {
     const value_type* str_l = s_cache_.row(l);
     const value_type* str_r = s_cache_.row(r);
 
+    size_t min_len = (in_len < min_key_len_) ? in_len : min_key_len_;
     size_type i = 0;
+    if (min_len >= 4)
+    {
+        for (; i < min_len-3; i+=4)
+        {
+            unsigned i2, i1;
+            ::memcpy(&i2, &str_l[i], sizeof(i2));
+            ::memcpy(&i1, &str_r[i], sizeof(i1));
+            BM_ASSERT(!bm::has_zero_byte_u64(
+                                bm::id64_t(i2) | (bm::id64_t(i1) << 32)));
+            if (i1 != i2)
+                break;
+            ::memcpy(&i2, &str_s[i], sizeof(i2));
+            BM_ASSERT(!bm::has_zero_byte_u64(
+                                bm::id64_t(i2) | (bm::id64_t(i1) << 32)));
+            if (i1 != i2)
+                break;
+        } // for i
+    }
+
     for (; true; ++i)
     {
         auto ch1 = str_l[i]; auto ch2 = str_r[i];
