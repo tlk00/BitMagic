@@ -1221,18 +1221,22 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
 {
     BM_ASSERT(size <= 16);
     BM_ASSERT(size);
-
-    const unsigned unroll_factor = 8;
     if (size < 4) // for very short vector use conventional scan
     {
+        if (pbuf[0] >= pos) return 0;
+        if (pbuf[1] >= pos) return 1;
+        if (pbuf[2] >= pos) return 2;
+        BM_ASSERT(0);
+/*
         unsigned j;
         for (j = 0; j < size; ++j)
-        {
             if (pbuf[j] >= pos)
                 break;
-        }
         return j;
+*/
     }
+
+    const unsigned unroll_factor = 8;
 
     __m128i m1, mz, maskF, maskFL;
 
@@ -1281,29 +1285,25 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
                          unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
 {
     unsigned start = 1;
-    unsigned end = 1 + ((*buf) >> 3);
-    unsigned dsize = end - start;
+    unsigned end = start + ((*buf) >> 3);
 
-    if (dsize < 17)
+    if (unsigned dsize = end - start; dsize < 17)
     {
         start = bm::sse4_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
         *is_set = ((*buf) & 1) ^ (start & 1);
         BM_ASSERT(buf[start+1] >= pos);
         BM_ASSERT(buf[start] < pos || (start==0));
-
         return start+1;
     }
-    unsigned arr_end = end;
-    while (start != end)
+    const unsigned arr_end = end;
+    BM_ASSERT (start != end);
+    do
     {
-        unsigned curr = (start + end) >> 1;
-        if (buf[curr] < pos)
+        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
             start = curr + 1;
         else
             end = curr;
-
-        unsigned size = end - start;
-        if (size < 16)
+        if (unsigned size = end - start; size < 16)
         {
             size += (end != arr_end);
             unsigned idx =
@@ -1314,24 +1314,60 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
             BM_ASSERT(buf[start - 1] < pos || (start == 1));
             break;
         }
-    }
+    } while (start != end);
 
     *is_set = ((*buf) & 1) ^ ((start-1) & 1);
     return start;
 }
 
+
 /**
-    Hybrid binary search, starts as binary, then switches to scan
+    Hybrid binary search to test GAP value, starts as binary, then switches to scan
+    @return test result
     @ingroup SSE4
 */
-inline
+
 unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 {
-    unsigned is_set;
-    bm::sse42_gap_bfind(buf, pos, &is_set);
-    return is_set;
-}
+    unsigned start = 1;
+    unsigned end = start + ((*buf) >> 3);
 
+    unsigned size = end - start;
+    if (size < 17)
+    {
+        start = bm::sse4_gap_find(buf + start, (bm::gap_word_t)pos, size);
+        BM_ASSERT(buf[start+1] >= pos);
+        BM_ASSERT(buf[start] < pos || (start==0));
+        return ((*buf) & 1) ^ (start & 1);
+    }
+    const unsigned arr_end = end;
+    BM_ASSERT (start != end);
+    do
+    {
+        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
+            start = curr + 1;
+        else
+            end = curr;
+
+        size = end - start;
+        if (size < 16)
+        {
+            size += (end != arr_end);
+            unsigned idx =
+                bm::sse4_gap_find(buf + start, (bm::gap_word_t)pos, size);
+            start += idx;
+            BM_ASSERT(buf[start] >= pos);
+            BM_ASSERT(buf[start - 1] < pos || (start == 1));
+            break;
+        }
+    } while (1);
+
+    return ((*buf) & 1) ^ ((--start) & 1);
+}
 
 
 /**
@@ -2066,6 +2102,9 @@ void sse42_bit_block_xor_2way(bm::word_t* target_block,
 
 #define VECT_GAP_BFIND(buf, pos, is_set) \
     sse42_gap_bfind(buf, pos, is_set)
+
+#define VECT_GAP_TEST(buf, pos) \
+    sse42_gap_test(buf, pos)
 
 #ifdef __GNUG__
 #pragma GCC diagnostic pop

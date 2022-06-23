@@ -1226,10 +1226,8 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
     {
         unsigned j;
         for (j = 0; j < size; ++j)
-        {
             if (pbuf[j] >= pos)
                 break;
-        }
         return j;
     }
 
@@ -1263,7 +1261,7 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
     BM_ASSERT(pbuf2 > pbuf); // assert in place to make sure GCC warning is indeed false
 
     m1 = _mm_loadu_si128((__m128i*)(pbuf2)); // load next elements (with possible overlap)
-    mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // m1 >= mp        
+    mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // m1 >= mp
     mi = _mm_movemask_epi8(mge_mask);
     if (mi)
     {
@@ -1300,28 +1298,26 @@ unsigned sse2_gap_bfind(const unsigned short* BMRESTRICT buf,
 
         return start+1;
     }
-    unsigned arr_end = end;
-    while (start != end)
+
+    const unsigned arr_end = end;
+    BM_ASSERT(start != end);
+    do
     {
-        unsigned curr = (start + end) >> 1;
-        if (buf[curr] < pos)
+        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
             start = curr + 1;
         else
             end = curr;
-
-        unsigned size = end - start;
-        if (size < 16)
+        if (unsigned size = end - start; size < 16)
         {
             size += (end != arr_end);
             unsigned idx =
                 bm::sse2_gap_find(buf + start, (bm::gap_word_t)pos, size);
             start += idx;
-
             BM_ASSERT(buf[start] >= pos);
             BM_ASSERT(buf[start - 1] < pos || (start == 1));
             break;
         }
-    }
+    } while (start != end);
 
     *is_set = ((*buf) & 1) ^ ((start-1) & 1);
     return start;
@@ -1464,6 +1460,9 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 
 #define VECT_GAP_BFIND(buf, pos, is_set) \
     sse2_gap_bfind(buf, pos, is_set)
+
+#define VECT_GAP_TEST(buf, pos) \
+    sse2_gap_test(buf, pos)
 
 } // namespace
 

@@ -101,6 +101,7 @@ For more information please visit:  http://bitmagic.io
 #undef VECT_BIT_FIND_FIRST_IF_1
 
 #undef VECT_GAP_BFIND
+#undef VECT_GAP_TEST
 
 #undef BMI1_SELECT64
 #undef BMI2_SELECT64

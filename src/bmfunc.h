@@ -1767,14 +1767,14 @@ unsigned gap_test(const T* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
     }
     else
     {
-        while (start != end)
+        BM_ASSERT(start != end);
+        do
         {
-            unsigned curr = (start + end) >> 1;
-            if (buf[curr] < pos)
+            if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
                 start = curr + 1;
             else
                 end = curr;
-        }
+        } while (start != end);
     }
     return ((*buf) & 1) ^ ((--start) & 1); 
 }
@@ -1789,20 +1789,11 @@ unsigned gap_test(const T* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 template<typename T> 
 unsigned gap_test_unr(const T* BMRESTRICT buf, const unsigned pos) BMNOEXCEPT
 {
+    BM_ASSERT(buf);
     BM_ASSERT(pos < bm::gap_max_bits);
 
-    if (pos == 0) // quick answer possible
-    {
-        return (*buf) & 1;
-    }
-#if defined(BMSSE2OPT)
-    unsigned res = bm::sse2_gap_test(buf, pos);
-    BM_ASSERT(res == bm::gap_test(buf, pos));
-#elif defined(BMSSE42OPT)
-    unsigned res = bm::sse42_gap_test(buf, pos);
-    BM_ASSERT(res == bm::gap_test(buf, pos));
-#elif defined(BMAVX2OPT)
-    unsigned res = bm::avx2_gap_test(buf, pos);
+#if defined(VECT_GAP_TEST)
+    unsigned res = VECT_GAP_TEST(buf, pos);
     BM_ASSERT(res == bm::gap_test(buf, pos));
 #else
     unsigned res = bm::gap_test(buf, pos);
