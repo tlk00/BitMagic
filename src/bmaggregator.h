@@ -1806,7 +1806,7 @@ aggregator<BV>::combine_and_sub(
 // ------------------------------------------------------------------------
 
 template<typename BV>
-void aggregator<BV>::process_gap_blocks_or(const arena& ar)//size_t arg_blk_gap_count)
+void aggregator<BV>::process_gap_blocks_or(const arena& ar)
 {
     size_t arg_blk_gap_count = ar.v_arg_or_blk_gap.size();
     bm::word_t* blk = tb_ar_->tb1;
