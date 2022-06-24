@@ -1220,22 +1220,7 @@ unsigned sse4_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
                        const bm::gap_word_t pos, const unsigned size) BMNOEXCEPT
 {
     BM_ASSERT(size <= 16);
-    BM_ASSERT(size);
-    if (size < 4) // for very short vector use conventional scan
-    {
-        if (pbuf[0] >= pos) return 0;
-        if (pbuf[1] >= pos) return 1;
-        if (pbuf[2] >= pos) return 2;
-        BM_ASSERT(0);
-/*
-        unsigned j;
-        for (j = 0; j < size; ++j)
-            if (pbuf[j] >= pos)
-                break;
-        return j;
-*/
-    }
-
+    BM_ASSERT(size >= 4);
     const unsigned unroll_factor = 8;
 
     __m128i m1, mz, maskF, maskFL;
@@ -1285,6 +1270,47 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
                          unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
 {
     unsigned start = 1;
+    unsigned end = 1 + ((*buf) >> 3);
+
+    const unsigned arr_end = end;
+    unsigned size = end - start;
+    for (; size >= 16; size = end - start)
+    {
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid + 1;
+        else
+            end = mid;
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid + 1;
+        else
+            end = mid;
+    } // for
+    size += (end != arr_end);
+    if (size < 4) // for very short vector use conventional scan
+    {
+        const unsigned short* BMRESTRICT pbuf = buf + start;
+        if (pbuf[0] >= pos) { }
+        else if (pbuf[1] >= pos) { start++; }
+        else
+        {
+            BM_ASSERT(pbuf[2] >= pos);
+            start+=2;
+        }
+    }
+    else
+    {
+        start += bm::sse4_gap_find(buf+start, (bm::gap_word_t)pos, size);
+    }
+    *is_set = ((*buf) & 1) ^ ((start-1) & 1);
+    return start;
+}
+
+/*
+inline
+unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
+                         unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
+{
+    unsigned start = 1;
     unsigned end = start + ((*buf) >> 3);
 
     if (unsigned dsize = end - start; dsize < 17)
@@ -1319,14 +1345,70 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
     *is_set = ((*buf) & 1) ^ ((start-1) & 1);
     return start;
 }
-
+*/
 
 /**
     Hybrid binary search to test GAP value, starts as binary, then switches to scan
     @return test result
     @ingroup SSE4
 */
+unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
+{
+    unsigned start = 1;
+    unsigned end = start + ((*buf) >> 3);
+    unsigned size = end - start;
+    const unsigned arr_end = end;
+    for (; size >= 64; size = end - start)
+    {
+        unsigned mid = (start + end) >> 1;
+        if (buf[mid] < pos)
+            start = mid+1;
+        else
+            end = mid;
+        if (buf[mid = (start + end) >> 1] < pos)
+            start = mid+1;
+        else
+            end = mid;
+        if (buf[mid = (start + end) >> 1] < pos)
+            start = mid+1;
+        else
+            end = mid;
+        if (buf[mid = (start + end) >> 1] < pos)
+            start = mid+1;
+        else
+            end = mid;
+    } // for
+    for (; size >= 16; size = end - start)
+    {
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid+1;
+        else
+            end = mid;
+    } // for
+    size += (end != arr_end);
+    if (size < 4) // for very short vector use conventional scan
+    {
+        const unsigned short* BMRESTRICT pbuf = buf + start;
+        if (pbuf[0] >= pos) { }
+        else if (pbuf[1] >= pos) { start++; }
+        else
+        {
+            BM_ASSERT(pbuf[2] >= pos);
+            start+=2;
+        }
+    }
+    else
+    {
+        start += bm::sse4_gap_find(buf+start, (bm::gap_word_t)pos, size);
+    }
+    BM_ASSERT(buf[start] >= pos);
+    BM_ASSERT(buf[start - 1] < pos || (start == 1));
 
+    return ((*buf) & 1) ^ ((--start) & 1);
+}
+
+
+/*
 unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 {
     unsigned start = 1;
@@ -1368,7 +1450,7 @@ unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNO
 
     return ((*buf) & 1) ^ ((--start) & 1);
 }
-
+*/
 
 /**
     Experimental (test) function to do SIMD vector search (lower bound)

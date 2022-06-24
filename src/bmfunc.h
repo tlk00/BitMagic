@@ -1058,6 +1058,28 @@ bool check_zero_digest(bm::id64_t digest,
     return !(digest & mask);
 }
 
+/**
+    \brief Is one range of 1s ( 0000110000 - one range, 000011000010 - more than one)
+    @return true
+    @internal
+ */
+inline
+bool is_digest_one_range(bm::id64_t digest) BMNOEXCEPT
+{
+    BM_ASSERT(digest);
+    bm::id64_t mask = 1;
+    bool prev = digest & mask;
+    unsigned cnt = prev;
+    for (mask <<= 1; mask; mask <<= 1)
+    {
+        bool curr = digest & mask;
+        if (curr && curr != prev)
+            cnt++;
+        prev = curr;
+    } // for
+    return cnt == 1;
+}
+
 /*!
    \brief Init block with 000111000 pattren based on digest
    \param block  - Bit block [out]
@@ -1762,8 +1784,8 @@ unsigned gap_test(const T* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
         if (buf[6] >= pos) return sv1;
         if (buf[7] >= pos) return sv;
         if (buf[8] >= pos) return sv1;
-        if (buf[9] >= pos) return sv;
-        BM_ASSERT(0);
+        BM_ASSERT(buf[9] >= pos);
+        return sv;
     }
     else
     {
@@ -3919,12 +3941,14 @@ void gap_sub_to_bitset(unsigned* BMRESTRICT dest,
    @ingroup gapfunc
 */
 template<typename T>
-[[nodiscard]] bm::id64_t gap_sub_to_bitset(unsigned* BMRESTRICT dest,
+bm::id64_t gap_sub_to_bitset(unsigned* BMRESTRICT dest,
                        const T* BMRESTRICT pcurr, bm::id64_t digest0) BMNOEXCEPT
 {
     BM_ASSERT(dest && pcurr);
     
-    const T* pend = pcurr + (*pcurr >> 3);
+    const T* BMRESTRICT pbuf = pcurr;
+    const unsigned len = (*pcurr >> 3);
+    const T* BMRESTRICT pend = pcurr + len;
     if (*pcurr & 1)  // Starts with 1
     {
         bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]);
@@ -3939,29 +3963,36 @@ template<typename T>
     {
         unsigned tz = bm::count_trailing_zeros_u64(digest0);
         unsigned start_pos = tz << set_block_digest_pos_shift;
-        for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0"
+        if (len > 16)
         {
-            if (*pcurr >= start_pos)
-                break;
+            unsigned is_set;
+            unsigned found_pos = bm::gap_bfind(pbuf, start_pos, &is_set);
+            if (found_pos > 2)
+            {
+                found_pos += !is_set; // to GAP "1" (can go out of scope)
+                pcurr = pbuf + found_pos;
+            }
+            BM_ASSERT (pcurr > pend || *pcurr >= start_pos);
+        }
+        else
+        {
+            for (; pcurr <= pend; pcurr += 2) // now we are in GAP "1"
+                if (*pcurr >= start_pos)
+                    break;
         }
     }
 
-    unsigned lz = bm::count_leading_zeros_u64(digest0);
+    const unsigned lz = bm::count_leading_zeros_u64(digest0);
     unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
 
-    unsigned bc, pos;
-    T prev;
-    for (; pcurr <= pend; pcurr += 2) // now we are in GAP "1" again
+    for (T prev; pcurr <= pend; pcurr += 2) // now we are in GAP "1" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
         prev = pcurr[-1];
-        bc = *pcurr - prev;
-        pos = 1u + prev;
-        
+        unsigned pos = 1u + prev;
         bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
         if (!all_zero)
-            bm::sub_bit_block(dest, pos, bc);
-        
+            bm::sub_bit_block(dest, pos, *pcurr - prev);
         if (pos > stop_pos)
             break; // early break is possible based on digest tail
     } // for
@@ -4094,14 +4125,15 @@ void gap_and_to_bitset(unsigned* BMRESTRICT dest,
    @ingroup gapfunc
 */
 template<typename T>
-[[nodiscard]] bm::id64_t gap_and_to_bitset(unsigned* BMRESTRICT dest,
+bm::id64_t gap_and_to_bitset(unsigned* BMRESTRICT dest,
                     const T* BMRESTRICT pcurr, bm::id64_t digest0) BMNOEXCEPT
 {
     BM_ASSERT(dest && pcurr);
     if (!digest0)
         return digest0;
-//    const T* BMRESTRICT pbuf = pcurr;
-    const T* pend = pcurr + (*pcurr >> 3);
+    const T* BMRESTRICT pbuf = pcurr;
+    const unsigned len = (*pcurr >> 3);
+    const T* BMRESTRICT pend = pcurr + len;
     if (!(*pcurr & 1) )  // Starts with 0
     {
         bool all_zero = bm::check_zero_digest(digest0, 0, pcurr[1]);
@@ -4116,15 +4148,7 @@ template<typename T>
     {
         unsigned tz = bm::count_trailing_zeros_u64(digest0);
         unsigned start_pos = tz << set_block_digest_pos_shift;
-
-        for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0"
-        {
-            if (*pcurr >= start_pos)
-                break;
-        }
-
-/*
-        if (start_pos > 1024)
+        if (len > 16)
         {
             unsigned is_set;
             unsigned found_pos = bm::gap_bfind(pbuf, start_pos, &is_set);
@@ -4141,26 +4165,20 @@ template<typename T>
                 if (*pcurr >= start_pos)
                     break;
         }
-*/
+
     }
 
-    unsigned lz = bm::count_leading_zeros_u64(digest0);
-    unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
-    
-    unsigned bc, pos;
-    T prev;
-    for (; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
+    const unsigned lz = bm::count_leading_zeros_u64(digest0);
+    const unsigned stop_pos = (64u - lz) << set_block_digest_pos_shift;
+
+    for (T prev; pcurr <= pend; pcurr += 2) // now we are in GAP "0" again
     {
         BM_ASSERT(*pcurr > *(pcurr-1));
-
         prev = pcurr[-1];
-        bc = *pcurr - prev;
-        pos = 1u + prev;
-        
+        unsigned pos = 1u + prev;
         bool all_zero = bm::check_zero_digest(digest0, prev, *pcurr);
         if (!all_zero)
-            bm::sub_bit_block(dest, pos, bc);
-        
+            bm::sub_bit_block(dest, pos, *pcurr - prev);
         if (pos > stop_pos) // early break is possible based on digest tail
             break;
     } // for pcurr

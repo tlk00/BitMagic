@@ -1216,7 +1216,8 @@ SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search resu
 \internal
 */
 inline
-unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word_t pos, const unsigned size)
+unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
+                       const bm::gap_word_t pos, unsigned size)
 {
     BM_ASSERT(size <= 16);
     BM_ASSERT(size);
@@ -1224,11 +1225,10 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf, const bm::gap_word
     const unsigned unroll_factor = 8;
     if (size < 4) // for very short vector use conventional scan
     {
-        unsigned j;
-        for (j = 0; j < size; ++j)
-            if (pbuf[j] >= pos)
-                break;
-        return j;
+        if      (pbuf[0] >= pos) { size = 0; }
+        else if (pbuf[1] >= pos) { size = 1; }
+        else                     { size = 2; BM_ASSERT(pbuf[2] >= pos); }
+        return size;
     }
 
     __m128i m1, mz, maskF, maskFL;
@@ -1287,37 +1287,26 @@ unsigned sse2_gap_bfind(const unsigned short* BMRESTRICT buf,
 {
     unsigned start = 1;
     unsigned end = 1 + ((*buf) >> 3);
-    unsigned dsize = end - start;
-
-    if (dsize < 17)
-    {
-        start = bm::sse2_gap_find(buf+1, (bm::gap_word_t)pos, dsize);
-        *is_set = ((*buf) & 1) ^ (start & 1);
-        BM_ASSERT(buf[start+1] >= pos);
-        BM_ASSERT(buf[start] < pos || (start==0));
-
-        return start+1;
-    }
 
     const unsigned arr_end = end;
     BM_ASSERT(start != end);
-    do
+    unsigned size = end - start;
+    for (; size >= 16; size = end - start)
     {
-        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
-            start = curr + 1;
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid + 1;
         else
-            end = curr;
-        if (unsigned size = end - start; size < 16)
-        {
-            size += (end != arr_end);
-            unsigned idx =
-                bm::sse2_gap_find(buf + start, (bm::gap_word_t)pos, size);
-            start += idx;
-            BM_ASSERT(buf[start] >= pos);
-            BM_ASSERT(buf[start - 1] < pos || (start == 1));
-            break;
-        }
-    } while (start != end);
+            end = mid;
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid + 1;
+        else
+            end = mid;
+    } // for
+
+    size += (end != arr_end);
+    start += bm::sse2_gap_find(buf + start, (bm::gap_word_t)pos, size);
+    BM_ASSERT(buf[start] >= pos);
+    BM_ASSERT(buf[start - 1] < pos || (start == 1));
 
     *is_set = ((*buf) & 1) ^ ((start-1) & 1);
     return start;
