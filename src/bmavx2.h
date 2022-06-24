@@ -2791,6 +2791,7 @@ int avx2_cmpge_u16(__m256i vect16, unsigned short value)
     return -1;
 }
 
+
 /**
     Hybrid binary search, starts as binary, then switches to scan
 
@@ -2819,7 +2820,8 @@ unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
     unsigned start = 1;
     unsigned end = start + ((*buf) >> 3);
 
-    if (end - start < unroll_factor) // too small for a full AVX stride
+    const unsigned arr_end = end;
+    if (unsigned dsize = end - start; dsize < unroll_factor) // too small for a full AVX stride
     {
         for (; start < end; ++start)
             if (buf[start] >= pos)
@@ -2827,8 +2829,6 @@ unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
         BM_ASSERT(0);
     }
 
-    {
-    const unsigned arr_end = end;
     do
     {
         if (unsigned dsize = end - start; dsize < linear_cutoff)
@@ -2875,17 +2875,15 @@ unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
             BM_ASSERT(0);
         }
 
-        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
-            start = curr + 1;
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid + 1;
         else
-            end = curr;
-        if (unsigned curr = (start + end) >> 1; buf[curr] < pos)
-            start = curr + 1;
+            end = mid;
+        if (unsigned mid = (start + end) >> 1; buf[mid] < pos)
+            start = mid + 1;
         else
-            end = curr;
-
-    } while (1);// (start != end);
-    }
+            end = mid;
+    } while (1);
 ret:
     res = ((*buf) & 1) ^ ((start-1) & 1);
     if constexpr(RET_TEST)
