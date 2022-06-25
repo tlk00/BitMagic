@@ -2012,7 +2012,8 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
 
         if (arg_blk_count > 1) // 2 or more
         {
-            digest = bm::bit_block_init_and_2way(blk, args[k], args[k+1], digest);
+//            digest = bm::bit_block_init_and_2way(blk, args[k], args[k+1], digest);
+            digest = bm::bit_block_and_2way(blk, args[k], args[k+1], digest);
             k += 2;
         }
         else
@@ -2045,8 +2046,7 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
                                     digest);
         switch (bm::word_bitcount64(digest))
         {
-        case 0:
-            return 0;
+        case 0: return 0;
         case 1:
             is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest);
             if (is_single_bit_)
@@ -2057,13 +2057,19 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
                 const unsigned mask = 1u << (single_bit_idx_ & bm::set_word_mask);
                 for (; k + unroll_factor < arg_blk_count; k += unroll_factor)
                 {
-                    bm::word_t acc = args[k][nword] & args[k+1][nword] &
-                                     args[k+2][nword] & args[k+3][nword];
-                    if (!(mask & acc))
+                    bm::word_t acc = mask & args[k][nword] & args[k+1][nword] &
+                                            args[k+2][nword] & args[k+3][nword];
+                    if (!acc)
+                        return 0;
+                } // for k
+                for (; k + 2 < arg_blk_count; k += 2)
+                {
+                    bm::word_t acc = mask & args[k][nword] & args[k+1][nword];
+                    if (!acc)
                         return 0;
                 } // for k
 
-                bm::word_t acc = ~0u;
+                bm::word_t acc = mask;
                 for (; k < arg_blk_count; ++k)
                     acc &= args[k][nword];
                 if (!(mask & acc))
@@ -2075,25 +2081,34 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
         } // switch
     } // for k
 
+    for (; k + 2 < arg_blk_count; k += 2)
+    {
+        digest = bm::bit_block_and_3way(blk, args[k], args[k+1], digest);
+        switch(bm::word_bitcount64(digest))
+        {
+        case 0: return digest;
+        case 1:
+            is_single_bit_ = bm::bit_find_first_if_1(blk,
+                                                     &single_bit_idx_, digest);
+            if (is_single_bit_) { ++k; goto sbit_check; }
+            break;
+        default: break;
+        } // switch
+    }
     for (; k < arg_blk_count; ++k)
     {
         digest = bm::bit_block_and(blk, args[k], digest);
         switch(bm::word_bitcount64(digest))
         {
-        case 0:
-            return digest;
+        case 0: return digest;
         case 1:
             is_single_bit_ = bm::bit_find_first_if_1(blk,
                                                      &single_bit_idx_, digest);
             if (is_single_bit_)
-            {
-                ++k;
-                goto sbit_check;
-            }
+                { ++k; goto sbit_check; }
             break;
         default: break;
         } // switch
-
     } // for k
     return digest;
 }
@@ -2153,21 +2168,30 @@ aggregator<BV>::process_bit_blocks_sub(const arena& ar,
         default: break;
         } // switch
     } // for k
-
+    for (; k + 2 < arg_blk_count; k += 2)
+    {
+        digest = bm::bit_block_sub_3way(blk, args[k], args[k+1], digest);
+        switch(bm::word_bitcount64(digest))
+        {
+        case 0: return digest;
+        case 1:
+            is_single_bit_ = bm::bit_find_first_if_1(blk,
+                                                     &single_bit_idx_, digest);
+            if (is_single_bit_) { ++k; goto sbit_check; }
+            break;
+        default: break;
+        } // switch
+    }
     for (; k < arg_blk_count; ++k)
     {
         digest = bm::bit_block_sub(blk, args[k], digest);
         switch(bm::word_bitcount64(digest))
         {
-        case 0:
-            return digest;
+        case 0: return digest;
         case 1:
             is_single_bit_ = bm::bit_find_first_if_1(blk, &single_bit_idx_, digest);
             if (is_single_bit_)
-            {
-                ++k;
-                goto sbit_check;
-            }
+                { ++k; goto sbit_check; }
             break;
         default: break;
         } // switch
