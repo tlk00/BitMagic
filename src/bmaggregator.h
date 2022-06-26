@@ -520,8 +520,8 @@ public:
         \param src_and_size  - size of AND group
         \param bv_src_sub    - array of pointers on bit-vectors for SUBstract
         \param src_sub_size  - size of SUB group
-        \param any           - flag if caller needs any results asap (incomplete results)
-     
+        \param any                      - flag if caller needs any results asap (incomplete results)
+
         \return true when found
     */
     bool combine_and_sub(bvector_type& bv_target,
@@ -657,11 +657,10 @@ protected:
                     const bvector_type_const_ptr* bv_src, size_t src_size);
     
     digest_type combine_and_sub(unsigned i, unsigned j,
-//                         const size_t* and_idx,
                          const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
-//                         const size_t* sub_idx,
                          const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
-                         int* is_result_full);
+                         int* is_result_full,
+                         bool find_all);
     
     void prepare_shift_right_and(bvector_type& bv_target,
                                  const bvector_type_const_ptr* bv_src,
@@ -735,7 +734,9 @@ protected:
 
     void process_gap_blocks_or(const arena& ar/*size_t block_count*/);
     
-    digest_type process_bit_blocks_and(const arena& ar, /*size_t block_count,*/ digest_type digest);
+    digest_type process_bit_blocks_and(const arena& ar,
+                                       digest_type digest,
+                                       bool find_all);
     
     digest_type process_gap_blocks_and(const arena& ar, /*size_t block_count,*/ digest_type digest);
 
@@ -1191,7 +1192,7 @@ bool aggregator<BV>::combine_and_sub(bvector_type& bv_target,
             digest_type digest = combine_and_sub(i, j,
                                                 /*0,*/ bv_src_and, src_and_size,
                                                 /*0,*/ bv_src_sub, src_sub_size,
-                                                &is_res_full);
+                                                &is_res_full, !any);
             if (is_res_full)
             {
                 bman_target.check_alloc_top_subblock(i);
@@ -1262,7 +1263,7 @@ bool aggregator<BV>::combine_and_sub(BII bi,
             digest_type digest = combine_and_sub(i, j,
                                                 /*0,*/ bv_src_and, src_and_size,
                                                 /*0,*/ bv_src_sub, src_sub_size,
-                                                &is_res_full);
+                                                &is_res_full, true);
             size_type r = size_type(i) * bm::set_sub_array_size;
             size_type base_idx = (r+j)*bm::bits_in_block;
             if (is_res_full)
@@ -1369,7 +1370,9 @@ void aggregator<BV>::combine_and_sub(TPipe& pipe)
                     digest_type digest = combine_and_sub(i, j,
                                                          bv_src_and, src_and_size,
                                                          bv_src_sub, src_sub_size,
-                                                         &is_res_full);
+                                                         &is_res_full,
+                                                         true    // find all
+                                                         );
                     if (digest || is_res_full)
                     {
                         if (pipe.bv_or_target_)
@@ -1479,7 +1482,8 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
             digest_type digest = combine_and_sub(i, j,
                                                  bv_src_and, src_and_size,
                                                  bv_src_sub, src_sub_size,
-                                                 &is_res_full);
+                                                 &is_res_full, false // first
+                                                 );
             // is_res_full is not needed here, since it is just 1 block
             if (digest)
             {
@@ -1507,13 +1511,9 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
         if (range_set_)
         {
             if (i == top_from)
-            {
                 j = nblock_from & bm::set_array_mask;
-            }
             if (i == top_to)
-            {
                 set_array_max = 1 + unsigned(nblock_to & bm::set_array_mask);
-            }
         }
         else
         {
@@ -1536,7 +1536,7 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
             digest_type digest = combine_and_sub(i, j,
                                                  /*0,*/ bv_src_and, src_and_size,
                                                  /*0,*/ bv_src_sub, src_sub_size,
-                                                 &is_res_full);
+                                                 &is_res_full, false);
             if (digest)
             {
                 unsigned block_bit_idx = 0;
@@ -1546,7 +1546,6 @@ bool aggregator<BV>::find_first_and_sub(size_type& idx,
                 return found;
             }
         } // for j
-        //while (++j < set_array_max);
     } // for i
     return false;
 }
@@ -1697,7 +1696,7 @@ void aggregator<BV>::combine_and(unsigned i, unsigned j,
         }
         // AND bit-blocks
         //
-        bm::id64_t digest = process_bit_blocks_and(*ar_, ~0ull);
+        bm::id64_t digest = process_bit_blocks_and(*ar_, ~0ull, true);
         if (!digest)
             return;
 
@@ -1722,7 +1721,7 @@ aggregator<BV>::combine_and_sub(
              unsigned i, unsigned j,
              const bvector_type_const_ptr* bv_src_and, size_t src_and_size,
              const bvector_type_const_ptr* bv_src_sub, size_t src_sub_size,
-             int* is_result_full)
+             int* is_result_full, bool find_all)
 {
     BM_ASSERT(is_result_full);
 
@@ -1762,7 +1761,7 @@ aggregator<BV>::combine_and_sub(
     
     // AND-SUB bit-blocks
     //
-    digest_type digest = process_bit_blocks_and(*ar_, ~0ull);
+    digest_type digest = process_bit_blocks_and(*ar_, ~0ull, find_all);
     if (!digest)
         return digest;
     digest = process_bit_blocks_sub(*ar_, digest);
@@ -1993,7 +1992,8 @@ bool aggregator<BV>::process_bit_blocks_or(blocks_manager_type& bman_target,
 template<typename BV>
 typename aggregator<BV>::digest_type
 aggregator<BV>::process_bit_blocks_and(const arena& ar,
-                                       digest_type digest)
+                                       digest_type digest,
+                                       bool find_all)
 {
     bm::word_t* blk = tb_ar_->tb1;
     size_t   arg_blk_count = ar.v_arg_and_blk.size();
@@ -2012,8 +2012,13 @@ aggregator<BV>::process_bit_blocks_and(const arena& ar,
 
         if (arg_blk_count > 1) // 2 or more
         {
-//            digest = bm::bit_block_init_and_2way(blk, args[k], args[k+1], digest);
-            digest = bm::bit_block_and_2way(blk, args[k], args[k+1], digest);
+            if (find_all)
+                digest = bm::bit_block_init_and_2way(blk,
+                                                     args[k], args[k+1],
+                                                     digest);
+            else
+                digest = bm::bit_block_and_2way(blk,
+                                                args[k], args[k+1], digest);
             k += 2;
         }
         else
