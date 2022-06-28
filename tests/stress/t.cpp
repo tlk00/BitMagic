@@ -9977,7 +9977,7 @@ void AggregatorTest()
         bv1[100000] = true;
         bv2[100] = true;
         bv2[100000] = true;
-        bv3[100000] = true;
+        bv3.set(100000);
 
         bv_arr[0] = &bv1;
         bv_arr[1] = &bv2;
@@ -9994,7 +9994,8 @@ void AggregatorTest()
         
         bv1.optimize();
         agg.combine_and_sub(bv4, bv_arr, 2, bv_arr2, 1, false);
-        assert(bv4.count()==1);
+        auto c = bv4.count();
+        assert(c==1);
         assert(bv4.test(100));
 
         bv2.optimize();
@@ -28149,6 +28150,86 @@ void TestStrSparseVector()
         assert(b);
     }
 
+    // samplex index tests
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector::size_type l, r;
+        TSparseOptVector str_sv1, str_sv0;
+        {
+            bm::sv_sample_index<TSparseOptVector> s_idx;
+            s_idx.construct(str_sv1, 64);
+            assert(s_idx.size() == 0);
+        }
+        str_sv1.push_back("1");
+        {
+            bm::sv_sample_index<TSparseOptVector> s_idx(str_sv1, 64);
+            assert(s_idx.size() == 1);
+            assert(s_idx.sv_size() == 1);
+            assert(s_idx.is_unique());
+
+            bool found = s_idx.bfind_range("0", 1, l, r);
+            assert(!found);
+            found = s_idx.bfind_range("1", 1, l, r);
+            assert(found);
+            assert(l == 0);
+            assert(r == 0);
+
+        }
+        str_sv1.push_back("2");
+        {
+            bm::sv_sample_index<TSparseOptVector> s_idx(str_sv1, 64);
+            assert(s_idx.size() == 2);
+            assert(s_idx.sv_size() == 2);
+            assert(s_idx.is_unique());
+
+        }
+
+
+        for (unsigned i = 0; i < 65536*16; ++i)
+        {
+            {
+            bm::sv_sample_index<TSparseOptVector> s_idx(str_sv0, 64);
+            assert(s_idx.sv_size() == i);
+            if (i <= 1)
+            {
+                assert(s_idx.is_unique());
+            }
+            else
+            {
+                assert(!s_idx.is_unique());
+            }
+
+            if (i)
+            {
+                //assert(s_idx.size() == (i / 64) || (s_idx.size() == (i / 64)+1) || (s_idx.size() == (i / 64)+2));
+            }
+            bool found = s_idx.bfind_range("0", 1,  l, r);
+            assert(!found);
+            found = s_idx.bfind_range("129", 3, l, r);
+            assert(!found);
+            if (i)
+            {
+                found = s_idx.bfind_range("123", 3, l, r);
+                assert(found);
+                assert(l >= 0);
+                assert(r <= s_idx.size()-1);
+
+                s_idx.recalc_range("123", l, r);
+                assert(l >= 0);
+                assert(r <= str_sv0.size()-1);
+                assert(l <= r);
+            }
+
+            }
+
+            str_sv0.push_back("123");
+
+            if (((i & 0xFFFF) == 0) && (!is_silent))
+                cout << "\r" << i << flush;
+        } // for i
+
+    }
+
 
 
     // test from Andrea Asztalos
@@ -30698,9 +30779,7 @@ void StressTestStrSparseVector()
    {
        str_svect_type::back_insert_iterator bi = str_sv.get_back_inserter();
        for (auto str : str_coll)
-       {
            bi = str;
-       }
        bi.flush();
    }
 
@@ -32554,6 +32633,7 @@ void TestSIMDUtils()
     {
         unsigned short buf[127] = { 65535, 127, 255, 256, 1000, 2000, 2001, 2005, 0xFF, 0,  };
         idx = bm::sse4_gap_find(buf, (unsigned short)65535, 1);
+cout << idx << endl;
         assert(idx == 0);
         idx = bm::sse4_gap_find(buf, 0, 1);
         assert(idx == 0);
@@ -38353,7 +38433,7 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
         CalcBeginMask();
         CalcEndMask();
 
-        TestSIMDUtils();
+//        TestSIMDUtils();
 
         TestArraysAndBuffers();
 
@@ -38829,7 +38909,6 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
     
     if (is_all || is_str_sv)
     {
-
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
