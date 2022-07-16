@@ -25,6 +25,8 @@ For more information please visit:  http://bitmagic.io
   \sa bm::bvector<>::set()
   \sa bm::bvector<>::count() 
   \sa bm::bvector<>::clear()
+  \sa bm::bvector<>::swap()
+
  */
 
 /*! \file sample1.cpp
@@ -92,7 +94,17 @@ int main(void)
             bv[10] = false;
         }
 
-        cout << "5. bitcount: " << bv.count() << endl;
+        cout << "5. bitcount: " << bv.count() << endl; // 2
+
+        // swap two values
+
+        bv.swap(10, 100);
+
+        cout << "6. bitcount: " << bv.count() << endl; // 2 again
+
+        assert(bv.test(10)); // make sure values swapped ok
+        assert(!bv.test(100));
+
     }
     catch(std::exception& ex)
     {
