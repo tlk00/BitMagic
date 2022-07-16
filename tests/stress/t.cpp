@@ -17158,6 +17158,109 @@ void SetTest()
 
 }
 
+template<class BV>
+void swap_bits(BV& bv, typename BV::size_type i1, typename BV::size_type i2)
+{
+    auto b1 = bv.test(i1);
+    auto b2 = bv.test(i2);
+    bv.set(i1, b2);
+    bv.set(i2, b1);
+}
+
+template<class BV>
+void swap_bits_check(BV& bv1, BV& bv2,
+                     typename BV::size_type i1, typename BV::size_type i2)
+{
+    swap_bits(bv2, i1, i2);
+    bv1.swap(i1, i2);
+    bool eq = bv1.equal(bv2);
+    assert(eq);
+}
+
+
+static
+void SwapTest()
+{
+    cout << "----------------------- SwapTest()" << endl;
+
+    {
+        bvect bv1, bv2;
+        swap_bits_check(bv1, bv2, 0, 0);
+        bv1.set(10);
+        bv2.set(10);
+        swap_bits_check(bv1, bv2, 0, 11);
+        swap_bits_check(bv1, bv2, 10, 65535);
+        bv1.optimize();
+        swap_bits_check(bv1, bv2, 10, 65535);
+        assert(bv1.count()==1);
+        assert(bv1.test(10)==1);
+    }
+
+    {
+        bvect bv1, bv2;
+        bv1.invert();
+        bv2.invert();
+        swap_bits_check(bv1, bv2, 0, 11);
+        swap_bits_check(bv1, bv2, 10, 65535);
+        swap_bits_check(bv1, bv2, 0, bm::id_max-1);
+        swap_bits_check(bv1, bv2, 10, 65535*2);
+    }
+
+    // gap one block tests
+    {
+        bvect bv1, bv2;
+        bv1.set_range(200, 250);
+        bv2.set_range(200, 250);
+        bv1.optimize();
+        swap_bits_check(bv1, bv2, 11, 1);
+        swap_bits_check(bv1, bv2, 199, 198);
+        swap_bits_check(bv1, bv2, 200, 199);
+        swap_bits_check(bv1, bv2, 200, 199);
+        swap_bits_check(bv1, bv2, 251, 65535);
+        swap_bits_check(bv1, bv2, 250, 251);
+        swap_bits_check(bv1, bv2, 220, 65536);
+        swap_bits_check(bv1, bv2, 221, 65536*2);
+    }
+
+    cout << "Stress test 1" << endl;
+    bvect::size_type max = 10000000;
+    {
+        bvect bv1, bv2;
+        generate_bvector(bv1, max, false);
+        bv2 = bv1;
+        bvect::size_type j = max;
+        bvect::size_type cnt = 0;
+        for (bvect::size_type i = 0; i <= j; i+=(rand()%16), j--)
+        {
+            swap_bits_check(bv1, bv2, i, j);
+
+            if (!is_silent)
+                if ((++cnt & 0xFF) == 0)
+                    cout << "\r" << i << "/" << j << flush;
+        } // for
+    }
+
+    cout << "\nStress test 2" << endl;
+    {
+        bvect bv1, bv2;
+        generate_bvector(bv1, max, true);
+        bv2 = bv1;
+        bvect::size_type j = max;
+        bvect::size_type cnt = 0;
+        for (bvect::size_type i = 0; i <= j; i+=(rand()%22), j--)
+        {
+            swap_bits_check(bv1, bv2, i, j);
+            if (!is_silent)
+                if ((++cnt & 0xFF) == 0)
+                    cout << "\r" << i << "/" << j << flush;
+
+        } // for
+    }
+
+
+
+    cout << "\n----------------------- SwapTest() OK" << endl;
+}
 
 template<class A, class B> void CompareMiniSet(const A& ms,
                                           const B& bvm)
@@ -38532,7 +38635,6 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
 
         if (is_all || is_bvbasic || is_bvb0)
         {
-
              ExportTest();
              CheckAllocLeaks(false);
 
@@ -38543,6 +38645,9 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
              CheckAllocLeaks(false);
 
              SetTest();
+             CheckAllocLeaks(false);
+
+             SwapTest();
              CheckAllocLeaks(false);
 
              ArenaTest();
