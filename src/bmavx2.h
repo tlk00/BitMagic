@@ -2961,7 +2961,29 @@ unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
 
     do
     {
-        if (unsigned dsize = end - start; dsize < linear_cutoff)
+        unsigned dsize = end - start;
+        for (; dsize >= 64; dsize = end - start)
+        {
+            unsigned mid = (start + end) >> 1;
+            if (buf[mid] < pos)
+                start = mid+1;
+            else
+                end = mid;
+            if (buf[mid = (start + end) >> 1] < pos)
+                start = mid+1;
+            else
+                end = mid;
+            if (buf[mid = (start + end) >> 1] < pos)
+                start = mid+1;
+            else
+                end = mid;
+            if (buf[mid = (start + end) >> 1] < pos)
+                start = mid+1;
+            else
+                end = mid;
+        } // for
+
+        if (dsize < linear_cutoff)
         {
             // set wider scan window to possibly over-read the range,
             // but stay within allocated block memory
