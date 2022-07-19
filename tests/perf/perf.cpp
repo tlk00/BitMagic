@@ -74,6 +74,7 @@ std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs 
 
 typedef bm::bvector<> bvect;
 typedef bm::str_sparse_vector<char, bvect, 8> str_svect_type;
+typedef bm::str_sparse_vector<char, bvect, 8> str_sv_type;
 
 
 // generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
@@ -1035,6 +1036,99 @@ void BitCountSparseTest()
     delete bset;
 }
 
+template<class BV>
+void swap_bits(BV& bv, typename BV::size_type i1, typename BV::size_type i2)
+{
+    auto b1 = bv.test(i1);
+    auto b2 = bv.test(i2);
+    if (b1 != b2)
+    {
+        bv.set(i1, b2);
+        bv.set(i2, b1);
+    }
+}
+
+static
+void BitSwapTest()
+{
+    unique_ptr<bvect>  bv0(new bvect());
+    unique_ptr<bvect>  bv1(new bvect());
+    unique_ptr<bvect>  bv2(new bvect());
+    unique_ptr<test_bitset>  bset0(new test_bitset());
+    unique_ptr<test_bitset>  bset1(new test_bitset());
+    unique_ptr<test_bitset>  bset2(new test_bitset());
+
+    SimpleFillSets(bset0.get(), *bv0, 0, BSIZE, 9530);
+    SimpleFillSets(bset1.get(), *bv1, 0, BSIZE, 1000);
+    SimpleFillSets(bset2.get(), *bv2, 0, BSIZE, 120);
+
+    bv1->optimize();
+    bv2->optimize();
+
+    const unsigned repeats = REPEATS * 100000;
+
+    std::vector<unsigned> idx;
+    for (unsigned i = 0; i < repeats; ++i)
+    {
+        idx.push_back(unsigned(rand_dis(gen)));
+    }
+
+
+
+    unique_ptr<bvect>  bv0c(new bvect(*bv0));
+    unique_ptr<bvect>  bv1c(new bvect(*bv1));
+    unique_ptr<bvect>  bv2c(new bvect(*bv2));
+
+#if 1
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "naive swap(i1, i2) (BIT+GAP) ", repeats);
+        unsigned j = repeats-1;
+        for (unsigned i = 0; i < repeats; ++i, --j)
+        {
+            unsigned idx1 = idx[i];
+            unsigned idx2 = idx[j];
+            swap_bits(*bv0c, idx1, idx2);
+            swap_bits(*bv1c, idx1, idx2);
+            swap_bits(*bv2c, idx1, idx2);
+        }
+    }
+#endif
+
+    {
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::swap(i1, i2) (BIT+GAPS) ", repeats);
+        unsigned j = repeats-1;
+        for (unsigned i = 0; i < repeats; ++i, --j)
+        {
+            unsigned idx1 = idx[i];
+            unsigned idx2 = idx[j];
+            bv0->swap(idx1, idx2);
+            bv1->swap(idx1, idx2);
+            bv2->swap(idx1, idx2);
+        }
+    }
+//return;
+    bool eq;
+    eq = bv0c->equal(*bv0);
+    if (!eq)
+    {
+        cerr << "swap 0 integrity check failed!" << endl;
+        assert(0); exit(1);
+    }
+    eq = bv1c->equal(*bv1);
+    if (!eq)
+    {
+        cerr << "swap 1 integrity check failed!" << endl;
+        assert(0); exit(1);
+    }
+    eq = bv2c->equal(*bv2);
+    if (!eq)
+    {
+        cerr << "swap 2 integrity check failed!" << endl;
+        assert(0); exit(1);
+    }
+
+}
+
 static
 void BitTestSparseTest()
 {
@@ -1056,9 +1150,8 @@ void BitTestSparseTest()
     std::vector<unsigned> idx;
     idx.resize(repeats);
     for (unsigned i = 0; i < repeats; ++i)
-    {
         idx.push_back(unsigned(rand_dis(gen)));
-    }
+
 
     {
         bm::chrono_taker<std::ostream> tt(cout, "BitTest: bvector<>::test() (BIT) ", repeats);
@@ -5366,6 +5459,8 @@ void StrSparseVectorTest()
 
    GenerateTestStrCollection(str_coll, max_coll);
 
+    // -----------------------------------------------
+
     {
        bm::chrono_taker tt(cout, "bm::str_sparse_vector<>::push_back() ", 1);
        for (auto str : str_coll)
@@ -5473,13 +5568,15 @@ void StrSparseVectorTest()
 
 
 
+
     // ---------
     // test on sorted collection
 
-    std::sort(str_coll.begin(), str_coll.end());
-
     std::vector<string> str_coll_test1;
     std::vector<string> str_coll_test2;
+
+    std::sort(str_coll.begin(), str_coll.end());
+
 
     const unsigned pick_factor = 5;
     for (unsigned i = 0; i < unsigned(str_coll.size()); i+=pick_factor)
@@ -5502,6 +5599,7 @@ void StrSparseVectorTest()
 
 
    str_svect_type str_sv_srt;
+
    {
        str_svect_type::back_insert_iterator bi = str_sv_srt.get_back_inserter();
        for (auto str : str_coll)
@@ -5511,23 +5609,16 @@ void StrSparseVectorTest()
    str_sv_srt.remap();
    str_sv_srt.optimize();
    str_sv_srt.freeze();
-/*
-    {
-       unsigned k =0;
-       for (auto str : str_coll)
-       {
-           string s;
-           str_sv_srt.get(k, s);
-           assert(str == s);
-           ++k;
-       }
-    }
-*/
 
 
     bm::id64_t  f_sum4_0{0}, f_sum1{0}, f_sum2_4{0}, f_sum2_8{0}, f_sum2_16{0},
                 f_sum2_32{0}, f_sum2_64{0};
+
     unsigned pos2;
+
+// ---------------------------------------
+
+#if 1
 
     {
         bm::chrono_taker tt(cout, "std::lower_bound()", 1);
@@ -5574,6 +5665,7 @@ void StrSparseVectorTest()
             if (!found2)
             {
                 cerr << "String bfind_eq_str() failure!" << endl;
+                found2 = scanner_4.bfind_eq_str(s.c_str(), pos2);
                 assert(0); exit(1);
             }
             f_sum2_4 += pos2;
@@ -5657,6 +5749,7 @@ void StrSparseVectorTest()
         assert(f_sum2_64 == f_sum1);
     }
 
+
     if (f_sum1 != f_sum4_0 || f_sum1 != f_sum2_4 || f_sum1 != f_sum2_8 ||
         f_sum1 != f_sum2_16 || f_sum1 != f_sum2_32 || f_sum1 != f_sum2_64)
     {
@@ -5681,6 +5774,7 @@ void StrSparseVectorTest()
             }
         }
     }
+#endif
 
 }
 
@@ -5798,7 +5892,215 @@ void InterpolativeCodingTest()
     }
 }
 
+inline
+void AS_test1()
+{
+    str_svect_type str_sv_srt1;
+    str_svect_type::size_type pos2;
 
+      bm::file_load_svector(str_sv_srt1, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/perf/0.0.batch.strsv");
+        bm::sparse_vector_scanner<str_svect_type, 32> scanner_32;
+        scanner_32.bind(str_sv_srt1, true); // bind sorted vector
+
+        std::vector<std::pair<string, unsigned> > tsample_v;
+        {
+        std::string s;
+
+        for (unsigned i = 0; i < str_sv_srt1.size(); i+= 7)
+        {
+            str_sv_srt1.get(i, s);
+            tsample_v.push_back(std::make_pair(s, i));
+        }
+        }
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(tsample_v.begin(), tsample_v.end(), g);
+
+        {
+        bm::chrono_taker tt(cout, "Test Compare", 1);
+
+        for (unsigned i = 0; i < tsample_v.size(); i++)
+        {
+            const std::pair<string, unsigned>& sp = tsample_v[i];
+            auto cmp = str_sv_srt1.compare(sp.second, sp.first.c_str());
+            if (cmp != 0)
+            {
+                cerr << "Compare failure!" << endl;
+                assert(0); exit(1);
+            }
+        }
+        }
+
+        bm::id64_t s0 = 0;
+        bm::id64_t s1 = 0;
+
+        {
+            bm::chrono_taker tt(cout, "Test AS-len", 1);
+            str_svect_type::size_type pos = 0;
+            for (unsigned i = 0; i < 1000000; ++i) {
+                const std::pair<string, unsigned>& sp = tsample_v[i];
+                bool f = scanner_32.bfind_eq_str(sp.first.c_str(), sp.first.size(), pos);
+                assert(f);
+                assert(pos == i);
+                s0+=pos;
+            }
+        }
+
+        {
+            bm::chrono_taker tt(cout, "Test AS-z", 1);
+            str_svect_type::size_type pos = 0;
+            for (unsigned i = 0; i < 1000000; ++i) {
+                const std::pair<string, unsigned>& sp = tsample_v[i];
+                bool f = scanner_32.bfind_eq_str(sp.first.c_str(), pos);
+                s1+=pos;
+                assert(f);
+                assert(pos == i);
+            }
+        }
+        assert(s0 == s1);
+
+
+        {
+        bm::chrono_taker tt(cout, "Test Plus-32", 1);
+
+        for (unsigned i = 0; i < tsample_v.size(); i++)
+        {
+            const std::pair<string, unsigned>& sp = tsample_v[i];
+
+            bool found2 = scanner_32.bfind_eq_str(sp.first.c_str(), sp.first.size(), pos2);
+            if (!found2 || pos2 != sp.second)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+        }
+        }
+
+        {
+        bm::sparse_vector_scanner<str_svect_type, 64> scanner_64;
+        scanner_64.bind(str_sv_srt1, true); // bind sorted vector
+        {
+        bm::chrono_taker tt(cout, "Test Plus-64", 1);
+
+        for (unsigned i = 0; i < tsample_v.size(); i++)
+        {
+            const std::pair<string, unsigned>& sp = tsample_v[i];
+
+            bool found2 = scanner_64.bfind_eq_str(sp.first.c_str(), sp.first.size(), pos2);
+            if (!found2 || pos2 != sp.second)
+            {
+                cerr << "String bfind_eq_str() failure!" << endl;
+                assert(0); exit(1);
+            }
+        }
+        }
+        }
+
+        for (unsigned i = 0; i < tsample_v.size(); i++)
+        {
+            std::pair<string, unsigned>& sp = tsample_v[i];
+            auto len = sp.first.length();
+            if (len)
+            {
+                size_t idx = (unsigned)(rand()) % (len-1);
+                if (!(idx < len))
+                    idx = len/2;
+                char ch = sp.first.at(idx);
+                if (ch == '0')
+                    ch = '6';
+                else
+                    ch = '0';
+                sp.first[idx] = ch;
+            }
+        }
+
+        {
+        bm::chrono_taker tt(cout, "Test Minus-32", 1);
+
+        for (unsigned i = 0; i < tsample_v.size(); i++)
+        {
+            const std::pair<string, unsigned>& sp = tsample_v[i];
+
+            bool found2 = scanner_32.bfind_eq_str(sp.first.c_str(),sp.first.size(), pos2);
+            if (found2)
+            {
+                auto cmp = str_sv_srt1.compare(pos2, sp.first.c_str());
+                if (cmp != 0)
+                {
+                    cerr << "String bfind_eq_str() Minus failure!" << endl;
+                    assert(0); exit(1);
+                }
+            }
+        }
+        }
+}
+
+inline
+void AS_test2()
+{
+    str_sv_type::size_type pos2 = 0;
+    cout << "Loading 1 " << endl;
+    str_sv_type str_sv_srt1;
+    bm::file_load_svector(str_sv_srt1, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/perf/0.0.batch");
+
+    cout << "Loading 2 " << endl;
+    str_sv_type str_sv_srt2;
+    bm::file_load_svector(str_sv_srt2, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/perf/1.0.batch");
+
+    cout << str_sv_srt1.size() << endl;
+    cout << str_sv_srt2.size() << endl;
+
+    cout << "sampling-shuffle..." << endl;
+    std::vector<std::pair<string, unsigned> > tsample_v;
+    {
+    str_svect_type::const_iterator it = str_sv_srt2.begin();
+    str_svect_type::const_iterator it_end = str_sv_srt2.end();
+
+    for (unsigned i=0; it != it_end; ++it, ++i)
+    {
+        tsample_v.push_back(std::make_pair(*it, i));
+    }
+
+    }
+
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(tsample_v.begin(), tsample_v.end(), g);
+
+    {
+        bm::sparse_vector_scanner<str_sv_type, 32> scanner_32;
+        scanner_32.bind(str_sv_srt1, true); // bind sorted vector
+
+        {
+        bm::chrono_taker tt(cout, "AS Test2 (scanner-32.bfind_eq_str()-len", 1);
+        for (unsigned k = 0; k < 10; ++k)
+            for (unsigned i = 0; i < tsample_v.size(); i++) {
+                const std::pair<string, unsigned>& sp = tsample_v[i];
+                const char* s = sp.first.c_str();
+                auto len = sp.first.size();
+                bool found2 = scanner_32.bfind_eq_str(s, len, pos2);
+                if (found2) {
+                    cerr << "String bfind_eq_str() failure!" << endl;
+                    assert(0); exit(1);
+                }
+            }
+        }
+        {
+        bm::chrono_taker tt(cout, "AS Test2 (scanner-32.bfind_eq_str()-z", 1);
+        for (unsigned k = 0; k < 10; ++k)
+            for (unsigned i = 0; i < tsample_v.size(); i++) {
+                const std::pair<string, unsigned>& sp = tsample_v[i];
+                bool found2 = scanner_32.bfind_eq_str(sp.first.c_str(), pos2);
+                if (found2) {
+                    cerr << "String bfind_eq_str() failure!" << endl;
+                    assert(0); exit(1);
+                }
+            }
+        }
+    }
+    return;
+}
 
 int main(void)
 {
@@ -5835,12 +6137,13 @@ int main(void)
         WordSelectTest();
         cout << endl;
 
-
         BitSetConditionalTest();
         cout << endl;
 
-
         BitCompareTest();
+        cout << endl;
+
+        BitSwapTest();
         cout << endl;
 
         OptimizeTest();
@@ -5930,6 +6233,9 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
+
+//        AS_test1();
+//        AS_test2();
 
     }
     catch (std::exception& ex)
