@@ -1360,6 +1360,56 @@ int SerializationTest()
     return res;
 }
 
+int SwapTest()
+{
+    int res = 0;
+    BM_BVHANDLE bmh1 = 0;
+    int val;
+    unsigned int count;
+    int carry_over;
+
+    res = BM_bvector_construct(&bmh1, 0);
+    BMERR_CHECK(res, "BM_bvector_construct()");
+
+
+    res = BM_bvector_set_bit(bmh1, 10, BM_TRUE);
+    BMERR_CHECK_GOTO(res, "BM_bvector_set_bit()", free_mem);
+
+    res = BM_bvector_swap_bits(bmh1, 10, 10000);
+    BMERR_CHECK_GOTO(res, "BM_bvector_swap_bits()", free_mem);
+
+
+    res = BM_bvector_get_bit(bmh1, 10000, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (!val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_get_bit(bmh1, 10, &val);
+    BMERR_CHECK_GOTO(res, "BM_bvector_get_bit()", free_mem);
+    if (val)
+    {
+        printf("bvector get_bit incorrect value \n");
+        res = 1; goto free_mem;
+    }
+
+    res = BM_bvector_count(bmh1, &count);
+    BMERR_CHECK_GOTO(res, "BM_bvector_count()", free_mem);
+    if (count != 1)
+    {
+        printf("incorrrect count %i \n", count);
+        res = 1; goto free_mem;
+    }
+
+
+    free_mem:
+        res = BM_bvector_free(bmh1);
+        BMERR_CHECK(res, "bvector free failed");
+
+    return res;
+}
 
 
 
@@ -1400,7 +1450,17 @@ int main(void)
         return res;
     }
     printf("\n---------------------------------- SetGetTest OK\n");
-    
+
+    res = SwapTest();
+    if (res != 0)
+    {
+        printf("\nSwapTest failed!\n");
+        return res;
+    }
+    printf("\n---------------------------------- SwapTest OK\n");
+
+
+
     res = ConstructionCopyMoveTest();
     if (res != 0)
     {

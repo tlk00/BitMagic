@@ -254,7 +254,7 @@ BM_API_EXPORT int BM_bvector_construct_copy_ro(BM_BVHANDLE* h, BM_BVHANDLE hfrom
         const TBM_bvector* bv_from = (TBM_bvector*)hfrom;
 
         // placement new just to call the constructor
-        TBM_bvector* bv = new(mem) TBM_bvector(*bv_from, bm::BM_READONLY);
+        TBM_bvector* bv = new(mem) TBM_bvector(*bv_from, bm::finalization::READONLY);
         *h = bv;
     }
     CATCH (BM_ERR_BADALLOC)
@@ -283,7 +283,8 @@ BM_API_EXPORT int BM_bvector_construct_copy_rw(BM_BVHANDLE* h, BM_BVHANDLE hfrom
         const TBM_bvector* bv_from = (TBM_bvector*)hfrom;
 
         // placement new just to call the constructor
-        TBM_bvector* bv = new(mem) TBM_bvector(*bv_from, bm::BM_READWRITE);
+        TBM_bvector* bv = new(mem) TBM_bvector(*bv_from,
+                                            bm::finalization::READWRITE);
         *h = bv;
     }
     CATCH (BM_ERR_BADALLOC)
@@ -428,6 +429,23 @@ int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i)
     ETRY;
     return BM_OK;
 }
+
+// -----------------------------------------------------------------
+
+int BM_bvector_swap_bits(BM_BVHANDLE h, unsigned int i1, unsigned int i2)
+{
+    if (!h)
+        return BM_ERR_BADARG;
+    BM_TRY
+    {
+        TBM_bvector* bv = (TBM_bvector*)h;
+        bv->swap(i1, i2);
+    }
+    BM_CATCH_ALL
+    ETRY;
+    return BM_OK;
+}
+
 
 // -----------------------------------------------------------------
 

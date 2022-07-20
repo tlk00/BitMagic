@@ -94,7 +94,9 @@ public:
 #endif
 //        void* ptr = ::malloc(n * sizeof(void*));
         if (!ptr)
-            throw std::bad_alloc();
+        {
+            BM_THROW( BM_ERR_BADALLOC );
+        }
         return ptr;
     }
 

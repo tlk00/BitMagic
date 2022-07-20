@@ -241,7 +241,15 @@ int BM_bvector_set_bit_conditional(BM_BVHANDLE  h,
 */
 BM_API_EXPORT 
 int BM_bvector_flip_bit(BM_BVHANDLE h, unsigned int i);
-    
+
+/* swap bits
+   i1 - index of a bit 1 tpo swap
+   i1 - index of a bit 1 tpo swap
+*/
+BM_API_EXPORT
+int BM_bvector_swap_bits(BM_BVHANDLE h, unsigned int i1, unsigned int i2);
+
+
 /* inc bit at position
    i           - index of a bit to flip
    1 + 0 = 1 (no carry over)
