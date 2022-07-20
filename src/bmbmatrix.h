@@ -286,6 +286,12 @@ public:
     */
     void clear_column(size_type idx, size_type row_from);
 
+    /*! Swap columns (bits in all rows)
+        @param idx1 - column index 1
+        @param idx2 - column index 2
+     */
+    void swap_columns(size_type idx1, size_type idx2);
+
     /**
         Set SUB (MINUS) operation on all existing rows
         @param bv - argument vector row[i] -= bv
@@ -398,6 +404,10 @@ public:
     
     /*! return true if empty */
     bool empty() const BMNOEXCEPT { return size() == 0; }
+
+    /** swap two vector elements */
+    void swap_elements(size_type idx1, size_type idx2)
+            { bmatr_.swap_columns(idx1, idx2); }
 
 public:
 
@@ -849,6 +859,16 @@ void basic_bmatrix<BV>::clear_column(size_type idx,
     for (size_type i = row_from; i < rsize_; ++i)
         if (bvector_type* bv = get_row(i))
             bv->clear_bit_no_check(idx);
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::swap_columns(size_type idx1, size_type idx2)
+{
+    for (size_type i = 0; i < rsize_; ++i)
+        if (bvector_type* bv = get_row(i))
+            bv->swap(idx1, idx2);
 }
 
 //---------------------------------------------------------------------

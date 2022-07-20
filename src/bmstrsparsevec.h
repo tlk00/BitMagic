@@ -595,6 +595,14 @@ public:
     */
     void insert(size_type idx, const value_type* str);
 
+    /**
+        \brief swap two vector elements between each other
+        \param idx1  - element index 1
+        \param idx1  - element index 2
+     */
+    void swap(size_type idx1, size_type idx2);
+
+
 
     /*!
         \brief insert STL string
@@ -1159,14 +1167,6 @@ public:
                 value_type* BMRESTRICT str = cmatr_.row(idx);
                 str[i] |= m;
             } while (++j < bits_size);
-/*
-            for (unsigned j = 0; j < bits_size; ++j)
-            {
-                size_type idx = bits[j] + base;
-                value_type* BMRESTRICT str = cmatr_.row(idx);
-                str[i] |= m;
-            } // for j
-*/
             return 0;
         }
 
@@ -1184,14 +1184,6 @@ public:
                 value_type* BMRESTRICT str = cmatr_.row(idx);
                 str[i] |= m;
             } while(++j < sz);
-/*
-            for (size_type j = 0; j < sz; ++j)
-            {
-                size_type idx = j + base;
-                value_type* BMRESTRICT str = cmatr_.row(idx);
-                str[i] |= m;
-            } // for j
-*/
             return 0;
         }
 
@@ -1686,6 +1678,18 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::insert(
     }
     insert_value(idx, str);
     this->size_++;
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+void str_sparse_vector<CharType, BV, STR_SIZE>::swap(size_type idx1,
+                                                     size_type idx2)
+{
+    BM_ASSERT(idx1 < this->size());
+    BM_ASSERT(idx2 < this->size());
+
+    this->swap_elements(idx1, idx2);
 }
 
 //---------------------------------------------------------------------

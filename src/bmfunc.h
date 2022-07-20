@@ -1779,45 +1779,6 @@ unsigned gap_bfind(const T* BMRESTRICT buf,
 }
 
 
-/*
-template<typename T> 
-unsigned gap_bfind(const T* BMRESTRICT buf,
-                   unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
-{
-    BM_ASSERT(pos < bm::gap_max_bits);
-    #undef VECT_GAP_BFIND // TODO: VECTOR bfind causes performance degradation
-    #ifdef VECT_GAP_BFIND
-        return VECT_GAP_BFIND(buf, pos, is_set);
-    #else
-        *is_set = (*buf) & 1;
-        unsigned start = 1;
-        unsigned end = 1 + ((*buf) >> 3);
-        while (start != end)
-        {
-            if ((end - start) < 16) // use direct scan on short span
-            {
-                do
-                {
-                    if (buf[start] >= pos)
-                        goto break2;
-                } while (++start);
-                BM_ASSERT(0); // should not get here
-                break;
-            }
-            unsigned curr = (start + end) >> 1;
-            if ( buf[curr] < pos )
-                start = curr + 1;
-            else
-                end = curr;
-        } // while
-        break2:
-        *is_set ^= ((start-1) & 1);
-        return start;
-    #endif
-}
-*/
-
-
 
 
 /*!
