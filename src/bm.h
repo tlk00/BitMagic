@@ -4429,20 +4429,21 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         }
         unsigned nword1 = unsigned(nbit1 >> bm::set_word_shift);
         unsigned nword2 = unsigned(nbit2 >> bm::set_word_shift);
-        nbit1 &= bm::set_word_mask;
-        nbit2 &= bm::set_word_mask;
+        nbit1 &= bm::set_word_mask; nbit2 &= bm::set_word_mask;
         bool b1 = block1[nword1] & (1u << nbit1);
         bool b2 = block1[nword2] & (1u << nbit2);
         if (b1 != b2)
         {
-            (b2) ? block1[nword1] |= (1u << nbit1) :
-                   block1[nword1] &= ~(1u << nbit1);
-            (b1) ? block1[nword2] |= (1u << nbit2) :
-                   block1[nword2] &= ~(1u << nbit2);
+            nbit1 = 1u << nbit1; nbit2 = 1u << nbit2;
+            auto w = block1[nword1];
+            (b2) ? w |= nbit1 : w &= ~nbit1;
+            block1[nword1] = w;
+            w = block1[nword2];
+            (b1) ? w |= nbit2 : w &= ~nbit2;
+            block1[nword2] = w;
         }
         return;
-    }
-
+    } // if (same block)
 
     {
         unsigned i0, j0;
@@ -4533,9 +4534,10 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         else // bit block
         {
             unsigned nword1 = unsigned(nbit1 >> bm::set_word_shift);
-            nbit1 &= bm::set_word_mask;
-            (b2) ? block1[nword1] |= (1u << nbit1) :
-                   block1[nword1] &= ~(1u << nbit1);
+            nbit1 = 1u << (nbit1 & bm::set_word_mask);
+            auto w = block1[nword1];
+            (b2) ? w |= nbit1 : w &= ~nbit1;
+            block1[nword1] = w;
         }
     }
     else // block
@@ -4561,9 +4563,10 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         else // bit block
         {
             unsigned nword2 = unsigned(nbit2 >> bm::set_word_shift);
-            nbit2 &= bm::set_word_mask;
-            (b1) ? block2[nword2] |= (1u << nbit2) :
-                   block2[nword2] &= ~(1u << nbit2);
+            nbit2 = 1u << (nbit2 & bm::set_word_mask);
+            auto w = block2[nword2];
+            (b1) ? w |= nbit2 : w &= ~nbit2;
+            block2[nword2] = w;
         }
     }
     else
