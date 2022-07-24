@@ -55,16 +55,16 @@ typedef bm::str_sparse_vector<char, bvector_type, 16> str_sv_type;
 /// ... and shuffle it
 static
 void generate_string_set(vector<string>& str_vec,
-                         const unsigned max_coll = 250000)
+                         const unsigned max_coll = 950000)
 {
     str_vec.resize(0);
     string str;
     for (unsigned i = 10; i < max_coll; i += unsigned(rand() % 3))
     {
-        switch (rand()%2)
+        switch (rand()%8)
         {
         case 0: str = "nssv"; break;
-        default: str = "rs"; break;
+        default: str = "rs";  break;
         }
 
         str.append(to_string(i));
@@ -82,8 +82,6 @@ void quicksort(str_sv_type& strsv, int first, int last)
 {
     using stype = str_sv_type::size_type;
     int i, j, pivot;
-    std::string s1, s2;
-
     if (first<last)
     {
         pivot = i= first;
@@ -96,16 +94,10 @@ void quicksort(str_sv_type& strsv, int first, int last)
                 j--;
             if (i < j)
             {
-                strsv.get(stype(i), s1);
-                strsv.get(stype(j), s2);
-                strsv.assign(stype(i), s2);
-                strsv.assign(stype(j), s1);
+                strsv.swap(i, j);
             }
         } // while
-        strsv.get(stype(pivot), s1);
-        strsv.get(stype(j), s2);
-        strsv.assign(stype(pivot), s2);
-        strsv.assign(stype(j), s1);
+        strsv.swap(pivot, j);
 
         quicksort(strsv, first, j-1);
         quicksort(strsv, j+1, last);
@@ -136,16 +128,13 @@ void quicksort2(str_sv_type& strsv, int first, int last)
         } // while
         strsv.swap(stype(pivot), stype(j));
 
-        quicksort(strsv, first, j-1);
-        quicksort(strsv, j+1, last);
+        quicksort2(strsv, first, j-1);
+        quicksort2(strsv, j+1, last);
     }
 }
 
 
-
-
-
-bm::chrono_taker<>::duration_map_type  timing_map;
+bm::chrono_taker<>::duration_map_type  timing_map; // timing stats
 
 int main(void)
 {
@@ -172,7 +161,23 @@ int main(void)
             BM_DECLARE_TEMP_BLOCK(tb)
             str_sv.optimize(tb);
         }
+
+        // print_svector_stat(cout, str_sv);
+
         str_sv2 = str_sv;
+
+        // calculate and print memory usage statistics
+        {
+            str_sv_type::statistics st;
+            str_sv.calc_stat(&st);
+            size_t std_vect_mem = sizeof(str_vec);
+            for (const string& term : str_vec)
+                std_vect_mem += term.size() + sizeof(term);
+
+            cout << "std::vector<string> mem    = " << std_vect_mem << endl;
+            cout << "Succinct vector vector mem = " << st.memory_used << endl;
+        }
+
 
         cout << "Quick Sort..." << endl;
 
