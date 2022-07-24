@@ -517,6 +517,15 @@ public:
     */
     void erase(size_type idx, bool erase_null = true);
 
+
+    /**
+        \brief swap two vector elements between each other
+        \param idx1  - element index 1
+        \param idx1  - element index 2
+     */
+    void swap(size_type idx1, size_type idx2);
+    
+
     /*!
         \brief clear specified element with bounds checking and automatic resize
         \param idx - element index
@@ -1850,6 +1859,17 @@ void sparse_vector<Val, BV>::push_back_null(size_type count)
     BM_ASSERT(this->is_nullable());
     
     this->size_ += count;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::swap(size_type idx1, size_type idx2)
+{
+    BM_ASSERT(idx1 < this->size());
+    BM_ASSERT(idx2 < this->size());
+
+    this->swap_elements(idx1, idx2);
 }
 
 
