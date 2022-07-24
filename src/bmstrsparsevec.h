@@ -2058,6 +2058,7 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
                                               size_type idx1,
                                               size_type idx2) const BMNOEXCEPT
 {
+    BM_ASSERT(idx1 < size() && idx2 < size());
     int res = 0;
     if (idx1 == idx2)
         return 0;
@@ -2075,9 +2076,9 @@ int str_sparse_vector<CharType, BV, STR_SIZE>::compare(
             }
             const unsigned char* remap_row = remap_matrix1_.row(i);
             unsigned char remap_value1 = remap_row[unsigned(octet1)];
-            BM_ASSERT(remap_value1);
+            //BM_ASSERT(remap_value1);
             unsigned char remap_value2 = remap_row[unsigned(octet2)];
-            BM_ASSERT(remap_value2);
+            //BM_ASSERT(remap_value2);
             res = (remap_value1 > remap_value2) - (remap_value1 < remap_value2);
             if (res || !octet2)
                 break;
