@@ -17171,8 +17171,18 @@ template<class BV>
 void swap_bits_check(BV& bv1, BV& bv2,
                      typename BV::size_type i1, typename BV::size_type i2)
 {
-    swap_bits(bv2, i1, i2);
+    auto b1 = bv1.test(i1);
+    auto b2 = bv1.test(i2);
+
     bv1.swap(i1, i2);
+
+    auto b12 = bv1.test(i1);
+    auto b22 = bv1.test(i2);
+    assert(b2 == b12);
+    assert(b1 == b22);
+
+    swap_bits(bv2, i1, i2);
+
     bool eq = bv1.equal(bv2);
     assert(eq);
 }
@@ -17230,12 +17240,12 @@ void SwapTest()
         bv2 = bv1;
         bvect::size_type j = max;
         bvect::size_type cnt = 0;
-        for (bvect::size_type i = 0; i <= j; i+=(rand()%16), j--)
+        for (bvect::size_type i = 0; i <= j; i+=unsigned(rand()%16), j--)
         {
             swap_bits_check(bv1, bv2, i, j);
 
             if (!is_silent)
-                if ((++cnt & 0xFF) == 0)
+                if ((++cnt & 0xFFFF) == 0)
                     cout << "\r" << i << "/" << j << flush;
         } // for
     }
@@ -17247,11 +17257,11 @@ void SwapTest()
         bv2 = bv1;
         bvect::size_type j = max;
         bvect::size_type cnt = 0;
-        for (bvect::size_type i = 0; i <= j; i+=(rand()%22), j--)
+        for (bvect::size_type i = 0; i <= j; i+=unsigned(rand()%22), j--)
         {
             swap_bits_check(bv1, bv2, i, j);
             if (!is_silent)
-                if ((++cnt & 0xFF) == 0)
+                if ((++cnt & 0xFFFF) == 0)
                     cout << "\r" << i << "/" << j << flush;
 
         } // for
@@ -22122,6 +22132,34 @@ void TestSparseVector()
 
         v = sv1[0];
         assert(v == -8);
+
+    }
+
+    // swap test
+    {
+        bm::sparse_vector<unsigned, bvect> sv;
+        sv.push_back(1);
+        sv.push_back(8);
+        sv.swap(1, 0);
+        auto v1 = sv.get(0);
+        auto v2 = sv.get(1);
+        assert(v1 == 8);
+        assert(v2 == 1);
+        sv.optimize();
+        sv.swap(0, 1);
+        v1 = sv.get(0);
+        v2 = sv.get(1);
+        assert(v1 == 1);
+        assert(v2 == 8);
+
+        sv.set(128000, 5);
+        sv.swap(128000, 0);
+        v1 = sv.get(0);
+        v2 = sv.get(1);
+        assert(v1 == 5);
+        assert(v2 == 8);
+        v2 = sv.get(128000);
+        assert(v2 == 1);
 
     }
 
@@ -28216,8 +28254,8 @@ void TestStrSparseVector()
             b = str_sv0.equal(str_sv2);
             assert(b);
         }
-
     }
+
 
     {
         using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
@@ -28442,8 +28480,8 @@ void TestStrSparseVector()
         auto it = ssv1.begin();
         const char* ch = *it;
         assert(!ch);
-
     }
+
 
     // bulk set_null
     {
@@ -28514,6 +28552,32 @@ void TestStrSparseVector()
         ++it; ++it;
         ch = *it;
         assert(!ch);
+    }
+
+    // swap test
+    {
+        using TSparseOptVector = bm::str_sparse_vector<char, bm::bvector<>, 2>;
+        TSparseOptVector ssv1(bm::use_null);
+
+        ssv1.set(0, "s1");
+        ssv1.set(1, "z1");
+        ssv1.set(4, "s4");
+
+        ssv1.remap();
+        ssv1.optimize();
+
+        ssv1.swap(1, 2);
+        bool b;
+        b = ssv1.is_null(1);
+        assert(b);
+        b = ssv1.is_null(2);
+        assert(!b);
+
+        int cmp;
+        char str[256];
+        ssv1.get(2, str, sizeof(str));
+        cmp = ::strcmp(str, "z1");
+        assert(cmp==0);
     }
 
 
@@ -31472,6 +31536,98 @@ void TestSparseFindEqStrPipeline()
 }
 
 
+void quicksort2(str_svect_type& strsv, int first, int last)
+{
+    using stype = str_svect_type::size_type;
+    int i, j, pivot;
+
+    str_svect_type::value_type pivot_buf[128]; // fixed buffer for simplicity
+    if (first<last)
+    {
+        pivot = i= first;
+        j = last;
+
+        strsv.get(stype(pivot), pivot_buf, sizeof(pivot_buf));
+
+        while (i <j)
+        {
+            while((i < last) && (strsv.compare(stype(i), pivot_buf) <= 0))
+                i++;
+            while(strsv.compare(stype(j), pivot_buf) > 0)
+                j--;
+            if (i < j)
+                strsv.swap(stype(i), stype(j));
+        } // while
+        strsv.swap(stype(pivot), stype(j));
+
+        quicksort2(strsv, first, j-1);
+        quicksort2(strsv, j+1, last);
+    }
+}
+
+static
+void generate_string_set(vector<string>& str_vec,
+                         const unsigned max_coll = 950000)
+{
+    str_vec.resize(0);
+    string str;
+    for (unsigned i = 10; i < max_coll; i += unsigned(rand() % 3))
+    {
+        switch (rand()%8)
+        {
+        case 0: str = "nssv"; break;
+        default: str = "rs";  break;
+        }
+
+        str.append(to_string(i));
+        str_vec.emplace_back(str);
+    } // for i
+
+    std::random_device rd;
+    std::mt19937       g(rd());
+    std::shuffle(str_vec.begin(), str_vec.end(), g);
+}
+
+static
+void TestStrSparseQuickSort()
+{
+   cout << "---------------------------- TestStrSparseQuickSort()" << endl;
+
+    vector<string> str_vec;
+    generate_string_set(str_vec);
+
+    str_svect_type str_sv;
+    {
+        auto bi = str_sv.get_back_inserter();
+        for (const string& term : str_vec)
+            bi = term;
+        bi.flush();
+    }
+    str_sv.remap();
+    str_sv.optimize();
+
+    quicksort2(str_sv, 0, (int)str_sv.size()-1);
+    std::sort(str_vec.begin(), str_vec.end());
+
+    {
+        vector<string>::const_iterator sit = str_vec.begin();
+        str_svect_type::const_iterator it = str_sv.begin();
+        str_svect_type::const_iterator it_end = str_sv.end();
+        for (; it != it_end; ++it, ++sit)
+        {
+            string s = *it;
+            if (*sit != s)
+            {
+                cerr << "Mismatch at:" << s << "!=" << *sit << endl;
+                assert(0);
+                exit(1);
+            }
+        } // for
+    }
+
+   cout << "---------------------------- TestStrSparseQuickSort() OK" << endl;
+}
+
 static
 void TestStrSparseSort()
 {
@@ -31539,7 +31695,7 @@ void TestStrSparseSort()
         cout << "\n";
     }
 
-    cout << "insertion sort test data generation.." << endl;
+    cout << "sort test data generation.." << endl;
     // insertion sort stress test
     {
        std::vector<string> str_coll;
@@ -31558,6 +31714,9 @@ void TestStrSparseSort()
             std::mt19937       g(rd());
             std::shuffle(str_coll.begin(), str_coll.end(), g);
         }
+
+
+
 
         // insertion sort
         str_svect_type      str_sv_sorted;
@@ -39030,6 +39189,9 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
          CheckAllocLeaks(false);
 
          TestStrSparseSort();
+         CheckAllocLeaks(false);
+
+         TestStrSparseQuickSort();
          CheckAllocLeaks(false);
 
          StressTestStrSparseVector();
