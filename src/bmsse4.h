@@ -1453,6 +1453,7 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
     @return test result
     @ingroup SSE4
 */
+inline
 unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 {
     unsigned start = 1;
@@ -1510,6 +1511,7 @@ unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNO
 
 
 /*
+inline
 unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 {
     unsigned start = 1;
