@@ -35,7 +35,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmstrsparsevec.h"
-//#include "bmsparsevec_algo.h"
+#include "bmsparsevec_algo.h"
 
 #include "bmdbg.h"
 #include "bmtimer.h"
@@ -94,10 +94,10 @@ void quicksort(str_sv_type& strsv, int first, int last)
                 j--;
             if (i < j)
             {
-                strsv.swap(i, j);
+                strsv.swap(stype(i), stype(j));
             }
         } // while
-        strsv.swap(pivot, j);
+        strsv.swap(stype(pivot), stype(j));
 
         quicksort(strsv, first, j-1);
         quicksort(strsv, j+1, last);
@@ -133,6 +133,29 @@ void quicksort2(str_sv_type& strsv, int first, int last)
     }
 }
 
+// insertion sort takes data from unsorted vector places it into sparse vector
+// maintaining correct sorted order (for fast search)
+//
+static
+void insertion_sort(str_sv_type& str_sv, const vector<string>& str_vec)
+{
+    // scanner object is re-used throught the processing
+    //
+    bm::sparse_vector_scanner<str_sv_type> scanner;
+
+    for (const string& s : str_vec)
+    {
+        const char* cs = s.c_str();
+        str_sv_type::size_type pos;
+        bool found = scanner.lower_bound_str(str_sv, cs, pos);
+        (void)found; // just to silence the unused variable warning
+
+        str_sv.insert(pos, cs);
+
+    } // for s
+}
+
+
 
 bm::chrono_taker<>::duration_map_type  timing_map; // timing stats
 
@@ -140,7 +163,7 @@ int main(void)
 {
     try
     {
-        str_sv_type str_sv, str_sv2;
+        str_sv_type str_sv, str_sv2, str_sv3;
 
         vector<string> str_vec;
         generate_string_set(str_vec);
@@ -179,53 +202,66 @@ int main(void)
         }
 
 
-        cout << "Quick Sort..." << endl;
-
+        cout << "Quick Sort... 1" << endl;
         {
         bm::chrono_taker tt1(cout, "1. quick sort (succint)", 1, &timing_map);
         quicksort(str_sv, 0, (int)str_sv.size()-1);
         }
 
+        cout << "Quick Sort... 2" << endl;
         {
         bm::chrono_taker tt1(cout, "2. quick sort 2 (succint)", 1, &timing_map);
         quicksort2(str_sv2, 0, (int)str_sv2.size()-1);
         }
 
-
+        cout << "Insertion Sort... " << endl;
         {
-        bool eq = str_sv.equal(str_sv2);
-        if (!eq)
-        {
-            cerr << "post-sort vector mismatch!" << endl;
-            assert(0); exit(1);
-        }
+        bm::chrono_taker tt1(cout, "3. insertion sort (succint)", 1, &timing_map);
+        insertion_sort(str_sv3, str_vec);
         }
 
-
-
-
-        // validate the results to match STL sort
         cout << "std::sort..." << endl;
         {
-        bm::chrono_taker tt1(cout, "3. std::sort()", 1, &timing_map);
+        bm::chrono_taker tt1(cout, "4. std::sort()", 1, &timing_map);
         std::sort(str_vec.begin(), str_vec.end());
         }
 
+        // validation of different sort methods
         {
-            vector<string>::const_iterator sit = str_vec.begin();
-            str_sv_type::const_iterator it = str_sv.begin();
-            str_sv_type::const_iterator it_end = str_sv.end();
-            for (; it != it_end; ++it, ++sit)
+            bool eq = str_sv.equal(str_sv2);
+            if (!eq)
             {
-                string s = *it;
-                if (*sit != s)
+                cerr << "post-sort vector mismatch! (qsort 1-2)" << endl;
+                assert(0); exit(1);
+            }
+
+            // validate the results to match STL sort
+            {
+                string s, s3;
+                vector<string>::const_iterator sit = str_vec.begin();
+                str_sv_type::const_iterator it = str_sv.begin();
+                str_sv_type::const_iterator it_end = str_sv.end();
+                str_sv_type::const_iterator it3 = str_sv3.begin();
+                for (; it != it_end; ++it, ++sit, ++it3)
                 {
-                    cerr << "Mismatch at:" << s << "!=" << *sit << endl;
-                    return 1;
-                }
-            } // for
+                    s = *it;
+                    if (*sit != s)
+                    {
+                        cerr << "Mismatch at:" << s << "!=" << *sit << endl;
+                        assert(0);
+                        return 1;
+                    }
+                    s3 = *it3;
+                    if (s != s3)
+                    {
+                        cerr << "Mismatch at:" << s << "!=" << s3 << endl;
+                        return 1;
+                    }
+
+                } // for
+            }
+            cout << "Sort validation Ok." << endl;
         }
-        cout << "Sort validation Ok." << endl;
 
         bm::chrono_taker<>::print_duration_map(cout, timing_map, bm::chrono_taker<>::ct_time);
 
