@@ -17,14 +17,15 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example strsvsample09.cpp
-  Example of how to use bm::str_sparse_vector<> - succinct container for
-  bit-transposed string collections
+  Example of how to use bm::str_sparse_vector<> - succinct container for sorting in compressive memory
+
  
   \sa bm::str_sparse_vector
+  \sa bm::str_sparse_vector::swap
 */
 
 /*! \file strsvsample09.cpp
-    \brief Example: str_sparse_vector<> swap example
+    \brief Example: str_sparse_vector<> sorting example
 */
 
 #include <iostream>
@@ -77,12 +78,13 @@ void generate_string_set(vector<string>& str_vec,
 }
 
 
-
+/// quick-sort
+///
 void quicksort(str_sv_type& strsv, int first, int last)
 {
     using stype = str_sv_type::size_type;
     int i, j, pivot;
-    if (first<last)
+    if (first < last)
     {
         pivot = i= first;
         j = last;
@@ -93,9 +95,7 @@ void quicksort(str_sv_type& strsv, int first, int last)
             while(strsv.compare(stype(j), stype(pivot)) > 0) // number[j]>number[pivot])
                 j--;
             if (i < j)
-            {
                 strsv.swap(stype(i), stype(j));
-            }
         } // while
         strsv.swap(stype(pivot), stype(j));
 
@@ -104,20 +104,24 @@ void quicksort(str_sv_type& strsv, int first, int last)
     }
 }
 
+
+/// Faster variant of quicksort, uses different variant of pivot compare, with decompressed argument
+///
 void quicksort2(str_sv_type& strsv, int first, int last)
 {
     using stype = str_sv_type::size_type;
     int i, j, pivot;
 
-    str_sv_type::value_type pivot_buf[128]; // fixed buffer for simplicity
-    if (first<last)
+    // fixed size for simplicity (in prod code needs dynamic buffer handling)
+    str_sv_type::value_type pivot_buf[128];
+    if (first < last)
     {
         pivot = i= first;
         j = last;
 
         strsv.get(stype(pivot), pivot_buf, sizeof(pivot_buf));
         
-        while (i <j)
+        while (i < j)
         {
             while((i < last) && (strsv.compare(stype(i), pivot_buf) <= 0))
                 i++;
@@ -133,9 +137,8 @@ void quicksort2(str_sv_type& strsv, int first, int last)
     }
 }
 
-// insertion sort takes data from unsorted vector places it into sparse vector
-// maintaining correct sorted order (for fast search)
-//
+/// insertion sort for performance comnparison
+///
 static
 void insertion_sort(str_sv_type& str_sv, const vector<string>& str_vec)
 {
