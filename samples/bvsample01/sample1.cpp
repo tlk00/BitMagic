@@ -32,6 +32,7 @@ For more information please visit:  http://bitmagic.io
 /*! \file sample1.cpp
     \brief Example: bvector<> set bits and then retrieve indexes of ON bits
 */
+#include <cassert>
 #include <iostream>
 
 #include "bm.h"
