@@ -107,6 +107,10 @@ void quicksort(str_sv_type& strsv, int first, int last)
 
 /// Faster variant of quicksort, uses different variant of pivot compare, with decompressed argument
 ///
+/// optimizations:
+/// 1. use of bm::str_sparse_vector<>::compare() function friendly for re-use of pivot element
+/// 2.  tail call recursion eleimination
+///
 void quicksort2(str_sv_type& strsv, int first, int last)
 {
     using stype = str_sv_type::size_type;
@@ -114,28 +118,30 @@ void quicksort2(str_sv_type& strsv, int first, int last)
 
     // fixed size for simplicity (in prod code needs dynamic buffer handling)
     str_sv_type::value_type pivot_buf[128];
-    if (first < last)
+    while (first < last)
     {
-        pivot = i= first;
+        pivot = i = first;
         j = last;
 
+        // save the pivor to re-use it in strsv.compare(..)
         strsv.get(stype(pivot), pivot_buf, sizeof(pivot_buf));
-        
+
         while (i < j)
         {
             while((i < last) && (strsv.compare(stype(i), pivot_buf) <= 0))
-                i++;
+                ++i;
             while(strsv.compare(stype(j), pivot_buf) > 0)
-                j--;
+                --j;
             if (i < j)
                 strsv.swap(stype(i), stype(j));
         } // while
         strsv.swap(stype(pivot), stype(j));
 
         quicksort2(strsv, first, j-1);
-        quicksort2(strsv, j+1, last);
-    }
+        first = j+1; // tail recursion
+    } // while
 }
+
 
 /// insertion sort for performance comnparison
 ///
