@@ -33,7 +33,8 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <random>
 #include <algorithm>
-
+//#define BMAVX2OPT
+//#define BMSSE42OPT
 #include "bm.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_algo.h"
@@ -56,7 +57,8 @@ typedef bm::str_sparse_vector<char, bvector_type, 16> str_sv_type;
 /// ... and shuffle it
 static
 void generate_string_set(vector<string>& str_vec,
-                         const unsigned max_coll = 950000)
+                         const unsigned max_coll = 350000,
+                         unsigned repeat = 250)
 {
     str_vec.resize(0);
     string str;
@@ -67,14 +69,17 @@ void generate_string_set(vector<string>& str_vec,
         case 0: str = "nssv"; break;
         default: str = "rs";  break;
         }
-
         str.append(to_string(i));
-        str_vec.emplace_back(str);
+
+        for (unsigned k = 0; k < repeat; ++k, ++i) // add more of the same string
+            str_vec.emplace_back(str);
+
     } // for i
-    
+ 
     std::random_device rd;
     std::mt19937       g(rd());
-    std::shuffle(str_vec.begin(), str_vec.end(), g);
+    std::shuffle(str_vec.begin() + str_vec.size()/2, str_vec.end(), g);
+    
 }
 
 
@@ -117,7 +122,7 @@ void quicksort2(str_sv_type& strsv, int first, int last)
     int i, j, pivot;
 
     // fixed size for simplicity (in prod code needs dynamic buffer handling)
-    str_sv_type::value_type pivot_buf[128];
+    static str_sv_type::value_type pivot_buf[128];
     while (first < last)
     {
         pivot = i = first;
@@ -194,7 +199,7 @@ int main(void)
             str_sv.optimize(tb);
         }
 
-        // print_svector_stat(cout, str_sv);
+         print_svector_stat(cout, str_sv);
 
         str_sv2 = str_sv;
 
@@ -222,6 +227,16 @@ int main(void)
         bm::chrono_taker tt1(cout, "2. quick sort 2 (succint)", 1, &timing_map);
         quicksort2(str_sv2, 0, (int)str_sv2.size()-1);
         }
+/*
+        str_sv2.optimize();
+        print_svector_stat(cout, str_sv);
+
+        cout << "Quick Sort... (on sorted)" << endl;
+        {
+            bm::chrono_taker tt1(cout, "3. quick sort 2 (succint) (pr-sorted)", 1, &timing_map);
+            quicksort2(str_sv2, 0, (int)str_sv2.size() - 1);
+        }
+*/
 
         cout << "Insertion Sort... " << endl;
         {
