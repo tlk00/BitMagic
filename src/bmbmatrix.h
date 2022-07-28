@@ -1243,22 +1243,33 @@ void basic_bmatrix<BV>::insert_octet(size_type pos,
 
 //---------------------------------------------------------------------
 
+/// @internal
+inline
+bool check_any_fullb(const bm::word_t* blka[8], const bm::word_t* FBADDR)
+{
+    bool b1, b2;
+    b1 = (blka[0] == FBADDR);
+    b2 = (blka[1] == FBADDR);
+    b1 |= (blka[2] == FBADDR);
+    b2 |= (blka[3] == FBADDR);
+    b1 |= (blka[4] == FBADDR);
+    b2 |= (blka[5] == FBADDR);
+    b1 |= (blka[6] == FBADDR);
+    b2 |= (blka[7] == FBADDR);
+    return b1 | b2;
+}
+
 template<typename BV>
 unsigned char
 basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEPT
 {
+    const bm::word_t* blka[8];
     unsigned v = 0;
 
     block_idx_type nb = (pos >>  bm::set_block_shift);
-    unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
-    unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
 
-    const bm::word_t* blk;
-    const bm::word_t* blka[8];
-    unsigned nbit = unsigned(pos & bm::set_block_mask);
-    unsigned nword  = unsigned(nbit >> bm::set_word_shift);
-    unsigned mask0 = 1u << (nbit & bm::set_word_mask);
-    
     unsigned row_idx = unsigned(octet_idx * 8);
     if (row_idx + 7 >= rsize_ ||
         (null_idx_ && (row_idx + 7 > null_idx_))) // out of bounds request?
@@ -1272,11 +1283,65 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     blka[5] = get_block(row_idx+5, i0, j0);
     blka[6] = get_block(row_idx+6, i0, j0);
     blka[7] = get_block(row_idx+7, i0, j0);
+
+
+    const bm::word_t* const  FBADDR = FULL_BLOCK_FAKE_ADDR;
+
     unsigned is_set;
-    
+    unsigned nbit  = unsigned(pos & bm::set_block_mask);
+    const unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    const unsigned mask0 = 1u << (nbit & bm::set_word_mask);
+#if 0
+    bool any_full = bm::check_any_fullb(blka, FBADDR);
+    if (!any_full)
+    {
+        if (const bm::word_t* blk; (blk = blka[0])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= (unsigned)bool(is_set);
+        }
+        if (const bm::word_t* blk;(blk = blka[1])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 1u;
+        }
+        if (const bm::word_t* blk;(blk = blka[2])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 2u;
+        }
+        if (const bm::word_t* blk;(blk = blka[3])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 3u;
+        }
+        if (const bm::word_t* blk;(blk = blka[4])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 4u;
+        }
+        if (const bm::word_t* blk;(blk = blka[5])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 5u;
+        }
+        if (const bm::word_t* blk;(blk = blka[6])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 6u;
+        }
+        if (const bm::word_t* blk;(blk = blka[7])!=0)
+        {
+            is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
+            v |= unsigned(bool(is_set)) << 7u;
+        }
+        return (unsigned char)v;
+    }
+#endif
+    const bm::word_t* blk;
     if ((blk = blka[0])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1284,7 +1349,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     }
     if ((blk = blka[1])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1292,7 +1357,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     }
     if ((blk = blka[2])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1300,17 +1365,16 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     }
     if ((blk = blka[3])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
         v |= unsigned(bool(is_set)) << 3u;
     }
     
-    
     if ((blk = blka[4])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1318,7 +1382,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     }
     if ((blk = blka[5])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1326,7 +1390,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     }
     if ((blk = blka[6])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1334,7 +1398,7 @@ basic_bmatrix<BV>::get_octet(size_type pos, size_type octet_idx) const BMNOEXCEP
     }
     if ((blk = blka[7])!=0)
     {
-        if (blk == FULL_BLOCK_FAKE_ADDR)
+        if (blk == FBADDR)
             is_set = 1;
         else
             is_set = (BM_IS_GAP(blk)) ? bm::gap_test_unr(BMGAP_PTR(blk), nbit) : (blk[nword] & mask0);
@@ -1391,8 +1455,8 @@ basic_bmatrix<BV>::get_half_octet(size_type pos, size_type row_idx) const BMNOEX
     unsigned v = 0;
 
     block_idx_type nb = (pos >>  bm::set_block_shift);
-    unsigned i0 = unsigned(nb >> bm::set_array_shift); // top block address
-    unsigned j0 = unsigned(nb &  bm::set_array_mask);  // address in sub-block
+    unsigned i0, j0;
+    bm::get_block_coord(nb, i0, j0);
 
     const bm::word_t* blk;
     const bm::word_t* blka[4];
