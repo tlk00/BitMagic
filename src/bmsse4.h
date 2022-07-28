@@ -1391,9 +1391,11 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
                          unsigned pos, unsigned* BMRESTRICT is_set) BMNOEXCEPT
 {
     unsigned start = 1;
-    unsigned end = 1 + ((*buf) >> 3);
+//    unsigned end = 1 + ((*buf) >> 3);
+    unsigned end = ((*buf) >> 3);
+    BM_ASSERT(buf[end] == 65535);
 
-    const unsigned arr_end = end;
+    const unsigned arr_end = end+1;
     unsigned size = end - start;
     for (; size >= 64; size = end - start)
     {
@@ -1415,6 +1417,7 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
         else
             end = mid;
     } // for
+    BM_ASSERT(buf[end] >= pos);
 
     for (; size >= 16; size = end - start)
     {
@@ -1427,7 +1430,8 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
         else
             end = mid;
     } // for
-    size += (end != arr_end);
+//    size += (end != arr_end);
+    ++size;
     if (size < 4) // for very short vector use conventional scan
     {
         const unsigned short* BMRESTRICT pbuf = buf + start;
@@ -1457,7 +1461,8 @@ inline
 unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNOEXCEPT
 {
     unsigned start = 1;
-    unsigned end = start + ((*buf) >> 3);
+//    unsigned end = start + ((*buf) >> 3);
+    unsigned end = ((*buf) >> 3);
     unsigned size = end - start;
     const unsigned arr_end = end;
     for (; size >= 64; size = end - start)
@@ -1487,7 +1492,8 @@ unsigned sse42_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos) BMNO
         else
             end = mid;
     } // for
-    size += (end != arr_end);
+    //size += (end != arr_end);
+    ++size;
     if (size < 4) // for very short vector use conventional scan
     {
         const unsigned short* BMRESTRICT pbuf = buf + start;
