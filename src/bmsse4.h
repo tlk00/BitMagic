@@ -1395,7 +1395,7 @@ unsigned sse42_gap_bfind(const unsigned short* BMRESTRICT buf,
     unsigned end = ((*buf) >> 3);
     BM_ASSERT(buf[end] == 65535);
 
-    const unsigned arr_end = end+1;
+//    const unsigned arr_end = end+1;
     unsigned size = end - start;
     for (; size >= 64; size = end - start)
     {
