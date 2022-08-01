@@ -31541,33 +31541,37 @@ void quicksort2(str_svect_type& strsv, int first, int last)
     using stype = str_svect_type::size_type;
     int i, j, pivot;
 
-    str_svect_type::value_type pivot_buf[128]; // fixed buffer for simplicity
-    if (first<last)
+    // fixed size for simplicity (in prod code needs dynamic buffer handling)
+    static str_svect_type::value_type pivot_buf[128];
+    while (first < last)
     {
-        pivot = i= first;
+        pivot = i = first;
         j = last;
 
+        // save the pivor to re-use it in strsv.compare(..)
         strsv.get(stype(pivot), pivot_buf, sizeof(pivot_buf));
 
-        while (i <j)
+        while (i < j)
         {
             while((i < last) && (strsv.compare(stype(i), pivot_buf) <= 0))
-                i++;
+                ++i;
             while(strsv.compare(stype(j), pivot_buf) > 0)
-                j--;
+                --j;
             if (i < j)
                 strsv.swap(stype(i), stype(j));
         } // while
         strsv.swap(stype(pivot), stype(j));
 
         quicksort2(strsv, first, j-1);
-        quicksort2(strsv, j+1, last);
-    }
+        first = j+1; // tail recursion
+    } // while
 }
 
 static
 void generate_string_set(vector<string>& str_vec,
-                         const unsigned max_coll = 950000)
+                         const unsigned max_coll = 150000,
+                         unsigned repeat = 220,
+                         bool shuffle = true)
 {
     str_vec.resize(0);
     string str;
@@ -31575,17 +31579,23 @@ void generate_string_set(vector<string>& str_vec,
     {
         switch (rand()%8)
         {
-        case 0: str = "nssv"; break;
-        default: str = "rs";  break;
+        case 0: str = "xnssv"; break;
+        default: str = "xrs";  break;
         }
-
         str.append(to_string(i));
         str_vec.emplace_back(str);
+
+        for (unsigned k = 0; k < repeat; ++k, ++i) // add more of the same string
+            str_vec.emplace_back(str);
+
     } // for i
 
-    std::random_device rd;
-    std::mt19937       g(rd());
-    std::shuffle(str_vec.begin(), str_vec.end(), g);
+    if (shuffle)
+    {
+        std::random_device rd;
+        std::mt19937       g(rd());
+        std::shuffle(str_vec.begin() + str_vec.size()/2, str_vec.end(), g);
+    }
 }
 
 static
@@ -31593,39 +31603,73 @@ void TestStrSparseQuickSort()
 {
    cout << "---------------------------- TestStrSparseQuickSort()" << endl;
 
-    vector<string> str_vec;
-    generate_string_set(str_vec);
-
-    str_svect_type str_sv;
+    unsigned max_pass = 250;
+    bool shuffle = true;
+    for (unsigned pass = 0; pass < max_pass; pass += (unsigned)rand()%25, shuffle ^= true)
     {
-        auto bi = str_sv.get_back_inserter();
-        for (const string& term : str_vec)
-            bi = term;
-        bi.flush();
-    }
-    str_sv.remap();
-    str_sv.optimize();
+        vector<string> str_vec;
+        generate_string_set(str_vec, 350000, pass, shuffle);
 
-    quicksort2(str_sv, 0, (int)str_sv.size()-1);
-    std::sort(str_vec.begin(), str_vec.end());
-
-    {
-        vector<string>::const_iterator sit = str_vec.begin();
-        str_svect_type::const_iterator it = str_sv.begin();
-        str_svect_type::const_iterator it_end = str_sv.end();
-        for (; it != it_end; ++it, ++sit)
+        str_svect_type str_sv, str_sv2, str_sv_ref;
         {
-            string s = *it;
-            if (*sit != s)
-            {
-                cerr << "Mismatch at:" << s << "!=" << *sit << endl;
-                assert(0);
-                exit(1);
-            }
-        } // for
-    }
+            auto bi = str_sv.get_back_inserter();
+            for (const string& term : str_vec)
+                bi = term;
+            bi.flush();
+        }
+        str_sv.remap();
+        str_sv.optimize();
 
-   cout << "---------------------------- TestStrSparseQuickSort() OK" << endl;
+        quicksort2(str_sv, 0, (int)str_sv.size()-1);
+
+        std::sort(str_vec.begin(), str_vec.end());
+        {
+            auto bi = str_sv_ref.get_back_inserter();
+            for (const string& term : str_vec)
+                bi = term;
+            bi.flush();
+        }
+        str_sv_ref.remap();
+        str_sv_ref.optimize();
+
+        bool b = str_sv_ref.equal(str_sv);
+        if (!b)
+        {
+            cerr << "vector mismatch detected!" << endl;
+
+            vector<string>::const_iterator sit = str_vec.begin();
+            str_svect_type::const_iterator it = str_sv.begin();
+            str_svect_type::const_iterator it_end = str_sv.end();
+            for (; it != it_end; ++it, ++sit)
+            {
+                string s = *it;
+                if (*sit != s)
+                {
+                    cerr << "Mismatch at:" << s << "!=" << *sit << endl;
+                    assert(0);
+                    exit(1);
+                }
+            } // for
+            assert(0);
+        }
+
+        str_sv2 = str_sv;
+        str_sv.optimize();
+/*cout << "qsort 2         " << flush;
+
+        quicksort2(str_sv, 0, (int)str_sv.size()-1);
+
+        bool eq = str_sv2.equal(str_sv);
+        assert(eq);
+*/
+        if (!is_silent)
+            cout << "\r       " << pass << "/" << max_pass << flush;
+
+
+
+    } // for pass
+
+   cout << "\n---------------------------- TestStrSparseQuickSort() OK" << endl;
 }
 
 static
@@ -39173,6 +39217,7 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
@@ -39196,7 +39241,6 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
 
          StressTestStrSparseVector();
          CheckAllocLeaks(false);
-
     }
 
     if (is_ser || is_allsvser)
