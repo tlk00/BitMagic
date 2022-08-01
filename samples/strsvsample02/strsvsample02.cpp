@@ -45,9 +45,8 @@ typedef bm::bvector<> bvector_type;
 
 // define the sparse vector type for 'char' type using bvector as
 // a container of bits for bit-transposed planes
-// 32 - is maximum string length for this container.
-//      Memory allocation is dynamic using sparse techniques, so this number
-//      just defines the max capacity.
+// 32 - is default initial string length for this container.
+//      it is extended automatically based on actual use
 //
 typedef bm::str_sparse_vector<char, bvector_type, 32> str_sv_type;
 
