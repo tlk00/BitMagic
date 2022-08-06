@@ -6775,7 +6775,7 @@ void bvector<Alloc>::combine_operation(
     }
     
     bm::word_t*** blk_root = blockman_.top_blocks_root();
-    unsigned block_idx = 0;
+    unsigned block_idx = 0; (void) block_idx;
     unsigned i, j;
 
     // calculate effective top size to avoid overscan
