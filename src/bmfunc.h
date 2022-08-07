@@ -732,7 +732,7 @@ unsigned short bitscan_bsf64(bm::id64_t w, B* bits) BMNOEXCEPT
     unsigned short pos = 0;
     while (w)
     {
-        bits[pos++] = bm::count_trailing_zeros_u64(w);
+        bits[pos++] = (B)bm::count_trailing_zeros_u64(w);
         w &= w - 1;
     }
     return pos;
