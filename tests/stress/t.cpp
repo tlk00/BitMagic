@@ -15593,8 +15593,8 @@ void CalcBeginMask()
 
         for(unsigned j = i; j < 32; ++j)
         {
-            unsigned nbit  = j; 
-            nbit &= bm::set_word_mask;
+            //unsigned nbit  = j; (void)nbit;
+            //nbit &= bm::set_word_mask;
             bm::word_t  mask1 = (((bm::word_t)1) << j);
 
             mask |= mask1;
@@ -15618,8 +15618,8 @@ void CalcEndMask()
 
         for(unsigned j = i; j > 0; --j)
         {
-            unsigned nbit  = j; 
-            nbit &= bm::set_word_mask;
+            //unsigned nbit  = j;
+            //nbit &= bm::set_word_mask;
             bm::word_t  mask1 = (((bm::word_t)1) << j);
 
             mask |= mask1;
