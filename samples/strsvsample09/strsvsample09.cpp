@@ -228,16 +228,6 @@ int main(void)
         bm::chrono_taker tt1(cout, "2. quick sort 2 (succint)", 1, &timing_map);
         quicksort2(str_sv2, 0, (int)str_sv2.size()-1);
         }
-/*
-        str_sv2.optimize();
-        print_svector_stat(cout, str_sv);
-
-        cout << "Quick Sort... (on sorted)" << endl;
-        {
-            bm::chrono_taker tt1(cout, "3. quick sort 2 (succint) (pr-sorted)", 1, &timing_map);
-            quicksort2(str_sv2, 0, (int)str_sv2.size() - 1);
-        }
-*/
 
         cout << "Insertion Sort... " << endl;
         {
