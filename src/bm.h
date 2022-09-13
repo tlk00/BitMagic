@@ -4456,7 +4456,7 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         return;
 
     bm::gap_word_t *gblk1{0}, *gblk2{0};
-    unsigned cpos1, cpos2;
+    unsigned cpos1{0}, cpos2;
     bool b1, b2, b1real, b2real;
 
     if (!block1)
