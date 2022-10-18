@@ -3346,6 +3346,9 @@ void sv_sample_index<SV>::construct(const SV& sv, unsigned s_factor)
         value_type* s_str = s_cache_.row(idx_size_);
         ++idx_size_;
         sv.get(i, s_str, cols);
+
+        if (i == sv_size_-1) // last element was aleady covered, break
+            break;
         i += s_step;
         if (i >= sv_size_) // add the last sampled element
         {
