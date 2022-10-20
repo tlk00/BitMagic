@@ -4745,7 +4745,6 @@ bool bvector<Alloc>::inc(size_type n)
     BM_ASSERT(IS_VALID_ADDR(blk));
 
     unsigned nbit   = unsigned(n & bm::set_block_mask);
-
     unsigned is_set;
     if (BM_IS_GAP(blk))
     {
@@ -4757,11 +4756,9 @@ bool bvector<Alloc>::inc(size_type n)
     {
         unsigned nword  = unsigned(nbit >> bm::set_word_shift);
         nbit &= bm::set_word_mask;
-
         bm::word_t* word = blk + nword;
         bm::word_t  mask = (((bm::word_t)1) << nbit);
         is_set = ((*word) & mask);
-        
         *word = (is_set) ? (*word & ~mask) : (*word | mask);
     }
     return is_set;
