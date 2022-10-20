@@ -4757,9 +4757,9 @@ bool bvector<Alloc>::inc(size_type n)
         unsigned nword  = unsigned(nbit >> bm::set_word_shift);
         nbit &= bm::set_word_mask;
         bm::word_t* word = blk + nword;
-        bm::word_t  mask = (((bm::word_t)1) << nbit);
+        const bm::word_t  mask = (((bm::word_t)1) << nbit);
         is_set = ((*word) & mask);
-        *word = (is_set) ? (*word & ~mask) : (*word | mask);
+        *word ^= mask; // flip the bit
     }
     return is_set;
 }
