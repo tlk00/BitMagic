@@ -4456,7 +4456,7 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         return;
 
     bm::gap_word_t *gblk1{0}, *gblk2{0};
-    unsigned cpos1, cpos2;
+    unsigned cpos1{0}, cpos2;
     bool b1, b2, b1real, b2real;
 
     if (!block1)
@@ -4745,7 +4745,6 @@ bool bvector<Alloc>::inc(size_type n)
     BM_ASSERT(IS_VALID_ADDR(blk));
 
     unsigned nbit   = unsigned(n & bm::set_block_mask);
-
     unsigned is_set;
     if (BM_IS_GAP(blk))
     {
@@ -4757,12 +4756,10 @@ bool bvector<Alloc>::inc(size_type n)
     {
         unsigned nword  = unsigned(nbit >> bm::set_word_shift);
         nbit &= bm::set_word_mask;
-
         bm::word_t* word = blk + nword;
-        bm::word_t  mask = (((bm::word_t)1) << nbit);
+        const bm::word_t  mask = (((bm::word_t)1) << nbit);
         is_set = ((*word) & mask);
-        
-        *word = (is_set) ? (*word & ~mask) : (*word | mask);
+        *word ^= mask; // flip the bit
     }
     return is_set;
 }
@@ -6775,7 +6772,7 @@ void bvector<Alloc>::combine_operation(
     }
     
     bm::word_t*** blk_root = blockman_.top_blocks_root();
-    unsigned block_idx = 0;
+    unsigned block_idx = 0; (void) block_idx;
     unsigned i, j;
 
     // calculate effective top size to avoid overscan

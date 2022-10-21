@@ -22,6 +22,7 @@ For more information please visit:  http://bitmagic.io
  
   \sa bm::str_sparse_vector
   \sa bm::str_sparse_vector::swap
+  \sa bm::str_sparse_vector::compare
 */
 
 /*! \file strsvsample09.cpp
@@ -57,8 +58,8 @@ typedef bm::str_sparse_vector<char, bvector_type, 16> str_sv_type;
 /// ... and shuffle it
 static
 void generate_string_set(vector<string>& str_vec,
-                         const unsigned max_coll = 350000,
-                         unsigned repeat = 250)
+                         const unsigned max_coll = 850000,
+                         unsigned repeat = 220)
 {
     str_vec.resize(0);
     string str;
@@ -66,8 +67,8 @@ void generate_string_set(vector<string>& str_vec,
     {
         switch (rand()%8)
         {
-        case 0: str = "nssv"; break;
-        default: str = "rs";  break;
+        case 0: str = "xnssv"; break;
+        default: str = "xrs";  break;
         }
         str.append(to_string(i));
 
@@ -75,11 +76,11 @@ void generate_string_set(vector<string>& str_vec,
             str_vec.emplace_back(str);
 
     } // for i
- 
+
     std::random_device rd;
     std::mt19937       g(rd());
     std::shuffle(str_vec.begin() + str_vec.size()/2, str_vec.end(), g);
-    
+
 }
 
 
@@ -199,7 +200,7 @@ int main(void)
             str_sv.optimize(tb);
         }
 
-         print_svector_stat(cout, str_sv);
+       //  print_svector_stat(cout, str_sv);
 
         str_sv2 = str_sv;
 
@@ -227,16 +228,6 @@ int main(void)
         bm::chrono_taker tt1(cout, "2. quick sort 2 (succint)", 1, &timing_map);
         quicksort2(str_sv2, 0, (int)str_sv2.size()-1);
         }
-/*
-        str_sv2.optimize();
-        print_svector_stat(cout, str_sv);
-
-        cout << "Quick Sort... (on sorted)" << endl;
-        {
-            bm::chrono_taker tt1(cout, "3. quick sort 2 (succint) (pr-sorted)", 1, &timing_map);
-            quicksort2(str_sv2, 0, (int)str_sv2.size() - 1);
-        }
-*/
 
         cout << "Insertion Sort... " << endl;
         {

@@ -1332,7 +1332,7 @@ void BitCompareTest()
     bvect*  bv1 = new bvect();
     bvect*  bv2 = new bvect();
     test_bitset*  bset = new test_bitset();
-    int value = 0;
+        int value = 0; (void)value;
 
     SimpleFillSets(bset, *bv1, 0, BSIZE, 10);
     SimpleFillSets(bset, *bv2, 0, BSIZE, 10);
@@ -1547,7 +1547,7 @@ void EnumeratorTest()
     unsigned i;
 
     {
-        unsigned long long acc = 0;
+        unsigned long long acc = 0; (void)acc;
         bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
         {
@@ -1591,7 +1591,7 @@ void EnumeratorTest()
 
     // -----------------------------------------------
     {
-        unsigned long long acc = 0;
+        unsigned long long acc = 0; (void)acc;
 
         bm::chrono_taker<std::ostream> tt(cout, "bvector<>::get_next()", REPEATS/10);
         for (i = 0; i < REPEATS/10; ++i)
@@ -1770,7 +1770,7 @@ void SerializationTest()
     bv_sparse.calc_stat(&st);
     unsigned char*  buf = new unsigned char[st.max_serialize_mem];
 
-    size_t len, id_size;
+    size_t len, id_size; (void)len;
     len = id_size = 0;
     {
     bm::chrono_taker<std::ostream> tt(cout, "Small bvector serialization", REPEATS*70000);
@@ -2466,7 +2466,7 @@ void TI_MetricTest()
     if (!platform_test)
     {
     test_bitset*  bset_tmp = new test_bitset();
-    double test_dice = 0;
+        double test_dice = 0; (void) test_dice;
     bm::chrono_taker tt(cout, "Dice bvector test with TEMP vector(STL)", REPEATS);
     for (i = 0; i < REPEATS; ++i)
     {
@@ -2894,7 +2894,7 @@ void ptest()
 
     {
     bm::chrono_taker tt(cout, "Operation &= test", REPEATS * 10);
-    unsigned count = 0;
+        unsigned count = 0; (void)(count);
     for (unsigned i = 0; i < REPEATS*10; ++i)
     {
         bvect t1(bm::BM_GAP);
@@ -2908,7 +2908,7 @@ void ptest()
 
     {
     bm::chrono_taker tt(cout, "Operation &= with enumerator test", REPEATS * 10);
-    unsigned count = 0;
+    unsigned count = 0; (void) count;
     for (unsigned i = 0; i < REPEATS*10; ++i)
     {
         bvect t1(bm::BM_GAP);
@@ -3115,7 +3115,7 @@ void SparseVectorAccessTest()
 
     {
         bm::chrono_taker tt(cout, "sparse_vector<>::decode()", REPEATS / 5);
-        auto from = gather_from;
+        auto from = gather_from; (void) from;
         for (unsigned i = 0; i < REPEATS; ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
@@ -3169,7 +3169,7 @@ void SparseVectorAccessTest()
 
     {
         bm::chrono_taker tt(cout, "sparse_vector<>::decode() (RO)", REPEATS / 5);
-        auto from = gather_from;
+        auto from = gather_from; (void)from;
         for (unsigned i = 0; i < REPEATS ; ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
@@ -3309,7 +3309,7 @@ void SparseVectorSignedAccessTest()
 
     {
         bm::chrono_taker tt(cout, "sparse_vector<int>::decode()", REPEATS / 5);
-        auto from = gather_from;
+        auto from = gather_from; (void) from;
         for (unsigned i = 0; i < REPEATS / 10; ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
@@ -3471,6 +3471,7 @@ void RSC_SparseVectorRandomAccesTest()
     test_arr.resize(test_idx.size());
 
     unsigned long long sum1 = 0, sum2 = 0, sum1d = 0, sum1g = 0, sum1g_ro = 0;
+    (void)sum1g_ro; (void) sum1d;
 
     {
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::is_null()+get() (DENSE)", REPEATS*10 );

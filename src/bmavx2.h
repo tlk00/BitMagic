@@ -2941,18 +2941,14 @@ unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
 {
     BM_ASSERT(is_set || RET_TEST);
 
-    const unsigned linear_cutoff = 48;
+    const unsigned linear_cutoff = 64;//48;
     const unsigned unroll_factor = 16;
 
     BM_ASSERT(pos < bm::gap_max_bits);
 
     unsigned res;
     unsigned start = 1;
-//    unsigned end = start + ((*buf) >> 3);
     unsigned end = ((*buf) >> 3);
-
-//    const unsigned short* pend = buf + ((*buf) >> 3);
-//    BM_ASSERT(*pend == 65535);
 
     const unsigned arr_end = end + 1;
     if (end <= unroll_factor) // too small for a full AVX stride
@@ -3017,13 +3013,11 @@ unsigned avx2_gap_bfind(const unsigned short* BMRESTRICT buf,
             {
                 start = end - 15;
                 BM_ASSERT(buf[start + 15] >= pos);
-                //start -= tail; // rewind back, but stay within block
                 vect16 = _mm256_loadu_si256((__m256i*)(&buf[start])); //16x u16s
                 mSub = _mm256_subs_epu16(mPos, vect16);
                 mge_mask = _mm256_cmpeq_epi16(mSub, mZ);
                 int mask = _mm256_movemask_epi8(mge_mask);
                 BM_ASSERT(mask); // the result MUST be here at this point
-
                 int lz = _tzcnt_u32(mask);
                 start += (lz >> 1);
                 goto ret;
