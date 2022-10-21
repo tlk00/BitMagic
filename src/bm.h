@@ -2280,8 +2280,7 @@ template<typename Alloc>
 void bvector<Alloc>::init()
 {
     BM_ASSERT(!is_ro());
-    if (!blockman_.is_init())
-        blockman_.init_tree();
+    blockman_.init_tree();
 }
 
 // -----------------------------------------------------------------------
