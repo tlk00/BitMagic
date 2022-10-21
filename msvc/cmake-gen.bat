@@ -6,4 +6,4 @@ REM cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
 REM cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
 
 REM Generate Visual Studio project files
-cmake .. -G "Visual Studio 15 2017 Win64"
+cmake .. -G "Visual Studio 16 2019" -A x64
