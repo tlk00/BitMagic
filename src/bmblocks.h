@@ -1948,7 +1948,8 @@ public:
     /// allocate first level of descr. of blocks 
     void init_tree()
     {
-        BM_ASSERT(top_blocks_ == 0);
+        if(top_blocks_ != 0)
+            return;
         if (top_block_size_)
         {
             top_blocks_ = (bm::word_t***) alloc_.alloc_ptr(top_block_size_);
