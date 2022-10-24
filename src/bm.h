@@ -4399,6 +4399,8 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
 
     bm::word_t* block1, *block2;
     unsigned nbit1, nbit2;
+    nbit1 = unsigned(idx1 & bm::set_block_mask);
+    nbit2 = unsigned(idx2 & bm::set_block_mask);
 
     if (nb1 == nb2) // same block hit
     {
@@ -4408,8 +4410,6 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         if (!block1 || (block1==FULL_BLOCK_FAKE_ADDR)) // nothing to do?
             return;
 
-        nbit1 = unsigned(idx1 & bm::set_block_mask);
-        nbit2 = unsigned(idx2 & bm::set_block_mask);
         if (BM_IS_GAP(block1))
         {
             bm::gap_word_t* gblk = BMGAP_PTR(block1);
@@ -4455,7 +4455,7 @@ void bvector<Alloc>::swap(size_type idx1, size_type idx2)
         return;
 
     bm::gap_word_t *gblk1{0}, *gblk2{0};
-    unsigned cpos1{0}, cpos2;
+    unsigned cpos1{ 0 }, cpos2{ 0 };
     bool b1, b2, b1real, b2real;
 
     if (!block1)
