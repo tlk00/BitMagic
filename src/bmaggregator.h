@@ -2719,7 +2719,8 @@ template<typename BV>
 typename aggregator<BV>::operation_status
 aggregator<BV>::run_step(unsigned i, unsigned j)
 {
-    BM_ASSERT(operation_status_ == op_prepared || operation_status_ == op_in_progress);
+    BM_ASSERT(operation_status_ == operation_status::op_prepared
+              || operation_status_ == operation_status::op_in_progress);
     BM_ASSERT(j < bm::set_sub_array_size);
     
     switch (operation_)
