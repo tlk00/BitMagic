@@ -1944,20 +1944,26 @@ public:
     
     /// if tree of blocks already up
     bool is_init() const BMNOEXCEPT { return top_blocks_ != 0; }
-    
+
+    // ----------------------------------------------------------------
+
     /// allocate first level of descr. of blocks 
     void init_tree()
     {
     // not clear why but GCC reports "maybe uninit" for top_blocks_ in -O3
     // all attempts to do a different fix failed, supressed for now...
 #ifdef __GNUG__
+#if !defined(__has_warning) || __has_warning("-Wmaybe-uninitialized")
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #endif
         if(top_blocks_ != 0)
             return;
 #ifdef __GNUG__
+#if !defined(__has_warning) || __has_warning("-Wmaybe-uninitialized")
 #pragma GCC diagnostic pop
+#endif
 #endif
         if (top_block_size_)
         {
