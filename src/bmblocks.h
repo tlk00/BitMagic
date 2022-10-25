@@ -1952,18 +1952,24 @@ public:
     {
     // not clear why but GCC reports "maybe uninit" for top_blocks_ in -O3
     // all attempts to do a different fix failed, supressed for now...
-#ifdef __GNUG__
-#if !defined(__has_warning) || __has_warning("-Wmaybe-uninitialized")
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
+#if defined(__GNUG__)
+    #if defined( __has_warning )
+        #if __has_warning("-Wmaybe-uninitialized")
+            #define BM_SUPPRESSING
+        #endif
+    #else
+        #define BM_SUPPRESSING
+    #endif
+    #ifdef BM_SUPPRESSING
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+    #endif
 #endif
         if(top_blocks_ != 0)
             return;
-#ifdef __GNUG__
-#if !defined(__has_warning) || __has_warning("-Wmaybe-uninitialized")
+#ifdef BM_SUPPRESSING
 #pragma GCC diagnostic pop
-#endif
+#undef  BM_SUPPRESSING
 #endif
         if (top_block_size_)
         {
