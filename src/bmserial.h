@@ -621,10 +621,8 @@ public:
     /** reset range deserialization and reference vectors
         @sa set_range()
     */
-    void reset() BMNOEXCEPT
-    {
-        unset_range(); set_ref_vectors(0);
-    }
+    void reset() BMNOEXCEPT { unset_range(); set_ref_vectors(0); }
+
 protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
@@ -689,7 +687,6 @@ protected:
     block_idx_type            x_nb_;
     unsigned                  xor_chain_size_;
     bm::match_pair            xor_chain_[64];
-//    bool                      x_ref_gap_;
 
     // Range deserialization settings
     //
@@ -4727,7 +4724,7 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
         if (nb_from == x_nb_ || nb_to == x_nb_)
             return;
     }
-    bman.optimize_bit_block(i0, j0, BV::opt_compress);
+    bman.optimize_bit_block_nocheck(i0, j0);
 
 }
 // ---------------------------------------------------------------------------
