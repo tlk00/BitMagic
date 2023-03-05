@@ -4536,7 +4536,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                 case 0: row_idx = dec.get_32(); break;
                 default: BM_ASSERT(0); break;
                 } // switch
-                bm::id64_t acc64 = x_ref_d64_ = dec.get_h64();
+                bm::id64_t acc64 = x_ref_d64_ = dec.get_h64(); (void) acc64;
                 BM_ASSERT(!xor_chain_size_);
                 xor_chain_size_ = dec.get_8();
                 BM_ASSERT(xor_chain_size_);
