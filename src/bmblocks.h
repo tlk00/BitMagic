@@ -1958,6 +1958,32 @@ public:
         top_block_size_ = top_blocks;
         return top_block_size_;
     }
+
+    /**
+        \brief shrink unused top blocks array (via reallocation)
+     */
+    void shrink_top_blocks()
+    {
+        if (!top_blocks_)
+            return;
+        unsigned tb_cnt = top_block_size() - 1;
+        for ( ; tb_cnt; --tb_cnt)
+        {
+            if (top_blocks_[tb_cnt])
+                break;
+        } // for
+        if (++tb_cnt < top_block_size_) // shrink is possible
+        {
+            BM_ASSERT(tb_cnt <= top_block_size_);
+            bm::word_t*** new_blocks =
+                (bm::word_t***)alloc_.alloc_ptr(tb_cnt);
+                ::memcpy(&new_blocks[0], &top_blocks_[0],
+                                tb_cnt * sizeof(top_blocks_[0]));
+            alloc_.free_ptr(top_blocks_, top_block_size_);
+            top_blocks_ = new_blocks;
+            top_block_size_ = tb_cnt;
+        }
+    }
     
     /** \brief Returns reference on the allocator
     */

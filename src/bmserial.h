@@ -4125,12 +4125,15 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 {
     blocks_manager_type& bman = bv.get_blocks_manager();
     if (!bman.is_init())
-        bman.init_tree();
+    {
+        auto bc = bman.compute_top_block_size(bm::id_max-1);
+        bman.init_tree(bc);
+    }
     
     bm::word_t* temp_block = temp_block_;
 
     bm::strategy  strat = bv.get_new_blocks_strat();
-    bv.set_new_blocks_strat(BM_GAP);
+    //bv.set_new_blocks_strat(BM_GAP);
     typename bvector_type::mem_pool_guard mp_guard_bv;
     mp_guard_bv.assign_if_not_set(pool_, bv);
 
@@ -4576,6 +4579,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         xor_decode(bman);
 
     bv.set_new_blocks_strat(strat);
+
+    bman.shrink_top_blocks(); // reduce top blocks to necessary size
 
     return dec.size();
 }
