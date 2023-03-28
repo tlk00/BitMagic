@@ -22518,7 +22518,10 @@ void TestSparseVector()
     cout << "sv[]:";
     for (unsigned i = 0; i < sv.size(); ++i)
     {
-        cout << sv.at(i) << ",";
+        auto v = sv.at(i);
+        cout << v << ",";
+        unsigned u = sv.get_unsigned_bits(i, 2);
+        assert(v == u);
     }
     cout << endl;
 
@@ -23006,6 +23009,16 @@ void TestSparseVector()
            b = sv.is_null(i+1);
            assert(b);
            assert(v == i);
+
+
+            unsigned N_bits = (unsigned)(rand()%31);
+            if (N_bits)
+            {
+                auto u = sv.get_unsigned_bits(i, N_bits);
+                unsigned mask1 = ~0u >> (32 - N_bits);
+                auto v_masked = v & mask1;
+                assert(u == v_masked);
+            }
        } // for
     }
 
@@ -35914,7 +35927,6 @@ void TestCompressSparseVector()
 
     }
 
-
     cout << "    testing count_range_notnull()..." << endl;
     {
         rsc_sparse_vector_u32 csv1;
@@ -36027,7 +36039,7 @@ void TestCompressSparseVector()
         v = csv1.at(2);
         assert(v == 2);
     }
-    
+
     {
         rsc_sparse_vector_u32 csv1;
         {
@@ -36109,7 +36121,7 @@ void TestCompressSparseVector()
             }
         }
     }
-    
+
 
     {
     cout << "decode() tests" << endl;
@@ -36204,7 +36216,18 @@ void TestCompressSparseVector()
 
             for (unsigned i0 = 1; i0 < i; ++i0)
             {
+                unsigned v = csv1.get(i0);
                 assert(csv1.get(i0) == i0*2);
+
+                unsigned N_bits = (unsigned) rand()%31;
+                if (N_bits)
+                {
+                    auto u = csv1.get_unsigned_bits(i0, N_bits);
+                    unsigned mask1 = ~0u >> (32 - N_bits);
+                    auto v_masked = v & mask1;
+                    assert(u == v_masked);
+                }
+
             }
             for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
             {
@@ -38505,6 +38528,75 @@ void BamLoVoTest()
 }
 */
 
+
+#if 0
+
+typedef bm::sparse_vector<uint32_t, bvect> sparse_vector_u32_t;
+typedef bm::rsc_sparse_vector<uint32_t, sparse_vector_u32_t>  rsc_sparse_vector_u32_t;
+
+void case3_read2()
+{
+    std::vector<std::pair<uint32_t, uint32_t >> alleles; // vector of pairs locus_id, allele_id
+
+    std::ifstream is("/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/case3_salmonella_3min", std::ios::binary);
+    uint8_t flags;
+    uint32_t file_id;
+    size_t sz = 0;
+    std::vector<char> buffer;
+    bvect bvector;
+    rsc_sparse_vector_u32_t rsv;
+    int cnt = 0;
+
+    bm::sparse_vector_deserializer<rsc_sparse_vector_u32_t> sv_deserializer;
+
+    do {
+        bvector.clear(true);
+
+        is.read((char*)&flags, sizeof(flags));
+        if (!is.good())
+            break;
+        is.read((char*)&file_id, sizeof(file_id));
+        is.read((char*)&sz, sizeof(sz));
+        buffer.resize(sz);
+        is.read(buffer.data(), sz);
+        bm::deserialize(bvector, (unsigned char*)buffer.data());
+/*
+        {
+            auto cnt = bvector.count();
+            alleles.resize(0);
+            alleles.reserve(cnt);
+
+            bm::bvector<>::enumerator en = bvector.first();
+            for ( ;en.valid(); ++en) {
+                auto locus_id = *en;
+                alleles.emplace_back(locus_id, 666); // allele from reference
+            }
+        }
+*/
+        is.read((char*)&sz, sizeof(sz));
+        buffer.resize(sz);
+        is.read(buffer.data(), sz);
+
+        sv_deserializer.deserialize(rsv, (const unsigned char*)&buffer[0]);
+        rsv.sync();
+
+        {
+            auto it = rsv.begin();
+            if (it.valid())
+            do {
+                if (!it.is_null())
+                    alleles.emplace_back(it.pos(), it.value());
+            } while (it.advance());
+        }
+
+        if (++cnt % 10000 == 0)
+            std::cout << "Process: " << cnt << std::endl;
+    } while (is.good());
+    std::cout << "Total: " << cnt << " files, " << alleles.size() << " alleles" << std::endl;
+}
+
+#endif
+
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
 
@@ -38519,6 +38611,11 @@ int main(int argc, char *argv[])
 #endif
 
 //    BamLoVoTest();
+
+
+    //case3_read2();
+    //return 0;
+
 
     {
     auto ret = parse_args(argc, argv);
@@ -38720,6 +38817,105 @@ LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
 */
 //    return main2();
 
+/*
+{
+typedef bm::bvector<> bvector_type1;
+typedef bm::str_sparse_vector<char, bvector_type1, 32> str_sv_type1;
+typedef bm::sparse_vector_scanner<str_sv_type1, 64> scanner_t;
+
+    str_sv_type1 sv;
+    bm::file_load_svector(sv, "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/2.batch");
+    scanner_t scanner;
+    scanner.bind(sv, true);
+    str_sv_type1::size_type pos = 0;
+    std::string name = "E00583:350:H5MV3CCX2:4:2113:18203:62663";
+
+    {
+    scanner_t scanner;
+    bvector_type1 bv_out;
+    bool b = scanner.find_eq_str(sv, name.c_str(), bv_out);
+    if (b)
+    {
+        std::cout << "found..." << std::endl;
+    }
+
+    }
+
+    bool found = scanner.bfind_eq_str(name.c_str(), name.size(), pos);
+    if (found)
+    {
+        std::string val;
+        sv.get(pos, val);
+        std::cout << name << std::endl;
+        std::cout << val << std::endl;
+        std::cout << name << " - found '" << val << "' at " << pos << std::endl;
+    }
+return 0;
+}
+*/
+/*
+{
+    typedef bm::sparse_vector<uint16_t, bm::bvector<> > svector_u16;
+    svector_u16 sv, sv_c;
+    std::ifstream input( "/Volumes/DATAFAT32/incs.txt", ios::in);
+    if (!input.good())
+    {
+        cerr << "cannot open file" << endl;
+        return 1;
+    }
+    string line;
+    size_t idx = 0;
+    size_t o_cnt = 0;
+
+    while (getline(input, line))
+    {
+
+        if (line.empty())
+            continue;
+        auto pos = stoi(line);
+        auto v1 = sv.get_no_check(pos);
+
+        sv.inc(pos);
+        sv_c.inc(pos);
+
+
+        auto v2 = sv.get_no_check(pos);
+        if (v1 + 1 != v2) {
+            cerr << "Mismatch!" << endl;
+            cout << "line:" << idx << ", pos: " << pos << ", v1: " << v1 << ", v2: " << v2 << endl;
+            auto v1_c = sv_c.get(pos);
+            cout << "v1_c=" << v1_c << endl;
+
+            return 1;
+        }
+        //if (o_cnt > 1) // start detailed checking
+        if (idx < 23796594)
+        {
+            auto v_c = sv.get(23796594);
+            if (v_c)
+            {
+                cerr << "\n** turned non-zero!" << endl;
+                cerr << "  position match=" << (pos == 23796594) << endl;
+                cout << "line:" << idx << ", pos: " << pos << ", v1: " << v1 << ", v2: " << v2 << endl;
+                auto v1_c = sv_c.get(23796594);
+                cout << "v1_c=" << v1_c << endl;
+                //return 1;
+            }
+        }
+
+        ++idx;
+        if (idx % 8000000 == 0)
+        {
+            svector_u16 sv1(sv);
+            cerr << "O" << flush;
+            sv.optimize();
+            ++o_cnt;
+        }
+    }
+    cout << "processed " << idx << " lines" << endl;
+    return 0;
+}
+*/
 
     if (is_all || is_low_level)
     {
