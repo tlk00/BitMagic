@@ -429,6 +429,15 @@ public:
     */
     value_type get(size_type idx) const BMNOEXCEPT;
 
+    /** Get raw unsigned value first N bits
+        \param idx - element index in the vector
+        \param N_bits - number of bits to be extracted (should be > 0)
+         @return unsigned value for
+    */
+    unsigned_value_type get_unsigned_bits(size_type idx,
+                                          size_type N_bits) const BMNOEXCEPT;
+
+
     /**
         \brief get specified element with NOT NULL check
         \param idx - element index
@@ -1572,6 +1581,21 @@ rsc_sparse_vector<Val, SV>::get(size_type idx) const BMNOEXCEPT
         return value_type(0);
     BM_ASSERT(!is_null(idx));
     return sv_.get(--sv_idx);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename rsc_sparse_vector<Val, SV>::unsigned_value_type
+rsc_sparse_vector<Val, SV>::get_unsigned_bits(size_type idx,
+                                            size_type N_bits) const BMNOEXCEPT
+{
+    size_type sv_idx;
+    bool found = resolve(idx, &sv_idx);
+    if (!found)
+        return unsigned_value_type(0);
+    BM_ASSERT(!is_null(idx));
+    return sv_.get_unsigned_bits(--sv_idx, N_bits);
 }
 
 //---------------------------------------------------------------------
