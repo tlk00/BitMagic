@@ -2271,6 +2271,9 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_tosv(
        const value_type* BMRESTRICT str,
        const slice_octet_matrix_type& BMRESTRICT octet_remap_matrix2) BMNOEXCEPT
 {
+    if (!octet_remap_matrix2.rows())
+        return false;
+
     const unsigned char* remap_row = octet_remap_matrix2.row(0);
     for (unsigned i = 0; i < buf_size; ++i, remap_row += 256)
     {
@@ -2280,7 +2283,6 @@ bool str_sparse_vector<CharType, BV, STR_SIZE>::remap_tosv(
             sv_str[i] = ch;
             break;
         }
-//        const unsigned char* remap_row = octet_remap_matrix2.row(i);
         unsigned char remap_value = remap_row[unsigned(ch)];
         sv_str[i] = CharType(remap_value);
         if (!remap_value) // unknown dictionary element
