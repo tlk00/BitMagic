@@ -38595,7 +38595,85 @@ void case3_read2()
     std::cout << "Total: " << cnt << " files, " << alleles.size() << " alleles" << std::endl;
 }
 
+
 #endif
+
+void VCF_des_test()
+{
+        const string filename = "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/sample_serialized_XOR.bin";
+
+/*
+        CFileIO fio;
+        fio.Open(filename, CFileIO::eOpen, CFileIO::eRead);
+        char* buffer = new char[fio.GetFileSize()];
+        fio.Read(buffer, fio.GetFileSize());
+        1165590
+*/
+
+        static const unsigned sm_Infosize = 200;
+
+        using bvector_type = bm::bvector<>;
+        using TSparseOptVector = bm::str_sparse_vector<char, bvector_type, sm_Infosize>;
+
+        // reference vector for XOR deserialization
+//        bm::sparse_vector_deserializer<TSparseOptVector> sample_deserializer;
+//        bm::sparse_vector_deserializer<TSparseOptVector>::bv_ref_vector_type  bitvector_ref;
+
+
+        TSparseOptVector sample_data(bm::use_null);
+
+        int r =  bm::file_load_svector(sample_data, filename);
+
+//        sample_deserializer.deserialize_structure(sample_data, (unsigned char*)buffer);  // this will run into assertion
+}
+
+// Contributed by Andrea Asztalos
+//
+void NULL_serial_search_test()
+{
+    using bvector_type = bvect;
+    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
+
+    // set up the vector with all null elements:
+    TSparseStrVector str_vector(bm::use_null);
+    auto in_iter = str_vector.get_back_inserter();
+    for (size_t i = 0; i < 10; ++i)
+        in_iter.add_null();
+
+    in_iter.flush();
+
+    BM_DECLARE_TEMP_BLOCK(tb);
+    str_vector.remap();
+    str_vector.optimize(tb);
+
+    // search in it for the string "CBS"
+    bm::sparse_vector_scanner<TSparseStrVector> scanner;
+    TSparseStrVector::bvector_type result;
+    scanner.find_eq_str(str_vector, "CBS", result);
+    assert (result.empty());
+
+    // serialize str_vector
+    bm::sparse_vector_serializer<TSparseStrVector> str_serializer;
+    str_serializer.set_bookmarks(true, 16);
+    str_serializer.enable_xor_compression();
+
+    bm::sparse_vector_serial_layout<TSparseStrVector> layout;
+    str_serializer.serialize(str_vector, layout);
+
+    // deserialize the entire vector int 'new_vector'
+    const unsigned char* buf_ptr = layout.buf();
+    bm::sparse_vector_deserializer<TSparseStrVector> deserializer;
+
+    TSparseStrVector new_vector(bm::use_null);
+    deserializer.deserialize(new_vector, buf_ptr);
+
+    // repeat the same search on 'new_vector'
+    bm::sparse_vector_scanner<TSparseStrVector> scanner_2;
+    TSparseStrVector::bvector_type result_2;
+    scanner_2.find_eq_str(new_vector, "CBS", result_2);
+
+    assert(result_2.empty());
+}
 
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
@@ -38657,6 +38735,9 @@ int main(int argc, char *argv[])
         }
     }
 #endif
+
+//    VCF_des_test();
+
 
 /*
     BrennerTest("/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.i",
@@ -39413,7 +39494,6 @@ return 0;
     
     if (is_all || is_str_sv)
     {
-
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
@@ -39424,6 +39504,9 @@ return 0;
          CheckAllocLeaks(false);
 
          TestStrSparseVector_FindEq();
+         CheckAllocLeaks(false);
+
+         NULL_serial_search_test();
          CheckAllocLeaks(false);
 
          TestSparseFindEqStrPipeline();
