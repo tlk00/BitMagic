@@ -837,7 +837,10 @@ public:
 
     bvector_type_ptr get_create_slice(unsigned i)
         { return sv_.get_create_slice(i); }
-    
+
+    bvector_type_ptr slice(unsigned i)
+        { return sv_.slice(i); }
+
     /*!
         Number of effective bit-slices in the value type
     */

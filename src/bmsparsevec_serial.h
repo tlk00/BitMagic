@@ -1223,6 +1223,8 @@ void sparse_vector_deserializer<SV>::deserialize(SV& sv,
                                                  const unsigned char* buf,
                                                  bool clear_sv)
 {
+    BM_ASSERT(buf);
+
     idx_range_set_ = false;
     deserialize_sv(sv, buf, 0, clear_sv);
 }
@@ -1567,7 +1569,7 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
         // the NULL vector just to get to the offset of remap table
 
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_create_slice(unsigned(i));
+        bvector_type*  bv = sv.slice(unsigned(i));
 
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));

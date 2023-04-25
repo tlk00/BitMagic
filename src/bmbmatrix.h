@@ -898,6 +898,7 @@ void basic_bmatrix<BV>::allocate_rows(size_type rsize)
             bv_rows_[rsize-1] = bv_rows_[null_idx_];
             bv_rows_[null_idx_] = 0;
             null_idx_ = rsize-1;
+            BM_ASSERT(rsize & 1u);
         }
     }
 }
@@ -1026,8 +1027,17 @@ template<typename BV>
 typename basic_bmatrix<BV>::bvector_type_ptr
 basic_bmatrix<BV>::construct_row(size_type row)
 {
-    if (row >= rsize_)
-        allocate_rows(row + 8);
+    if (auto null_idx = get_null_idx(); null_idx)
+    {
+        if (row >= null_idx-1)
+            allocate_rows(rsize_ + 8);
+    }
+    else
+    {
+        if (row >= rsize_)
+            allocate_rows(rsize_ + 8);
+    }
+//    BM_ASSERT(row != null_idx_); // attempt to re-construct the NULL plane ?
     BM_ASSERT(row < rsize_);
     bvector_type_ptr bv = bv_rows_[row];
     if (!bv)
