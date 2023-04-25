@@ -1100,7 +1100,7 @@ sparse_vector<Val, BV>::sparse_vector(
         allocation_policy_type  ap,
         size_type               bv_max_size,
         const allocator_type&   alloc)
-: parent_type(null_able, ap, bv_max_size, alloc)
+: parent_type(null_able, false, ap, bv_max_size, alloc)
 {}
 
 //---------------------------------------------------------------------

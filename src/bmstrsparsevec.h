@@ -1602,7 +1602,7 @@ str_sparse_vector<CharType, BV, STR_SIZE>::str_sparse_vector(
         allocation_policy_type  ap,
         size_type               bv_max_size,
         const allocator_type&   alloc)
-: parent_type(null_able, ap, bv_max_size, alloc),
+: parent_type(null_able, true, ap, bv_max_size, alloc),
   remap_flags_(0)
 {
     static_assert(STR_SIZE > 1,
@@ -1629,7 +1629,7 @@ str_sparse_vector<CharType, BV, STR_SIZE>::str_sparse_vector(
 template<class CharType, class BV, unsigned STR_SIZE>
 str_sparse_vector<CharType, BV, STR_SIZE>::str_sparse_vector(
               const str_sparse_vector& str_sv, bm::remap_setup remap_mode)
-: parent_type(str_sv.get_null_support()),
+: parent_type(str_sv.get_null_support(), true),
   remap_flags_(str_sv.remap_flags_),
   remap_matrix1_(str_sv.remap_matrix1_),
   remap_matrix2_(str_sv.remap_matrix2_)
