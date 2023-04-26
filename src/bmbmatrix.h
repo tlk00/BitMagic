@@ -309,6 +309,12 @@ public:
     /// Return if matrix is dynamic resizable
     bool is_dynamic() const BMNOEXCEPT { return is_dynamic_; }
 
+
+    /// Debugging function to check if two matrixes have the same rows created
+    /// @return true - if the same
+    ///
+    bool is_same_structure(const basic_bmatrix<BV>& bbm) const BMNOEXCEPT;
+
     ///@}
 
 protected:
@@ -932,6 +938,30 @@ void basic_bmatrix<BV>::free_rows() BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<typename BV>
+bool basic_bmatrix<BV>::is_same_structure(
+                        const basic_bmatrix<BV>& bbm) const BMNOEXCEPT
+{
+    BM_ASSERT(this != &bbm);
+    
+    if (rsize_ != bbm.rsize_)
+        return false;
+    if (null_idx_ != bbm.null_idx_)
+        return false;
+    for (size_type i = 0; i < rsize_; ++i)
+    {
+        const bvector_type* bv = bv_rows_[i];
+        const bvector_type* bv_arg = bbm.bv_rows_[i];
+        if (bool(bv) != bool(bv_arg))
+            return false;
+    } // for i
+
+
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
 void basic_bmatrix<BV>::set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEXCEPT
 {
     if (pool_ != pool_ptr)
@@ -1026,16 +1056,8 @@ basic_bmatrix<BV>::construct_row(size_type row)
 {
     if (is_dynamic())
     {
-        if (auto null_idx = get_null_idx(); null_idx)
-        {
-            if (row >= null_idx-1)
-                allocate_rows(rsize_ + 8);
-        }
-        else
-        {
-            if (row >= rsize_)
-                allocate_rows(rsize_ + 8);
-        }
+        if (row >= rsize_)
+            allocate_rows(rsize_ + 8);
     }
     BM_ASSERT(row < rsize_);
     bvector_type_ptr bv = bv_rows_[row];

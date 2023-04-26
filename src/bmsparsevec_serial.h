@@ -1239,10 +1239,13 @@ void sparse_vector_deserializer<SV>::deserialize_structure(SV& sv,
 
     unsigned char matr_s_ser = 0;
     unsigned planes = load_header(dec, sv, matr_s_ser);
-    if (planes == 0)
+    if (!planes)
         return;
 
     load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+
+    sv.get_bmatrix().allocate_rows(planes);
+
     for (unsigned i = 0; i < planes; ++i)
     {
         if (!off_vect_[i]) // empty vector
