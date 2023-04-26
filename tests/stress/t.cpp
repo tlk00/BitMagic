@@ -23523,6 +23523,7 @@ void TestSparseVector()
 
     cout << "Test Sparse vector join NULL-able with NULL-able" << endl;
     {
+        bm::sparse_vector<unsigned, bvect> sv0;
         bm::sparse_vector<unsigned, bvect> sv1(bm::use_null);
         bm::sparse_vector<unsigned, bvect> sv2(bm::use_null);
 
@@ -23545,7 +23546,8 @@ void TestSparseVector()
             cerr << "Sparse join size failed:" << sv1.size() << endl;
             exit(1);
         }
-        for (unsigned i = 0; i < sv1.size(); ++i)
+        auto sz = sv1.size();
+        for (unsigned i = 0; i < sz; ++i)
         {
             unsigned v1 = sv1[i];
             if (v1 != i)
@@ -30721,9 +30723,21 @@ void TestStrSparseVectorSerial()
         auto sz2 = sv_lay1.size();
         (void)sz2;
 
+        bool same_struct;
         sv_deserial.deserialize_structure(sv1o, sv_lay1.buf());
+        same_struct = sv1o.get_bmatrix().is_same_structure(sv1i.get_bmatrix());
+        assert(same_struct);
+
         sv_deserial.deserialize_structure(sv2o, sv_lay2.buf());
-        sv_deserial.deserialize_structure(sv3o, sv_lay3.buf());
+        same_struct = sv2o.get_bmatrix().is_same_structure(sv2i.get_bmatrix());
+        assert(same_struct);
+
+        {
+        auto buff = sv_lay3.buf();
+        sv_deserial.deserialize_structure(sv3o, buff);
+        }
+        same_struct = sv3o.get_bmatrix().is_same_structure(sv3i.get_bmatrix());
+        assert(same_struct);
 
         bv_ref_d.add_vectors(sv3o.get_bmatrix());
         bv_ref_d.add_vectors(sv2o.get_bmatrix());
@@ -38598,36 +38612,133 @@ void case3_read2()
 
 #endif
 
+// Test contributed by Andrea Asztalos
+//
 void VCF_des_test()
 {
         const string filename = "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/sample_serialized_XOR.bin";
 
-/*
-        CFileIO fio;
-        fio.Open(filename, CFileIO::eOpen, CFileIO::eRead);
-        char* buffer = new char[fio.GetFileSize()];
-        fio.Read(buffer, fio.GetFileSize());
-        1165590
-*/
+//const string filename = "sample_serialized_XOR.bin";
+        ifstream istr(filename, std::ios::in | std::ios::binary);
+        if (!istr.good()) {
+            return;
+        }
 
-        static const unsigned sm_Infosize = 200;
+        istr.seekg(0, std::ios_base::end);
+        unsigned length = (unsigned)istr.tellg();
+        cout << "Length: " << length << endl;
 
-        using bvector_type = bm::bvector<>;
-        using TSparseOptVector = bm::str_sparse_vector<char, bvector_type, sm_Infosize>;
+        istr.seekg(0, std::ios::beg);
+        char* buffer = new char[length];
+
+        istr.read(buffer, length);
+
+        using bvector_type = bvect;
+        using TSparseOptVector = bm::str_sparse_vector<char, bvector_type, 200>;
 
         // reference vector for XOR deserialization
-//        bm::sparse_vector_deserializer<TSparseOptVector> sample_deserializer;
-//        bm::sparse_vector_deserializer<TSparseOptVector>::bv_ref_vector_type  bitvector_ref;
-
+        bm::sparse_vector_deserializer<TSparseOptVector> sample_deserializer;
+        bm::sparse_vector_deserializer<TSparseOptVector>::bv_ref_vector_type  bitvector_ref;
 
         TSparseOptVector sample_data(bm::use_null);
-
-        int r =  bm::file_load_svector(sample_data, filename);
-
-//        sample_deserializer.deserialize_structure(sample_data, (unsigned char*)buffer);  // this will run into assertion
+        sample_deserializer.deserialize_structure(sample_data, (unsigned char*)buffer);    // this will run into an assertion
 }
 
-// Contributed by Andrea Asztalos
+void test_str_sv_des_fnc()
+{
+    cout << "Serialize and deserialize a vector of size 11" << endl;
+
+    using bvector_type = bvect;
+    using TSparseOptVector = bm::str_sparse_vector<char, bvector_type, 8>;
+
+    TSparseOptVector str_vector(bm::use_null);
+    auto in_iter = str_vector.get_back_inserter();
+
+    in_iter = "0/0:40,11,0:0.216:51:16,6,0:24,5,0:11:24,0,34,324,1277,358:204,0,255:39,0:3.437e-01,1.119e+01,4.819e+01,3.348e+02,4.500e+02,3.718e+02:0.00,34.77,37.77,34.77,69.54,37.77:17,23,7,4:19,21,6,5";
+    in_iter = "0/1:1,3,0:0.750:4:1,2,0:0,1,0:9:46,0,9,116,39,85:107,0,107:3,0:1.159e+01,5.942e-01,1.232e+01,1.169e+02,7.413e+01,8.813e+01:0.00,34.77,37.77,34.77,69.54,37.77:0,1,0,3:0,1,1,2";
+    in_iter = "2/2:0,0,7,0:0.000,1.000:7:0,0,3,0:0,0,4,0:18:98,233,98,21,21,0,222,233,21,98:224,21,0:0,0:5.983e+01,2.306e+02,9.789e+01,1.808e+01,5.314e+01,6.815e-02,2.188e+02,2.647e+02,5.285e+01,9.760e+01:0.00,35.00,38.00,34.77,69.77,37.77,34.77,69.54,69.54,37.77:0,0,5,2:0,0,3,4";
+    in_iter = "0/0:89,24,0:0.212:113:51,4,0:38,20,0:6:30,0,23,578,2085,601:255,0,255:40,0:1.185e+00,6.231e+00,3.223e+01,4.500e+02,4.500e+02,4.500e+02:0.00,34.77,37.77,34.77,69.54,37.77:45,44,14,10:45,44,12,12";
+    in_iter = "0/0:15,6,0:0.286:21:8,3,0:7,3,0:4:34,0,10,200,547,210:161,0,255:10,0:2.521e+00,3.774e+00,1.677e+01,2.040e+02,4.500e+02,2.170e+02:0.00,34.77,37.77,34.77,69.54,37.77:5,10,1,5:6,9,2,4";
+    in_iter = "0/0:15,4,0:0.211:19:7,1,0:8,3,0:23:12,0,10,155,581,165:110,0,255:15,0:2.299e-02,2.299e+01,3.599e+01,1.780e+02,4.500e+02,1.910e+02:0.00,34.77,37.77,34.77,69.54,37.77:6,9,4,0:6,9,1,3";
+    in_iter = "0/0:16,3,0:0.158:19:6,1,0:10,2,0:24:11,0,10,116,588,126:68,0,255:15,0:1.874e-02,2.387e+01,3.687e+01,1.401e+02,4.500e+02,1.531e+02:0.00,34.77,37.77,34.77,69.54,37.77:10,6,0,3:6,10,2,1";
+    in_iter = "0/0:10,2,0:0.167:12:4,0,0:6,2,0:9:26,0,27,78,376,105:47,0,255:10,0:5.850e-01,9.000e+00,3.900e+01,8.652e+01,4.194e+02,1.165e+02:0.00,34.77,37.77,34.77,69.54,37.77:3,7,0,2:7,3,2,0";
+    in_iter = "0/1:3,2,0:0.400:5:0,1,0:3,1,0:5:39,0,5,66,116,71:56,0,110:3,0:6.346e+00,1.785e+00,9.785e+00,6.732e+01,1.529e+02,7.532e+01:0.00,34.77,37.77,34.77,69.54,37.77:2,1,1,1:1,2,2,0";
+    in_iter = "1/1:0,6,0:1.000:6:0,2,0:0,4,0:14:58,18,0,251,18,58:251,18,0:0,0:2.023e+01,1.523e+01,1.748e-01,2.478e+02,5.000e+01,5.800e+01:0.00,34.77,37.77,34.77,69.54,37.77:0,0,3,3:0,0,3,3";
+    in_iter = "0/1:7,4,0:0.364:11:0,3,0:7,1,0:20:58,0,20,121,203,144:100,0,191:6,0:2.325e+01,4.233e-02,2.304e+01,1.211e+02,2.382e+02,1.471e+02:0.00,34.77,37.77,34.77,69.54,37.77:4,3,2,2:3,4,1,3";
+    in_iter.flush();
+
+    BM_DECLARE_TEMP_BLOCK(tb);
+    str_vector.remap();
+    str_vector.optimize(tb);
+
+    // serialize and store it in - bm::sparse_vector_serial_layout<TSparseOptVector> layout
+
+    bm::sparse_vector_serial_layout<TSparseOptVector> layout;
+
+    {
+        using samples_serializer_type = bm::sparse_vector_serializer<TSparseOptVector>;
+        samples_serializer_type sample_serializer;
+
+        sample_serializer.set_bookmarks(true, 16);
+
+        // create a reference vector and attach it to all serializers
+        samples_serializer_type::bv_ref_vector_type bitvector_ref;
+
+        // add references in reverse order - here, there is only one vector
+        bitvector_ref.add_sparse_vector(str_vector);
+
+        // compute XOR similarity matrix in parallel
+        bm::compute_sim_matrix_plan_builder<bvector_type> pbuilder;
+        bm::compute_sim_matrix_plan_builder<bvector_type>::task_batch tbatch;
+        bm::xor_sim_model<bvector_type> sim_model;
+        bm::xor_sim_params  xor_search_params;
+        pbuilder.build_plan(tbatch, sim_model, bitvector_ref, xor_search_params);
+
+        typedef bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
+        pool_type tpool; // our thread pool here (no threads created yet)
+
+        unsigned thread_count = thread::hardware_concurrency();
+        if (thread_count == 0)
+            thread_count = 1;
+
+        tpool.start(thread_count); // start the threads
+        {
+            bm::thread_pool_executor<pool_type> exec;
+            exec.run(tpool, tbatch, true);
+        }
+        tpool.set_stop_mode(pool_type::stop_when_done);
+        tpool.join();
+
+        // add similarity model to each serializer
+        sample_serializer.set_sim_model(&sim_model);
+
+        // then: serialize
+
+
+        sample_serializer.serialize(str_vector, layout);
+
+        sample_serializer.set_xor_ref(nullptr);
+    }
+
+    // deserialize - and store data in:  TSparseOptVector new_vector(bm::use_null);
+
+    TSparseOptVector new_vector(bm::use_null);
+    {
+        const unsigned char* buf_ptr = layout.buf();
+
+        // reference vector for XOR deserialization
+        bm::sparse_vector_deserializer<TSparseOptVector> sample_deserializer;
+        bm::sparse_vector_deserializer<TSparseOptVector>::bv_ref_vector_type  bitvector_ref;
+
+
+        // first pass: build reference vectors
+
+        sample_deserializer.deserialize_structure(new_vector, buf_ptr);
+    }
+}
+
+
+// Test contributed by Andrea Asztalos
 //
 void NULL_serial_search_test()
 {
@@ -38674,6 +38785,151 @@ void NULL_serial_search_test()
 
     assert(result_2.empty());
 }
+
+/// submitted by Andreay (GBench)
+///
+void test_chr21()
+{
+    using bvector_type = bvect;
+    using TSparseOptVector = bm::str_sparse_vector<char, bvector_type, 8>;
+
+    cout << "Deserialize chr21 data and then do round_trip" << endl;
+
+    char* buffer = 0;
+
+    {
+        const string filename = "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/serialized_sampleCol_chr21.bin";
+        ifstream istr(filename, std::ios::in | std::ios::binary);
+        if (!istr.good()) {
+            return;
+        }
+        istr.seekg(0, std::ios_base::end);
+        unsigned length = (unsigned)istr.tellg();
+        istr.seekg(0, std::ios::beg);
+        buffer = new char[length];
+        istr.read(buffer, length);
+    }
+
+
+    TSparseOptVector str_vector(bm::use_null);
+    bm::sparse_vector_deserializer<TSparseOptVector> deserializer;
+    deserializer.deserialize(str_vector, (unsigned char*)buffer);
+
+    cout << "Vector length:" << str_vector.size() << endl; // expected size = 1776
+
+    // serialize str_vector and store it in - bm::sparse_vector_serial_layout<TSparseOptVector> layout
+
+    bm::sparse_vector_serial_layout<TSparseOptVector> layout;
+
+    {
+        using samples_serializer_type = bm::sparse_vector_serializer<TSparseOptVector>;
+        samples_serializer_type sample_serializer;
+
+        sample_serializer.set_bookmarks(true, 16);
+
+        // create a reference vector and attach it to all serializers
+        samples_serializer_type::bv_ref_vector_type bitvector_ref;
+
+        // add references in reverse order - here, there is only one vector
+        bitvector_ref.add_sparse_vector(str_vector);
+
+        // connect the reference vector to the serializer
+        sample_serializer.set_xor_ref(&bitvector_ref);
+
+        // compute XOR similarity matrix in parallel
+        bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
+        bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
+        bm::xor_sim_model<bvect> sim_model;
+        bm::xor_sim_params  xor_search_params;
+        pbuilder.build_plan(tbatch, sim_model, bitvector_ref, xor_search_params);
+
+        typedef bm::thread_pool<bm::task_descr*, bm::spin_lock<bm::pad0_struct> > pool_type;
+        pool_type tpool; // our thread pool here (no threads created yet)
+
+        unsigned thread_count = thread::hardware_concurrency();
+        if (thread_count == 0)
+            thread_count = 1;
+
+        tpool.start(thread_count); // start the threads
+        {
+            bm::thread_pool_executor<pool_type> exec;
+            exec.run(tpool, tbatch, true);
+        }
+        tpool.set_stop_mode(pool_type::stop_when_done);
+        tpool.join();
+
+        // add similarity model to each serializer
+        sample_serializer.set_sim_model(&sim_model);
+
+        // then: serialize
+        sample_serializer.serialize(str_vector, layout);
+
+        sample_serializer.set_xor_ref(nullptr);
+    }
+
+    // -----------------------------------------------
+    // deserialize - and store data in:  TSparseOptVector new_vector(bm::use_null);
+    //
+
+    TSparseOptVector new_vector(bm::use_null);
+    {
+        const unsigned char* buf_ptr = layout.buf();
+
+        // reference vector for XOR deserialization
+        bm::sparse_vector_deserializer<TSparseOptVector> sample_deserializer;
+        bm::sparse_vector_deserializer<TSparseOptVector>::bv_ref_vector_type  bitvector_ref;
+
+
+        // first pass: build reference vectors
+
+        const unsigned char* tmp_ptr = buf_ptr;
+        sample_deserializer.deserialize_structure(new_vector, tmp_ptr);
+
+        {
+            const bvect* bv = new_vector.get_bmatrix().row(2976);
+            assert(bv);
+        }
+
+        // construct the reference vector
+        // Add references in reverse order
+        bitvector_ref.add_vectors(new_vector.get_bmatrix());
+
+        sample_deserializer.set_xor_ref(&bitvector_ref);
+
+        // second pass: data deserialization
+
+        sample_deserializer.deserialize(new_vector, buf_ptr, false);
+
+        sample_deserializer.set_xor_ref(nullptr);
+
+/*
+        CompareStrSparseVector(new_vector,
+                            const vector<string>& str_coll)
+*/
+/*
+        {
+            TSparseOptVector::const_iterator it = new_vector.begin();
+            TSparseOptVector::const_iterator it_end = new_vector.end();
+            for (; it != it_end; ++it)
+            {
+                std::cout << *it << std::endl;
+            }
+        }
+*/
+
+        bm::print_svector_stat(cout, str_vector);
+
+cout << "----------------------------\n";
+        bm::print_svector_stat(cout, new_vector);
+
+
+        bool eq = new_vector.equal(str_vector);
+        assert(eq);
+
+    }
+
+}
+
 
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
@@ -38736,7 +38992,13 @@ int main(int argc, char *argv[])
     }
 #endif
 
-//    VCF_des_test();
+/*
+    test_str_sv_des_fnc();
+    test_chr21();
+
+    return 0;
+*/
+    //VCF_des_test();
 
 
 /*
@@ -39494,6 +39756,7 @@ return 0;
     
     if (is_all || is_str_sv)
     {
+
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
