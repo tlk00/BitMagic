@@ -215,7 +215,7 @@ public:
     /// adjust current size (no need to reallocate)
     void resize_no_check(size_t new_size) BMNOEXCEPT
     {
-        BM_ASSERT(new_size < capacity_ || !new_size);
+        BM_ASSERT(new_size <= capacity_ || !new_size);
         this->size_ = new_size;
     }
 
