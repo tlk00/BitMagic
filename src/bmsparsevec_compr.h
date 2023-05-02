@@ -353,7 +353,7 @@ public:
     {
         if (this != &csv)
         {
-            clear_all(true);
+            clear_all(true, 0);
             sv_.swap(csv.sv_);
             size_ = csv.size_; max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
             if (in_sync_)
@@ -732,12 +732,12 @@ public:
     /*! \brief resize to zero, free memory
         @param free_mem - free bit vector slices if true
     */
-    void clear_all(bool free_mem) BMNOEXCEPT;
+    void clear_all(bool free_mem, unsigned) BMNOEXCEPT;
 
     /*! \brief resize to zero, free memory
         @param free_mem - free bit vector slices if true
     */
-    void clear() BMNOEXCEPT { clear_all(true); }
+    void clear() BMNOEXCEPT { clear_all(true, 0); }
 
     /*!
         @brief Calculates memory statistics.
@@ -1382,7 +1382,7 @@ void rsc_sparse_vector<Val, SV>::load_from(
     }
     else
     {
-        sv_.clear_all(true);
+        sv_.clear_all(true, 0);
         *bv_null = *bv_null_src;
         
         bm::rank_compressor<bvector_type> rank_compr; // re-used for planes
@@ -1409,7 +1409,7 @@ void rsc_sparse_vector<Val, SV>::load_from(
 template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::load_to(sparse_vector_type& sv) const
 {
-    sv.clear_all(true);
+    sv.clear_all(true, 0);
     
     const bvector_type* bv_null_src = this->get_null_bvector();
     if (!bv_null_src)
@@ -1660,9 +1660,9 @@ void rsc_sparse_vector<Val, SV>::optimize(bm::word_t*  temp_block,
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
-void rsc_sparse_vector<Val, SV>::clear_all(bool free_mem) BMNOEXCEPT
+void rsc_sparse_vector<Val, SV>::clear_all(bool free_mem, unsigned) BMNOEXCEPT
 {
-    sv_.clear_all(free_mem);
+    sv_.clear_all(free_mem, 0);
     in_sync_ = false;  max_id_ = size_ = 0;
 }
 
@@ -1947,7 +1947,7 @@ void rsc_sparse_vector<Val, SV>::copy_range(
     bool range_valid = csv.resolve_range(left, right, &sv_left, &sv_right);
     if (!range_valid)
     {
-        sv_.clear_all(true); sv_.resize(size_);
+        sv_.clear_all(true, 0); sv_.resize(size_);
         bvector_type* bv_null = sv_.get_null_bvect();
         bv_null->copy_range(*arg_bv_null, 0, right);
         return;

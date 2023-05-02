@@ -417,7 +417,7 @@ public:
     {
         if (this != &sv)
         {
-            clear_all(true);
+            clear_all(true, 0);
             swap(sv);
         }
         return *this;
@@ -699,11 +699,13 @@ public:
     /*! @name Clear                                              */
     ///@{
 
-    /*! \brief resize to zero, free memory */
-    void clear_all(bool free_mem) BMNOEXCEPT;
+    /*! \brief resize to zero, free memory
+        @param free_mem - true - indicates the need to free underlying memory in bit-vectors
+    */
+    void clear_all(bool free_mem, unsigned ) BMNOEXCEPT;
 
     /*! \brief resize to zero, free memory */
-    void clear() BMNOEXCEPT { clear_all(true); }
+    void clear() BMNOEXCEPT { clear_all(true, 0); }
 
     /*!
         \brief clear range (assign bit 0 for all planes)
@@ -2096,7 +2098,7 @@ void sparse_vector<Val, BV>::inc_no_null(size_type idx, value_type v)
 //---------------------------------------------------------------------
 
 template<class Val, class BV>
-void sparse_vector<Val, BV>::clear_all(bool free_mem) BMNOEXCEPT
+void sparse_vector<Val, BV>::clear_all(bool free_mem, unsigned) BMNOEXCEPT
 {
     parent_type::clear_all(free_mem);
 }
