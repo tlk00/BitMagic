@@ -817,11 +817,18 @@ public:
     /*! @name Clear                                              */
     ///@{
 
-    /*! \brief resize to zero, free memory */
-    void clear_all(bool free_mem) BMNOEXCEPT;
+    /*! \brief resize to zero, free memory
+        @param free_mem - true - free all bit-vectors memory,
+                         false - set bit-vecor to zero (memory remains reserved)
+        @param remap - 0 - set to no-remap (default), 1 - keep remap substitution matrix for possible re-use
+                     (if remap() was ever called on this vector with the datawith same frequency profiles)
+        Note that feeding the data with disimilar frequency profile would cause undefined behavior.
+        @sa remap
+    */
+    void clear_all(bool free_mem, unsigned remap=0) BMNOEXCEPT;
 
-    /*! \brief resize to zero, free memory */
-    void clear() BMNOEXCEPT { clear_all(true); }
+    /*! \brief resize to zero, free memory, reset remapping */
+    void clear() BMNOEXCEPT { clear_all(true, 0); }
 
     /*!
         \brief clear range (assign bit 0 for all planes)
@@ -2590,9 +2597,15 @@ str_sparse_vector<CharType, BV, STR_SIZE>::begin() const BMNOEXCEPT
 
 template<class CharType, class BV, unsigned STR_SIZE>
 void str_sparse_vector<CharType, BV, STR_SIZE>::clear_all(
-                                        bool free_mem) BMNOEXCEPT
+                                        bool free_mem, unsigned remap) BMNOEXCEPT
 {
     parent_type::clear_all(free_mem);
+    if (remap_flags_ && (remap == 0))
+    {
+        remap_flags_ = 0;
+        remap_matrix1_.free();
+        remap_matrix2_.free();
+    }
 }
 
 //---------------------------------------------------------------------
