@@ -1378,10 +1378,9 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         return size;
     }
     ::memset(arr, 0, sizeof(value_type)*size);
-    
     for (size_type i = 0; i < size;)
     {
-        bool sorted_block = true;
+        bool sorted_block = true; // initial assumption
         
         // look ahead for the depth of the same block
         //          (speculate more than one index lookup per block)
@@ -1393,7 +1392,7 @@ sparse_vector<Val, BV>::gather(value_type*       arr,
         {
         case BM_UNKNOWN:
             {
-                sorted_block = true; // initial assumption
+                // check if sorted, it pays off to verify
                 size_type idx_prev = idx[r];
                 for (; (r < size) && (nb == (idx[r] >> bm::set_block_shift)); ++r)
                 {
