@@ -22506,7 +22506,7 @@ void TestSparseVector()
         
         sv1.clear();
         assert(!sv1.is_nullable());
-        sv2.clear_all(true);
+        sv2.clear_all(true, 0);
         assert(sv2.is_nullable());
     }}
     
@@ -22815,7 +22815,7 @@ void TestSparseVector()
             exit(1);
         }
         
-        sv2.clear_all(true);
+        sv2.clear_all(true, 0);
         sv2.import(&vect[0], (unsigned)vect.size());
         res = CompareSparseVector(sv2, vect);
         if (!res)
@@ -39756,7 +39756,6 @@ return 0;
     
     if (is_all || is_str_sv)
     {
-
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
