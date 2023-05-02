@@ -750,6 +750,7 @@ public:
     void free() BMNOEXCEPT
     {
         buffer_.free_buffer();
+        rows_ = 0; cols_ = 0;
     }
 
     size_type rows() const BMNOEXCEPT { return rows_; }
