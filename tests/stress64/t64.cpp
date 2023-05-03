@@ -15422,7 +15422,7 @@ void TestCompressSparseVector()
             {
                 auto v = csv1.get(i0);
                 assert(v == i0*2);
-                unsigned N_bits = rand()%32;
+                unsigned N_bits = (unsigned)rand()%32;
                 if (N_bits)
                 {
                     unsigned u = csv1.get_unsigned_bits(i0, N_bits);
@@ -15471,7 +15471,7 @@ void TestCompressSparseVector()
             unsigned v = csv[pr.first];
             assert(v == pr.second);
 
-            unsigned N_bits = rand()%32;
+            unsigned N_bits = (unsigned)rand()%32;
             if (N_bits)
             {
                 unsigned u = csv.get_unsigned_bits(pr.first, N_bits);
@@ -19731,7 +19731,7 @@ int parse_args(int argc, char *argv[])
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
 
-static
+inline
 void test_kmers()
 {
 
@@ -19769,7 +19769,7 @@ return;
 
         {
 
-        chrono_taker<std::ostream> ct(cerr, "bv import");
+        //chrono_taker<std::ostream> ct(cerr, "bv import");
         bv.import(test_kmers.data(), test_kmers.size(), bm::BM_SORTED);
 
         }
@@ -19813,13 +19813,13 @@ int main(int argc, char *argv[])
 {
     time_t      start_time = time(0);
     time_t      finish_time;
-
+/*
     {
     chrono_taker<std::ostream> ct(cerr, "k-mer test");
     test_kmers();
     }
     return 0;
-
+*/
 #if !defined(BM_ASSERT) || (EXPAND(BM_ASSERT) == 1)
     cerr << "Build error: Test build with undefined BM_ASSERT" << endl;
     exit(1);
