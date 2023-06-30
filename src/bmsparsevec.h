@@ -1697,6 +1697,8 @@ sparse_vector<Val, BV>::extract(value_type* BMRESTRICT arr,
         size_type                  sv_off_; ///< SV read offset
     };
 
+    BM_ASSERT(((unsigned long long)(offset) + size) < bm::id_max); // out of bounds!
+
     if (!size)
         return 0;
 
