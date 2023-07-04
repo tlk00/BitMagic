@@ -711,7 +711,8 @@ public:
     const_iterator get_const_iterator(size_type idx) const BMNOEXCEPT
         { return const_iterator(this, idx); }
 
-    back_insert_iterator get_back_inserter() { return back_insert_iterator(this); }
+    back_insert_iterator get_back_inserter()
+                { return back_insert_iterator(this); }
     ///@}
 
     // ------------------------------------------------------------
@@ -762,7 +763,7 @@ public:
     void freeze() { sv_.freeze(); }
 
     /** Returns true if vector is read-only */
-    bool is_ro() const BMNOEXCEPT { return sv_.is_ro_; }
+    bool is_ro() const BMNOEXCEPT { return sv_.is_ro(); }
 
 
 
@@ -951,6 +952,8 @@ protected:
     static
     value_type u2s(unsigned_value_type v) BMNOEXCEPT
         { return  sparse_vector_type::u2s(v); }
+
+    void set_ro_flag(bool b) BMNOEXCEPT { sv_.set_ro_flag(b); }
 
 private:
 
@@ -1446,7 +1449,7 @@ void rsc_sparse_vector<Val, SV>::sync(bool force)
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
     bv_null->build_rs_index(rs_idx_); // compute popcount prefix list
-    sv_.is_ro_ = bv_null->is_ro();
+    sv_.bmatr_.is_ro_ = bv_null->is_ro();
 
     if (force)
         sync_size();

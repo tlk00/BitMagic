@@ -100,7 +100,6 @@ public:
     typedef bm::basic_bmatrix<BV>                    bmatrix_type;
     typedef base_sparse_vector<Val, BV, 1>           parent_type;
     typedef typename parent_type::unsigned_value_type unsigned_value_type;
-    
 
     /*! Statistical information about  memory allocation details. */
     struct statistics : public bv_statistics
@@ -824,8 +823,10 @@ public:
      */
     void freeze() { this->freeze_matr(); }
 
-    /** Returns true if vector is read-only */
-    bool is_ro() const BMNOEXCEPT { return this->is_ro_; }
+    /** Returns true if vector is in read-only mode.
+         @sa freeze
+    */
+    bool is_ro() const BMNOEXCEPT { return this->bmatr_.is_ro(); }
 
     ///@}
 
@@ -1028,11 +1029,15 @@ protected:
 
     /// unused remap matrix type for compatibility with the sparse serializer
     typedef
+    typename parent_type::bmatrix_type::remap_matrix_type remap_matrix_type;
+
+#if 0
     bm::heap_matrix<unsigned char,
                     sizeof(value_type), /* ROWS */
                     256,          /* COLS = number of chars in the ASCII set */
                     typename bvector_type::allocator_type>
                                                     remap_matrix_type;
+#endif
 
     const remap_matrix_type* get_remap_matrix() const { return 0; }
     remap_matrix_type* get_remap_matrix() { return 0; }

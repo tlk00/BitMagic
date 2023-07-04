@@ -931,7 +931,7 @@ public:
     void freeze() { this->freeze_matr(); }
 
     /** Returns true if vector is read-only */
-    bool is_ro() const BMNOEXCEPT { return this->is_ro_; }
+    bool is_ro() const BMNOEXCEPT { return this->bmatr_.is_ro(); }
 
     ///@}
 
