@@ -55,6 +55,14 @@ int main(void)
     cout << "sv1.size() = " << sv1.size() << ": ";
     for (i = 0; i < sv1.size(); ++i)
     {
+        auto v = sv1.at(i);
+        // another way to get a bit-partial number.
+        // In our case it is the whole number because it all fits into 2-bits
+        // sparse_vector uses variable bit length
+        unsigned u = sv1.get_unsigned_bits(i, 2);
+        assert(v == u);
+
+
         cout << sv1.at(i) << ",";
     }
     cout << endl;
