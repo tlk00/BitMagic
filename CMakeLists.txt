@@ -203,3 +203,4 @@ add_executable(strsvsample08 ${PROJECT_SOURCE_DIR}/samples/strsvsample08/strsvsa
 add_executable(strsvsample09 ${PROJECT_SOURCE_DIR}/samples/strsvsample09/strsvsample09.cpp ${BM_HEADERS})
 
 
+add_executable(bmbsample01 ${PROJECT_SOURCE_DIR}/samples/bmbsample01/bmbsample01.cpp ${BM_HEADERS})
