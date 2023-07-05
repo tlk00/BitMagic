@@ -1244,7 +1244,12 @@ basic_bmatrix<BV>::construct_row(size_type row)
     if (is_dynamic())
     {
         if (row >= rsize_)
-            allocate_rows(rsize_ + 8);
+        {
+            size_type new_rsize = rsize_ + 8;
+            while (row >= new_rsize)
+                new_rsize +=8;
+            allocate_rows(new_rsize);
+        }
     }
     BM_ASSERT(row < rsize_);
     bvector_type_ptr bv = bv_rows_[row];
