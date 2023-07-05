@@ -1031,13 +1031,6 @@ protected:
     typedef
     typename parent_type::bmatrix_type::remap_matrix_type remap_matrix_type;
 
-#if 0
-    bm::heap_matrix<unsigned char,
-                    sizeof(value_type), /* ROWS */
-                    256,          /* COLS = number of chars in the ASCII set */
-                    typename bvector_type::allocator_type>
-                                                    remap_matrix_type;
-#endif
 
     const remap_matrix_type* get_remap_matrix() const { return 0; }
     remap_matrix_type* get_remap_matrix() { return 0; }

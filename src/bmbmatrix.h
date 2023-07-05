@@ -454,6 +454,13 @@ protected:
     /// Force RO flag without running freeze ops on content
     void set_ro_flag(bool b) BMNOEXCEPT { is_ro_ = b; }
 
+    /// Nominal function for serializer compatibility
+    bool resolve_range(size_type from, size_type to,
+                       size_type* idx_from, size_type* idx_to) const BMNOEXCEPT
+    {
+        *idx_from = from; *idx_to = to; return true;
+    }
+
 protected:
     size_type                bv_size_;
     allocator_type           alloc_;
