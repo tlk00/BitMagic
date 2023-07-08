@@ -24545,6 +24545,149 @@ void TestSparseVector_XOR_Scanner()
     cout << " -------------------------- TestSparseVector_XOR_Scanner() OK" << endl;
 }
 
+// --------------------------------------------------------------------------
+
+void TestBasicBMatrixVectorSerial()
+{
+    cout << "---------------------------- TestBasicBMatrixVectorSerial()" << endl;
+
+    typedef bm::basic_bmatrix<bvect> bmatr_32;
+    typedef bm::sparse_vector_serializer<bmatr_32> bmatr_ser_t;
+    bm::sparse_vector_deserializer<bmatr_32> bmatr_deserial;
+    bm::sparse_vector_deserializer<bmatr_32> bmatr_deserial_ro;
+    bmatr_deserial_ro.set_finalization(bm::finalization::READONLY);
+
+    bmatr_ser_t  bmser;
+
+    {
+        bmatr_32 bmatr(0);
+        {
+        auto bv = bmatr.construct_row(0);
+        bv->set(1);
+        bv->set(100000);
+        }
+
+        bmatr.optimize();
+
+        sparse_vector_serial_layout<bmatr_32> bmatr_lay;
+
+        bmser.serialize(bmatr, bmatr_lay);
+
+        {
+            const unsigned char* buf = bmatr_lay.buf();
+            bmatr_32 bmatr2(0);
+            {
+            bool eq = bmatr.equal(bmatr2);
+            assert(!eq);
+            }
+
+            bmatr_deserial.deserialize(bmatr2, buf);
+            {
+            bool eq = bmatr.equal(bmatr2);
+            assert(eq);
+            }
+        }
+
+        {
+            const unsigned char* buf = bmatr_lay.buf();
+            bmatr_32 bmatr2(0);
+            {
+            bool eq = bmatr.equal(bmatr2);
+            assert(!eq);
+            }
+
+            bmatr_deserial_ro.deserialize(bmatr2, buf);
+            assert(bmatr2.is_ro());
+            {
+            bool eq = bmatr.equal(bmatr2);
+            assert(eq);
+            const bvect* bv = bmatr2.get_row(0);
+            assert(bv->is_ro());
+
+            }
+        }
+
+
+        {
+            const unsigned char* buf = bmatr_lay.buf();
+            bmatr_32 bmatr2(0);
+            bmatr_deserial_ro.deserialize_range(bmatr2, buf, 2, 200000);
+
+            assert(bmatr2.is_ro());
+            const bvect* bv = bmatr2.get_row(0);
+            assert(bv->is_ro());
+            bool b = bv->test(100000);
+            assert(b);
+            auto c = bv->count();
+            assert(c == 1);
+        }
+
+        {
+            bmatr_32::bvector_type bv_mask;
+            bv_mask.set_range(100000-10, 100000);
+
+            const unsigned char* buf = bmatr_lay.buf();
+            bmatr_32 bmatr2(0);
+            bmatr_deserial_ro.deserialize(bmatr2, buf, bv_mask);
+
+            assert(bmatr2.is_ro());
+            const bvect* bv = bmatr2.get_row(0);
+            assert(bv->is_ro());
+            bool b = bv->test(100000);
+            assert(b);
+            auto c = bv->count();
+            assert(c == 1);
+        }
+    }
+
+
+    cout << "stress..." << endl;
+    {
+        bmatr_32 bmatr0(0);
+        assert(bmatr0.is_dynamic());
+
+        for (unsigned i = 0; i < 70000; i+= (unsigned) rand()%25)
+        {
+            bmatr_32::bvector_type* bv = bmatr0.construct_row(i);
+
+            for (unsigned j = 0; j < 250000; j += (unsigned)rand()%3)
+            {
+                bv->set(j);
+            } // for j
+            cout << "\r" << i << flush;
+
+        } // for i
+        bmatr0.optimize();
+
+        cout << endl << endl;
+        cout << " serialization..." << endl;
+        sparse_vector_serial_layout<bmatr_32> bmatr_lay;
+        bmser.serialize(bmatr0, bmatr_lay);
+
+
+        {
+            const unsigned char* buf = bmatr_lay.buf();
+            bmatr_32 bmatr2(0);
+            {
+            bool eq = bmatr0.equal(bmatr2);
+            assert(!eq);
+            }
+            cout << " de-serialization..." << endl;
+            bmatr_deserial.deserialize(bmatr2, buf);
+            {
+            bool eq = bmatr0.equal(bmatr2);
+            assert(eq);
+            }
+        }
+
+    }
+
+
+
+    cout << "---------------------------- TestBasicBMatrixVectorSerial() OK" << endl;
+}
+
+// --------------------------------------------------------------------------
 
 
 static
@@ -24600,10 +24743,7 @@ void TestSparseVectorSerial()
         } // for pass
     }
 
-//    bm::sparse_vector_serializer<sparse_vector_u32> sv_ser;
     sv_ser.set_xor_ref(false);
-//sv_ser.set_xor_ref(true);
-//    bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
 
     for (unsigned pass = 0; pass < 2; ++pass)
     {
@@ -38929,6 +39069,340 @@ cout << "----------------------------\n";
     }
 
 }
+/*
+inline unsigned DNA2int(char DNA_bp)
+{
+    switch (DNA_bp)
+    {
+    case 'A':
+        return 0; // 000
+    case 'T':
+        return 1; // 001
+    case 'G':
+        return 2; // 010
+    case 'C':
+        return 3; // 011
+    case 'N':
+        return 4; // 100
+    default:
+        assert(0);
+        return 0;
+    }
+}
+
+inline char Int2DNA(uint8_t code)
+{
+    switch (code)
+    {
+    case 0:
+        return 'A'; // 000
+    case 1:
+        return 'T'; // 001
+    case 2:
+        return 'G'; // 010
+    case 3:
+        return 'C'; // 011
+    case 4:
+        return 'N'; // 100
+    default:
+        assert(0);
+        return 0;
+    }
+}
+
+static
+void test_fastq()
+{
+typedef bm::bvector<> bvector_type;
+    typedef bm::sparse_vector<unsigned, bvector_type> svector_u32;
+    svector_u32 sv;
+    ifstream is("/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/test.seq");
+    if (!is.good())
+    {
+        cerr << "failed to open file " << endl;
+        exit(1);
+    }
+    string seq, str;
+    vector<uint32_t> buffer;
+    size_t offset = 0, line = 0;
+
+    while (is.good()) {
+        getline(is, seq);
+        ++line;
+        size_t seq_sz = seq.size();
+        buffer.resize(seq_sz);
+        for (size_t i = 0; i < seq_sz; ++i)
+            buffer[i] = DNA2int(seq[i]);
+        sv.import(&buffer[0], seq_sz, offset);
+
+        sv.decode(&buffer[0], offset, seq_sz);
+        str.resize(seq_sz);
+        for (size_t j = 0; j < seq_sz; ++j)
+            str[j] = Int2DNA(buffer[j]);
+        if (str != seq) {
+            cout << "line:" << line << endl;
+            cout << seq << endl;
+            cout << "!=" << endl;
+            cout << str << endl;
+            exit(0);
+        }
+        offset += seq_sz;
+
+        if (line % 1000 == 0)
+            cout << "\r" << line << flush;
+    }
+    cout << endl;
+}
+*/
+
+#if 0
+
+typedef bm::dynamic_heap_matrix<unsigned, bvect::allocator_type> DPMatrix;
+
+/**
+    Result of longest common substring search
+ */
+struct LCS_result
+{
+    unsigned pos1;     ///< pos in string 1
+    unsigned pos2;     ///< pos in string 2
+    unsigned len = 0;  /// LCS length
+
+    void set(unsigned p1, unsigned p2, unsigned l) noexcept
+        { pos1 = p1; pos2 = p2; len = l; }
+};
+
+/**
+    Find longest common substring
+ */
+template<typename DPM>
+LCS_result find_LCS(
+            const std::string& in_str1, const std::string& in_str2, DPM& dp)
+{
+    auto len1 = in_str1.length();
+    auto len2 = in_str2.length();
+
+    dp.resize(typename DPM::size_type(len1)+1, typename DPM::size_type(len2)+1, false);
+    dp.set_zero();
+
+    const char* s1 = in_str1.c_str();
+    const char* s2 = in_str2.c_str();
+
+    unsigned max_len = 0;
+    LCS_result result;
+
+    for (size_t i = 1; i <= len1; ++i)
+    {
+        unsigned* row = dp.row(i);
+        const unsigned* row_prev = dp.row(i-1);
+        for (size_t j = 1; j <= len2; ++j)
+        {
+            if (s1[i - 1] == s2[j - 1])
+            {
+                row[j] = row_prev[j-1] + 1;
+                if (row[j] > max_len)
+                {
+                    max_len = row[j];
+                    result.set(unsigned(i - max_len), unsigned(j - max_len), max_len);
+                }
+            }
+        } // for j
+    } // for i
+    return result;
+}
+/*
+void cyclicRotateString(std::string& str, int N) {
+    int len = str.length();
+
+    // Adjust the rotation value to be within the string length
+    N = N % len;
+
+    // Perform the rotation in place by swapping substrings
+    std::swap_ranges(str.begin(), str.begin() + N, str.begin() + N);
+}
+*/
+
+void cyclicRotateString(std::string& str, int N) {
+    int len = str.length();
+
+    // Adjust the rotation value to be within the string length
+    N = N % len;
+
+    if (N < 0) {
+        // Reverse rotation
+        N = len + N;
+    }
+
+    // Perform the rotation in place by swapping substrings
+    std::reverse(str.begin(), str.begin() + N);
+    std::reverse(str.begin() + N, str.end());
+    std::reverse(str.begin(), str.end());
+}
+
+inline
+size_t compute_match_count(const string& str1, const string& str2,
+                           size_t max_match_len,
+                           const LCS_result& lcs_res) noexcept
+{
+    const char* s1 = str1.c_str() + lcs_res.pos1;
+    const char* s2 = str2.c_str() + lcs_res.pos2;
+    size_t match_cnt = lcs_res.len;
+    for (size_t i = lcs_res.len; i < max_match_len; ++i)
+    {
+        match_cnt += (*s1 == *s2);
+        ++s1; ++s2;
+        if (!s2)
+            break;
+    } // for i
+    return match_cnt;
+}
+
+
+typedef bm::dynamic_heap_matrix<unsigned long long, bvect::allocator_type> LCS_ResultsMatrix;
+
+
+
+static
+void load_fastq()
+{
+    const size_t batch_size = 500000;
+    const unsigned min_match = 4;
+
+    typedef std::vector<std::string> TSeqVector;
+    TSeqVector seq_vect;
+
+    size_t lsum = 0;
+
+    ifstream is("/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/test.seq");
+    if (!is.good())
+    {
+        cerr << "failed to open file " << endl;
+        exit(1);
+    }
+    string seq, str;
+    size_t line {0};
+
+    for (;is.good() && line < batch_size;)
+    {
+        getline(is, seq);
+        ++line;
+
+        lsum += seq.size();
+        seq_vect.emplace_back(seq);
+
+        if (line % 5000)
+            cout << "\r" << line << std::flush;
+    }
+
+    cout << "Read cnt = " << seq_vect.size() << endl;
+    cout << "AVG len = " << lsum / seq_vect.size() << endl;
+    cout << endl;
+
+    std::vector<LCS_result> row_results;
+    row_results.resize(seq_vect.size());
+
+    DPMatrix dp;
+    bvect bv_sim_found; // elements already picked for rotation
+    bv_sim_found.init();
+
+    std::chrono::time_point<std::chrono::steady_clock> s;
+    std::chrono::time_point<std::chrono::steady_clock> f;
+    s = std::chrono::steady_clock::now();
+
+
+    for (size_t i = 0; i < seq_vect.size(); ++i)
+    {
+
+        cout << i << ":" << endl;
+        const string& s_i = seq_vect[i];
+        unsigned best_sim = 0;
+        size_t best_mate_idx;
+
+
+        for (size_t j = i+1; j < seq_vect.size(); ++j)
+        {
+            bool being_found = bv_sim_found.test(j);
+            if (being_found) // we have a greedy algo here, it is ok to skip some
+            {
+                continue;
+            }
+
+            const string& s_j = seq_vect[j];
+            LCS_result result = find_LCS(s_i, s_j, dp);
+            row_results[j] = result;
+
+            if (result.len > min_match) // minimal cut-off
+            {
+                if (result.len > best_sim)
+                {
+                    best_sim = result.len; best_mate_idx = j;
+                }
+            }
+        } // for j
+        cout << " best-sim=" << best_sim << " ";
+
+
+        // find other similar cases in the row
+        //
+        if (best_sim) // any similarity found?
+        {
+            bv_sim_found.set_bit_no_check(i);
+            bv_sim_found.set_bit_no_check(best_mate_idx);
+
+            const LCS_result& best_mate_res = row_results[best_mate_idx];
+            size_t cnt{0}, cnt_ext{0};
+
+            for (size_t j = best_mate_idx+1; j < seq_vect.size(); ++j)
+            {
+                const size_t greed_cut_off = (best_sim / 2);
+                const size_t greed_cut_off2 = (best_sim * 4) / 5;
+
+                const LCS_result& sim_res = row_results[j];
+                if (best_mate_res.pos1 == sim_res.pos1) // same similarity position!
+                {
+                    const string& s_j = seq_vect[j];
+                    if (sim_res.len >= greed_cut_off)
+                    {
+                        bv_sim_found.set_bit_no_check(j);
+                        ++cnt;
+                    }
+                    else // extra chance to be included by extension
+                    {
+                        size_t match_cnt = compute_match_count(s_i, s_j, best_sim, sim_res);
+                        if (match_cnt >= greed_cut_off2)
+                        {
+                            bv_sim_found.set_bit_no_check(j);
+                            ++cnt; ++cnt_ext;
+                        }
+                    }
+                }
+            } // for j
+            cout << "greedy-pick = " << cnt << " ext-extra= " << cnt-cnt_ext << endl;
+        }
+
+        {
+            auto found_cnt = bv_sim_found.count();
+
+            cout << "Found=" << found_cnt << " / " << seq_vect.size() << endl;
+        }
+
+        // perf. metrics
+        //
+        {
+            f = std::chrono::steady_clock::now();
+            auto diff = f - s;
+            auto d = std::chrono::duration <double, std::milli> (diff).count();
+            cout << "(" << d << "ms)" << endl;
+
+            s = std::chrono::steady_clock::now();
+        }
+
+
+    } // for i
+    cout << "Sequence sim.claculation done \n";
+
+}
+#endif
 
 
 #define BM_EXPAND(x)  x ## 1
@@ -38943,6 +39417,92 @@ int main(int argc, char *argv[])
     cerr << "Build error: Test build with undefined BM_ASSERT" << endl;
     exit(1);
 #endif
+
+//    test_fastq();
+//    return 0;
+
+/*
+    load_fastq();
+    return 0;
+
+    {
+    std::string str1 = "abcdef";
+    std::string str2 = "12defg";
+    DPMatrix dp;
+    LCS_result result = find_LCS(str1, str2, dp);
+
+    if (result.len) {
+        std::cout << "Longest common substring found:\n";
+        std::cout << "Substring: " << str1.substr(result.pos1, result.len) << "\n";
+        std::cout << "Position in str1: " << result.pos1 << "\n";
+        std::cout << "Position in str2: " << result.pos2 << "\n";
+        std::cout << "Length: " << result.len << "\n";
+
+        if (result.pos1)
+        {
+            cyclicRotateString(str1, result.pos1);
+        }
+        if (result.pos2)
+        {
+            cyclicRotateString(str2, result.pos2);
+        }
+        std::cout << "Rotated strings:" << endl;
+        std::cout << " " << str1 << endl;
+        std::cout << " " << str2 << endl;
+
+        if (result.pos1)
+        {
+            cyclicRotateString(str1, -result.pos1);
+        }
+        if (result.pos2)
+        {
+            cyclicRotateString(str2, -result.pos2);
+        }
+        std::cout << "Un-Rotated strings:" << endl;
+        std::cout << " " << str1 << endl;
+        std::cout << " " << str2 << endl;
+
+
+
+
+    } else {
+        std::cout << "No common substring found.\n";
+    }
+    }
+
+    {
+    std::string str1 = "abcdef12";
+    std::string str2 = "34cdefg";
+    DPMatrix dp;
+    LCS_result result = find_LCS(str1, str2, dp);
+
+    if (result.len) {
+        std::cout << "Longest common substring found:\n";
+        std::cout << "Substring: " << str1.substr(result.pos1, result.len) << "\n";
+        std::cout << "Position in str1: " << result.pos1 << "\n";
+        std::cout << "Position in str2: " << result.pos2 << "\n";
+        std::cout << "Length: " << result.len << "\n";
+    } else {
+        std::cout << "No common substring found.\n";
+    }
+    }
+    {
+    std::string str1 = "abcdef12";
+    std::string str2 = "3478qg";
+    DPMatrix dp;
+    LCS_result result = find_LCS(str1, str2, dp);
+
+    if (result.len) {
+        std::cout << "Longest common substring found:\n";
+        std::cout << "Substring: " << str1.substr(result.pos1, result.len) << "\n";
+        std::cout << "Position in str1: " << result.pos1 << "\n";
+        std::cout << "Position in str2: " << result.pos2 << "\n";
+        std::cout << "Length: " << result.len << "\n";
+    } else {
+        std::cout << "No common substring found.\n";
+    }
+    }
+*/
 
 //    BamLoVoTest();
 
@@ -39650,6 +40210,7 @@ return 0;
 
         if (is_all || is_sv || is_sv0)
         {
+/*
             TestSparseVector();
              CheckAllocLeaks(false);
 
@@ -39666,6 +40227,9 @@ return 0;
              CheckAllocLeaks(false);
 
             TestSparseVector_XOR_Scanner();
+             CheckAllocLeaks(false);
+*/
+            TestBasicBMatrixVectorSerial();
              CheckAllocLeaks(false);
 
             TestSparseVectorSerial();
