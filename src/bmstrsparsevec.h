@@ -1343,7 +1343,7 @@ public:
     // ------------------------------------------------------------
 
     /*! \brief syncronize internal structures */
-    void sync(bool force);
+    void sync(bool force, bool sync_size);
 
     /*!
         \brief check if another sparse vector has the same content and size
@@ -2480,7 +2480,8 @@ str_sparse_vector<CharType, BV, STR_SIZE>::remap_from_impl(
 //---------------------------------------------------------------------
 
 template<class CharType, class BV, unsigned STR_SIZE>
-void str_sparse_vector<CharType, BV, STR_SIZE>::sync(bool /*force*/)
+void str_sparse_vector<CharType, BV, STR_SIZE>::sync(
+                                    bool /*force*/, bool /*sync_size*/)
 {
     if (remap_flags_)
         recalc_remap_matrix2();

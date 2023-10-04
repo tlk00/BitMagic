@@ -144,6 +144,13 @@ public:
         if (*p != n)
         {
             printf("Block memory deallocation ERROR! n = %i (expected %i)\n", (int)n, (int)*p);
+            #ifdef BM_STACK_COLL
+            std::string stack_str;
+            stack_str.reserve(2048);
+            get_stacktrace(stack_str);
+            cout << stack_str << endl;
+            #endif
+
             assert(0);exit(1);
         }
         ::free(p);
@@ -13220,20 +13227,51 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_bienc_v2] == 1);
-       
+        assert(cstat[bm::set_block_arrgap_bienc_v2] == 1 || cstat[bm::set_block_arrgap_bienc_v3] == 1);
+
+        {
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
-
         int cmp = bv.compare(bv2);
         assert(cmp == 0);
+        }
+        {
         bvect bv3;
         od.deserialize(bv3,
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv3.compare(bv2);
+        int cmp = bv3.compare(bv);
         assert(cmp == 0);
+        }
+
+
+        if (cstat[bm::set_block_arrgap_bienc_v3])
+        {
+            size_t drange_size = sermem_buf.size();
+            bv_ser.set_bic_dynamic_range_reduce(false);
+            bv_ser.serialize(bv, sermem_buf, 0);
+
+            const bvect::size_type* cstat = bv_ser.get_compression_stat();
+            assert(cstat[bm::set_block_arrgap_bienc_v2] == 1);
+            size_t no_drange_size = sermem_buf.size();
+            assert(no_drange_size >= drange_size);
+            {
+            bvect bv2;
+            bm::deserialize(bv2, sermem_buf.buf());
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+            }
+            {
+            bvect bv3;
+            od.deserialize(bv3,
+                           sermem_buf.buf(),
+                           tb,
+                           set_OR);
+            int cmp = bv3.compare(bv);
+            assert(cmp == 0);
+            }
+        }
    }
    
    {
@@ -13258,8 +13296,9 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_bienc_inv_v2] == 1);
-       
+        assert(cstat[bm::set_block_arrgap_bienc_inv_v2] == 1 || cstat[bm::set_block_arrgap_bienc_inv_v3] == 1);
+
+        {
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
 
@@ -13270,8 +13309,37 @@ void SerializationCompressionLevelsTest()
                        sermem_buf.buf(),
                        tb,
                        set_OR);
-        cmp = bv3.compare(bv2);
+        cmp = bv3.compare(bv);
         assert(cmp == 0);
+        }
+        if (cstat[bm::set_block_arrgap_bienc_inv_v3])
+        {
+            size_t drange_size = sermem_buf.size();
+            bv_ser.set_bic_dynamic_range_reduce(false);
+            bv_ser.serialize(bv, sermem_buf, 0);
+
+            const bvect::size_type* cstat = bv_ser.get_compression_stat();
+            assert(cstat[bm::set_block_arrgap_bienc_inv_v2] == 1);
+            size_t no_drange_size = sermem_buf.size();
+            assert(no_drange_size >= drange_size);
+            {
+            bvect bv2;
+            bm::deserialize(bv2, sermem_buf.buf());
+            int cmp = bv.compare(bv2);
+            assert(cmp == 0);
+            }
+            {
+            bvect bv3;
+            od.deserialize(bv3,
+                           sermem_buf.buf(),
+                           tb,
+                           set_OR);
+            int cmp = bv3.compare(bv);
+            assert(cmp == 0);
+            }
+        }
+
+
    }
 
 
@@ -14275,6 +14343,282 @@ void SerializationCompressionLevelsTest()
    cout << " ----------------------------------- SerializationCompressionLevelsTest() OK" << endl;
 }
 
+template<typename BV>
+void Check_V3DR_Serializations(const BV& bv,
+                               size_t& drange_size, size_t& no_drange_size,
+                               unsigned stat_code)
+{
+   BM_DECLARE_TEMP_BLOCK(tb)
+
+   bm::serializer<BV> bv_ser(tb);
+   typename bm::serializer<BV>::buffer sermem_buf;
+   auto c = bv.count();
+
+   {
+       bv_ser.set_bic_dynamic_range_reduce(true);
+       bv_ser.serialize(bv, sermem_buf, 0);
+       const bvect::size_type* cstat = bv_ser.get_compression_stat();
+       assert(cstat[stat_code]==1);
+       drange_size = sermem_buf.size();
+       auto plain_size = (c * 2)+5;
+        cout << "plain =" << plain_size << " serial size = " << drange_size
+             << " diff=" << plain_size - drange_size << endl;
+        {
+        BV bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        bool eq = bv.equal(bv2);
+        if (!eq)
+        {
+            cout << "mismatch cnt=" << bv2.count() << endl;
+            //print_bv(bv2);
+            assert(eq);
+        }
+        }
+
+        {
+        operation_deserializer<BV> od;
+        BV bv2;
+        od.deserialize(bv2, sermem_buf.buf(), nullptr, set_ASSIGN);
+        bool eq = bv.equal(bv2);
+        assert(eq);
+        }
+    }
+   {
+       bv_ser.set_bic_dynamic_range_reduce(false);
+       bv_ser.serialize(bv, sermem_buf, 0);
+       const bvect::size_type* cstat = bv_ser.get_compression_stat();
+       //assert(cstat[bm::set_block_arrgap_bienc_v2]==1 || cstat[bm::set_block_gap_bienc]==1);
+       no_drange_size = sermem_buf.size();
+        {
+        BV bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        bool eq = bv.equal(bv2);
+        assert(eq);
+        }
+    }
+    int diff = int(drange_size) - int(no_drange_size);
+    if (drange_size > no_drange_size)
+    {
+        cerr << "DRANGE LOSS detected:" << diff << endl;
+//        BM_ASSERT(0);
+    }
+    else
+    {
+        //cout << "Savings:" << diff << endl;
+    }
+
+}
+
+void GAPSerializationTest0()
+{
+   cout << " ----------------------------------- GAPSerializationTest0()" << endl;
+   BM_DECLARE_TEMP_BLOCK(tb)
+   bm::serializer<bvect> bv_ser(tb);
+   bm::serializer<bvect>::buffer sermem_buf;
+   size_t drange_size_sum{0}, no_drange_size_sum{0}, saved_sum{0};
+
+   // -------------------------------------------------------------------
+/*
+    cout << " Test gap BIC" << endl;
+
+    for (unsigned k = 0; k < 50; ++k)
+    {
+       size_t drange_size, no_drange_size;
+       bvect bv;
+
+        unsigned step = 100;
+        for (unsigned i = 0; i < 65535; i+=(step+step/2))
+        {
+            bv.set_range(i, i+step);
+            if (!k)
+                step += 3;//step + step/10;
+            else
+                step += step / k;
+        }
+
+       bv.optimize(tb);
+       Check_V3DR_Serializations(bv, drange_size, no_drange_size, bm::set_block_gap_bienc_v3);
+
+       drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+       int diff = int(no_drange_size) - int(drange_size) ;
+        saved_sum += diff;
+
+    } // for k
+
+    cout << "Drange: " << drange_size_sum << endl;
+    cout << "NO Drange: " << no_drange_size_sum << endl;
+    cout << "Total save: " << saved_sum << endl;
+    float percent_save = double(saved_sum) / double(no_drange_size_sum) * 100.0;
+    cout << "Percent saved:" << percent_save << endl;
+*/
+    // -------------------------------------------------------------------
+
+    cout << " Test gap BIC (with exceptions)" << endl;
+
+    for (unsigned k = 1; k < 50; ++k)
+    {
+       size_t drange_size, no_drange_size;
+       bvect bv;
+
+        unsigned step = 100;
+        for (unsigned i = 0; i < 65535; i+=(step+step/2))
+        {
+            bv.set_range(i, i+step);
+            if (!k)
+                step += 3;//step + step/10;
+            else
+                step += step / k;
+            if (k == 0)
+            {
+               bv.set(0, false);
+               bv.set(5, false);
+               bv.set(6, false);
+               bv.set(8, false);
+            }
+            else
+                if (i < 1024)
+                    bv.set(i+k, false);
+                else
+                    bv.set(i+step+k);
+        }
+       bv.optimize(tb);
+       Check_V3DR_Serializations(bv, drange_size, no_drange_size, bm::set_block_gap_bienc_v3);
+
+       drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+       int diff = int(no_drange_size) - int(drange_size) ;
+        saved_sum += diff;
+
+    } // for k
+
+    cout << "Drange: " << drange_size_sum << endl;
+    cout << "NO Drange: " << no_drange_size_sum << endl;
+    cout << "Total save: " << saved_sum << endl;
+    float percent_save = double(saved_sum) / double(no_drange_size_sum) * 100.0;
+    cout << "Percent saved:" << percent_save << endl;
+
+    // -------------------------------------------------------------------
+
+
+
+    cout << "------------------------------" << endl;
+    cout << "\n Test gap-array BIC" << endl;
+    cout << " OK" << endl;
+
+
+    drange_size_sum = 0; no_drange_size_sum = 0; saved_sum=0;
+    for (unsigned k = 0; k < 50; ++k)
+    {
+       size_t drange_size, no_drange_size;
+       bvect bv;
+        unsigned step = 100 + (k*2);
+        if (k == 0)
+        {
+            for (unsigned i = 1024; i < 1024 * 3; i+=(step+step/2))
+            {
+                bv.set(i);
+            }
+        }
+        else
+        for (unsigned i = 0; i < 65535; i+=(step+step/2))
+        {
+            bv.set(i);
+        }
+       bv.optimize(tb);
+
+       Check_V3DR_Serializations(bv, drange_size, no_drange_size, bm::set_block_arrgap_bienc_v3);
+
+       drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+       int diff = int(no_drange_size) - int(drange_size) ;
+        saved_sum += diff;
+    } // for k
+    cout << "Drange: " << drange_size_sum << endl;
+    cout << "NO Drange: " << no_drange_size_sum << endl;
+    cout << "Total save: " << saved_sum << endl;
+    percent_save = double(saved_sum) / double(no_drange_size_sum) * 100.0;
+    cout << "Percent saved:" << percent_save << endl;
+
+    cout << "------------------------------" << endl;
+
+
+
+    cout << "v3 split tests" << endl;
+
+
+    drange_size_sum = 0; no_drange_size_sum = 0; saved_sum=0;
+    for (unsigned k = 0; k < 50; ++k)
+    {
+       size_t drange_size, no_drange_size;
+       bvect bv;
+
+        unsigned step = 100 + (k*2);
+        if (k < 5)
+        {
+            if (k == 0 || k == 1)
+            {
+                if (k==0)
+                    bv.set_range(1, 2);
+                bv.set_range(k+100, k+101);
+                bv.set_range(k+201, k+202);
+                bv.set_range(k+250, k+251);
+                bv.set_range(k+300, k+301);
+                if (k==0)
+                    bv.set_range(k+65450, k+65451);
+            }
+            else
+            {
+                bv.set_range(1, 2);
+                bv.set_range(k+100, k+100+2);
+                bv.set_range(k+200, k+200+3);
+            }
+        }
+        else
+            for (unsigned i = k-5; i < 1024 + 1000; i+=step)
+            {
+                bv.set(i);
+                bv.set(i+1);
+                if ((i & 1) == 0)
+                    bv.set(i+2);
+            } // for
+        if (k == 0)
+        {
+            for (unsigned i = 1024 + k*1000; i < 65535; )
+            {
+                bv.set(i);
+                i+=(step+10);
+            } // for
+            cout << bv.count() << endl;
+        }
+        else
+            for (unsigned i = 1024 + k*1000; i < 65535; i+=(step+step/2))
+            {
+                bv.set(i);
+            } // for
+
+        bv.optimize(tb);
+
+        Check_V3DR_Serializations(bv, drange_size, no_drange_size, bm::set_block_arrgap_bienc_v3);
+        drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+        int diff = int(no_drange_size) - int(drange_size) ;
+        if (drange_size > no_drange_size)
+        {
+            cerr << "DRANGE LOSS detected:" << diff << endl;
+            BM_ASSERT(0);
+        }
+        else
+        {
+            cout << "Savings:" << diff << " total=" << saved_sum << endl;
+            saved_sum += diff;
+        }
+    } // for k
+
+    cout << "Drange: " << drange_size_sum << endl;
+    cout << "NO Drange: " << no_drange_size_sum << endl;
+    cout << "Total save: " << saved_sum << endl;
+    percent_save = double(saved_sum) / double(no_drange_size_sum) * 100.0;
+    cout << "percent saved:" << percent_save << endl;
+
+   cout << " ----------------------------------- GAPSerializationTest0() OK" << endl;
+}
 
 
 static
@@ -20952,7 +21296,7 @@ void InterpolativeCodingTest()
         bm::bit_out<bm::encoder> bout(enc);
         
         sz = sizeof(arr1)/sizeof(arr1[0])-1;
-        bout.bic_encode_u16_rg(arr1, sz, 0, 62);
+        bout.bic_encode_u16_rg(arr1, sz, arr1[0], 62);
         
         bout.flush();
     }
@@ -20970,7 +21314,7 @@ void InterpolativeCodingTest()
         bm::bit_in<decoder> bin(dec);
         
         bm::gap_word_t arr2c[256] = {0, };
-        bin.bic_decode_u16_rg(&arr2c[0], sz, 0, 62);
+        bin.bic_decode_u16_rg(&arr2c[0], sz, arr1[0], 62);
         for (unsigned i = 0; i < sz; ++i)
         {
             assert(arr1[i] == arr2c[i]);
@@ -21040,7 +21384,7 @@ void InterpolativeCodingTest()
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
                 
-                bout.bic_encode_u16_cm(src_arr, sz-1, 0, src_arr[sz-1]);
+                bout.bic_encode_u16_cm(src_arr, sz-1, src_arr[0], src_arr[sz-1]);
                 bout.flush();
                 auto ssz = enc.size();
                 assert(ssz < sizeof(buf));
@@ -21049,7 +21393,7 @@ void InterpolativeCodingTest()
                 decoder dec(buf);
                 bm::bit_in<decoder> bin(dec);
                 
-                bin.bic_decode_u16_cm(&dst_arr[0], sz-1, 0, src_arr[sz-1]);
+                bin.bic_decode_u16_cm(&dst_arr[0], sz-1, src_arr[0], src_arr[sz-1]);
                 dst_arr[sz-1]=src_arr[sz-1];
                 for (unsigned i = 0; i < sz; ++i)
                 {
@@ -21085,14 +21429,14 @@ void InterpolativeCodingTest()
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
                 
-                bout.bic_encode_u16_cm(src_arr, sz, 0, src_arr[sz-1]);
+                bout.bic_encode_u16_cm(src_arr, sz, src_arr[0], src_arr[sz-1]);
                 bout.flush();
             }
             {
                 decoder dec(buf);
                 bm::bit_in<decoder> bin(dec);
                 
-                bin.bic_decode_u16_cm(&dst_arr[0], sz, 0, src_arr[sz-1]);
+                bin.bic_decode_u16_cm(&dst_arr[0], sz, src_arr[0], src_arr[sz-1]);
                 //dst_arr[sz-1]=src_arr[sz-1];
                 for (unsigned i = 0; i < sz; ++i)
                 {
@@ -35743,6 +36087,31 @@ void TestCompressSparseVector()
         assert(ex_flag);
     }
 
+    // test contributed by A.Shkeda
+    {
+    typedef bm::bvector<> bvector_type;
+    typedef bm::sparse_vector<uint32_t, bvector_type> sparse_vector_u32;
+    typedef bm::rsc_sparse_vector<uint32_t, sparse_vector_u32>  rsc_sparse_vector_u32;
+
+    rsc_sparse_vector_u32 rsc;
+    auto rsc_bi = rsc.get_back_inserter();
+
+    rsc_bi = 666;
+    rsc_bi.add_null();
+    rsc_bi.flush();
+    rsc.sync();
+
+    BM_DECLARE_TEMP_BLOCK(TB);
+    rsc_sparse_vector_u32::statistics st;
+    rsc.optimize(TB, bvector_type::opt_compress, &st);
+
+    uint32_t v = 0;
+    assert(rsc.try_get_sync(0, v) == true);
+    assert(rsc.try_get_sync(1, v) == false);
+    cout << v << endl;
+
+    }
+
     cout << " set test " << endl;
     {
         unsigned v;
@@ -36303,7 +36672,7 @@ void TestCompressSparseVector()
 
 
             csv1.set_null(100);
-            csv1.sync(true);
+            csv1.sync(true, true);
 
             sz = csv1.decode(&arr[0], 100, 1);
             assert(sz == 0);
@@ -37061,7 +37430,7 @@ void TestCompressSparseSignedVector()
 
 
             csv1.set_null(100);
-            csv1.sync(true);
+            csv1.sync(true, true);
 
             sz = csv1.decode(&arr[0], 100, 1);
             assert(sz == 0);
@@ -39155,7 +39524,7 @@ typedef bm::bvector<> bvector_type;
 }
 */
 
-#if 0
+#if 1
 
 typedef bm::dynamic_heap_matrix<unsigned, bvect::allocator_type> DPMatrix;
 
@@ -39164,14 +39533,94 @@ typedef bm::dynamic_heap_matrix<unsigned, bvect::allocator_type> DPMatrix;
  */
 struct LCS_result
 {
-    unsigned pos1;     ///< pos in string 1
-    unsigned pos2;     ///< pos in string 2
+    unsigned pos1 = 0;     ///< pos in string 1
+    unsigned pos2 = 0;     ///< pos in string 2
     unsigned len = 0;  /// LCS length
 
     void set(unsigned p1, unsigned p2, unsigned l) noexcept
         { pos1 = p1; pos2 = p2; len = l; }
 };
 
+int solve(char* X, char* Y, int m, int n){
+   int longest[m + 1][n + 1];
+   int len = 0;
+   int row, col;
+   for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= n; j++) {
+         if (i == 0 || j == 0)
+            longest[i][j] = 0;
+         else if (X[i - 1] == Y[j - 1]) {
+            longest[i][j] = longest[i - 1][j - 1] + 1;
+            if (len < longest[i][j]) {
+               len = longest[i][j];
+               row = i;
+               col = j;
+            }
+         }
+         else
+            longest[i][j] = 0;
+      }
+   }
+   return len;
+}
+
+// Function to find longest common substring.
+string LCSubStr(const string& X, const string& Y)
+{
+    // Find length of both the strings.
+    int m = X.length();
+    int n = Y.length();
+
+    // Variable to store length of longest
+    // common substring.
+    int result = 0;
+
+    // Variable to store ending point of
+    // longest common substring in X.
+    int end;
+
+    // Matrix to store result of two
+    // consecutive rows at a time.
+    int len[2][n + 1];
+
+    // Variable to represent which row of
+    // matrix is current row.
+    int currRow = 0;
+
+    // For a particular value of i and j,
+    // len[currRow][j] stores length of longest
+    // common substring in string X[0..i] and Y[0..j].
+    for (int i = 0; i <= m; i++) {
+        for (int j = 0; j <= n; j++) {
+            if (i == 0 || j == 0) {
+                len[currRow][j] = 0;
+            }
+            else if (X[i - 1] == Y[j - 1]) {
+                len[currRow][j] = len[1 - currRow][j - 1] + 1;
+                if (len[currRow][j] > result) {
+                    result = len[currRow][j];
+                    end = i - 1;
+                }
+            }
+            else {
+                len[currRow][j] = 0;
+            }
+        }
+
+        // Make current row as previous row and
+        // previous row as new current row.
+        currRow = 1 - currRow;
+    }
+
+    // If there is no common substring, print -1.
+    if (result == 0) {
+        return "-1";
+    }
+
+    // Longest common substring is from index
+    // end - result + 1 to index end in X.
+    return X.substr(end - result + 1, result);
+}
 /**
     Find longest common substring
  */
@@ -39208,8 +39657,21 @@ LCS_result find_LCS(
             }
         } // for j
     } // for i
+
+/*
+    int check = solve((char*)in_str1.c_str(), (char*)in_str2.c_str(), (int)in_str1.size(), (int)in_str2.size());
+    assert(check == result.len);
+
+    string lcs = LCSubStr(in_str1, in_str2);
+    assert(lcs.size() == result.len);
+*/
     return result;
 }
+
+
+
+
+
 /*
 void cyclicRotateString(std::string& str, int N) {
     int len = str.length();
@@ -39260,20 +39722,117 @@ size_t compute_match_count(const string& str1, const string& str2,
 
 typedef bm::dynamic_heap_matrix<unsigned long long, bvect::allocator_type> LCS_ResultsMatrix;
 
-
-
-static
-void load_fastq()
+/// Codes for heuristical decision maker for best set to pick
+enum E_LCS_BestSet
 {
-    const size_t batch_size = 500000;
-    const unsigned min_match = 4;
+    e_LCS,        ///< max length LCS substring (and all associalted mate subjects)
+    e_LCS_maxsum, ///< maximum sum of all LCS substrings
+    e_LCS_best_avg, ///< best LCS average: sum(lcs)/N
+    e_LCS_Best_none    ///< no good variant to follow
+};
 
-    typedef std::vector<std::string> TSeqVector;
-    TSeqVector seq_vect;
+inline
+E_LCS_BestSet find_best_subject_set(size_t LCS_sum,      size_t LCS_count,
+                                    size_t LCS_max_sum,  size_t LCS_max_sum_cnt,
+                                    float  LCS_best_avg, size_t LCS_avg_cnt) noexcept
+{
+    const size_t min_set_count = 32; // to prevent really small sets of subjects from winning
+    E_LCS_BestSet ret =
+        (LCS_max_sum_cnt > min_set_count/2) ? e_LCS_maxsum : e_LCS_Best_none; // default choice
 
-    size_t lsum = 0;
+    float lcs_sum_avg =
+        (LCS_count > min_set_count) ? float(LCS_sum) / float(LCS_count) : 0.0f;
+    float lcs_max_sum_avg =
+        (LCS_max_sum_cnt > min_set_count) ? float(LCS_max_sum) / float(LCS_max_sum_cnt) : 0.0f;
 
-    ifstream is("/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/test.seq");
+    // evaluate best average
+    //
+    // if BEST avg (SUM(lcs)/N is better than SUM(lcs)
+    if ((LCS_best_avg > lcs_max_sum_avg) && (LCS_avg_cnt > min_set_count))
+    {
+        float d = LCS_best_avg - lcs_max_sum_avg;
+        if (d > 0.7f) // gain is substantial enough to warrant a switch
+        {
+            ret = e_LCS_best_avg; // new best established
+            // evaluate longest LCS beats it
+            if ((lcs_sum_avg > LCS_best_avg) && (LCS_count > min_set_count))
+            {
+                d = lcs_sum_avg - LCS_best_avg;
+                if (d > 0.7f)
+                {
+                    ret = e_LCS;
+                }
+            }
+        }
+    }
+    else
+    {
+        // evaluate longest LCS beats sum(lcs)
+        if ((lcs_sum_avg > lcs_max_sum_avg) && (LCS_count > min_set_count))
+        {
+            float d = lcs_sum_avg -  lcs_max_sum_avg;
+            if (d > 0.7f)
+            {
+                ret = e_LCS;
+            }
+        }
+
+    }
+    return ret;
+}
+
+/// Debug print func to get human redable for best set
+///
+inline
+std::string get_subject_set_name(E_LCS_BestSet bsc) noexcept
+{
+    switch(bsc)
+    {
+    case e_LCS:          return "LCS";
+    case e_LCS_maxsum:   return "MAX(SUM(lcs)))";
+    case e_LCS_best_avg: return "BEST_AVG";
+    default:
+        break;
+    } // switch
+    return "NONE";
+}
+
+/// Scan LCS distances vector, pick elements matching the requested query position
+///
+inline
+void pick_subject_mates(bvect& bsc_members,
+                        const std::vector<LCS_result>& row_results,
+                        size_t query_pos,
+                        size_t rr_start_index)
+{
+    for (size_t i = rr_start_index; i < row_results.size(); ++i)
+    {
+        const LCS_result& lcs_res = row_results[i];
+        if (lcs_res.len && lcs_res.pos1 == query_pos)
+            bsc_members.set_bit_no_check(i);
+    } // for i
+}
+
+
+
+
+typedef std::vector<std::string> TSeqVector;
+typedef std::vector<LCS_result>  TLCS_RowResults;
+
+/*
+void print_seqcluster(const TSeqVector& seq_vect,
+                      const TLCS_RowResults& rr)
+{
+}
+
+*/
+
+
+void load_sequence_file(const char* fname, size_t batch_size,
+                        TSeqVector& seq_vect, size_t& max_ssize,
+                        size_t start_trim)
+{
+    ifstream is(fname);
     if (!is.good())
     {
         cerr << "failed to open file " << endl;
@@ -39282,23 +39841,79 @@ void load_fastq()
     string seq, str;
     size_t line {0};
 
-    for (;is.good() && line < batch_size;)
+    for ( ;is.good() && (line < batch_size || batch_size==0);)
     {
         getline(is, seq);
         ++line;
-
-        lsum += seq.size();
+        if (seq.size() > max_ssize)
+            max_ssize = seq.size();
+        if (start_trim)
+            seq.erase(0, start_trim);
+cout << seq << endl;
         seq_vect.emplace_back(seq);
+    } // for
+}
 
-        if (line % 5000)
-            cout << "\r" << line << std::flush;
+static
+void load_fastq()
+{
+    const size_t batch_size = 500000;
+    const unsigned min_match = 6;
+    size_t max_ssize = 0;
+
+    TSeqVector seq_vect;
+/*
+    TSeqVector seq_vect_sr;
+    load_sequence_file(
+        "/Volumes/DATAFAT32/rotated-seqs/ILLUMINA.m100/test_0_0.rotated.sort",
+        0, seq_vect_sr, max_ssize);
+
+    cout << seq_vect_sr.size() << endl;
+
+
+    {
+        size_t A, T, G, C, O; // counts
+
+        for (size_t i = 0; i < max_ssize; ++i)
+        {
+            A = T = G = C = O = 0;
+            for (size_t j = 0; j < seq_vect_sr.size(); ++j)
+            {
+                const string& s = seq_vect_sr[j];
+                char base = s[i];
+                switch (base)
+                {
+                case 'A': A++; break;
+                case 'T': T++; break;
+                case 'G': G++; break;
+                case 'C': C++; break;
+                default: ++O; break;
+                } // switch
+            } // for j
+            cout << "Slice " << i << endl;
+            cout << " A=" << A << endl
+                 << " T=" << T << endl
+                 << " G=" << G << endl
+                 << " C=" << C << endl;
+        } // for i
     }
+return;
+*/
 
+
+    load_sequence_file(
+        "/Volumes/DATAFAT32/rotated-seqs/ILLUMINA.m100/test_0_0.rotated.sort",
+        0, seq_vect, max_ssize, 10);
+
+/*
+    load_sequence_file(
+        "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/test.seq",
+        batch_size, seq_vect, max_ssize);
+*/
     cout << "Read cnt = " << seq_vect.size() << endl;
-    cout << "AVG len = " << lsum / seq_vect.size() << endl;
     cout << endl;
 
-    std::vector<LCS_result> row_results;
+    TLCS_RowResults row_results;
     row_results.resize(seq_vect.size());
 
     DPMatrix dp;
@@ -39310,10 +39925,16 @@ void load_fastq()
     s = std::chrono::steady_clock::now();
 
 
-    for (size_t i = 0; i < seq_vect.size(); ++i)
+    // counters for statistics on decision making
+    size_t LCS_cnt{0}, LCS_max_sum_cnt{0}, LCS_best_avg_cnt{0}, LCS_none{0};
+
+    for (size_t i{0}, c{0}; i < seq_vect.size(); ++i)
     {
 
-        cout << i << ":" << endl;
+        if (bv_sim_found.test(i))
+            continue;
+
+        cout << "---------------------------------------" << c++ << ":" << endl;
         const string& s_i = seq_vect[i];
         unsigned best_sim = 0;
         size_t best_mate_idx;
@@ -39321,14 +39942,14 @@ void load_fastq()
 
         for (size_t j = i+1; j < seq_vect.size(); ++j)
         {
-            bool being_found = bv_sim_found.test(j);
-            if (being_found) // we have a greedy algo here, it is ok to skip some
-            {
+            if (bv_sim_found.test(j)) // we have a greedy algo here, it is ok to skip some
                 continue;
-            }
 
             const string& s_j = seq_vect[j];
             LCS_result result = find_LCS(s_i, s_j, dp);
+            assert(result.pos1 < max_ssize);
+            assert(result.pos2 < max_ssize);
+
             row_results[j] = result;
 
             if (result.len > min_match) // minimal cut-off
@@ -39339,51 +39960,172 @@ void load_fastq()
                 }
             }
         } // for j
-        cout << " best-sim=" << best_sim << " ";
-
-
-        // find other similar cases in the row
-        //
-        if (best_sim) // any similarity found?
+        cout << " best-sim=" << best_sim << " " << " best_idx = " << best_mate_idx << endl;
         {
-            bv_sim_found.set_bit_no_check(i);
-            bv_sim_found.set_bit_no_check(best_mate_idx);
+            const LCS_result& result = row_results[best_mate_idx];
+            cout << "Max LCS pos1=" << result.pos1 << endl;
+        }
 
-            const LCS_result& best_mate_res = row_results[best_mate_idx];
-            size_t cnt{0}, cnt_ext{0};
+        // build sum of LCS for all possible rotations
+        //
+        std::vector<size_t> LCS_sum_vect;
+        LCS_sum_vect.resize(max_ssize, 0); // resize and set to 0
+        std::vector<size_t> LCS_cnt_vect;
+        LCS_cnt_vect.resize(max_ssize, 0); // resize and set to 0
 
-            for (size_t j = best_mate_idx+1; j < seq_vect.size(); ++j)
+        for (size_t j = i+1; j < seq_vect.size(); ++j)
+        {
+            const LCS_result& result = row_results[j];
+            auto query_pos = result.pos1;
+            assert(query_pos < LCS_sum_vect.size());
+            LCS_sum_vect[query_pos] += result.len; // sum of all possible gains for a particular position on the query
+            LCS_cnt_vect[query_pos]++; // register a hit
+        } // for j
+
+
+        // find the max-sum position
+        //
+        size_t best_LCS_sum = 0;
+        size_t best_LCS_pos = 0;
+
+        float  best_LCS_avg = 0;
+        size_t best_LCS_avg_pos = 0;
+
+
+        for (size_t k = 0; k < LCS_sum_vect.size(); ++k)
+        {
+            if (LCS_cnt_vect[k])
             {
-                const size_t greed_cut_off = (best_sim / 2);
-                const size_t greed_cut_off2 = (best_sim * 4) / 5;
-
-                const LCS_result& sim_res = row_results[j];
-                if (best_mate_res.pos1 == sim_res.pos1) // same similarity position!
+                if (LCS_sum_vect[k] > best_LCS_sum)
                 {
-                    const string& s_j = seq_vect[j];
-                    if (sim_res.len >= greed_cut_off)
+                    best_LCS_sum = LCS_sum_vect[k];
+                    best_LCS_pos = k;
+                }
+                float LCS_avg = float(LCS_sum_vect[k]) / float(LCS_cnt_vect[k]);
+                float d = LCS_avg - best_LCS_avg;
+                if (d > 0.1f )
+                {
+                    best_LCS_avg = LCS_avg;
+                    best_LCS_avg_pos = k;
+                }
+            }
+        } // for k
+        if (LCS_cnt_vect[best_LCS_pos] > 16)
+            cout << "Best LCS sum = " << best_LCS_sum << " at pos1=" << best_LCS_pos << endl;
+        if (LCS_cnt_vect[best_LCS_avg_pos] > 16)
+            cout << "Best LCS avg = " << best_LCS_avg << " at pos1=" << best_LCS_avg_pos << endl;
+
+
+        // compare all methods
+        {
+
+            const LCS_result& max_LCS_res = row_results[best_mate_idx];
+            auto LCS_max_pos1 = max_LCS_res.pos1;
+
+            //const LCS_result& maxsum_LCS_res = row_results[best_LCS_pos];
+            auto LCS_bestsum_pos1 = best_LCS_pos;//maxsum_LCS_res.pos1;
+            long long int diff = LCS_sum_vect[LCS_bestsum_pos1] - LCS_sum_vect[LCS_max_pos1];
+            cout << "Gain = " << diff << endl << endl;
+
+
+
+            // print the histogram matrix
+            for (size_t k = 0; k < LCS_sum_vect.size(); ++k)
+            {
+                if (LCS_cnt_vect[k] > 16) // has to be sufficiently representative
+                {
+                    if (k == LCS_max_pos1 || k == LCS_bestsum_pos1 || k==best_LCS_avg_pos)
                     {
-                        bv_sim_found.set_bit_no_check(j);
-                        ++cnt;
-                    }
-                    else // extra chance to be included by extension
-                    {
-                        size_t match_cnt = compute_match_count(s_i, s_j, best_sim, sim_res);
-                        if (match_cnt >= greed_cut_off2)
+                        cout << k << ": " << LCS_sum_vect[k];
+
+                        if (k == LCS_max_pos1)
+                            cout << " -> LCS: ";
+                        if (k == LCS_bestsum_pos1)
+                            cout << " -> BEST-SUM: ";
+                        if (k == best_LCS_avg_pos)
+                            cout << " -> BEST-AVG: ";
+                        cout << "[" << LCS_cnt_vect[k] << "] ";
+
+                        if (LCS_cnt_vect[k])
                         {
-                            bv_sim_found.set_bit_no_check(j);
-                            ++cnt; ++cnt_ext;
+                            float LCS_avg = float(LCS_sum_vect[k]) / float(LCS_cnt_vect[k]);
+                            cout << LCS_avg ;
                         }
+                        cout << endl;
                     }
                 }
-            } // for j
-            cout << "greedy-pick = " << cnt << " ext-extra= " << cnt-cnt_ext << endl;
+            } // for k
+            cout << endl;
+
+            E_LCS_BestSet best_subj_set =
+                find_best_subject_set(
+                    LCS_sum_vect[LCS_max_pos1], LCS_cnt_vect[LCS_max_pos1],
+                    LCS_sum_vect[LCS_bestsum_pos1], LCS_cnt_vect[LCS_bestsum_pos1],
+                    best_LCS_avg, LCS_cnt_vect[best_LCS_avg_pos]
+                    );
+
+            string best_str = get_subject_set_name(best_subj_set);
+            cout << "BEST set:" << best_str << endl;
+
+            // update global statistics
+            switch(best_subj_set)
+            {
+            case e_LCS:         ++LCS_cnt; break;
+            case e_LCS_maxsum:  ++LCS_max_sum_cnt; break;
+            case e_LCS_best_avg: ++LCS_best_avg_cnt; break;
+            default: ++LCS_none; break;
+            } // switch
+
+            // .. print globals
+            cout << "BEST CNTs\n"
+                 << " LCS= " << LCS_cnt << " BEST-SUM=" << LCS_max_sum_cnt
+                 << " BEST-AVG=" << LCS_best_avg_cnt << " NONE=" << LCS_none << endl;
+
+
+            // prepare a set of winning members
+            //
+            bvect best_mates(BM_GAP); // should be relatively small and sparse set
+            best_mates.init();
+
+            size_t query_pos = 0;
+            bool result_flag = true;
+            switch(best_subj_set)
+            {
+            case e_LCS:  query_pos =  LCS_max_pos1; break;
+            case e_LCS_maxsum:  query_pos = LCS_bestsum_pos1; break;
+            case e_LCS_best_avg: query_pos = best_LCS_avg_pos; break;
+            default:
+                result_flag = false;
+                break;
+            } // switch
+
+            if (result_flag)
+            {
+                pick_subject_mates(best_mates, row_results, query_pos, i+1);
+                auto cnt = best_mates.count();
+                cout << "Picked query mates cnt=" << cnt << endl;
+                //assert(cnt == LCS_cnt_vect[query_pos]);
+            }
+            else
+            {
+                // looks like we have unique string, no good rotation mates
+                // TODO: add it to the exceptions list or something
+            }
+
+            // add current found cluster to the list of already found strings
+            bv_sim_found.set_bit_no_check(i);
+            bv_sim_found |= best_mates;
+
         }
+
+
 
         {
             auto found_cnt = bv_sim_found.count();
-
             cout << "Found=" << found_cnt << " / " << seq_vect.size() << endl;
+
+            if (found_cnt >= seq_vect.size())
+                break; // method converged, early exit
         }
 
         // perf. metrics
@@ -39396,6 +40138,8 @@ void load_fastq()
 
             s = std::chrono::steady_clock::now();
         }
+
+
 
 
     } // for i
@@ -39421,10 +40165,10 @@ int main(int argc, char *argv[])
 //    test_fastq();
 //    return 0;
 
-/*
-    load_fastq();
-    return 0;
 
+//    load_fastq();
+//    return 0;
+/*
     {
     std::string str1 = "abcdef";
     std::string str2 = "12defg";
@@ -40050,9 +40794,13 @@ return 0;
 
     if (is_all || is_bvser || is_bvbasic)
     {
+/*
         SerializationCompressionLevelsTest();
          CheckAllocLeaks(false);
-
+*/
+        GAPSerializationTest0();
+         CheckAllocLeaks(false);
+//return 0;
         SparseSerializationTest();
          CheckAllocLeaks(false);
 
@@ -40210,7 +40958,7 @@ return 0;
 
         if (is_all || is_sv || is_sv0)
         {
-/*
+
             TestSparseVector();
              CheckAllocLeaks(false);
 
@@ -40228,7 +40976,7 @@ return 0;
 
             TestSparseVector_XOR_Scanner();
              CheckAllocLeaks(false);
-*/
+
             TestBasicBMatrixVectorSerial();
              CheckAllocLeaks(false);
 

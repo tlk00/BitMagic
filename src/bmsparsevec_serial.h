@@ -1307,7 +1307,7 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
             load_remap(sv, remap_buf_ptr_);
     } // if remap traits
 
-    sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+    sv.sync(true, true); // force sync, recalculate RS index, remap tables, etc
 
     remap_buf_ptr_ = 0;
 
@@ -1395,7 +1395,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
             load_remap(sv, remap_buf_ptr_);
     } // if remap traits
     
-    sv.sync(true); // force sync, recalculate RS index, remap tables, etc
+    sv.sync(true, true); // force sync, recalculate RS index, remap tables, etc
     remap_buf_ptr_ = 0;
 }
 

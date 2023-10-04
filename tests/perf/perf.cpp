@@ -3441,10 +3441,10 @@ void RSC_SparseVectorRandomAccesTest()
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::sync() (BIT)", REPEATS*10 );
         for (unsigned i = 0; i < REPEATS*10; ++i)
         {
-            sv1.sync(true);
+            sv1.sync(true, true);
         }
     }
-    sv1.sync(false);
+    sv1.sync(false, false);
 
     //bm::print_svector_stat(cout, sv2);
 
@@ -3551,7 +3551,7 @@ void RSC_SparseVectorRandomAccesTest()
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::sync() (GAP)", REPEATS*10 );
         for (unsigned i = 0; i < REPEATS*10; ++i)
         {
-            sv1.sync(true);
+            sv1.sync(true, true);
         }
     }
 
@@ -5845,6 +5845,8 @@ unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
 static
 void InterpolativeCodingTest()
 {
+    cout << "InterpolativeCodingTest() " << endl;
+
     unsigned char buf[1024 * 200] = { 0, };
 
     const unsigned code_repeats = 500000;
@@ -5853,44 +5855,49 @@ void InterpolativeCodingTest()
     vector<unsigned> sa; sa.resize(test_size);
     vector<unsigned> da; da.resize(test_size);
 
-    bm::word_t* src_arr = &sa[0];
-    bm::word_t* dst_arr = &da[0];
-    unsigned sz;
-    unsigned inc = (unsigned)rand() % (65536 * 256);
-    sz = generate_inter_test_linear(src_arr, inc, test_size);
-    assert(sz);
-    assert(src_arr[0]);
+    //for (unsigned pass = 0; pass < 1000; ++pass)
     {
-        bm::encoder enc(buf, sizeof(buf));
-        bm::bit_out<bm::encoder> bout(enc);
-
-        bout.bic_encode_u32_cm(src_arr, sz - 1, 0, src_arr[sz - 1]);
-        bout.flush();
-        auto ssz = enc.size();
-        assert(ssz < sizeof(buf));
-        (void)ssz;
-    }
-
-    {
-        bm::chrono_taker tt(cout, "bic_decode_u32_cm() ", 1);
-
-        for (unsigned k = 0; k < code_repeats; ++k)
+        bm::word_t* src_arr = &sa[0];
+        bm::word_t* dst_arr = &da[0];
+        unsigned sz;
+        unsigned inc = (unsigned)rand() % (65536 * 256);
+        sz = generate_inter_test_linear(src_arr, inc, test_size);
+        assert(sz);
+        assert(src_arr[0]);
         {
-            bm::decoder dec(buf);
-            bm::bit_in<bm::decoder> bin(dec);
+            bm::encoder enc(buf, sizeof(buf));
+            bm::bit_out<bm::encoder> bout(enc);
 
-            bin.bic_decode_u32_cm(&dst_arr[0], sz - 1, 0, src_arr[sz - 1]);
-            dst_arr[sz - 1] = src_arr[sz - 1];
-            for (unsigned i = 0; i < sz; ++i)
+            bout.bic_encode_u32_cm(src_arr, sz - 1, src_arr[0], src_arr[sz - 1]);
+            bout.flush();
+            auto ssz = enc.size();
+            assert(ssz < sizeof(buf));
+            (void)ssz;
+        }
+
+        {
+            bm::chrono_taker tt(cout, "bic_decode_u32_cm() ", 1);
+
+            for (unsigned k = 0; k < code_repeats; ++k)
             {
-                assert(src_arr[i] == dst_arr[i]);
-                if (i)
+                bm::decoder dec(buf);
+                bm::bit_in<bm::decoder> bin(dec);
+
+                bin.bic_decode_u32_cm(&dst_arr[0], sz - 1, src_arr[0], src_arr[sz - 1]);
+                dst_arr[sz - 1] = src_arr[sz - 1];
+                for (unsigned i = 0; i < sz; ++i)
                 {
-                    assert(src_arr[i - 1] < src_arr[i]);
+                    assert(src_arr[i] == dst_arr[i]);
+                    if (i)
+                    {
+                        assert(src_arr[i - 1] < src_arr[i]);
+                    }
                 }
-            }
-        } // for k
-    }
+            } // for k
+        }
+    } // for pass
+
+    cout << "InterpolativeCodingTest() OK" << endl;
 }
 
 inline
@@ -6103,8 +6110,53 @@ void AS_test2()
     return;
 }
 
+
+std::vector<std::string> t1(const std::string& str, char delim)
+{
+    (void)delim; (void)str;
+    std::vector<std::string> items;
+    items.reserve(10240);
+
+    for (int i = 0; i < 2000000; ++i) {
+        items.push_back("atgf1234567890");
+    }
+    return items;
+}
+
+void t2(const std::string& str, char delim, std::vector<std::string>& items)
+{
+    (void)delim;
+    (void)str;
+    for (int i = 0; i < 2000000; ++i) {
+        items.push_back("atgf1234567890");
+    }
+}
+
+
+
+void test_ro()
+{
+    {
+    bm::chrono_taker tt(cout, "DK T1 ", 1);
+    std::vector<std::string> items = t1("test", '\n');
+    cout << items.size() << endl;
+    }
+
+    {
+    bm::chrono_taker tt(cout, "DK T2 ", 1);
+    std::vector<std::string> items;
+    items.reserve(10240);
+    t2("test", '\n', items);
+    cout << items.size() << endl;
+    }
+}
+
+
 int main(void)
 {
+//test_ro();
+//return 0;
+
     cout << bm::_copyright<true>::_p << endl;
     cout << "SIMD code = " << bm::simd_version() << endl;
     #if defined (BM64OPT)

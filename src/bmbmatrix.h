@@ -377,7 +377,7 @@ public:
 
     /*! \brief syncronize internal structures, build fast access index
     */
-    void sync(bool /*force*/) { }
+    void sync(bool /*force*/, bool /* sync_size*/) BMNOEXCEPT { }
 
     ///@}
 

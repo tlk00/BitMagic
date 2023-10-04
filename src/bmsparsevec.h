@@ -900,7 +900,7 @@ public:
     
     /*! \brief syncronize internal structures, build fast access index
     */
-    void sync(bool /*force*/) { this->sync_ro(); }
+    void sync(bool /*force*/, bool /*sync_size*/) { this->sync_ro(); }
     
     
     /*!

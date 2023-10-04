@@ -15585,7 +15585,7 @@ void TestCompressSparseVector()
             csv1.push_back(8, 2);
             csv1.push_back(255, 4);
 
-            csv1.sync(true);
+            csv1.sync(true, true);
 
             for (unsigned k = 0; k < 2; ++k)
             {
@@ -16097,7 +16097,7 @@ void TestCompressSparseSignedVector()
 
 
             csv1.set_null(100);
-            csv1.sync(true);
+            csv1.sync(true, true);
 
             sz = csv1.decode(&arr[0], 100, 1);
             assert(sz == 0);
