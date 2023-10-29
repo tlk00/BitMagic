@@ -2226,66 +2226,520 @@ bm::id64_t sum_arr(const T* first, const T* last) BMNOEXCEPT
     return sum;
 }
 
+
 /*!
-    Extract short (len=1) exceptions from the GAP block
-    \param buf - GAP buffer to split
-    \param arr0 - [OUT] list of isolates 0 positions (clear list)
-    \param arr1 - [OUT] list of isolated 1 positions (set list)
-    \param arr0_cnt - [OUT] arr0 size
-    \param arr1_cnt -
-    @ingroup gapfunc
+   \brief calculate minimal delta between monotonic growing numbers
+   \param arr -array buffer pointer
+   \param arr_len - array length
+
+   @ingroup gapfunc
 */
 template<typename T>
-void gap_split(const T* buf,
-              T* arr0, T* arr1, T& arr0_cnt, T& arr1_cnt) BMNOEXCEPT
+void arr_calc_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
+{
+    min0 = 65535;
+    for (unsigned i = 1; i < arr_len; ++i)
+    {
+        BM_ASSERT(arr[i] > arr[i-1]);
+        T delta = arr[i] - arr[i-1];
+        if (delta < min0)
+        {
+            min0 = delta;
+            if (min0 < 2) //
+                break;
+        }
+    } // for i
+}
+
+
+/*!
+   \brief calculate minimal delta between monotonic growing numbers
+   \param arr -array buffer pointer
+   \param arr_len - array length
+
+   @ingroup gapfunc
+*/
+template<typename T>
+void arr_calc_min(const T* arr, unsigned arr_len,
+                  T& min0,
+                  unsigned* hist, unsigned hist_len) BMNOEXCEPT
+{
+    min0 = 65535; 
+    for (unsigned i = 1; i < arr_len; ++i)
+    {
+        BM_ASSERT(arr[i] > arr[i-1]);
+        T delta = arr[i] - arr[i-1];
+        if (delta < min0)
+            min0 = delta;
+        if (delta < hist_len)
+            hist[delta]++;
+    } // for i
+}
+
+
+/*!
+   \brief split array based on delta exceptions
+   @ingroup gapfunc
+*/
+template<typename T>
+void arr_delta1_split(T* arr_d1,  unsigned& d1_len,
+                      T* arr_dst, unsigned& dst_len,
+                      const T* arr, unsigned arr_len,
+                      unsigned ex_max_delta) BMNOEXCEPT
+{
+    BM_ASSERT(arr_d1 && arr_dst);
+
+    d1_len = dst_len = 0;
+    arr_dst[dst_len] = arr[dst_len];
+    dst_len++;
+
+    for (unsigned i = 1; i < arr_len; ++i)
+    {
+        BM_ASSERT(arr[i] > arr[i-1]);
+        T delta = arr[i] - arr[i-1];
+        if (delta <= ex_max_delta)
+            arr_d1[d1_len++] = arr[i];
+        else
+            arr_dst[dst_len++] = arr[i];
+    } // for i
+}
+
+/*!
+   \brief Recalculate array using two minimal delta for better BIC compression
+   @internal
+*/
+template<typename T>
+T arr_recalc_min(T* tarr, const T* arr, unsigned arr_len, T min0) BMNOEXCEPT
+{
+    tarr[0] = arr[0];
+    T delta_acc = 0;
+    for (unsigned i = 1; i < arr_len; ++i)
+    {
+        tarr[i] = arr[i] - min0 - delta_acc;
+        delta_acc += min0;
+    } // for i
+    return delta_acc;
+}
+
+/*!
+   \brief Restore array using two minimal delta for better BIC compression
+*/
+template<typename T>
+void arr_restore_min(T* arr, unsigned arr_len, T min0) BMNOEXCEPT
+{
+    T delta_acc = 0;
+    for (unsigned i = 1; i < arr_len; ++i)
+    {
+        arr[i] += min0 + delta_acc;
+        delta_acc += min0;
+    } // for i
+}
+
+/*!
+   \brief minimal delta sizes
+   \param buf - GAP buffer pointer.
+   @ingroup gapfunc
+*/
+
+template<typename T>
+void gap_calc_mins(const T* buf, T& min0, T& min1) BMNOEXCEPT
 {
     const T* pcurr = buf;
-    unsigned len = (*pcurr >> 3);
-    const T* pend = pcurr + len;
+    auto dsize = (*pcurr >> 3);
+    unsigned is_set = (*pcurr & 1u);
 
-    T cnt0, cnt1;
-    cnt0 = cnt1 = 0;
-    unsigned is_set = (*buf & 1);
+    const T* pend = pcurr + dsize;
 
-    if (*pcurr == 0)
+    min1 = 65535;
+    ++pcurr;
+    min0 = *pcurr;
+    is_set ^= 1u;
+    for (++pcurr; pcurr <= pend; pcurr++)
     {
-        if (is_set)
+        T delta = *pcurr - *(pcurr-1);
+        if (delta < min1)
+            min1 = delta;
+        ++pcurr; is_set ^= 1u;
+        if (pcurr <= pend)
         {
-            arr1[cnt1] = *pcurr;
-            ++cnt1;
+            delta = *pcurr - *(pcurr-1);
+            if (delta < min0)
+                min0 = delta;
+        }
+        is_set ^= 1u;
+    } // for
+
+    if (min0 == 65535)
+        min0 = 0;
+    if (min1 == 65535)
+        min1 = 0;
+}
+
+
+/*!
+   \brief compute histogram of exceptions on GAP block
+   \param buf - GAP buffer pointer.
+   @ingroup gapfunc
+*/
+template<typename T>
+void gap_calc_hist(const T*  buf, /*T& min0, T& min1,*/
+                   unsigned* hist0, unsigned* hist1, unsigned hist_len
+                  ) BMNOEXCEPT
+{
+    const T* pcurr = buf;
+    auto dsize = (*pcurr >> 3);
+    unsigned is_set = (*pcurr & 1u);
+
+    const T* pend = pcurr + dsize;
+
+    ++pcurr;
+    T delta = *pcurr+1;
+    if (delta < hist_len)
+        (is_set) ?
+            hist1[delta]++
+            : hist0[delta]++;
+    is_set ^= 1u;
+    for (++pcurr; pcurr <= pend; pcurr++, is_set ^= 1u)
+    {
+        delta = *pcurr - *(pcurr-1);
+        if (delta < hist_len)
+            (is_set) ?
+                hist1[delta]++
+                : hist0[delta]++;
+        ++pcurr; is_set ^= 1u;
+        if (pcurr <= pend)
+        {
+            delta = *pcurr - *(pcurr-1);
+            if (delta < hist_len)
+                (is_set) ?
+                    hist1[delta]++
+                    : hist0[delta]++;
+        }
+    } // for
+}
+
+template<typename T>
+unsigned gap_set_value(unsigned val,
+                       T* BMRESTRICT buf,
+                       unsigned pos) BMNOEXCEPT;
+
+template<class TOut>
+void _PrintGap(TOut& tout, const bm::gap_word_t* gap_buf, unsigned limit = 65536)
+{
+    unsigned len = (*gap_buf >> 3);
+    if (len > limit)
+        len = limit;
+    tout << "[" << *gap_buf << " len=" << (*gap_buf >> 3) << "] ";
+    unsigned is_set = (*gap_buf & 1u);
+    for (unsigned i = 0; i < len; ++i)
+    {
+        ++gap_buf;
+        tout << *gap_buf << (is_set ? "*" : "") << ", ";
+        is_set ^= 1;
+    }
+    tout << std::endl;
+}
+template<typename T>
+void _Print_arr(const T* arr, unsigned arr_len) BMNOEXCEPT
+{
+    if (!arr_len)
+        std::cout << "[empty]";
+    else
+        for (unsigned i = 0; i < arr_len; ++i)
+            std::cout << arr[i] << ", ";
+    std::cout << std::endl;
+}
+template<typename T>
+void _Print_arr_el(const T* arr, unsigned arr_len, int v) BMNOEXCEPT
+{
+    std::cout << arr_len << ":" << std::endl;
+    for (unsigned i = 0; i < arr_len; ++i)
+        if (arr[i] == v)
+            std::cout << arr[i] << ", ";
+    std::cout << std::endl;
+}
+
+/*!
+   \brief split GAP block into pure GAPs and exceptions
+   \param buf - GAP buffer pointer.
+      \return true if ex0 - slits first
+   @ingroup gapfunc
+*/
+template<typename T>
+bool gap_split(const T* buf,
+               unsigned h_limit, /*unsigned ex_limit,*/
+               const unsigned* hist0, const unsigned* hist1,
+               T* tbuf, T* ex0_arr, T* ex1_arr,
+               unsigned& ex0_cnt, unsigned& ex1_cnt) BMNOEXCEPT
+{
+    bool ex0_first = true;
+    ex0_cnt = ex1_cnt = 0;
+    unsigned dsize = (*buf >> 3);
+    ::memcpy(tbuf, buf, (1+dsize) * sizeof(T)); // copy GAP block
+
+
+    for (T i = 1; i < h_limit; ++i)
+    {
+        unsigned ex0_cnt_s {ex0_cnt}, ex1_cnt_s {ex1_cnt};
+
+        bool h0_flag{0}, h1_flag{0};
+        if (hist0[i] < hist1[i])
+        {
+            ex0_first = false;
+            goto h1_label;
+        }
+
+
+        // pass 0: (add 1's to zero exceptions)
+        //
+        h0_label:
+        if (hist0[i] == 0)
+            h0_flag = true; // nothing to do
+        if (!h0_flag)
+        {
+            const T* pcurr = tbuf+1;
+            dsize = (*tbuf >> 3);
+            const T* pend = pcurr + dsize;
+            unsigned is_set = (*tbuf & 1u);
+
+            T delta = *pcurr;
+            if (delta < i && !is_set) // target delta to exclude
+                for (unsigned j = 0; j <= *pcurr; ++j)
+                    ex0_arr[ex0_cnt++] = (T)j;
+            for (++pcurr, is_set ^= 1u; pcurr <= pend; ++pcurr,is_set ^= 1u)
+            {
+                delta = *pcurr - *(pcurr-1);
+                if (delta <= i && !is_set)
+                    for (unsigned j = *(pcurr-1)+1; j <= *pcurr; ++j)
+                        ex0_arr[ex0_cnt++] = (T)j;
+
+                ++pcurr; is_set ^= 1u;
+                if (pcurr <= pend)
+                {
+                    delta = *pcurr - *(pcurr-1);
+                    if (delta <= i && !is_set)
+                        for (unsigned j = *(pcurr-1)+1; j <= *pcurr; ++j)
+                            ex0_arr[ex0_cnt++] = (T)j;
+                }
+            } // for pcurr
+            auto new_len = dsize;
+            for (unsigned k = ex0_cnt_s; k < ex0_cnt; ++k)
+            {
+                new_len = bm::gap_set_value(true, tbuf, ex0_arr[k]);
+//    std::cout << "set:" << ex0_arr[k] << std::endl;
+//    _PrintGap(std::cout, tbuf, 10);
+            }
+//_PrintGap(std::cout, tbuf, 10);
+            BM_ASSERT(dsize >= new_len);
+            dsize = new_len;
+
+            if (/*ex0_cnt + ex1_cnt > ex_limit*/ new_len < 4)
+                break;
+            h0_flag = true;
+        }
+
+        // pass 1: (set 0's to 1 exceptions)
+        //
+        h1_label:
+        if (hist1[i] == 0)
+            h1_flag = true; // nothing to do
+        if (!h1_flag)
+        {
+            const T* pcurr = tbuf+1;
+            //unsigned dsize = (*tbuf >> 3);
+            const T* pend = pcurr + (*tbuf >> 3);
+            unsigned is_set = (*tbuf & 1u);
+
+            T delta = *pcurr;
+            if (delta < i && is_set) // target delta to exclude
+                for (unsigned j = 0; j <= *pcurr; ++j)
+                    ex1_arr[ex1_cnt++] = (T)j;
+            is_set ^= 1u;
+            for (++pcurr; pcurr <= pend; ++pcurr,is_set ^= 1u)
+            {
+                delta = *pcurr - *(pcurr-1);
+                if (delta <= i && is_set)
+                    for (unsigned j = *(pcurr-1)+1; j <= *pcurr; ++j)
+                        ex1_arr[ex1_cnt++] = (T)j;
+
+                ++pcurr; is_set ^= 1u;
+                if (pcurr <= pend)
+                {
+                    delta = *pcurr - *(pcurr-1);
+                    if (delta <= i && is_set)
+                        for (unsigned j = *(pcurr-1)+1; j <= *pcurr; ++j)
+                            ex1_arr[ex1_cnt++] = (T)j;
+                }
+            } // for pcurr
+            auto new_len = dsize;
+            for (unsigned k = ex1_cnt_s; k < ex1_cnt; ++k)
+            {
+                new_len = bm::gap_set_value(false, tbuf, ex1_arr[k]);
+            }
+//bm::_PrintGap(std::cout, tbuf);
+
+            BM_ASSERT(dsize >= new_len); (void) new_len;
+            dsize = new_len;
+
+            if (/*ex0_cnt + ex1_cnt > ex_limit*/ new_len < 4)
+                break;
+
+            h1_flag = true;
+            if (!h0_flag)
+                goto h0_label;
+        } // if h1_flag
+    } // for i
+    return ex0_first;
+}
+
+
+/*!
+    \brief claculate the effective exceptions limit using two histograms
+*/
+inline
+unsigned calc_hist_limit(const unsigned* hist0, const unsigned* hist1,
+                         unsigned hist_len,
+                         unsigned ex_limit, unsigned* ex_sum) BMNOEXCEPT
+{
+    BM_ASSERT(ex_limit);
+    *ex_sum = 0;
+    unsigned i = 0;
+    for (i = 0; (i < hist_len) && (*ex_sum < ex_limit); ++i)
+    {
+        *ex_sum += hist0[i] + hist1[i];
+    } // for i
+    return i;
+}
+
+/*!
+   \brief Recalculate GAP block using two minimal GAP lens
+   @param tbuf - target GAP buffer
+   @param buf - src GAP buffer
+   @ingroup gapfunc
+   @return total reduction in dynamic range
+   @sa gap_calc_mins
+*/
+template<typename T>
+T gap_recalc_mins(T* tbuf, const T* buf, T min0, T min1) BMNOEXCEPT
+{
+    const T* pcurr = buf;
+    auto dsize = (*pcurr >> 3);
+    const T* pend = pcurr + dsize;
+    BM_ASSERT(*pend == 65535);
+
+    T* tcurr = tbuf;
+    *tcurr = *pcurr; // copy head word
+
+    ++pcurr; ++tcurr;
+    T prev;
+    prev = *tcurr = (*pcurr - min0);
+    T delta_acc = min0;
+
+    ++pcurr; ++tcurr;
+    for (; pcurr <= pend; )
+    {
+        if (pcurr == pend)
+        {
+            BM_ASSERT(*pcurr == 65535);
+            *tcurr = *pcurr;
+            break;
+        }
+
+        BM_ASSERT(*pcurr < 65535);
+        BM_ASSERT((int(*pcurr) - min1- delta_acc) > prev);
+        prev = *tcurr = *pcurr - min1 - delta_acc;
+        delta_acc += min1;
+        ++pcurr; ++tcurr;
+        if (pcurr < pend)
+        {
+            BM_ASSERT(*pcurr < 65535);
+            BM_ASSERT((int(*pcurr) - min0 - delta_acc) > prev);
+            prev = *tcurr = *pcurr - min0 - delta_acc;
+            delta_acc += min0;
+            ++pcurr; ++tcurr;
         }
         else
         {
-            arr0[cnt0] = *pcurr;
-            ++cnt0;
+            BM_ASSERT(*pcurr == 65535);
+            *tcurr = *pcurr;
+            break;
         }
-    }
-    T prev = *pcurr;
-    ++pcurr;
-
-    while (pcurr <= pend)
-    {
-        is_set ^= 1;
-        T delta = *pcurr - prev;
-        if (delta == 1)
-        {
-            if (is_set)
-            {
-                arr1[cnt1] = prev;
-                ++cnt1;
-            }
-            else
-            {
-                arr0[cnt0] = prev;
-                ++cnt0;
-            }
-        }
-        prev = *pcurr++;
-    } // while
-
-    arr0_cnt = cnt0;
-    arr1_cnt = cnt1;
+    } // for
+    return delta_acc;
 }
+
+/*!
+   \brief Restore GAP block using two minimal GAP lens
+   @param buf - src GAP buffer
+   @ingroup gapfunc
+   @sa gap_calc_mins
+*/
+template<typename T>
+void gap_restore_mins(T* buf, T min0, T min1) BMNOEXCEPT
+{
+    T* pcurr = buf;
+    auto dsize = (*pcurr >> 3);
+    const T* pend = pcurr + dsize;
+    BM_ASSERT(*pend == 65535);
+
+    ++pcurr;
+    T prev;
+    prev = *pcurr = (*pcurr + min0);
+    T delta_acc = min0;
+
+    for (++pcurr; pcurr <= pend; )
+    {
+        if (pcurr == pend)
+        {
+            BM_ASSERT(*pcurr == 65535);
+            break;
+        }
+
+        BM_ASSERT(*pcurr < 65535);
+        BM_ASSERT((int(*pcurr) + min1 + delta_acc) > prev);
+        prev = *pcurr = *pcurr + min1 + delta_acc;
+        delta_acc += min1;
+        ++pcurr;
+        if (pcurr < pend)
+        {
+            BM_ASSERT(*pcurr < 65535);
+            BM_ASSERT((int(*pcurr) + min0 + delta_acc) > prev);
+            prev = *pcurr = *pcurr + min0 + delta_acc;
+            delta_acc += min0;
+            ++pcurr;
+        }
+        else
+        {
+            BM_ASSERT(*pcurr == 65535);
+            break;
+        }
+    } // for
+}
+
+
+/*!
+   \brief Validates GAP block
+   \param buf - GAP buffer pointer.
+   @ingroup gapfunc
+*/
+template<typename T>
+void gap_validate(const T* buf, unsigned dsize=0) BMNOEXCEPT
+{
+    const T* pcurr = buf;
+    if (dsize == 0)
+        dsize = (*pcurr >> 3);
+    const T* pend = pcurr + dsize;
+    BM_ASSERT(*pend == 65535);
+
+    T prev = buf[1];
+    pcurr = &buf[2];
+    for (; pcurr <= pend; pcurr++)
+    {
+        BM_ASSERT(prev < *pcurr);
+    }
+    BM_ASSERT(*(pcurr-1) == 65535);
+}
+
 
 
 /*!
@@ -3349,12 +3803,10 @@ unsigned gap_set_value(unsigned val,
 
 /*!
    \brief Add new value to the end of GAP buffer.
-
    \param buf - GAP buffer.
    \param pos - Index of bit to set.
 
-   \return New GAP buffer length. 
-
+   \return New GAP buffer length.
    @ingroup gapfunc
 */
 template<typename T> 
@@ -10234,6 +10686,49 @@ bm::bit_representation best_representation(unsigned gc,
         return e_bit_bit;
     return e_bit_IINT;
 }
+
+// --------------------------------------------------------------
+// sort related utils
+// --------------------------------------------------------------
+
+
+/// swap function for simple types
+/// @internal
+///
+template<typename T>
+void simple_swap(T* a, T* b) BMNOEXCEPT
+{
+    T temp = *a; *a = *b; *b = temp;
+}
+/**
+    @brief simple recursive quick-sort for short integer arrays
+    @internal
+ */
+template<typename T>
+void quick_sort2(T* arr, int first, int last) BMNOEXCEPT
+{
+    int i, j, pivot;
+    while (first < last)
+    {
+        pivot = i = first;
+        j = last;
+
+        while (i < j)
+        {
+            while((i < last) && (arr[i] <= arr[pivot]))
+                ++i;
+            while(arr[j] > arr[pivot])
+                --j;
+
+            if (i < j)
+                bm::simple_swap(&arr[i], &arr[j]);
+        } // while
+        bm::simple_swap(&arr[pivot], &arr[j]);
+        bm::quick_sort2(arr, first, j-1);
+        first = j+1; // tail recursion
+    } // while
+}
+
 
 // --------------------------------------------------------------
 // Nibble array functions

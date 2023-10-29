@@ -34,8 +34,20 @@ For more information please visit:  http://bitmagic.io
 #include "bmbuffer.h"
 #include "bmdef.h"
 
+
 namespace bm
 {
+
+template<class BV, typename TOut>
+void _print_bv(TOut& tout, const BV& bv)
+{
+    tout << bv.count() << ": ";
+    typename BV::enumerator en = bv.first();
+    for (; en.valid(); ++en)
+        tout << *en << ", ";
+    tout << std::endl;
+}
+
 
 /** \defgroup svserial Sparse vector serialization
     Sparse vector serialization
@@ -940,6 +952,9 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 
     bmatr.build_plane_digest(plane_digest_bv_);
     plane_digest_bv_.optimize();
+
+//bm::_print_bv(std::cout, plane_digest_bv_);
+
     bvs_.set_ref_vectors(0); // disable possible XOR compression for offs.bv
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
 
@@ -1003,6 +1018,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     for (unsigned i = 0; i < planes; ++i)
     {
         typename SV::bvector_type_const_ptr bv = bmatr.row(i);
+
         if (!bv)  // empty plane
         {
             sv_layout.set_plane(i, 0, 0);
@@ -1075,6 +1091,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             enc_o.put_8('6');
             // save the offset table as a list of 64-bit values
             //
+//std::cout << "Plane OFFS:" << std::endl;
             for (unsigned i = 0; i < planes; ++i)
             {
                 const unsigned char* p = sv_layout.get_plane(i);
@@ -1082,8 +1099,18 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                 {
                     size_t offset = size_t(p - buf);
                     enc_o.put_64(offset);
+//std::cout << offset << ", ";
                 }
             } // for
+/*
+std::cout << "Plane OFFS:" << std::endl;
+for (unsigned k = 0; k < plane_off_vect_.size(); ++k)
+{
+    std::cout << plane_off_vect_.data()[k] << ", ";
+}
+*/
+//std::cout << std::endl;
+
         }
         else  // searialize 32-bit offset table using BIC
         {
@@ -1095,10 +1122,21 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             enc_o.put_32(min_v);
             enc_o.put_32(max_v);
 
+            {
             bm::bit_out<bm::encoder> bo(enc_o);
             bo.bic_encode_u32_cm(plane_off_vect_.data()+1,
                                  unsigned(plane_off_vect_.size()-2),
                                  min_v, max_v);
+            bo.flush();
+            }
+/*
+std::cout << "Plane OFFS:" << std::endl;
+for (unsigned k = 0; k < plane_off_vect_.size(); ++k)
+{
+    std::cout << plane_off_vect_.data()[k] << ", ";
+}
+std::cout << std::endl;
+*/
         }
         buf_ptr += enc_o.size();
     }

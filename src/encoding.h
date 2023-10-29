@@ -69,6 +69,7 @@ public:
     void put_prefixed_array_16(unsigned char c, 
                                const bm::short_t* s, unsigned count,
                                bool encode_count) BMNOEXCEPT;
+    void put_short_array_16(const bm::short_t* s, unsigned count) BMNOEXCEPT;
     void memcpy(const unsigned char* src, size_t count) BMNOEXCEPT;
     size_t size() const BMNOEXCEPT;
     unsigned char* get_pos() const BMNOEXCEPT;
@@ -226,8 +227,23 @@ public:
     void bic_encode_u32_cm(const bm::word_t* arr, unsigned sz,
                            bm::word_t lo, bm::word_t hi) BMNOEXCEPT;
 
+
+    /// Selective array serialization
+    ///
+    void encode_array(const bm::gap_word_t* arr, bm::gap_word_t* recalc_arr,
+                      unsigned sz,
+                      bool one_flag,
+                      bool EOC_flag
+                      ) BMNOEXCEPT;
+
     /// Flush the incomplete 32-bit accumulator word
     void flush() BMNOEXCEPT { if (used_bits_) flush_accum(); }
+
+    void flush_if_full() BMNOEXCEPT
+    {
+        if (used_bits_ == 32)
+            flush_accum();
+    }
 
 private:
     void flush_accum() BMNOEXCEPT
@@ -321,6 +337,12 @@ public:
     /// Binary Interpolative array decode into /dev/null
     void bic_decode_u16_cm_dry(unsigned sz,
                                bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT;
+
+    /// Selective array decode
+    /// @return bit-flag of decoding parameters
+    ///
+    unsigned decode_array(bm::gap_word_t* arr, unsigned* sz) BMNOEXCEPT;
+
 
 private:
     bit_in(const bit_in&);
@@ -425,6 +447,16 @@ inline void encoder::put_prefixed_array_16(unsigned char c,
     put_16(s, count);
 }
 
+/*!
+    \brief Encode array of shorts less than 256 in length
+*/
+inline void encoder::put_short_array_16(const bm::short_t* s,
+                                        unsigned count) BMNOEXCEPT
+{
+    BM_ASSERT(count < 256);
+    put_8((unsigned char)count);
+    put_16(s, count);
+}
 
 /*!
    \fn void encoder::put_8(unsigned char c) 
@@ -1107,7 +1139,11 @@ void bit_out<TEncoder>::put_bits(unsigned value, unsigned count) BMNOEXCEPT
 {
     unsigned used = used_bits_;
     unsigned acc = accum_;
-
+    if (used == (sizeof(accum_) * 8))
+    {
+        dest_.put_32(acc);
+        used = acc = 0;
+    }
     {
         unsigned mask = ~0u;
         mask >>= (sizeof(accum_) * 8) - count;
@@ -1132,11 +1168,6 @@ void bit_out<TEncoder>::put_bits(unsigned value, unsigned count) BMNOEXCEPT
             acc = used = 0;
             continue;
         }
-    }
-    if (used == (sizeof(accum_) * 8))
-    {
-        dest_.put_32(acc);
-        acc = used = 0;
     }
     used_bits_ = used;
     accum_ = acc;
@@ -1249,6 +1280,11 @@ void bit_out<TEncoder>::gamma(unsigned value) BMNOEXCEPT
         }
     } // for
 
+    if (used ==  32)
+    {
+        dest_.put_32(acc);
+        acc = used ^= used;
+    }
     used_bits_ = used;
     accum_ = acc;
 }
@@ -1458,6 +1494,104 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
     } // for sz
 }
 
+// ----------------------------------------------------------------------
+
+
+// Array encoding(masks and bit-packed values)
+//
+// encoding types:
+// 00 - plain array
+// 01 - BIC with DR (0..65535)
+// 10 - delta-gamma code
+// 11 - single value
+const unsigned char h3f_ex_upper2 = 1 | (1 << 1); // lower two bits mask for codec
+
+// length types
+// 00 - 8 bit < 256
+// 01 - 8 bit < 511
+// 10 - 16-bit value
+// 11 - reserved (gamma length)
+
+//
+const unsigned char h3f_ex_arr_1 = (1 << 4); /// array of 1s (otherwise 0s)
+const unsigned char h3f_ex_arr_min0_0 = (1 << 5); /// min0 is zero somehow
+const unsigned char h3f_ex_arr_ex_EOC = (1 << 6); /// End-of-Chain
+const unsigned char h3f_ex_minmax_v = (1 << 7); /// min-max range used to encode
+
+
+template<typename TEncoder>
+void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
+                                     bm::gap_word_t* recalc_arr,
+                                     unsigned sz,
+                                     bool one_flag, bool EOC_flag) BMNOEXCEPT
+{
+    BM_ASSERT(sz && (sz < 65536));
+    BM_ASSERT(arr);
+
+    unsigned char h3_flag = 0;
+    if (one_flag)
+        h3_flag |= bm::h3f_ex_arr_1;
+    if (EOC_flag)
+        h3_flag |= bm::h3f_ex_arr_ex_EOC;
+
+    if (sz == 1) // single value encoding
+    {
+        h3_flag |= bm::h3f_ex_upper2; // same flag as single value
+        if (arr[0] == 0)
+        {
+            h3_flag |= (1 << 3); // 1000
+            this->put_bits(h3_flag, 8);
+            return;
+        }
+        this->put_bits(h3_flag, 8);
+        this->gamma(arr[0]);
+        return;
+    } // single value encoding
+
+    // calculate DR compression parameter
+    //
+    bm::gap_word_t min0;
+    bm::arr_calc_min(arr, sz, min0);
+    if (min0 < 65535)
+    {
+        BM_ASSERT(min0 > 0);
+    }
+    else
+        min0 = 0;
+    if (min0)
+    {
+        --min0;
+    }
+    auto delta_acc = bm::arr_recalc_min(recalc_arr, arr, sz, min0);
+    (void) delta_acc; // ignore
+    if (!min0)
+        h3_flag |= bm::h3f_ex_arr_min0_0;
+    h3_flag |= 1; // BIC-DR
+    bm::gap_word_t min_v = recalc_arr[0];
+    bm::gap_word_t max_v = recalc_arr[sz-1];
+    if (sz > 128 && min_v)
+        h3_flag |= h3f_ex_minmax_v;
+
+    this->put_bits(h3_flag, 8);
+    this->gamma(sz);
+    if (min0)
+        this->gamma(min0);
+    if (h3_flag & h3f_ex_minmax_v)
+    {
+        this->gamma(min_v);
+        unsigned tail = 65536 - max_v;
+        this->gamma(tail);
+
+        recalc_arr = &recalc_arr[1];
+        sz-=2;
+    }
+    else
+    {
+        min_v = 0; max_v = 65535; // BIC dflt range [0..65535]
+    }
+    this->flush_if_full();
+    this->bic_encode_u16(recalc_arr, sz, min_v, max_v);
+}
 
 
 
@@ -1928,6 +2062,47 @@ unsigned bit_in<TDecoder>::get_bit() BMNOEXCEPT
         accum_ = (a >> 1);
     }
     return value;
+}
+
+// ----------------------------------------------------------------------
+
+template<class TDecoder>
+unsigned bit_in<TDecoder>::decode_array(bm::gap_word_t* arr,
+                                        unsigned* sz) BMNOEXCEPT
+{
+    unsigned h3_flag = this->get_bits(8);
+    if ((h3_flag & bm::h3f_ex_upper2) == bm::h3f_ex_upper2) // single value
+    {
+        *sz = 1;
+        arr[0] = (h3_flag & (1 << 3)) ? // 1000
+            0 :
+            (bm::gap_word_t)this->gamma();
+    }
+    else
+    {
+        *sz = this->gamma();
+        bm::gap_word_t min0 = 
+                (h3_flag & bm::h3f_ex_arr_min0_0) ?
+                0 :
+                (bm::gap_word_t)this->gamma();
+
+        if (h3_flag & h3f_ex_minmax_v)
+        {
+            bm::gap_word_t min_v = (bm::gap_word_t)this->gamma();
+            unsigned tail = this->gamma();
+            bm::gap_word_t max_v = bm::gap_word_t(65536u - tail);
+            arr[0] = min_v;
+            arr[*sz-1] = max_v;
+            this->bic_decode_u16(&arr[1], *sz-2, min_v, max_v);
+        }
+        else
+        {
+            this->bic_decode_u16(arr, *sz, 0, 65535);
+        }
+        if (min0)
+            bm::arr_restore_min(arr, *sz, min0);
+    }
+    return h3_flag;
 }
 
 // ----------------------------------------------------------------------

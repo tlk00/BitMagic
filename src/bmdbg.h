@@ -1109,6 +1109,17 @@ size_t getCurrentRSS( )
 #endif
 
 
+template<class BV, typename TOut>
+void print_bv(TOut& tout, const BV& bv)
+{
+    tout << bv.count() << ": ";
+    typename BV::enumerator en = bv.first();
+    for (; en.valid(); ++en)
+        tout << *en << ", ";
+    tout << std::endl;
+}
+
+
 } // namespace
 
 
