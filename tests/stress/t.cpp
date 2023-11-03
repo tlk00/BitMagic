@@ -22,7 +22,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMAVX2OPT
 //#define BM_USE_EXPLICIT_TEMP
 //#define BM_USE_GCC_BUILD
-
+//#define BMNEONOPT
 
 //#define BM_CAPTURE_DIR "/Users/anatoliykuznetsov/bmcapture/"
 
