@@ -23,6 +23,9 @@ For more information please visit:  http://bitmagic.io
 //#define BM_USE_EXPLICIT_TEMP
 //#define BM_USE_GCC_BUILD
 
+
+//#define BM_CAPTURE_DIR "/Users/anatoliykuznetsov/bmcapture/"
+
 #define BMXORCOMP
 #define BM_NONSTANDARD_EXTENTIONS
 
@@ -11175,7 +11178,19 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         }
        
         FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt, method);
+#ifdef BM_CAPTURE_DIR
+        {
+            string fname(BM_CAPTURE_DIR); fname.append("full1.bv");
+            SaveBVector(fname.c_str(), *bvect_full1, true);
+        }
+#endif
         FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt, method);
+#ifdef BM_CAPTURE_DIR
+        {
+            string fname(BM_CAPTURE_DIR); fname.append("full2.bv");
+            SaveBVector(fname.c_str(), *bvect_full2, true);
+        }
+#endif
 
         unsigned arr[bm::set_total_blocks]={0,};
         bm::id_t cnt = bvect_full1->count();
@@ -11626,7 +11641,12 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         cout << "Deserialization...";
 
         bm::deserialize(*bvect_full3, new_sermem_buf.buf());
-
+#ifdef BM_CAPTURE_DIR
+        {
+            string fname(BM_CAPTURE_DIR); fname.append("total.bv");
+            SaveBVector(fname.c_str(), bvtotal, true);
+        }
+#endif
         bm::deserialize(bvtotal, new_sermem_buf.buf());
         operation_deserializer<bvect> od;
         {
@@ -13193,7 +13213,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_egamma] == 1);
+        assert(cstat[bm::set_block_arrgap_egamma] == 1 || cstat[bm::set_block_gap_egamma] == 1);
        
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -13217,13 +13237,14 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(5); // binary interpolated coding
         bv_ser.set_bookmarks(true);
+        bv_ser.set_bic_dynamic_range_reduce(false);
 
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_bienc_v2] == 1 );
+        assert(cstat[bm::set_block_gap_bienc] == 1 );
 
         {
         bvect bv2;
@@ -13287,6 +13308,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(5); // binary interplated coding
         bv_ser.set_bookmarks(true);
+        bv_ser.set_bic_dynamic_range_reduce(false);
 
         bm::serializer<bvect>::buffer sermem_buf;
 
@@ -13294,7 +13316,7 @@ void SerializationCompressionLevelsTest()
 
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_bienc_inv_v2] == 1);
+        assert(cstat[bm::set_block_gap_bienc] == 1);
 
 
         {
@@ -13358,13 +13380,14 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bv_ser(tb);
         bv_ser.set_compression_level(4); // use elias gamma
         bv_ser.set_bookmarks(true);
+        bv_ser.set_bic_dynamic_range_reduce(false);
 
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_egamma_inv] == 1);
+        assert(cstat[bm::set_block_gap_egamma] == 1);
        
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -14137,6 +14160,7 @@ void SerializationCompressionLevelsTest()
             bm::serializer<bvect> bv_ser;
             bv_ser.set_compression_level(5); // interpolated binary
             bv_ser.set_bookmarks(true);
+            bv_ser.set_bic_dynamic_range_reduce(false);
 
 
             bm::serializer<bvect>::buffer sermem_buf;
@@ -14209,6 +14233,7 @@ void SerializationCompressionLevelsTest()
             bm::serializer<bvect> bv_ser;
             bv_ser.set_compression_level(5); // interpolated binary
             bv_ser.set_bookmarks(true);
+            bv_ser.set_bic_dynamic_range_reduce(false);
 
 
             bm::serializer<bvect>::buffer sermem_buf;
@@ -14286,6 +14311,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect> bv_ser;
         bv_ser.set_compression_level(5);
         bv_ser.set_bookmarks(true);
+        bv_ser.set_bic_dynamic_range_reduce(false);
 
         bm::serializer<bvect>::buffer sermem_buf;
 
@@ -18108,11 +18134,11 @@ void BitCountChangeTest()
 
         if (a0 != a1)
         {
-            cout << hex
+            cout << std::hex
                 << "Bit count change test failed!"
                 << " i = " << i << " return = "
                 << a0 << " check = " << a1
-                << endl;
+                << std::dec << endl;
             exit(1);
         }
     }
@@ -20704,7 +20730,7 @@ void TestHasZeroByte()
         {
             auto v = ~0ULL ^ (0xFFUL << i);
             cout << i << endl;
-            cout << hex << v << endl;
+            cout << std::hex << v << std::dec << endl;
             b = bm::has_zero_byte_u64(v);
             assert(b || v == ~0ULL);
         }
@@ -31859,7 +31885,7 @@ void StressTestStrSparseVector()
     cout << "Memory optimization" << endl;
     str_sv.optimize();
     str_sv_remap.optimize();
-/*
+
     cout << "ok. \n Verification..." << endl;
 
     CompareStrSparseVector(str_sv, str_coll);
@@ -31873,7 +31899,7 @@ void StressTestStrSparseVector()
     cout << "ok. \n Verification of remap vector..." << endl;
     
     CompareStrSparseVector(str_sv_remap, str_coll_sorted);
-*/
+
 
 
     // serialization check
@@ -31892,7 +31918,7 @@ void StressTestStrSparseVector()
             cerr << "De-Serialization error" << endl;
             exit(1);
         }
-//        CompareStrSparseVector(str_sv2, str_coll);
+        CompareStrSparseVector(str_sv2, str_coll);
         bool equal = str_sv.equal(str_sv2);
         assert(equal);
    }
@@ -31912,14 +31938,14 @@ void StressTestStrSparseVector()
             cerr << "De-Serialization error" << endl;
             exit(1);
         }
-//        CompareStrSparseVector(str_sv2, str_coll_sorted);
+        CompareStrSparseVector(str_sv2, str_coll_sorted);
         bool equal = str_sv_remap.equal(str_sv2);
         assert(equal);
    }
    cout << "Validate serialization of REMAP str-sparse vector...OK" << endl;
 
    // ----------------------------------------------
-/*
+
    cout << "Test common prefix..." << endl;
     {
     const unsigned str_size = 64;
@@ -31972,7 +31998,7 @@ void StressTestStrSparseVector()
     
     }
    cout << "\nTest common prefix...ok." << endl;
-*/
+
 
    // ----------------------------------------------
 
@@ -32181,13 +32207,13 @@ void StressTestStrSparseVector()
 
    cout << "\nErase str collection..." << endl;
    EraseStrCollection(str_sv_sorted);
-   cout << "\nErase str collection...OK" << endl;
+   cout << "Erase str collection...OK" << endl;
 
    cout << "\nErase remap str collection..." << endl;
    EraseStrCollection(str_sv_remap);
-   cout << "\nErase remap str collection...OK" << endl;
+   cout << "Erase remap str collection...OK" << endl;
 
-   cout << "---------------------------- Bit-plane STR sparse vector stress test OK" << endl;
+   cout << "\n---------------------------- Bit-plane STR sparse vector stress test OK" << endl;
    cout << endl;
 }
 
@@ -41167,10 +41193,10 @@ return 0;
 
     if (is_all || is_bvser || is_bvbasic)
     {
-/*
+
         SerializationCompressionLevelsTest();
          CheckAllocLeaks(false);
-*/
+
         GAPSerializationTest0();
          CheckAllocLeaks(false);
 //return 0;
@@ -41270,6 +41296,7 @@ return 0;
 
     if (is_all || is_bvops)
     {
+
         AndOperationsTest(true); // enable detailed check
          CheckAllocLeaks(false);
 
@@ -41440,7 +41467,7 @@ return 0;
     
     if (is_all || is_str_sv)
     {
-/*
+
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
@@ -41464,7 +41491,7 @@ return 0;
 
          TestStrSparseQuickSort();
          CheckAllocLeaks(false);
-*/
+
          StressTestStrSparseVector();
          CheckAllocLeaks(false);
     }
