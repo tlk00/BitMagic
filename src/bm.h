@@ -7308,7 +7308,8 @@ void bvector<Alloc>::combine_operation_block_or(
             res = bm::gap_operation_or(gap_blk, BMGAP_PTR(arg_blk),
                                        tmp_buf, res_len);
             BM_ASSERT(res == tmp_buf);
-            blockman_.assign_gap_check(i, j, res, ++res_len, blk, tmp_buf);
+            BM_ASSERT(res[res_len]==65535);
+            blockman_.assign_gap_check(i, j, res, res_len, blk, tmp_buf);
             return;
         }
         // GAP or BIT
@@ -7413,7 +7414,8 @@ void bvector<Alloc>::combine_operation_block_xor(
                                          tmp_buf,
                                          res_len);
             BM_ASSERT(res == tmp_buf);
-            blockman_.assign_gap_check(i, j, res, ++res_len, blk, tmp_buf);
+            BM_ASSERT(res[res_len]==65535);
+            blockman_.assign_gap_check(i, j, res, res_len, blk, tmp_buf);
             return;
         }
         // GAP or BIT
@@ -7488,7 +7490,9 @@ void bvector<Alloc>::combine_operation_block_and(
                                         tmp_buf,
                                         res_len);
             BM_ASSERT(res == tmp_buf);
-            blockman_.assign_gap_check(i, j, res, ++res_len, blk, tmp_buf);
+            BM_ASSERT(res[res_len]==65535);
+//            blockman_.assign_gap_check(i, j, res, ++res_len, blk, tmp_buf);
+            blockman_.assign_gap_check(i, j, res, res_len, blk, tmp_buf);
             return;
         }
         // GAP & BIT
@@ -7597,8 +7601,8 @@ void bvector<Alloc>::combine_operation_block_sub(
 
             BM_ASSERT(res == tmp_buf);
             BM_ASSERT(!(res == tmp_buf && res_len == 0));
-            
-            blockman_.assign_gap_check(i, j, res, ++res_len, blk, tmp_buf);
+            BM_ASSERT(res[res_len]==65535);
+            blockman_.assign_gap_check(i, j, res, res_len, blk, tmp_buf);
             return;
         }
         // else: argument is BITSET-type (own block is GAP)
@@ -7687,13 +7691,14 @@ bvector<Alloc>::combine_operation_with_block(block_idx_type    nb,
             }
             BM_ASSERT(res == tmp_buf);
             BM_ASSERT(!(res == tmp_buf && res_len == 0));
+            BM_ASSERT(tmp_buf[res_len]==65535);
 
             // if as a result of the operation gap block turned to zero
             // we can now replace it with NULL
             if (bm::gap_is_all_zero(res))
                 blockman_.zero_block(nb);
             else
-                blockman_.assign_gap(nb, res, ++res_len,  blk, tmp_buf);
+                blockman_.assign_gap(nb, res, res_len,  blk, tmp_buf);
             return;
         }
         else // argument is BITSET-type (own block is GAP)

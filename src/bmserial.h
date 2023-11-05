@@ -1636,6 +1636,11 @@ _Print_arr(ex0_arr, ex0_cnt);
                         bout.encode_array(&ex0_arr[0], &ex0_arr[0], ex0_cnt, false, true);
                 }
                 bout.flush();
+#ifdef BM_DBG_SERIAL
+                auto cnt = bm::gap_bit_count(gap_block);
+                enc.put_8((unsigned char)0xFF);
+                enc.put_16(bm::gap_word_t(cnt));
+#endif
                 compression_stat_[bm::set_block_gap_bienc_v3]++;
 
                 return true;
@@ -1716,6 +1721,11 @@ encode_GAP:
             }
             else
             {
+#ifdef BM_DBG_SERIAL
+                auto cnt = bm::gap_bit_count(gap_block);
+                enc.put_8((unsigned char)0xFF);
+                enc.put_16(bm::gap_word_t(cnt));
+#endif
                 compression_stat_[bm::set_block_gap_bienc_v3]++;
             }
             return true;
@@ -4165,20 +4175,34 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
                         bm::gap_set_value(restore_v, dst_block, ex0_arr[k]);
                     BM_ASSERT(h3f & bm::h3f_ex_arr_ex_EOC);
                 }
-                break;
             } // exceptions
-
-            // no-exeptions decode
+            else
             {
-                bit_in_type bin(decoder);
-                bin.bic_decode_u16(&dst_block[2], len-3, min_v+1, max_v-1);
-                dst_block[len-1] = max_v;
-                dst_block[len] = bm::gap_max_bits - 1;
+                // no-exeptions decode
+                {
+                    bit_in_type bin(decoder);
+                    bin.bic_decode_u16(&dst_block[2], len-3, min_v+1, max_v-1);
+                    dst_block[len-1] = max_v;
+                    dst_block[len] = bm::gap_max_bits - 1;
+                }
+                // recalculate/restore GAPs to add mins
+                if (min0 || min1)
+                    bm::gap_restore_mins(dst_block, min0, min1);
             }
 
-            // recalculate/restore GAPs to add mins
-            if (min0 || min1)
-                bm::gap_restore_mins(dst_block, min0, min1);
+#ifdef BM_DBG_SERIAL
+            unsigned char control = decoder.get_8();
+            BM_ASSERT(control == 0xFF);
+            unsigned cnt_saved = decoder.get_16();
+
+            auto cnt = bm::gap_bit_count(dst_block);
+            BM_ASSERT(cnt == cnt_saved);
+            if(cnt != cnt_saved)
+            {
+                std::cerr << "SERIALIZATION INTEGRITY!" << std::endl;
+                exit(1);
+            }
+#endif
         }
         break;
 

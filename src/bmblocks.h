@@ -972,7 +972,11 @@ public:
             if (bm::gap_is_all_zero(res))
                 zero_gap_block_ptr(i, j);
             else
-                assign_gap(i, j, res, ++res_len, blk, tmp_buf);
+            {
+//                assign_gap(i, j, res, ++res_len, blk, tmp_buf);
+                BM_ASSERT(res[res_len] == 65535);
+                assign_gap(i, j, res, res_len, blk, tmp_buf);
+            }
         }
     }
 
@@ -988,13 +992,14 @@ public:
         int level = bm::gap_level(BMGAP_PTR(blk));
         BM_ASSERT(level >= 0);
         unsigned threshold = unsigned(this->glen(unsigned(level)) - 4u);
-        int new_level = bm::gap_calc_level(res_len, this->glen());
+        int new_level = bm::gap_calc_level(res_len+1, this->glen());
         if (new_level < 0)
         {
-            convert_gap2bitset(i, j, res);
+            BM_ASSERT(res[res_len] == 65535);
+            convert_gap2bitset(i, j, res, res_len);
             return;
         }
-        if (res_len > threshold) // GAP block needs next level up extension
+        if (res_len >= threshold) // GAP block needs next level up extension
         {
             BM_ASSERT(new_level >= 0);
             gap_word_t* new_blk = allocate_gap_block(unsigned(new_level), res);
@@ -1016,7 +1021,9 @@ public:
         // we copy it back to the gap_block (target size/level - fits)
         BM_ASSERT(blk);
         bm::set_gap_level(tmp_buf, level);
-        ::memcpy(BMGAP_PTR(blk), tmp_buf, res_len * sizeof(gap_word_t));
+        bm::gap_word_t* tblk = BMGAP_PTR(blk);
+        ::memcpy(tblk, tmp_buf, (res_len+1) * sizeof(gap_word_t));
+        BM_ASSERT(tblk[res_len] == 65535);
     }
     
     
@@ -1543,6 +1550,10 @@ public:
         BM_ASSERT(IS_VALID_ADDR((bm::word_t*)gap_block));
 
         bm::word_t* new_block = alloc_.alloc_bit_block();
+        if (!len)
+            len = bm::gap_length(gap_block)-1;
+
+        BM_ASSERT(gap_block[len] == 65535);
         bm::gap_convert_to_bitset(new_block, gap_block, len);
         
         top_blocks_[i][j] = new_block;
