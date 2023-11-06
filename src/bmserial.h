@@ -538,7 +538,7 @@ protected:
     
     /// Read binary interpolated list into a bit-set
     void read_bic_arr(decoder_type&   decoder, 
-                      bm::word_t* blk, unsigned block_type) BMNOEXCEPT;
+                      bm::word_t* blk, unsigned block_type);
 
 	/// Read list of bit ids for super-blocks
 	///
@@ -2896,7 +2896,9 @@ serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
         enc.set_pos(enc_pos0); // rollback the bit stream
         return false;
     }
-
+#ifdef BM_DBG_SERIAL
+    enc.put_8((unsigned char)0xFF); // add control magic number
+#endif
     compression_stat_[scode]++;
     return true;
 }
@@ -3742,7 +3744,7 @@ template<typename DEC, typename BLOCK_IDX>
 void
 deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
                                                bm::word_t*   blk,
-                                               unsigned block_type) BMNOEXCEPT
+                                               unsigned block_type)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     bm::gap_word_t min_v, max_v, max_delta, arr_len;
@@ -3768,17 +3770,47 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
             unsigned h3f = bin.decode_array(&ex0_arr[0], &ex0_cnt); (void) h3f;
             BM_ASSERT(h3f & bm::h3f_ex_arr_ex_EOC);
             BM_ASSERT(h3f & bm::h3f_ex_arr_1);
+            #ifdef BM_DBG_SERIAL
+                unsigned char control = dec.get_8();
+                if (control != 0xFF)
+                {
+                std::cerr << "SERIALIZATION INTEGRITY 2!" << std::endl;
+                #ifndef BM_NO_STL
+                    throw std::logic_error(err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+                }
+                BM_ASSERT(control == 0xFF);
+            #endif
+
             goto set_bits;
         }
         //return;
     case bm::set_block_arr_bienc_inv_v3:
         {
             {
+            unsigned h3f;
+            {
             bit_in_type bin(dec);
             // TODO: add proper _dry() function
-            unsigned h3f = bin.decode_array(&ex0_arr[0], &ex0_cnt); (void) h3f;
+            h3f = bin.decode_array(&ex0_arr[0], &ex0_cnt); (void) h3f;
             BM_ASSERT(h3f & bm::h3f_ex_arr_ex_EOC);
             BM_ASSERT(!(h3f & bm::h3f_ex_arr_1));
+            }
+            #ifdef BM_DBG_SERIAL
+                unsigned char control = dec.get_8();
+                if (control != 0xFF)
+                {
+                std::cerr << "SERIALIZATION INTEGRITY 3!" << std::endl;
+                #ifndef BM_NO_STL
+                    throw std::logic_error(err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+                }
+                BM_ASSERT(control == 0xFF);
+            #endif
             }
             set_bits:
             if (IS_VALID_ADDR(blk))
@@ -4192,6 +4224,15 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
 
 #ifdef BM_DBG_SERIAL
             unsigned char control = decoder.get_8();
+            if (control != 0xFF)
+            {
+                std::cerr << "SERIALIZATION INTEGRITY!" << std::endl;
+                #ifndef BM_NO_STL
+                    throw std::logic_error(err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            }
             BM_ASSERT(control == 0xFF);
             unsigned cnt_saved = decoder.get_16();
 
@@ -4200,6 +4241,11 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
             if(cnt != cnt_saved)
             {
                 std::cerr << "SERIALIZATION INTEGRITY!" << std::endl;
+                #ifndef BM_NO_STL
+                    throw std::logic_error(err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
                 exit(1);
             }
 #endif
