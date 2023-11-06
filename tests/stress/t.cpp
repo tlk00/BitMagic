@@ -25,6 +25,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMNEONOPT
 
 //#define BM_CAPTURE_DIR "/Users/anatoliykuznetsov/bmcapture/"
+#define BM_DBG_SERIAL
 
 #define BMXORCOMP
 #define BM_NONSTANDARD_EXTENTIONS
@@ -1192,7 +1193,10 @@ unsigned SerializationOperation(bvect*             bv_target,
             // 2-way
             {
                 bvect bvc(bv1, bm::finalization::READWRITE);
+//print_bv(cout, bvc);
+//print_bv(cout, bv2);
                 bvc &= bv2;
+//print_bv(cout, bvc);
 
                 bvect bv_ro1(bv1, bm::finalization::READONLY);
                 bvect bv_ro2(bv2, bm::finalization::READONLY);
