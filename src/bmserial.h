@@ -1525,7 +1525,7 @@ bool serializer<BV>::interpolated_encode_gap_block_v3(
 
         unsigned ex0_cnt, ex1_cnt;
         bool ex0_first =
-        bm::gap_split(gap_block, len, 2/*h_limit*/, /*ex_limit_eff,*/ &hist0[0], &hist1[0],
+        bm::gap_split(gap_block, len, 2/*h_limit*/, &hist0[0], &hist1[0],
                gap_recalc_block, ex0_arr, ex1_arr, ex0_cnt, ex1_cnt);
         if (!ex0_cnt && !ex1_cnt)
             goto encode_GAP;
@@ -1537,7 +1537,7 @@ _Print_arr(ex0_arr, ex0_cnt);
 */
         bm::gap_word_t min0, min1;
         bm::gap_calc_mins(gap_recalc_block, min0, min1);
-        if ( (min0 > 1 || min1 > 1))
+//        if ( (min0 > 1 || min1 > 1))
         {
             if (min0) --min0; // not to collapse minimal gaps completely
             if (min1) --min1;
