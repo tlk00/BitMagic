@@ -25,7 +25,7 @@ For more information please visit:  http://bitmagic.io
 //#define BMNEONOPT
 
 //#define BM_CAPTURE_DIR "/Users/anatoliykuznetsov/bmcapture/"
-#define BM_DBG_SERIAL
+//#define BM_DBG_SERIAL
 
 #define BMXORCOMP
 #define BM_NONSTANDARD_EXTENTIONS
@@ -11100,7 +11100,7 @@ void TestAND_OR(bm::random_subset<bvect>& rsub,
 
 static
 void StressTest(unsigned repetitions, int set_operation, bool detailed,
-                int method = -1)
+                int method = -1, const bvect* bv1=0, const bvect* bv2 = 0)
 {
 
    unsigned RatioSum = 0;
@@ -11119,6 +11119,8 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
    cout << "----------------------------StressTest" << endl;
 
    unsigned size = BITVECT_SIZE - 10;
+
+
 //size = BITVECT_SIZE / 10;
    unsigned i;
    for (i = 0; i < repetitions; ++i)
@@ -11148,6 +11150,20 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
             break;
         } // switch
 
+       if (bv1)
+       {
+          unsigned last;
+          if (bv1->find_reverse(last))
+            if (size < last+1)
+                size = last+1;
+       }
+       if (bv2)
+       {
+          unsigned last;
+          if (bv2->find_reverse(last))
+            if (size < last+1)
+                size = last+1;
+       }
 
         bvect_mini*   bvect_min1= new bvect_mini(size);
         bvect_mini*   bvect_min2= new bvect_mini(size);
@@ -11180,21 +11196,47 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         default:
             break;
         }
-       
-        FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt, method);
-#ifdef BM_CAPTURE_DIR
-        {
-            string fname(BM_CAPTURE_DIR); fname.append("full1.bv");
-            SaveBVector(fname.c_str(), *bvect_full1, true);
+
+       if (bv1)
+       {
+            bvect::enumerator en = bv1->first();
+            for (;en.valid(); ++en)
+            {
+                auto v = *en;
+                bvect_min1->set_bit(v);
+            }
+            *bvect_full1 = *bv1;
+       }
+       else
+       {
+            FillSetsRandomMethod(bvect_min1, bvect_full1, start1, size, opt, method);
+            #ifdef BM_CAPTURE_DIR
+            {
+                string fname(BM_CAPTURE_DIR); fname.append("full1.bv");
+                SaveBVector(fname.c_str(), *bvect_full1, true);
+            }
+            #endif
         }
-#endif
-        FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt, method);
-#ifdef BM_CAPTURE_DIR
+        if (bv2)
         {
-            string fname(BM_CAPTURE_DIR); fname.append("full2.bv");
-            SaveBVector(fname.c_str(), *bvect_full2, true);
+            bvect::enumerator en = bv2->first();
+            for (;en.valid(); ++en)
+            {
+                auto v = *en;
+                bvect_min2->set_bit(v);
+            }
+            *bvect_full2 = *bv2;
         }
-#endif
+        else
+        {
+            FillSetsRandomMethod(bvect_min2, bvect_full2, start2, size, opt, method);
+            #ifdef BM_CAPTURE_DIR
+            {
+                string fname(BM_CAPTURE_DIR); fname.append("full2.bv");
+                SaveBVector(fname.c_str(), *bvect_full2, true);
+            }
+            #endif
+        }
 
         unsigned arr[bm::set_total_blocks]={0,};
         bm::id_t cnt = bvect_full1->count();
@@ -11465,7 +11507,6 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
             }
             break;
         }
-
 
 
         cout << "Operation comparison" << endl;
@@ -15169,8 +15210,9 @@ void SerializationTest()
     bvect_full1.calc_stat(&st);
 
     unsigned char* sermem = new unsigned char[st.max_serialize_mem];
-    print_stat(cout,bvect_full1);
-    
+    //print_stat(cout,bvect_full1);
+
+//bvect_full1.keep_range(65536, 65536*2);
     size_t slen = bm::serialize(bvect_full1, sermem);
 
     cout << "Serialized len = " << slen << endl;
@@ -40550,6 +40592,45 @@ return;
 #endif
 
 
+#ifdef BM_CAPTURE_DIR
+void TestCapture()
+{
+    bvect bv_full1, bv_full2,  bv_total;
+    {
+    string fname(BM_CAPTURE_DIR); fname.append("full1.bv");
+    LoadBVector(fname.c_str(), bv_full1);
+    }
+    {
+    string fname(BM_CAPTURE_DIR); fname.append("full2.bv");
+    LoadBVector(fname.c_str(), bv_full2);
+    }
+    {
+    string fname(BM_CAPTURE_DIR); fname.append("total.bv");
+    LoadBVector(fname.c_str(), bv_total);
+    }
+   size_t drange_size{0}, no_drange_size{0};
+/*
+   Check_V3DR_Serializations(bv_full1, drange_size, no_drange_size, 0, 0);
+   bv_full1.optimize();
+   Check_V3DR_Serializations(bv_full1, drange_size, no_drange_size, 0, 0);
+   bv_full1.optimize();
+
+   Check_V3DR_Serializations(bv_full2, drange_size, no_drange_size, 0, 0);
+   bv_full2.optimize();
+   Check_V3DR_Serializations(bv_full2, drange_size, no_drange_size, 0, 0);
+   bv_full2.optimize();
+
+   Check_V3DR_Serializations(bv_total, drange_size, no_drange_size, 0, 0);
+   bv_total.optimize();
+   Check_V3DR_Serializations(bv_total, drange_size, no_drange_size, 0, 0);
+   bv_total.optimize();
+*/
+    StressTest(50, 5, false, -1, &bv_full1, &bv_full2);
+
+}
+#endif
+
+
 #define BM_EXPAND(x)  x ## 1
 #define EXPAND(x)     BM_EXPAND(x)
 
@@ -40964,6 +41045,9 @@ return 0;
     return 0;
 }
 */
+
+//    TestCapture();
+//    return 0;
 
     if (is_all || is_low_level)
     {
