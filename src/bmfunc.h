@@ -2382,12 +2382,13 @@ void gap_calc_mins(const T* buf, T& min0, T& min1) BMNOEXCEPT
    @ingroup gapfunc
 */
 template<typename T>
-void gap_calc_hist(const T*  buf, /*T& min0, T& min1,*/
+void gap_calc_hist(const T*  buf, unsigned len, /*T& min0, T& min1,*/
                    unsigned* hist0, unsigned* hist1, unsigned hist_len
                   ) BMNOEXCEPT
 {
     const T* pcurr = buf;
-    auto dsize = (*pcurr >> 3);
+    auto dsize = len; // (*pcurr >> 3);
+    BM_ASSERT(buf[len] == 65535);
     unsigned is_set = (*pcurr & 1u);
 
     const T* pend = pcurr + dsize;
@@ -2466,7 +2467,7 @@ void _Print_arr_el(const T* arr, unsigned arr_len, int v) BMNOEXCEPT
    @ingroup gapfunc
 */
 template<typename T>
-bool gap_split(const T* buf,
+bool gap_split(const T* buf, unsigned len,
                unsigned h_limit, /*unsigned ex_limit,*/
                const unsigned* hist0, const unsigned* hist1,
                T* tbuf, T* ex0_arr, T* ex1_arr,
@@ -2474,7 +2475,8 @@ bool gap_split(const T* buf,
 {
     bool ex0_first = true;
     ex0_cnt = ex1_cnt = 0;
-    unsigned dsize = (*buf >> 3);
+    unsigned dsize = len; // (*buf >> 3);
+    BM_ASSERT(buf[len] == 65535);
     ::memcpy(tbuf, buf, (1+dsize) * sizeof(T)); // copy GAP block
 
 
@@ -3739,7 +3741,7 @@ unsigned gap_set_value(unsigned val,
     BM_ASSERT(pos < bm::gap_max_bits);
     unsigned is_set;
     unsigned curr = bm::gap_bfind(buf, pos, &is_set);
-    T end = (T)(*buf >> 3);
+    T end = (T) (*buf >> 3);
     if (is_set == val)
         return end;
 
