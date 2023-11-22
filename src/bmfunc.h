@@ -2235,7 +2235,7 @@ bm::id64_t sum_arr(const T* first, const T* last) BMNOEXCEPT
    @ingroup gapfunc
 */
 template<typename T>
-void arr_calc_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
+void arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
 {
     min0 = 65535;
     for (unsigned i = 1; i < arr_len; ++i)
@@ -2260,7 +2260,7 @@ void arr_calc_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
    @ingroup gapfunc
 */
 template<typename T>
-void arr_calc_min(const T* arr, unsigned arr_len,
+void arr_calc_delta_min(const T* arr, unsigned arr_len,
                   T& min0,
                   unsigned* hist, unsigned hist_len) BMNOEXCEPT
 {
@@ -4219,6 +4219,9 @@ unsigned test_bit(const unsigned* block, unsigned  bitpos) BMNOEXCEPT
 inline
 void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
 {
+    BM_ASSERT(bitcount);
+    const unsigned maskFF = ~0u;
+
     dest += unsigned(bitpos >> bm::set_word_shift); // nword
     bitpos &= bm::set_word_mask;
 
@@ -4227,9 +4230,7 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
         *dest |= (1u << bitpos);
         return;
     }
-
-     const unsigned maskFF = ~0u;
-   if (bitpos) // starting pos is not aligned
+    if (bitpos) // starting pos is not aligned
     {
         unsigned mask_r = maskFF << bitpos;
         if (unsigned right_margin = bitpos + bitcount; right_margin < 32)
@@ -4243,13 +4244,9 @@ void or_bit_block(unsigned* dest, unsigned bitpos, unsigned bitcount) BMNOEXCEPT
     for ( ;bitcount >= 64; bitcount-=64, dest+=2)
         dest[0] = dest[1] = maskFF;
     if (bitcount >= 32)
-    {
-        *dest++ = maskFF; bitcount -= 32;
-    }
+        { *dest++ = maskFF; bitcount -= 32; }
     if (bitcount)
-    {
-        *dest |= maskFF >> (32 - bitcount);
-    }
+        *dest |= (maskFF >> (32 - bitcount));
 }
 
 
@@ -9516,10 +9513,10 @@ bm::set_representation best_representation(unsigned bit_count,
 */
 template<typename T>
 unsigned bit_block_convert_to_arr(T* BMRESTRICT dest,
-    const unsigned* BMRESTRICT src,
-    bool inverted) BMNOEXCEPT
+                                  const unsigned* BMRESTRICT src,
+                                  bool inverted) BMNOEXCEPT
 {
-    bm::id64_t imask64 = inverted ? ~0ull : 0;
+    const bm::id64_t imask64 = inverted ? ~0ull : 0;
     T* BMRESTRICT pcurr = dest;
     for (unsigned bit_idx = 0; bit_idx < bm::gap_max_bits;
         src+=2, bit_idx += unsigned(sizeof(*src) * 8 * 2))
@@ -9528,14 +9525,106 @@ unsigned bit_block_convert_to_arr(T* BMRESTRICT dest,
             (bm::id64_t(src[0]) | (bm::id64_t(src[1]) << 32u)) ^ imask64;
         while (w)
         {
-            bm::id64_t t = bmi_blsi_u64(w); // w & -w;
+            bm::id64_t t = bm::bmi_blsi_u64(w); // w & -w;
             *pcurr++ = (T)(bm::word_bitcount64(t - 1) + bit_idx);
-            w = bmi_bslr_u64(w); // w &= w - 1;
+            w = bm::bmi_bslr_u64(w); // w &= w - 1;
         }
     } // for
     return (unsigned)(pcurr - dest);
 }
 
+
+/*!
+    @brief Convert bit block into two arrays of ints( corresponding to 1 bits)
+    @param dst_s - [out] array of single bit indexes, not part of any runs
+    @param dst_r - [out] run start indexes
+    @param rlen - [out] run lengths (corresponding to dst_r)
+    @param s_cnt - [out] - target size/count of dst_s
+    @param r_cnt - [out] - target count of runs
+    @param src - bit-block to split
+    @param inverted - flag to invert block on the fly
+    @ingroup bitfunc
+*/
+template<typename T>
+void bit_block_rle_split(T* BMRESTRICT dst_s,
+                         T* BMRESTRICT dst_r,
+                         T* BMRESTRICT rlen,
+                         unsigned& s_cnt,
+                         unsigned& r_cnt,
+                         const unsigned* BMRESTRICT src,
+                         bool inverted) BMNOEXCEPT
+{
+    const bm::id64_t imask64 = inverted ? ~0ull : 0;
+    T* BMRESTRICT pcurr_s = dst_s;
+    T* BMRESTRICT pcurr_r = dst_r;
+    T* BMRESTRICT pcurr_rl = rlen;
+    int prev{-2};
+    T rl{0};
+
+    for (unsigned bit_idx = 0; bit_idx < bm::gap_max_bits;
+        src+=2, bit_idx += unsigned(sizeof(*src) * 8 * 2))
+    {
+        bm::id64_t w =
+            (bm::id64_t(src[0]) | (bm::id64_t(src[1]) << 32u)) ^ imask64;
+        while (w)
+        {
+            bm::id64_t t = bm::bmi_blsi_u64(w); // w & -w;
+            int idx = int(bm::word_bitcount64(t - 1) + bit_idx);
+            if (idx != prev+1) // out of run
+            {
+                if (rl) // previous run exists, saving it...
+                {
+                    *pcurr_r++ = T(prev - rl);
+                    *pcurr_rl++ = rl;
+                    rl = 0;
+                }
+                *pcurr_s++ = T(idx);
+            }
+            else // in-run
+            {
+                if (!rl && (pcurr_s != dst_s)) // second element in the run
+                    --pcurr_s; // take back the non-single value
+                ++rl;
+            }
+            prev = idx;
+            w = bm::bmi_bslr_u64(w); // w &= w - 1;
+        } // while
+    } // for
+
+    if (rl) // flush the last run
+    {
+        *pcurr_r++ = T(prev - rl);
+        *pcurr_rl++ = rl;
+    }
+
+    s_cnt = (unsigned)(pcurr_s - dst_s);
+    r_cnt = (unsigned)(pcurr_r - dst_r);
+}
+
+/**
+    @brief Set bits using rle split scheme (reverse of bit_block_rle_split)
+    @sa bit_block_rle_split
+    @ingroup bitfunc
+ */
+template<typename T>
+void bit_block_rle_set(unsigned* BMRESTRICT blk,
+                       const T* BMRESTRICT s,
+                       const T* BMRESTRICT r,
+                       const T* BMRESTRICT rlen,
+                       unsigned s_cnt,
+                       unsigned r_cnt) BMNOEXCEPT
+{
+    for (unsigned i = 0; i < s_cnt; ++i)
+    {
+        unsigned nword = unsigned(s[i] >> bm::set_word_shift); // nword
+        unsigned bitpos = s[i] & bm::set_word_mask;
+        blk[nword] |= (1u << bitpos);
+    } // for i
+    for (unsigned i = 0; i < r_cnt; ++i)
+    {
+        bm::or_bit_block(blk, r[i], rlen[i]+1);
+    } // for i
+}
 
 /**
     \brief Checks all conditions and returns true if block consists of only 0 bits

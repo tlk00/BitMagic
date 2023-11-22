@@ -329,7 +329,8 @@ protected:
                             bm::encoder& enc, bool inverted);
 
     bool interpolated_arr_bit_block_v3(bm::encoder& enc,
-                                       unsigned arr_len, bool inverted);
+                                       const bm::word_t* block,
+                                       bool inverted);
 
     /// encode bit-block as interpolated gap block
     void interpolated_gap_bit_block(const bm::word_t* block,
@@ -581,6 +582,7 @@ protected:
     unsigned             skip_offset_=0; ///< bookmark to skip 256 encoded blocks
     const unsigned char* skip_pos_=0;    ///< decoder skip position
     bm::word_t*          ex0_arr_=0;     ///< array for exceptions
+    bm::word_t*          ex1_arr_=0;     ///< array for exceptions
 };
 
 /**
@@ -1255,6 +1257,11 @@ serializer<BV>::serializer(const allocator_type&   alloc,
     compression_stat_ = (size_type*) alloc_.alloc_bit_block();
     optimize_ = free_ = false;
     xor_tmp1_ = xor_tmp2_ = 0;
+
+    gap_recalc_tmp_block_ = alloc_.alloc_bit_block(6);
+    // TODO: merge two extra allocs with gap_recalc_tmp_block_
+    gap_ex0_tmp_block_ = alloc_.alloc_bit_block(4);
+    gap_ex1_tmp_block_ = alloc_.alloc_bit_block(4);
 }
 
 template<class BV>
@@ -1287,6 +1294,11 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
     compression_stat_ = (size_type*) alloc_.alloc_bit_block();
     optimize_ = free_ = false;
     xor_tmp1_ = xor_tmp2_ = 0;
+
+    gap_recalc_tmp_block_ = alloc_.alloc_bit_block(6);
+    // TODO: merge two extra allocs with gap_recalc_tmp_block_
+    gap_ex0_tmp_block_ = alloc_.alloc_bit_block(4);
+    gap_ex1_tmp_block_ = alloc_.alloc_bit_block(4);
 }
 
 template<class BV>
@@ -1299,12 +1311,12 @@ serializer<BV>::~serializer()
     if (xor_tmp_block_)
         alloc_.free_bit_block(xor_tmp_block_, 3);
     if (gap_recalc_tmp_block_)
-        alloc_.free_bit_block(gap_recalc_tmp_block_, 3);
+        alloc_.free_bit_block(gap_recalc_tmp_block_, 6);
     // TODO: remove extra blocks, merge with gap_recalc_tmp_block_
     if (gap_ex0_tmp_block_)
-        alloc_.free_bit_block(gap_ex0_tmp_block_);
+        alloc_.free_bit_block(gap_ex0_tmp_block_, 4);
     if (gap_ex1_tmp_block_)
-        alloc_.free_bit_block(gap_ex1_tmp_block_);
+        alloc_.free_bit_block(gap_ex1_tmp_block_, 4);
 }
 
 
@@ -1510,15 +1522,6 @@ bool serializer<BV>::interpolated_encode_gap_block_v3(
 
     if (ex_sum) // there are GAP exeptions
     {
-        // TODO: double check if we need to split...
-
-        if (!gap_recalc_tmp_block_) // init on demand
-            gap_recalc_tmp_block_ = alloc_.alloc_bit_block(3);
-        // TODO: merge two extra allocs with gap_recalc_tmp_block_
-        if (!gap_ex0_tmp_block_) // init on demand
-            gap_ex0_tmp_block_ = alloc_.alloc_bit_block();
-        if (!gap_ex1_tmp_block_) // init on demand
-            gap_ex1_tmp_block_ = alloc_.alloc_bit_block();
         gap_word_t* gap_recalc_block = (gap_word_t*) gap_recalc_tmp_block_;
         gap_word_t* ex0_arr = (gap_word_t*) gap_ex0_tmp_block_;
         gap_word_t* ex1_arr = (gap_word_t*) gap_ex1_tmp_block_;
@@ -1657,8 +1660,10 @@ encode_GAP:
 
     if ( (min0 > 1 || min1 > 1))
     {
+    /*
         if (!gap_recalc_tmp_block_) // init on demand
             gap_recalc_tmp_block_ = alloc_.alloc_bit_block(3);
+    */
         bm::gap_word_t* gap_recalc_block = (bm::gap_word_t*) gap_recalc_tmp_block_;
         if (min0) --min0; // not to collapse minimal gaps completely
         if (min1) --min1;
@@ -2885,14 +2890,27 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
 template<class BV>
 bool
 serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
-                                              unsigned arr_len,
+                                              const bm::word_t* block,
                                               bool inverted)
 {
-    BM_ASSERT(arr_len);
+    BM_ASSERT(bic_drange_);
+    bm::gap_word_t* arr_s = (bm::gap_word_t*) gap_recalc_tmp_block_;
+    bm::gap_word_t* arr_r = (bm::gap_word_t*) gap_ex0_tmp_block_;
+    bm::gap_word_t* arr_rl = (bm::gap_word_t*) gap_ex1_tmp_block_;
 
-    if (!bic_drange_)
-        return false;
+    unsigned s_cnt, r_cnt;
+    bm::bit_block_rle_split(arr_s, arr_r, arr_rl, s_cnt, r_cnt, block, inverted);
+    BM_ASSERT(s_cnt + r_cnt);
+/*
+BM_DECLARE_TEMP_BLOCK(tb2)
+bm::bit_block_rle_set(tb2, arr_s, arr_r, arr_rl, s_cnt, r_cnt);
+unsigned block_pos;
+bool found = bm::block_find_first_diff(block, tb2, &block_pos);
+BM_ASSERT(!found);
 
+std::cout << "RL:\n";
+_Print_arr(arr_rl, r_cnt);
+*/
     unsigned char scode =
         inverted ? bm::set_block_arr_bienc_inv_v3 : bm::set_block_arr_bienc_v3;
     encoder::position_type enc_pos0 = enc.get_pos();
@@ -2900,8 +2918,13 @@ serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
     enc.put_8(scode);
     {
         bit_out_type bout(enc);
-        bout.encode_array(bit_idx_arr_.data(), bit_idx_arr_.data(),
-                          arr_len, !inverted, true);
+        bool no_gap_EOC = (r_cnt == 0);
+        bout.encode_array(arr_s, arr_s, s_cnt, !inverted, no_gap_EOC);
+        if (r_cnt)
+        {
+            bout.encode_array(arr_r, arr_r, r_cnt, !inverted, false);
+            bout.encode_array(arr_rl, arr_rl, r_cnt, !inverted, true, true); // gamma
+        }
         bout.flush();
     }
 
@@ -2911,7 +2934,7 @@ serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
     if (enc_size >= raw_size)
     {
         enc.set_pos(enc_pos0); // rollback the bit stream
-        return false;
+        return false; // TODO:
     }
 #ifdef BM_DBG_SERIAL
     enc.put_8((unsigned char)0xFF); // add control magic number
@@ -2927,14 +2950,18 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
                                            bm::encoder&      enc,
                                            bool              inverted)
 {
-    unsigned arr_len = bm::bit_block_convert_to_arr(
-                            bit_idx_arr_.data(), block, inverted);
-
-    if (arr_len)
+    if (bic_drange_)
     {
-        bool r = interpolated_arr_bit_block_v3(enc, arr_len, inverted);
+        bool r = interpolated_arr_bit_block_v3(enc, block, inverted);
         if (r)
             return;
+    }
+
+    unsigned arr_len = bm::bit_block_convert_to_arr(
+                            bit_idx_arr_.data(), block, inverted);
+    if (arr_len)
+    {
+
 
         unsigned char scode =
             inverted ? bm::set_block_arr_bienc_inv : bm::set_block_arr_bienc;
@@ -3765,8 +3792,6 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     bm::gap_word_t min_v, max_v, max_delta, arr_len;
-    bm::gap_word_t* ex0_arr = (bm::gap_word_t*) this->ex0_arr_;
-    unsigned ex0_cnt;
 
     switch (block_type)
     {
@@ -3781,12 +3806,37 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
         max_v = bm::gap_word_t(65536 - max_delta);
         break;
     case bm::set_block_arr_bienc_v3:
+    case bm::set_block_arr_bienc_inv_v3:
         {
+            bm::gap_word_t* arr_s = (bm::gap_word_t*) ex0_arr_;
+            unsigned s_cnt, r_cnt;
+
             bit_in_type bin(dec);
             // TODO: add proper _dry() function
-            unsigned h3f = bin.decode_array(&ex0_arr[0], &ex0_cnt); (void) h3f;
-            BM_ASSERT(h3f & bm::h3f_ex_arr_ex_EOC);
-            BM_ASSERT(h3f & bm::h3f_ex_arr_1);
+
+            unsigned h3f = bin.decode_array(arr_s, &s_cnt);
+            if (IS_VALID_ADDR(blk))
+                bm::bit_block_rle_set(blk, arr_s,
+                        (bm::gap_word_t*)0, (bm::gap_word_t*)0, s_cnt, 0u);
+            if (bool no_gap_EOC = !(h3f & bm::h3f_ex_arr_ex_EOC); no_gap_EOC)
+            {
+                bm::gap_word_t* arr_r = (bm::gap_word_t*) ex0_arr_;
+                bm::gap_word_t* arr_rl = (bm::gap_word_t*) ex1_arr_;
+                h3f = bin.decode_array(arr_r, &r_cnt);
+                h3f = bin.decode_array(arr_rl, &s_cnt);
+                BM_ASSERT(r_cnt == s_cnt);
+                if (IS_VALID_ADDR(blk))
+                    bm::bit_block_rle_set(blk, (bm::gap_word_t*)0, arr_r, arr_rl, 0, r_cnt);
+            }
+/*
+std::cout << "D-RL:\n";
+_Print_arr(arr_rl, r_cnt);
+*/
+
+
+//            BM_ASSERT(h3f & bm::h3f_ex_arr_ex_EOC);
+//            BM_ASSERT(h3f & bm::h3f_ex_arr_1);
+
             #ifdef BM_DBG_SERIAL
                 unsigned char control = dec.get_8();
                 if (control != 0xFF)
@@ -3801,11 +3851,13 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
                 BM_ASSERT(control == 0xFF);
             #endif
 
-            goto set_bits;
+            //goto set_bits;
         }
-        //return;
+        return;
+/*
     case bm::set_block_arr_bienc_inv_v3:
         {
+            BM_ASSERT(0);
             {
             unsigned h3f;
             {
@@ -3841,6 +3893,7 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
             }
         }
         return;
+*/
     default:
         BM_ASSERT(0);
         return;
@@ -4370,6 +4423,7 @@ deserializer<BV, DEC>::deserializer()
 {
     temp_block_ = alloc_.alloc_bit_block();
     this->ex0_arr_ = alloc_.alloc_bit_block(8);
+    this->ex1_arr_ = alloc_.alloc_bit_block(4);
 
     bit_idx_arr_.resize(bm::gap_max_bits);
     this->id_array_ = bit_idx_arr_.data();
@@ -4390,6 +4444,8 @@ deserializer<BV, DEC>::~deserializer()
         alloc_.free_bit_block(xor_block_, 2);
     if (this->ex0_arr_)
         alloc_.free_bit_block(this->ex0_arr_, 8);
+    if (this->ex1_arr_)
+        alloc_.free_bit_block(this->ex1_arr_, 4);
     BM_ASSERT(!or_block_);
 }
 
@@ -5471,7 +5527,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned ch
     }
     this->ex0_arr_ =
         (bm::word_t*)::malloc(sizeof(bm::word_t) * bm::set_block_size * 8);
-    if (!this->ex0_arr_)
+    this->ex1_arr_ =
+        (bm::word_t*)::malloc(sizeof(bm::word_t) * bm::set_block_size * 4);
+    if (!this->ex0_arr_ || !this->ex1_arr_)
     {
         #ifndef BM_NO_STL
             throw std::bad_alloc();
@@ -5490,6 +5548,8 @@ serial_stream_iterator<DEC, BLOCK_IDX>::~serial_stream_iterator()
         ::free(block_idx_arr_);
     if (this->ex0_arr_)
         ::free(this->ex0_arr_);
+    if (this->ex1_arr_)
+        ::free(this->ex1_arr_);
 }
 
 
