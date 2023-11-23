@@ -4423,7 +4423,7 @@ deserializer<BV, DEC>::deserializer()
 {
     temp_block_ = alloc_.alloc_bit_block();
     this->ex0_arr_ = alloc_.alloc_bit_block(8);
-    this->ex1_arr_ = alloc_.alloc_bit_block(4);
+    this->ex1_arr_ = alloc_.alloc_bit_block(8);
 
     bit_idx_arr_.resize(bm::gap_max_bits);
     this->id_array_ = bit_idx_arr_.data();
@@ -4445,7 +4445,7 @@ deserializer<BV, DEC>::~deserializer()
     if (this->ex0_arr_)
         alloc_.free_bit_block(this->ex0_arr_, 8);
     if (this->ex1_arr_)
-        alloc_.free_bit_block(this->ex1_arr_, 4);
+        alloc_.free_bit_block(this->ex1_arr_, 8);
     BM_ASSERT(!or_block_);
 }
 

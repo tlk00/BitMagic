@@ -4037,9 +4037,13 @@ void bvector<Alloc>::calc_stat(
         st->max_serialize_mem += full_null_size;
         
     } // if blk_root
-    
-    size_t safe_inc = st->max_serialize_mem / 10; // 10% increment
-    if (!safe_inc) safe_inc = 256;
+
+    // add safety buffer for one full bit-block for "speculative" compression
+    if (st->bit_blocks)
+        st->max_serialize_mem += sizeof(bm::word_t) * bm::set_block_size;
+    // 10% increment
+    size_t safe_inc = st->max_serialize_mem / 10;
+    if (!safe_inc) safe_inc = 1024;
     st->max_serialize_mem += safe_inc;
 
     // Calc size of different odd and temporary things.
