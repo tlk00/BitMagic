@@ -110,6 +110,18 @@ struct bv_statistics
         memory_used += st.memory_used;
         gap_cap_overhead += st.gap_cap_overhead;
     }
+
+    /// add serialization correction (sandbox for override)
+    void add_scorrection() BMNOEXCEPT
+    {
+        // add safety buffer for one full bit-block for "speculative" compression
+        if (bit_blocks)
+            max_serialize_mem += sizeof(bm::word_t) * bm::set_block_size;
+        // 10% increment
+        size_t safe_inc = max_serialize_mem / 10;
+        if (!safe_inc) safe_inc = 1024;
+        max_serialize_mem += safe_inc;
+    }
 };
 
 /*!

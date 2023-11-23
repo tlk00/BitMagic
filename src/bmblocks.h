@@ -2455,10 +2455,8 @@ public:
     {
         BM_ASSERT(stat);
         
-        size_t safe_inc = stat->max_serialize_mem / 10; // 10% increment
-        if (!safe_inc) safe_inc = 256;
-        stat->max_serialize_mem += safe_inc;
-
+        stat->add_scorrection();
+        
         unsigned top_size = top_block_size();
         size_t blocks_mem = sizeof(*this);
         blocks_mem += sizeof(bm::word_t**) * top_size;
