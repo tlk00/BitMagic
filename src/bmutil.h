@@ -137,7 +137,7 @@ BMFORCEINLINE T ilog2(T x) BMNOEXCEPT
 
 template<>
 BMFORCEINLINE
-bm::gap_word_t ilog2(gap_word_t x) BMNOEXCEPT
+bm::gap_word_t ilog2(bm::gap_word_t x) BMNOEXCEPT
 {
     unsigned int l = 0;
     if (x >= 1<<8)  { x = (bm::gap_word_t)(x >> 8); l |= 8; }
