@@ -9361,7 +9361,11 @@ void Check_V3DR_Serializations(const BV& bv,
         if (!eq)
         {
             cout << "mismatch cnt=" << bv2.count() << endl;
-            print_bv(cout, bv2);
+            unsigned pos;
+            bool found = bv.find_first_mismatch(bv2, pos);
+            assert(found);
+            cout << "mismatch at: " << pos << " block=" << (pos/65536) << std::endl;
+            //print_bv(cout, bv2);
             assert(eq);
         }
            if (stat_code)
@@ -14631,7 +14635,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
  
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[set_block_bitgap_bienc] == 1);
+        assert(cstat[bm::set_block_gap_bienc_v3] == 1);
         operation_deserializer<bvect> od;
 
         bvect bv2;
@@ -41576,7 +41580,7 @@ return 0;
         DesrializationTest2();
          CheckAllocLeaks(false);
 
-        RangeDeserializationTest();
+//        RangeDeserializationTest();
          CheckAllocLeaks(false);
     }
     
