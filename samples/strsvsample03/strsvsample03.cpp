@@ -43,6 +43,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_serial.h"
+#include "bmdbg.h"
 #include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
@@ -214,11 +215,11 @@ int main(void)
         // serialize and save
         //
         {
+            //bm::print_svector_stat(cout, str_sv);
             std::string fname = "test.sv";
             bm::sparse_vector_serial_layout<str_sv_type> sv_lay;
             
-            BM_DECLARE_TEMP_BLOCK(tb)
-            bm::sparse_vector_serialize(str_sv, sv_lay, tb);
+            bm::sparse_vector_serialize(str_sv, sv_lay);
 
             std::ofstream fout(fname.c_str(), std::ios::binary);
             if (!fout.good())
@@ -234,6 +235,18 @@ int main(void)
             fout.close();
             
             cout << "Saved size: " << sv_lay.size() << endl;
+
+            // deserialize
+            //
+            str_sv_type str_sv2;
+            bm::sparse_vector_deserializer<str_sv_type> sv_deserial;
+            sv_deserial.deserialize(str_sv2, (unsigned char*)buf);
+            bool eq = str_sv.equal(str_sv2);
+            if (!eq)
+            {
+                assert(0);
+                cout << "Serialization failure!" << endl;
+            }
         }
 
     }
