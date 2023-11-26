@@ -543,7 +543,7 @@ void sparse_vector_serialize(
 {
     (void)temp_block;
     bm::sparse_vector_serializer<SV> sv_serializer;
-//    sv_serializer.enable_xor_compression();
+    sv_serializer.enable_xor_compression();
     sv_serializer.serialize(sv, sv_layout);
 }
 
@@ -1018,7 +1018,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     for (unsigned i = 0; i < planes; ++i)
     {
         typename SV::bvector_type_const_ptr bv = bmatr.row(i);
-
         if (!bv)  // empty plane
         {
             sv_layout.set_plane(i, 0, 0);

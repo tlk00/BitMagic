@@ -78,6 +78,7 @@ const unsigned set_word_mask  = 0x1Fu;
 typedef unsigned short gap_word_t;
 
 const unsigned gap_max_buff_len = 1280;
+const unsigned gap_max_safe_len = 8189; 
 const unsigned gap_max_bits = 65536;
 const unsigned gap_equiv_len = (unsigned)
    ((sizeof(bm::word_t) * bm::set_block_size) / sizeof(bm::gap_word_t));
