@@ -64,7 +64,7 @@ typedef bm::str_sparse_vector<char, bvector_type, 32> str_sv_type;
 static
 void generate_string_set(vector<string>& str_vec)
 {
-    const unsigned max_coll = 50000;
+    const unsigned max_coll = 500000;
    
     str_vec.resize(0);
     string str;
@@ -238,6 +238,7 @@ int main(void)
 
             // deserialize
             //
+
             str_sv_type str_sv2;
             bm::sparse_vector_deserializer<str_sv_type> sv_deserial;
             sv_deserial.deserialize(str_sv2, (unsigned char*)buf);
@@ -247,6 +248,7 @@ int main(void)
                 assert(0);
                 cout << "Serialization failure!" << endl;
             }
+
         }
 
     }
