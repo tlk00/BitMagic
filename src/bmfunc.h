@@ -2265,6 +2265,218 @@ void arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
 
 
 /*!
+   \brief calculate minimal delta between monotonic growing numbers with windows
+   \param arr -array buffer pointer
+   \param arr_len - array length
+   \param wlen - window size for delta-min calculations
+   \param min0 - global min
+   \param wflags - bit flags for each window of calculation
+
+   @return number of windows improved against min0
+
+   @ingroup gapfunc
+*/
+template<typename T>
+unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
+                              unsigned* wflags) BMNOEXCEPT
+{
+    BM_ASSERT(wlen > 1);
+    unsigned wcnt = 0;
+    if (arr_len <= wlen)
+        return wcnt;
+    unsigned min_w_prev = ~0u;
+    // process first wave
+    for (unsigned i = 1; i < wlen; ++i)
+    {
+        BM_ASSERT(arr[i] > arr[i-1]);
+        if (T delta = arr[i] - arr[i-1]; delta < min_w_prev)
+        {
+            min_w_prev = delta;
+        }
+    } // for i
+
+    unsigned wave = 1;
+    // process the rest of the array
+    for (unsigned i = wlen; i < arr_len; ++wave, i+=wlen)
+    {
+        if (i + wlen > arr_len) // out of bounds
+        {
+            unsigned r = arr_len % wlen;
+            wlen = r;
+            BM_ASSERT(i+wlen == arr_len);
+        }
+        bool w_ok = true;
+        unsigned min_w = ~0u;
+        for (unsigned j = 0; j < wlen; ++j)
+        {
+            BM_ASSERT(i+j < arr_len);
+            BM_ASSERT(arr[i+j] > arr[i+j-1]);
+            T delta = arr[i+j] - arr[i+j-1];
+            if (delta < min_w_prev)
+                w_ok = false;
+            if (delta < min_w)
+            {
+                min_w = delta;
+            }
+        } // for j
+        if (w_ok)
+        {
+            ++wcnt;
+            {
+                unsigned nword  = unsigned(wave >> bm::set_word_shift);
+                unsigned nbit = wave & bm::set_word_mask;
+                wflags[nword] |= (1u << nbit);
+            }
+        }
+        min_w_prev = min_w;
+    } // for i
+
+    return wcnt;
+}
+
+/*!
+   \brief Recalculate array using two minimal delta for better BIC compression
+   @internal
+*/
+template<typename T>
+T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
+                   T min0, const unsigned* wflags) BMNOEXCEPT
+{
+    BM_ASSERT(wlen > 1 && wflags);
+    BM_ASSERT(arr_len >= wlen);
+    BM_ASSERT((wflags[0] & 1) == 0);
+
+    tarr[0] = arr[0];
+    T delta_acc = 0;
+
+    T min_w_prev = T(~0u);
+    // process first wave
+    for (unsigned i = 1; i < wlen; ++i)
+    {
+        BM_ASSERT(arr[i] > arr[i-1]);
+        if (T delta = arr[i] - arr[i-1]; delta < min_w_prev)
+        {
+            min_w_prev = delta;
+            BM_ASSERT(min_w_prev >= min0);
+        }
+        // recalc
+        tarr[i] = arr[i] - min0 - delta_acc;
+        BM_ASSERT(tarr[i-1] < tarr[i]);
+        delta_acc += min0;
+    } // for i
+
+    min_w_prev -= bool(min_w_prev);
+
+    // process the rest of the array
+    unsigned wave = 1;
+    for (unsigned i = wlen; i < arr_len; ++wave, i+=wlen)
+    {
+        if (i + wlen > arr_len) // out of bounds
+        {
+            unsigned r = arr_len % wlen;
+            wlen = r;
+            BM_ASSERT(i+wlen == arr_len);
+        }
+        bool w_recalc;
+        {
+            unsigned nword  = unsigned(wave >> bm::set_word_shift);
+            unsigned nbit = wave & bm::set_word_mask;
+            w_recalc = (wflags[nword] & (1u << nbit));
+        }
+        T min_w = T(~0u);
+        for (unsigned j = 0; j < wlen; ++j)
+        {
+            BM_ASSERT(i+j < arr_len);
+            BM_ASSERT(arr[i+j] > arr[i+j-1]);
+            if (T delta = arr[i+j] - arr[i+j-1]; delta < min_w)
+                min_w = delta;
+            if (w_recalc) // prev-min recacl
+            {
+                tarr[i+j] = arr[i+j] - min_w_prev - delta_acc;
+                delta_acc += min_w_prev;
+            }
+            else // min0 recalc
+            {
+                tarr[i+j] = arr[i+j] - min0 - delta_acc;
+                delta_acc += min0;
+            }
+            BM_ASSERT(tarr[j+i-1] < tarr[i+j]);
+        } // for j
+        min_w_prev = (min_w > min0) ? min_w - 1 : min0;
+    } // for i
+
+    return delta_acc;
+}
+
+/*!
+   \brief Restore array using two minimal delta for better BIC compression
+*/
+template<typename T>
+void arr_restore_min_w(T* arr, unsigned arr_len, unsigned wlen,
+                       T min0,  const unsigned* wflags) BMNOEXCEPT
+{
+    BM_ASSERT(wlen > 1 && wflags);
+    BM_ASSERT(arr_len >= wlen);
+    BM_ASSERT((wflags[0] & 1) == 0);
+
+    T delta_acc = 0;
+
+    unsigned min_w_prev = ~0u;
+    // process first wave
+    for (unsigned i = 1; i < wlen; ++i)
+    {
+        // recalc
+        arr[i] += min0 + delta_acc;
+        BM_ASSERT(arr[i-1] < arr[i]);
+        delta_acc += min0;
+
+        if (T delta = arr[i] - arr[i-1]; delta < min_w_prev)
+        {
+            min_w_prev = delta;
+            BM_ASSERT(min_w_prev >= min0);
+        }
+    } // for i
+    min_w_prev -= bool(min_w_prev);
+
+    // process the rest of the array
+    unsigned wave = 1;
+    for (unsigned i = wlen; i < arr_len; ++wave, i+=wlen)
+    {
+        if (i + wlen > arr_len) // out of bounds
+        {
+            unsigned r = arr_len % wlen;
+            wlen = r;
+            BM_ASSERT(i+wlen == arr_len);
+        }
+        bool w_recalc;
+        {
+            unsigned nword  = unsigned(wave >> bm::set_word_shift);
+            unsigned nbit = wave & bm::set_word_mask;
+            w_recalc = (wflags[nword] & (1u << nbit));
+        }
+        unsigned min_w = ~0u;
+        for (unsigned j = 0; j < wlen; ++j)
+        {
+            if (w_recalc) // prev-min recacl
+            {
+                arr[i+j] += min_w_prev + delta_acc;
+                delta_acc += min_w_prev;
+            }
+            else // min0 recalc
+            {
+                arr[i+j] += min0 + delta_acc;
+                delta_acc += min0;
+            }
+            BM_ASSERT(arr[i+j-1] < arr[i+j]);
+            if (T delta = arr[i+j] - arr[i+j-1]; delta < min_w)
+                min_w = delta;
+        } // for j
+        min_w_prev = (min_w > min0) ? min_w - 1 : min0;
+    } // for i
+}
+
+
+/*!
    \brief calculate minimal delta between monotonic growing numbers
    \param arr -array buffer pointer
    \param arr_len - array length
@@ -2328,6 +2540,7 @@ T arr_recalc_min(T* tarr, const T* arr, unsigned arr_len, T min0) BMNOEXCEPT
     for (unsigned i = 1; i < arr_len; ++i)
     {
         tarr[i] = arr[i] - min0 - delta_acc;
+        BM_ASSERT(tarr[i-1] < tarr[i]);
         delta_acc += min0;
     } // for i
     return delta_acc;
@@ -2343,6 +2556,7 @@ void arr_restore_min(T* arr, unsigned arr_len, T min0) BMNOEXCEPT
     for (unsigned i = 1; i < arr_len; ++i)
     {
         arr[i] += min0 + delta_acc;
+        BM_ASSERT(arr[i-1] < arr[i]);
         delta_acc += min0;
     } // for i
 }
