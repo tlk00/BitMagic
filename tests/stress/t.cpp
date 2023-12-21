@@ -15034,11 +15034,16 @@ void GAPSerializationTest0()
     {
         {
             bvect bv1;  // generated random
+            cout << "   generation 1" << endl;
             generate_bvector(bv1, bm::id_max32/4, false);
+            bvect bv2;  // generated random
+            cout << "   generation 2" << endl;
+            generate_bvector(bv2, bm::id_max32/4, false);
+            cout << "   gen-ok" << endl;
 
             size_t drange_size, no_drange_size;
-            Check_V3DR_Serializations(bv1, drange_size, no_drange_size, 0, 0);
 
+            Check_V3DR_Serializations(bv1, drange_size, no_drange_size, 0, 0);
             drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
             int diff = int(no_drange_size) - int(drange_size) ;
             if (drange_size > no_drange_size)
@@ -15051,6 +15056,53 @@ void GAPSerializationTest0()
                 //cout << "Savings:" << diff << " total=" << saved_sum << endl;
                 saved_sum += diff;
             }
+
+            Check_V3DR_Serializations(bv2, drange_size, no_drange_size, 0, 0);
+            drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+            diff = int(no_drange_size) - int(drange_size) ;
+            if (drange_size > no_drange_size)
+            {
+                cerr << "DRANGE LOSS detected:" << diff << endl;
+                BM_ASSERT(0);
+            }
+            else
+            {
+                //cout << "Savings:" << diff << " total=" << saved_sum << endl;
+                saved_sum += diff;
+            }
+            {
+                bvect bv3 = bv1 ^ bv2;
+                Check_V3DR_Serializations(bv3, drange_size, no_drange_size, 0, 0);
+                drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+                diff = int(no_drange_size) - int(drange_size) ;
+                if (drange_size > no_drange_size)
+                {
+                    cerr << "DRANGE LOSS detected:" << diff << endl;
+                    BM_ASSERT(0);
+                }
+                else
+                {
+                    //cout << "Savings:" << diff << " total=" << saved_sum << endl;
+                    saved_sum += diff;
+                }
+            }
+            {
+                bvect bv3 = bv1 & bv2;
+                Check_V3DR_Serializations(bv3, drange_size, no_drange_size, 0, 0);
+                drange_size_sum += drange_size; no_drange_size_sum += no_drange_size;
+                diff = int(no_drange_size) - int(drange_size) ;
+                if (drange_size > no_drange_size)
+                {
+                    cerr << "DRANGE LOSS detected:" << diff << endl;
+                    BM_ASSERT(0);
+                }
+                else
+                {
+                    //cout << "Savings:" << diff << " total=" << saved_sum << endl;
+                    saved_sum += diff;
+                }
+            }
+
         }
 
         cout << "Drange: " << drange_size_sum << endl;
@@ -35828,6 +35880,190 @@ void TestBlockDigest()
     cout << " ------------------------------ Test bit-block DIGEST OK" << endl;
 }
 
+static
+void TestArrMin0()
+{
+    cout << " ------------------------------ TestArrMin0()" << endl;
+    BM_DECLARE_TEMP_BLOCK(tb0);
+    bm::gap_word_t min0;
+    {
+        bm::gap_word_t test_arr[] = {0, 10, 25, 32 };
+        unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
+
+        bm::bit_block_set(tb0, 0);
+        bm::arr_calc_delta_min(test_arr, sz, min0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 64, tb0);
+        assert(wcnt == 0);
+        wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        assert(wcnt == 0);
+        auto cnt = bm::bit_block_count(tb0);
+        assert(cnt == 0);
+    }
+    {
+        bm::gap_word_t test_arr[] = {0, 3, 15, 50, 250, 320, 1000 };
+        unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
+
+        bm::bit_block_set(tb0, 0);
+        bm::arr_calc_delta_min(test_arr, sz, min0);
+        assert(min0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        assert(wcnt == 3);
+        auto cnt = bm::bit_block_count(tb0);
+        assert(cnt == 3);
+
+        bm::gap_word_t test_arr2[1024] = {0,};
+
+        --min0;
+        bm::arr_recalc_min_w(test_arr2, test_arr, sz, 2, min0, tb0);
+
+        bm::arr_restore_min_w(test_arr2, sz, 2, min0, tb0);
+        for (unsigned i = 0; i < sz; ++i)
+        {
+            assert(test_arr2[i] == test_arr[i]);
+        }
+    }
+    {
+        bm::gap_word_t test_arr[] = {0, 6, 15, 50, 250, 252, 253 };
+        unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
+
+        bm::bit_block_set(tb0, 0);
+        bm::arr_calc_delta_min(test_arr, sz, min0);
+        assert(min0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        assert(wcnt == 1);
+        auto cnt = bm::bit_block_count(tb0);
+        assert(cnt == 1);
+
+        bm::gap_word_t test_arr2[1024] = {0,};
+
+        --min0;
+        bm::arr_recalc_min_w(test_arr2, test_arr, sz, 2, min0, tb0);
+        //_Print_arr(test_arr2, sz);
+
+        bm::arr_restore_min_w(test_arr2, sz, 2, min0, tb0);
+        for (unsigned i = 0; i < sz; ++i)
+        {
+            assert(test_arr2[i] == test_arr[i]);
+        }
+    }
+
+    {
+        bm::gap_word_t test_arr[] = {0, 1152, 2242, 4401, 7739, 12143, 14405, 22305, 23424, 24469, 25550, 29981, 34457, 35569, 37847, 40013, 41090, 44336, 44576, 44798, 45157, 45392, 45638, 45842, 46063, 46294, 46385, 46481, 46585, 47140, 47259, 47595, 47812, 48048, 48168, 48303, 48414, 48640, 49056, 49477, 49676};
+        unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
+
+        bm::bit_block_set(tb0, 0);
+        bm::arr_calc_delta_min(test_arr, sz, min0);
+        assert(min0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        assert(wcnt == 10);
+        auto cnt = bm::bit_block_count(tb0);
+        assert(cnt == wcnt);
+
+        bm::gap_word_t test_arr2[1024] = {0,};
+
+        --min0;
+        bm::arr_recalc_min_w(test_arr2, test_arr, sz, 2, min0, tb0);
+        _Print_arr(test_arr2, sz);
+
+        bm::arr_restore_min_w(test_arr2, sz, 2, min0, tb0);
+        for (unsigned i = 0; i < sz; ++i)
+        {
+            assert(test_arr2[i] == test_arr[i]);
+        }
+    }
+
+    std::cout << "Stress pass 0" << endl;
+    {
+        bm::gap_word_t test_arr[65536] = {0, };
+        unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
+
+        bm::gap_word_t delta = 2;
+        unsigned gsz = 1;
+        for (; gsz < sz; ++gsz)
+        {
+            if (unsigned(test_arr[gsz-1]) + delta > 65535)
+                break;
+            test_arr[gsz] = test_arr[gsz-1] + delta;
+            if (gsz % 64 == 0)
+                ++delta;
+        } // for gsz
+        sz = gsz;
+        //_Print_arr(test_arr, sz);
+
+        for (unsigned w = 2; w < 128; ++w)
+        {
+            bm::arr_calc_delta_min(test_arr, sz, min0);
+            assert(min0);
+
+            bm::bit_block_set(tb0, 0);
+            auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, w, tb0);
+            auto cnt = bm::bit_block_count(tb0);
+            assert(cnt == wcnt);
+
+            bm::gap_word_t test_arr2[65536] = {0,};
+
+            --min0;
+            bm::arr_recalc_min_w(test_arr2, test_arr, sz, w, min0, tb0);
+            bm::arr_restore_min_w(test_arr2, sz, w, min0, tb0);
+            for (unsigned i = 0; i < sz; ++i)
+            {
+                assert(test_arr2[i] == test_arr[i]);
+            }
+        } // for w
+    }
+    for (unsigned pass = 1; pass < 1024; ++pass)
+    {
+        std::cout << "Stress pass " << pass << endl;
+        bm::gap_word_t test_arr[65536] = {0, };
+        unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
+
+        bm::gap_word_t delta = 2;
+        unsigned gsz = 1;
+        for (; gsz < sz; ++gsz)
+        {
+            if (unsigned(test_arr[gsz-1]) + delta > 65535)
+                break;
+            test_arr[gsz] = test_arr[gsz-1] + delta;
+            if (gsz % 64 == 0)
+                delta += unsigned(rand() % 128);
+            else
+                if (gsz % 64 == 1)
+                    delta = 1;
+                else
+                    if (gsz % 64 == 2)
+                        delta = 2;
+
+            if (!delta)
+                delta = 1;
+        } // for gsz
+        sz = gsz;
+
+        for (unsigned w = 2; w < 128; ++w)
+        {
+            bm::arr_calc_delta_min(test_arr, sz, min0);
+            assert(min0);
+
+            bm::bit_block_set(tb0, 0);
+            auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, w, tb0);
+            auto cnt = bm::bit_block_count(tb0);
+            assert(cnt == wcnt);
+            if (!cnt)
+                continue;
+
+            bm::gap_word_t test_arr2[65536] = {0,};
+
+            --min0;
+            bm::arr_recalc_min_w(test_arr2, test_arr, sz, w, min0, tb0);
+            bm::arr_restore_min_w(test_arr2, sz, w, min0, tb0);
+            for (unsigned i = 0; i < sz; ++i)
+            {
+                assert(test_arr2[i] == test_arr[i]);
+            }
+        } // for w
+    }
+
+    cout << " ------------------------------ TestArrMin0() OK" << endl;
+}
 
 static
 void TestBlockAND()
@@ -41330,7 +41566,7 @@ return 0;
 
     if (is_all || is_low_level)
     {
-
+/*
         TestNibbleArr();
 
         TestHasZeroByte();
@@ -41396,6 +41632,8 @@ return 0;
          BitSplitTest();
 
          TestBlockDigest();
+*/
+         TestArrMin0();
 
         //BitBlockTransposeTest();
     }
@@ -41564,7 +41802,6 @@ return 0;
 
     if (is_all || is_bvser || is_bvbasic)
     {
-
         SerializationCompressionLevelsTest();
          CheckAllocLeaks(false);
 
@@ -41580,7 +41817,7 @@ return 0;
         DesrializationTest2();
          CheckAllocLeaks(false);
 
-//        RangeDeserializationTest();
+        RangeDeserializationTest();
          CheckAllocLeaks(false);
     }
     
