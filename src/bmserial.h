@@ -1515,7 +1515,6 @@ bool serializer<BV>::interpolated_encode_gap_block_v3(
    const bm::gap_word_t* gap_block, bm::encoder& enc, unsigned len)
 {
     const unsigned drange_gain_cutoff = 200;//2000;
-
     if (!bic_drange_)
         return false;
 
@@ -1546,8 +1545,13 @@ bool serializer<BV>::interpolated_encode_gap_block_v3(
         bool ex0_first =
         bm::gap_split(gap_block, len, 2/*h_limit*/, &hist0[0], &hist1[0],
                gap_recalc_block, ex0_arr, ex1_arr, ex0_cnt, ex1_cnt);
+/*
+if (ex0_cnt < 3 && ex1_cnt < 3)
+    goto encode_GAP;
+*/
         if (!ex0_cnt && !ex1_cnt)
             goto encode_GAP;
+//std::cout << " GS: ";
 /*
 std::cout << "ex1:" << std::endl;
 _Print_arr(ex1_arr, ex1_cnt);
@@ -2061,11 +2065,8 @@ unsigned char
 serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
 {
     const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 2.5f;
-//    const float bie_bits_per_int = compression_level_ < 6 ? 3.75f : 2.3f;
     const unsigned bie_limit = unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
 
-//    unsigned bc, ibc, gc;
-    
     add_model(bm::set_block_bit, bm::gap_max_bits); // default model (bit-block)
     
     bit_stat_.bit_model_0run_size_ = bm::bit_count_nonzero_size(block, bm::set_block_size);
@@ -2175,18 +2176,24 @@ serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
     // (minus 3 bits for level and start value)
     // we take less for safety, because of possible +-1 error in gap-counting
     //
+/*
     if ((model == bm::set_block_arr_bienc) &&
         (compression_level_ >= 6) &&
         (bit_stat_.gc < bm::gap_max_safe_len) && (bic_drange_))
         model = bm::set_block_gap_bienc;
+*/
+
     switch (model)
     {
     case bm::set_block_arr_bienc:
+    /*
         if ((compression_level_ >= 6) &&
             (bit_stat_.gc < bm::gap_max_safe_len) && (bic_drange_))
             model = bm::set_block_gap_bienc;
+    */
         break;
     case bm::set_block_bitgap_bienc:
+/*
         if ((compression_level_ >= 6) &&
             (bit_stat_.gc > bm::gap_max_safe_len) && (bic_drange_))
         {
@@ -2195,8 +2202,10 @@ serializer<BV>::find_bit_best_encoding_l5(const bm::word_t* block) BMNOEXCEPT
             else
                 model = bm::set_block_arr_bienc_inv;
         }
+*/
         break;
     }
+
     return model;
 }
 
@@ -2981,7 +2990,10 @@ serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
     {
         bit_out_type bout(enc);
         bool no_gap_EOC = (r_cnt == 0);
-
+/*
+std::cout << "arr_s:\n";
+_Print_arr(arr_s, s_cnt);
+*/
         bout.encode_array(arr_s, arr_tmp, s_cnt, !inverted, no_gap_EOC);
 #if (0)
         auto ps = enc.get_pos();
@@ -3006,6 +3018,7 @@ serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
             unsigned g_size = (r_cnt == 1) ? 0
                               : bm::gamma_size(arr_rl, r_cnt) + 3;
             bool use_gamma = (g_size <= enc_size2);
+//use_gamma = false;
             if (use_gamma)
                 bout.encode_array(arr_rl, arr_tmp, r_cnt,
                                   !inverted, true, use_gamma, false/*no-size*/);
@@ -3960,6 +3973,10 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
             // TODO: add proper _dry() function
 
             unsigned h3f = bin.decode_array(arr_s, &s_cnt);
+/*
+std::cout << "restore arr_s:\n";
+_Print_arr(arr_s, s_cnt);
+*/
             if (IS_VALID_ADDR(blk))
                 bm::bit_block_rle_set(blk, arr_s,
                         (bm::gap_word_t*)0, (bm::gap_word_t*)0, s_cnt, 0u);
