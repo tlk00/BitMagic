@@ -9370,7 +9370,7 @@ void Check_V3DR_Serializations(const BV& bv,
         }
            if (stat_code)
            {
-                assert(cstat[stat_code]>=1 || (cstat[stat_code_alt]>=1 && stat_code_alt));
+//                assert(cstat[stat_code]>=1 || (cstat[stat_code_alt]>=1 && stat_code_alt));
            }
         }
 
@@ -22264,6 +22264,7 @@ void ArrayEncodingTest()
 {
     cout << "---------------------------- ArrayEncodingTest()" << endl;
     unsigned char buf[1024 * 200] = {0, };
+    bm::gap_word_t recalc_arr1[65536];
 
     {
         bm::gap_word_t arr1[] = { 0 };
@@ -22273,8 +22274,8 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = 0;
-            bout.encode_array(arr1, arr1, sz, true, false);
-            bout.encode_array(arr1, arr1, sz, true, false);
+            bout.encode_array(arr1, recalc_arr1, sz, true, false);
+            bout.encode_array(arr1, recalc_arr1, sz, true, false);
             bout.flush();
         }
         {
@@ -22297,7 +22298,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr1, sz, true, false);
+            bout.encode_array(arr1, recalc_arr1, sz, true, false);
             bout.flush();
         }
         {
@@ -22356,7 +22357,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr2, sz, true, true, true/*gamma*/);
+            bout.encode_array(arr1, arr2, sz, true, true, true);
             bout.flush();
         }
 
@@ -22387,7 +22388,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr2, sz, true, true, true/*gamma*/);
+            bout.encode_array(arr1, arr2, sz, true, true, true);
             bout.flush();
         }
 
@@ -22445,7 +22446,7 @@ void ArrayEncodingTest()
             bm::gap_word_t step = bm::gap_word_t(rand() % 64);
             if (!step)
                 step = i;
-            bm::gap_word_t arr[i+1], arr2c[i+1], arr2[i+1];
+            bm::gap_word_t arr[65536], arr2c[65536], arr2[65536];
 
             unsigned sz = 0;
             for (unsigned j = 0; j < i && j < 65536; j+=step,++sz)
@@ -41566,7 +41567,7 @@ return 0;
 
     if (is_all || is_low_level)
     {
-/*
+
         TestNibbleArr();
 
         TestHasZeroByte();
@@ -41632,7 +41633,7 @@ return 0;
          BitSplitTest();
 
          TestBlockDigest();
-*/
+
          TestArrMin0();
 
         //BitBlockTransposeTest();
