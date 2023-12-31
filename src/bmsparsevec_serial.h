@@ -1080,8 +1080,9 @@ else
     // save the digest vector
     //
     size_t digest_offset = size_t(buf_ptr - buf); // digest position from the start
-    ::memcpy(buf_ptr, plane_digest_buf_.buf(), plane_digest_buf_.size());
-    buf_ptr += plane_digest_buf_.size();
+    auto pd_size =  plane_digest_buf_.size();
+    ::memcpy(buf_ptr, plane_digest_buf_.buf(), pd_size);
+    buf_ptr += pd_size;
     {
         bool use_64bit = false;
         plane_off_vect_.resize(0);
@@ -1701,11 +1702,11 @@ void sparse_vector_deserializer<SV>::load_planes_off_table(
                 if (plane_digest_bv_.test(i))
                     offset = (size_t) dec_o.get_64();
                 off_vect_[i] = offset;
-std::cout << offset << ",";
+//std::cout << offset << ",";
             } // for i
 
-std::cout << std::endl;
-_Print_arr(&off_vect_[0], planes);
+//std::cout << std::endl;
+//_Print_arr(&off_vect_[0], planes);
             break;
         case '3':
         {

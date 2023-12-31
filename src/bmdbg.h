@@ -1015,7 +1015,8 @@ int file_save_svector(const SV& sv, const std::string& fname,
         return -1;
     }
     const char* buf = (char*)sv_lay.buf();
-    fout.write(buf, std::streamsize(sv_lay.size()));
+    auto sz = sv_lay.size();
+    fout.write(buf, std::streamsize(sz));
     if (!fout.good())
     {
         return -1;
