@@ -1833,14 +1833,24 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         BM_ASSERT(wcnt == bm::bit_block_count(tb_wflags));
 //std::cout << wcnt << " ";
 
+        auto delta_acc =
         bm::arr_recalc_min_w(recalc_arr, arr, sz, win_size, min0, tb_wflags);
         BM_ASSERT((tb_wflags[0] & 1) == 0);
+        if (delta_acc < 300) // if DR compression was not really efficient
+        {
+            min0 = 0; use_wdr = false;
+            recalc_arr = const_cast<bm::gap_word_t*>(arr);
+        }
     }
     else
         if (min0)
         {
             auto delta_acc = bm::arr_recalc_min(recalc_arr, arr, sz, min0);
-            (void) delta_acc; // ignore (for now)
+            if (delta_acc < 300) // if DR compression was not really efficient
+            {
+                min0 = 0;
+                recalc_arr = const_cast<bm::gap_word_t*>(arr);
+            }
         }
         else
         {
@@ -1854,7 +1864,8 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
     bm::gap_word_t max_v = recalc_arr[sz-1];
     BM_ASSERT(min_v < max_v);
 
-    if (sz > 16)
+    unsigned range_reduct = min_v + (65536 - max_v);
+    if ((sz > 16) && (range_reduct > 1*1024))
         h3_flag |= bm::h3f_ex_minmax_v;
 
     this->put_bits(h3_flag, 8);

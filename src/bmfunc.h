@@ -2649,7 +2649,7 @@ template<typename T>
 unsigned gap_set_value(unsigned val,
                        T* BMRESTRICT buf,
                        unsigned pos) BMNOEXCEPT;
-
+/*
 template<class TOut>
 void _PrintGap(TOut& tout, const bm::gap_word_t* gap_buf, unsigned limit = 65536)
 {
@@ -2685,6 +2685,8 @@ void _Print_arr_el(const T* arr, unsigned arr_len, int v) BMNOEXCEPT
             std::cout << arr[i] << ", ";
     std::cout << std::endl;
 }
+*/
+
 
 /*!
    \brief split GAP block into pure GAPs and exceptions
@@ -9760,6 +9762,168 @@ unsigned bit_block_convert_to_arr(T* BMRESTRICT dest,
 }
 
 
+template<typename T>
+unsigned arr_cnt_zero_splits(T* BMRESTRICT arr, unsigned sz) BMNOEXCEPT
+{
+    unsigned z_cnt = 0;
+    for (unsigned i = 1; i < sz; ++i)
+    {
+        BM_ASSERT(arr[i-1] < arr[i]);
+        unsigned d = arr[i] - arr[i-1];
+        z_cnt += (d == 2);
+    } // for i
+    return z_cnt;
+}
+
+
+/*!
+    @brief Extract standalone 0s out of bit-block
+    @param block - bit-block to extract singleton 0s
+    @param arr_ex0 - [out] target array for indexes of 0s
+    @param ex0_cnt - [out] size of arr_ex0
+    @param inverted - [in] if we are finding ex1s
+*/
+template<typename T>
+void bit_block_ex0_split(unsigned* BMRESTRICT block,
+                         T* BMRESTRICT arr_ex0, unsigned& ex0_cnt,
+                         bool inverted) BMNOEXCEPT
+{
+    ex0_cnt = 0;
+    unsigned i = 1;
+    // check if bit 0 is isolate
+    unsigned nword = 0;
+    unsigned bitpos = 0;
+    unsigned w = block[nword];
+    bool b = w & 1;
+
+    if (inverted)
+    {
+        if (b)
+        {
+            b = (~w) & (1 << 1);
+            if (b)
+            {
+                arr_ex0[ex0_cnt] = 0; ++ex0_cnt;
+                i = 2;
+                block[0] |= 1; // set bit 0 to 1
+            }
+        }
+        for (; i <= 65534; ++i)
+        {
+            nword = unsigned(i >> bm::set_word_shift);
+            bitpos = i & bm::set_word_mask;
+            w = ~block[nword];
+            b = w & (1 << bitpos);
+            if (b)
+                continue;
+
+            // prev
+            nword = unsigned((i-1) >> bm::set_word_shift); // nword
+            bitpos = (i-1) & bm::set_word_mask;
+            w = ~block[nword];
+            bool b_prev = w & (1 << bitpos);
+            if (b == b_prev)
+                continue;
+            // next
+            nword = unsigned((i+1) >> bm::set_word_shift); // nword
+            bitpos = (i+1) & bm::set_word_mask;
+            w = ~block[nword];
+            bool b_next = w & (1 << bitpos);
+            if (b == b_next)
+                continue;
+
+            // standalone 0 bit found (ex0)
+
+            nword = unsigned(i >> bm::set_word_shift); // nword
+            bitpos = i & bm::set_word_mask;
+            w = block[nword];
+            w &= ~(1 << bitpos); // clear bit
+            block[nword] = w;
+            arr_ex0[ex0_cnt] = (T)i; ++ex0_cnt;
+            ++i;
+
+        } // for i
+
+        return;
+    }
+
+    // not inverted
+    if (!b)
+    {
+        b = w & (1 << 1);
+        if (b)
+        {
+            arr_ex0[ex0_cnt] = 0; ++ex0_cnt;
+            i = 2;
+            block[0] |= 1; // set bit 0 to 1
+        }
+    }
+
+    for (; i <= 65534; ++i)
+    {
+        nword = unsigned(i >> bm::set_word_shift);
+        bitpos = i & bm::set_word_mask;
+        w = block[nword];
+        b = w & (1 << bitpos);
+        if (b)
+            continue;
+
+        // prev
+        nword = unsigned((i-1) >> bm::set_word_shift); // nword
+        bitpos = (i-1) & bm::set_word_mask;
+        w = block[nword];
+        bool b_prev = w & (1 << bitpos);
+        if (b == b_prev)
+            continue;
+        // next
+        nword = unsigned((i+1) >> bm::set_word_shift); // nword
+        bitpos = (i+1) & bm::set_word_mask;
+        w = block[nword];
+        bool b_next = w & (1 << bitpos);
+        if (b == b_next)
+            continue;
+
+        // standalone 0 bit found (ex0)
+
+        nword = unsigned(i >> bm::set_word_shift); // nword
+        bitpos = i & bm::set_word_mask;
+        w = block[nword];
+        w |= (1 << bitpos); // set bit
+        block[nword] = w;
+        arr_ex0[ex0_cnt] = (T)i; ++ex0_cnt;
+        ++i;
+
+    } // for i
+
+    // We do not check the last bit (intentionally)
+    //
+}
+
+/**
+    @brief validate split results (for DEBUGGING)
+    @internal
+ */
+template<typename T>
+bool bit_block_ex0_split_check(const unsigned* BMRESTRICT /*block*/,
+                               const unsigned* BMRESTRICT tb,
+                               const T* BMRESTRICT ex0_arr,
+                               unsigned ex0_cnt) BMNOEXCEPT
+{
+    for (unsigned k = 0; k < ex0_cnt; ++k) // check if ex0 split is correct
+    {
+        bool b = bm::test_bit(tb, ex0_arr[k]);
+        BM_ASSERT(b);
+        b = bm::test_bit(tb, ex0_arr[k]+1);
+        BM_ASSERT(b);
+        if (ex0_arr[k])
+        {
+            b = bm::test_bit(tb, ex0_arr[k]-1);
+            BM_ASSERT(b);
+        }
+    } // for k
+    return true;
+}
+
 /*!
     @brief Convert bit block into two arrays of ints( corresponding to 1 bits)
     @param dst_s - [out] array of single bit indexes, not part of any runs
@@ -9842,9 +10006,7 @@ void bit_block_rle_set(unsigned* BMRESTRICT blk,
 {
     for (unsigned i = 0; i < s_cnt; ++i)
     {
-        unsigned nword = unsigned(s[i] >> bm::set_word_shift); // nword
-        unsigned bitpos = s[i] & bm::set_word_mask;
-        blk[nword] |= (1u << bitpos);
+        bm::set_bit(blk, s[i]);
     } // for i
     for (unsigned i = 0; i < r_cnt; ++i)
     {
