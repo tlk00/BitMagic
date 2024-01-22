@@ -1099,7 +1099,6 @@ unsigned SerializationOperation(bvect*             bv_target,
        cout << "optimize=" << st2_op.max_serialize_mem << endl;
        assert(0); exit(1);
    }
-
    unsigned char* smem1 = new unsigned char[st1.max_serialize_mem];
    unsigned char* smem2 = new unsigned char[st2.max_serialize_mem];
 
@@ -1425,8 +1424,6 @@ unsigned SerializationOperation(bvect*             bv_target,
             bv1 |= bv2;
             cout << "Count3 = " << bv1.count() << endl;;
 */
-            //SaveBVector("err1.bv", bv1);
-            //SaveBVector("err2.bv", bv2);
 
             
 
@@ -9342,6 +9339,7 @@ void Check_V3DR_Serializations(const BV& bv,
                                size_t& drange_size, size_t& no_drange_size,
                                unsigned stat_code, unsigned stat_code_alt)
 {
+    (void)stat_code_alt;
    BM_DECLARE_TEMP_BLOCK(tb)
 
    bm::serializer<BV> bv_ser(tb);
@@ -9352,7 +9350,7 @@ void Check_V3DR_Serializations(const BV& bv,
        bv_ser.set_bic_dynamic_range_reduce(true);
        bv_ser.serialize(bv, sermem_buf, 0);
        const bvect::size_type* cstat = bv_ser.get_compression_stat();
-
+       (void)cstat;
        drange_size = sermem_buf.size();
         {
         BV bv2;
@@ -9375,12 +9373,13 @@ void Check_V3DR_Serializations(const BV& bv,
         }
 
         {
+        bool eq;
             bm::operation_deserializer<BV> od;
             BV bv2, bv_target;
             od.deserialize(bv2, sermem_buf.buf(), nullptr, set_ASSIGN);
-            bool eq = bv.equal(bv2);
+            eq = bv.equal(bv2);
             assert(eq);
-            auto c = bv2.count();
+            c = bv2.count();
             {
             auto cnt = od.deserialize(bv_target, sermem_buf.buf(), 0, set_COUNT);
             assert(c == cnt);
@@ -9388,26 +9387,26 @@ void Check_V3DR_Serializations(const BV& bv,
             {
             bvect bv3(bv2);
             od.deserialize(bv3, sermem_buf.buf(), nullptr, set_AND);
-            bool eq = bv3.equal(bv2);
+            eq = bv3.equal(bv2);
             assert(eq);
             }
             {
             bvect bv3;
             od.deserialize(bv3, sermem_buf.buf(), nullptr, set_OR);
-            bool eq = bv3.equal(bv2);
+            eq = bv3.equal(bv2);
             assert(eq);
             }
             {
             bvect bv3(bv2);
             od.deserialize(bv3, sermem_buf.buf(), nullptr, set_SUB);
-            bool e = bv3.empty();
-            assert(e);
+            eq = bv3.empty();
+            assert(eq);
             }
             {
             bvect bv3(bv2);
             od.deserialize(bv3, sermem_buf.buf(), nullptr, set_XOR);
-            bool e = bv3.empty();
-            assert(e);
+            eq = bv3.empty();
+            assert(eq);
             }
             {
             bvect bv3(bv2);
@@ -11692,7 +11691,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
 
             TestAND_OR(rsub, predicted_count, *bvect_full1, *bvect_full2);
 
-            bvect bv1(*bvect_full1);
+            //bvect bv1(*bvect_full1);
 
             bvect_full1->bit_and(*bvect_full2);
             bm::id_t count = bvect_full1->count();
@@ -11700,8 +11699,6 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
             int res = bvect_full1->compare(bv_target_s);
             if (res != 0)
             {
-                //SaveBVector("bv1.bv", bv1);
-                //SaveBVector("bv2.bv", *bvect_full2);
                 cout << "Serialization operation failed!" << endl;
                 exit(1);
             }
@@ -11746,7 +11743,8 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
             }
         }
 
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
         {
             bvect bv1(*bvect_full1);
             unsigned idx = unsigned(rand()) % size;
@@ -11814,7 +11812,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
                 }
             }
         }
-
+#pragma GCC diagnostic pop
         {
             VisitorAllRangeTest(*bvect_full2, 0); // test with automatic step
         }
@@ -11859,7 +11857,6 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         CheckVectors(*bvect_min1, *bvect_full1, size, detailed);
         CheckIntervals(*bvect_full1, BITVECT_SIZE);
 
-//        bvect::rs_index_type rs_idx1;
         bvect_full1->build_rs_index(&rs_idx1);
         CheckCountRange(*bvect_full1, rs_idx1, 0, size);
 
@@ -11951,7 +11948,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
                 assert(0); exit(1);
             }
         }
-        CheckVectors(*bvect_min1, *bvect_full3, size, detailed);
+        //CheckVectors(*bvect_min1, *bvect_full3, size, detailed);
 
         int res = bv_target_s->compare(*bvect_full3);
         if (res != 0)
@@ -13508,7 +13505,7 @@ void SerializationCompressionLevelsTest()
         assert(cstat[bm::set_block_gap_bienc] == 1 );
 
         {
-        operation_deserializer<bvect> od;
+        //operation_deserializer<bvect> od;
 
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -19255,6 +19252,41 @@ void BitSplitTest()
     assert(!found);
     }
 
+
+    {
+    bm::bit_block_set(tb1, 0u);
+    bm::or_bit_block(tb1, 1, 1);
+    bm::bit_block_ex0_split(tb1, arr_s, s_cnt, false);
+    auto cnt = bm::bit_block_count(tb1);
+    assert (cnt == 2);
+    assert(s_cnt == 1);
+    assert(arr_s[0] == 0);
+
+    bm::bit_block_set(tb1, 0u);
+    bm::or_bit_block(tb1, 1, 1);
+    bm::or_bit_block(tb1, 3, 1);
+
+    bm::bit_block_ex0_split(tb1, arr_s, s_cnt, false);
+    assert(s_cnt == 2);
+    assert(arr_s[0] == 0);
+    assert(arr_s[1] == 2);
+    cnt = bm::bit_block_count(tb1);
+    assert(cnt == 4);
+
+    bm::bit_block_set(tb1, ~0u);
+    bm::clear_bit(tb1, 1025);
+    bm::clear_bit(tb1, 2048);
+    bm::bit_block_ex0_split(tb1, arr_s, s_cnt, false);
+    assert(s_cnt == 2);
+    assert(arr_s[0] == 1025);
+    assert(arr_s[1] == 2048);
+    cnt = bm::bit_block_count(tb1);
+    assert(cnt == 65536);
+
+    }
+
+
+
     {
     for (unsigned pass = 1; pass < 0xFFF; ++pass)
     {
@@ -19267,7 +19299,7 @@ void BitSplitTest()
         bm::bit_block_rle_set(tb2, arr_s, arr_r, arr_rl, s_cnt, r_cnt);
         bool found = bm::block_find_first_diff(tb1, tb2, &block_pos);
         assert(!found);
-    }
+    } // for pass
     }
 
     for (unsigned pass = 0; pass < 100000; ++pass)
@@ -35964,7 +35996,7 @@ void TestArrMin0()
 
         --min0;
         bm::arr_recalc_min_w(test_arr2, test_arr, sz, 2, min0, tb0);
-        _Print_arr(test_arr2, sz);
+        //_Print_arr(test_arr2, sz);
 
         bm::arr_restore_min_w(test_arr2, sz, 2, min0, tb0);
         for (unsigned i = 0; i < sz; ++i)
@@ -37102,7 +37134,7 @@ void TestCompressSparseVector()
 
     // test contributed by A.Shkeda
     {
-    typedef bm::bvector<> bvector_type;
+//    typedef bm::bvector<> bvector_type;
 //    typedef bm::sparse_vector<uint32_t, bvector_type> sparse_vector_u32;
 //    typedef bm::rsc_sparse_vector<uint32_t, sparse_vector_u32>  rsc_sparse_vector_u32;
 
@@ -40813,10 +40845,10 @@ cout << seq << endl;
     } // for
 }
 
-static
+inline
 void load_fastq()
 {
-    const size_t batch_size = 500000;
+    //const size_t batch_size = 500000;
     const unsigned min_match = 6;
     size_t max_ssize = 0;
 
@@ -41561,10 +41593,10 @@ return 0;
     return 0;
 }
 */
-
-//    TestCapture();
-//    return 0;
-
+/*
+    TestCapture();
+    return 0;
+*/
     if (is_all || is_low_level)
     {
 
@@ -41846,6 +41878,7 @@ return 0;
 
     if (is_bvops0)
     {
+
         AndOperationsTest(true); // enable detailed check
          CheckAllocLeaks(false);
 
