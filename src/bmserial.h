@@ -1558,12 +1558,12 @@ bool serializer<BV>::interpolated_encode_gap_block_v3(
             if (min0) --min0; // not to collapse minimal gaps completely
             if (min1) --min1;
             len = bm::gap_length(gap_recalc_block)-1;
-            unsigned delta_acc = 0;
+            //unsigned delta_acc = 0;
             if (len < 4)
             {}
             else // do not DR small blocks
             {
-                delta_acc =
+                //delta_acc =
                     bm::gap_recalc_mins(gap_recalc_block, gap_recalc_block,
                                         min0, min1);
             }
@@ -2403,12 +2403,12 @@ serializer<BV>::find_gap_best_encoding(const bm::gap_word_t* gap_block) BMNOEXCE
         return bm::set_block_gap;
 
     unsigned bc = bm::gap_bit_count_unr(gap_block);
-    unsigned ibc = bm::gap_max_bits - bc;
+    //unsigned ibc = bm::gap_max_bits - bc;
 
     if (bc == 1)
         return bm::set_block_bit_1bit;
 
-    bc += 2; ibc += 2; // correct counts because effective GAP len = len - 2
+    bc += 2; //ibc += 2; // correct counts because effective GAP len = len - 2
 /*
     if (bc < len)
     {
