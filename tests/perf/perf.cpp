@@ -29,6 +29,8 @@ For more information please visit:  http://bitmagic.io
 //#define BMAVX2OPT
 //#define BM_USE_GCC_BUILD
 
+#define BM_DBG_SERIAL
+
 #define BM_NONSTANDARD_EXTENTIONS
 //#define BM64ADDR
 #ifdef _MSC_VER
@@ -75,6 +77,8 @@ std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs 
 typedef bm::bvector<> bvect;
 typedef bm::str_sparse_vector<char, bvect, 8> str_svect_type;
 typedef bm::str_sparse_vector<char, bvect, 8> str_sv_type;
+
+float g_fl_cnt = 0;
 
 
 // generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
@@ -540,9 +544,7 @@ void BitForEachTest()
     }
     assert(sum1 == sum4);
 
-    char buf[256];
-    sprintf(buf, "%i", (int)value); // to fool some smart compilers like ICC
-
+    g_fl_cnt += value; // to fool some smart compilers like ICC using global
 
     delete [] test_arr;
 }
@@ -1414,8 +1416,9 @@ void BitCompareTest()
     delete [] arr1;
     delete [] arr2;
 
-    char buf[256];
-    sprintf(buf, "%p", p);
+    if (p)
+        g_fl_cnt += 10.0f; // to fool some smart compilers like ICC using global
+
 }
 
 unsigned long long g_acc = 0;
@@ -1482,8 +1485,7 @@ void FindTest()
             }
         }
     }
-    char cbuf[256];
-    sprintf(cbuf, "%i ", pos_sum); // attempt to avoid agressive optmizations
+    g_fl_cnt += pos_sum; // to fool some smart compilers like ICC using global
 
     {
         bm::chrono_taker<std::ostream> tt(cout, "bvector<>::find()", REPEATS*100);
@@ -1738,8 +1740,8 @@ void EnumeratorTestGAP()
     }
     s << v << endl; // attempt to fool optimization
 
-    char buf[256];
-    sprintf(buf, "%i", cnt); // to fool some smart compilers like ICC
+    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+
 
     delete bv;
     delete bset;
@@ -1784,8 +1786,6 @@ void SerializationTest()
     delete [] buf; buf = 0;
         
     bvect*  bv = new bvect();
-    //test_bitset*  bset = new test_bitset();
-    unsigned value = 0;
 
     SimpleFillSets(nullptr, *bv, 0, BSIZE, 4);
     
@@ -1802,13 +1802,9 @@ void SerializationTest()
     }
     }
 
+    g_fl_cnt += id_size; // to fool some smart compilers like ICC using global
 
-    char cbuf[256] = {0, };
-    sprintf(cbuf, "%u", value);
-    /*
-    cout << cbuf << " " << id_size << " " << len << " " << value << endl;
-    */
-        
+
     delete bv;
     delete [] buf;
 }
@@ -2751,8 +2747,11 @@ void BitBlockTransposeTest()
 
     }
     
-    char cbuf[256];
-    sprintf(cbuf, "%i %i", cnt, d2[10][10]);
+
+    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+    g_fl_cnt += d2[10][10];
+
+
 
     for (unsigned i = 0; i < blocks_count; ++i)
     {
@@ -3194,12 +3193,7 @@ void SparseVectorAccessTest()
 
     assert(cnt1 == cnt2);
 
-
-
-    
-    char buf[256];
-    sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
-
+    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
 }
 
 static
@@ -3351,9 +3345,7 @@ void SparseVectorSignedAccessTest()
         }
     }
 
-
-    char buf[256];
-    sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
+    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
 
 }
 
@@ -4119,8 +4111,8 @@ void Set2SetTransformTest()
         }
     }
     */
-    char buf[256];
-    sprintf(buf, "%i", (int)cnt); // to fool some smart compilers like ICC
+    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+
 }
 
 static
@@ -4471,8 +4463,8 @@ void IntervalsTest()
                 }
                 assert(cnt == cnt_c);
             }
-            char buf[256];
-            sprintf(buf, "%u", sum); // this is to prevent unwanted optimizations by some compilers
+
+            g_fl_cnt += sum; // to fool some smart compilers like ICC using global
 
         }
 
@@ -6286,6 +6278,9 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
+
+        if (g_fl_cnt < 0) // ... to fool compiler optimizers not to exclude code
+            cout << "";
 
 //        AS_test1();
 //        AS_test2();
