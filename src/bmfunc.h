@@ -2572,27 +2572,27 @@ void gap_calc_mins(const T* buf, T& min0, T& min1) BMNOEXCEPT
 {
     const T* pcurr = buf;
     auto dsize = (*pcurr >> 3);
-    unsigned is_set = (*pcurr & 1u);
+    //unsigned is_set = (*pcurr & 1u);
 
     const T* pend = pcurr + dsize;
 
     min1 = 65535;
     ++pcurr;
     min0 = *pcurr;
-    is_set ^= 1u;
+    //is_set ^= 1u;
     for (++pcurr; pcurr <= pend; pcurr++)
     {
         T delta = *pcurr - *(pcurr-1);
         if (delta < min1)
             min1 = delta;
-        ++pcurr; is_set ^= 1u;
+        ++pcurr; //is_set ^= 1u;
         if (pcurr <= pend)
         {
             delta = *pcurr - *(pcurr-1);
             if (delta < min0)
                 min0 = delta;
         }
-        is_set ^= 1u;
+        //is_set ^= 1u;
     } // for
 
     if (min0 == 65535)
