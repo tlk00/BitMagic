@@ -9909,7 +9909,7 @@ bool agg_shift_right_and(bm::aggregator<bvect>& agg,
     va_start(args, bv);
     agg.add(bv);
     
-    for (int i = 0; true; ++i)
+    for (; true; )
     {
         const bvect* bv_arg = (const bvect*)va_arg(args, void*);
         if (!bv_arg)
@@ -22317,6 +22317,7 @@ void ArrayEncodingTest()
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c = 3;
             unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            (void) h3f;
             assert(sz == sz2c);
             h3f = bin.decode_array(&arr2c[0], &sz2c);
             assert(sz == sz2c);
@@ -40535,7 +40536,7 @@ struct LCS_result
 int solve(char* X, char* Y, int m, int n){
    int longest[m + 1][n + 1];
    int len = 0;
-   int row, col;
+    int row, col; (void) row; (void) col;
    for (int i = 0; i <= m; i++) {
       for (int j = 0; j <= n; j++) {
          if (i == 0 || j == 0)
@@ -40559,8 +40560,8 @@ int solve(char* X, char* Y, int m, int n){
 string LCSubStr(const string& X, const string& Y)
 {
     // Find length of both the strings.
-    int m = X.length();
-    int n = Y.length();
+    int m = (int)X.length();
+    int n = (int)Y.length();
 
     // Variable to store length of longest
     // common substring.
@@ -40676,7 +40677,7 @@ void cyclicRotateString(std::string& str, int N) {
 */
 
 void cyclicRotateString(std::string& str, int N) {
-    int len = str.length();
+    int len = (int)str.length();
 
     // Adjust the rotation value to be within the string length
     N = N % len;
@@ -40800,7 +40801,7 @@ void pick_subject_mates(bvect& bsc_members,
     {
         const LCS_result& lcs_res = row_results[i];
         if (lcs_res.len && lcs_res.pos1 == query_pos)
-            bsc_members.set_bit_no_check(i);
+            bsc_members.set_bit_no_check((unsigned)i);
     } // for i
 }
 
@@ -40922,7 +40923,7 @@ return;
     for (size_t i{0}, c{0}; i < seq_vect.size(); ++i)
     {
 
-        if (bv_sim_found.test(i))
+        if (bv_sim_found.test((unsigned)i))
             continue;
 
         cout << "---------------------------------------" << c++ << ":" << endl;
@@ -40933,7 +40934,7 @@ return;
 
         for (size_t j = i+1; j < seq_vect.size(); ++j)
         {
-            if (bv_sim_found.test(j)) // we have a greedy algo here, it is ok to skip some
+            if (bv_sim_found.test((unsigned)j)) // we have a greedy algo here, it is ok to skip some
                 continue;
 
             const string& s_j = seq_vect[j];
@@ -41104,7 +41105,7 @@ return;
             }
 
             // add current found cluster to the list of already found strings
-            bv_sim_found.set_bit_no_check(i);
+            bv_sim_found.set_bit_no_check((unsigned)i);
             bv_sim_found |= best_mates;
 
         }
