@@ -594,6 +594,50 @@ private:
     B* bp_;
 };
 
+// ------------------------------------------------------------------
+
+/*!
+    \brief Set 1 bit in a block
+    @ingroup bitfunc
+*/
+BMFORCEINLINE
+void set_bit(unsigned* dest, unsigned  bitpos) BMNOEXCEPT
+{
+    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
+    unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    nbit &= bm::set_word_mask;
+    dest[nword] |= unsigned(1u << nbit);
+}
+
+/*!
+    \brief Set 1 bit in a block
+    @ingroup bitfunc
+*/
+BMFORCEINLINE
+void clear_bit(unsigned* dest, unsigned  bitpos) BMNOEXCEPT
+{
+    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
+    unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    nbit &= bm::set_word_mask;
+    dest[nword] &= ~(unsigned(1u << nbit));
+}
+
+/*!
+    \brief Test 1 bit in a block
+
+    @ingroup bitfunc
+*/
+BMFORCEINLINE
+unsigned test_bit(const unsigned* block, unsigned  bitpos) BMNOEXCEPT
+{
+    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
+    unsigned nword = unsigned(nbit >> bm::set_word_shift);
+    nbit &= bm::set_word_mask;
+    return (block[nword] >> nbit) & 1u;
+}
+
+// ------------------------------------------------------------------
+
 
 /*!
    \brief Unpacks word into list of ON bit indexes
@@ -2278,6 +2322,7 @@ void arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
 */
 template<typename T>
 unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
+                              unsigned min0,
                               unsigned* wflags) BMNOEXCEPT
 {
     BM_ASSERT(wlen > 1);
@@ -2290,9 +2335,7 @@ unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
     {
         BM_ASSERT(arr[i] > arr[i-1]);
         if (T delta = arr[i] - arr[i-1]; delta < min_w_prev)
-        {
             min_w_prev = delta;
-        }
     } // for i
 
     unsigned wave = 1;
@@ -2315,17 +2358,14 @@ unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
             if (delta < min_w_prev)
                 w_ok = false;
             if (delta < min_w)
-            {
                 min_w = delta;
-            }
         } // for j
         if (w_ok)
         {
-            ++wcnt;
+            if (min_w > min0) // improved over global
             {
-                unsigned nword  = unsigned(wave >> bm::set_word_shift);
-                unsigned nbit = wave & bm::set_word_mask;
-                wflags[nword] |= (1u << nbit);
+                ++wcnt;
+                bm::set_bit(wflags, wave);
             }
         }
         min_w_prev = min_w;
@@ -2377,12 +2417,7 @@ T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
             wlen = r;
             BM_ASSERT(i+wlen == arr_len);
         }
-        bool w_recalc;
-        {
-            unsigned nword  = unsigned(wave >> bm::set_word_shift);
-            unsigned nbit = wave & bm::set_word_mask;
-            w_recalc = (wflags[nword] & (1u << nbit));
-        }
+        bool w_recalc = bm::test_bit(wflags, wave);
         T min_w = T(~0u);
         for (unsigned j = 0; j < wlen; ++j)
         {
@@ -2448,12 +2483,7 @@ void arr_restore_min_w(T* arr, unsigned arr_len, unsigned wlen,
             wlen = r;
             BM_ASSERT(i+wlen == arr_len);
         }
-        bool w_recalc;
-        {
-            unsigned nword  = unsigned(wave >> bm::set_word_shift);
-            unsigned nbit = wave & bm::set_word_mask;
-            w_recalc = (wflags[nword] & (1u << nbit));
-        }
+        bool w_recalc = bm::test_bit(wflags, wave);
         unsigned min_w = ~0u;
         for (unsigned j = 0; j < wlen; ++j)
         {
@@ -4390,47 +4420,6 @@ unsigned gap_block_find(const T* BMRESTRICT buf,
 }
 
 //------------------------------------------------------------------------
-
-
-/*! 
-    \brief Set 1 bit in a block
-    @ingroup bitfunc
-*/
-BMFORCEINLINE
-void set_bit(unsigned* dest, unsigned  bitpos) BMNOEXCEPT
-{
-    unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
-    unsigned nword = unsigned(nbit >> bm::set_word_shift); 
-    nbit &= bm::set_word_mask;
-    dest[nword] |= unsigned(1u << nbit);
-}
-
-/*!
-    \brief Set 1 bit in a block
-    @ingroup bitfunc
-*/
-BMFORCEINLINE
-void clear_bit(unsigned* dest, unsigned  bitpos) BMNOEXCEPT
-{
-    unsigned nbit  = unsigned(bitpos & bm::set_block_mask);
-    unsigned nword = unsigned(nbit >> bm::set_word_shift);
-    nbit &= bm::set_word_mask;
-    dest[nword] &= ~(unsigned(1u << nbit));
-}
-
-/*! 
-    \brief Test 1 bit in a block
-    
-    @ingroup bitfunc
-*/
-BMFORCEINLINE
-unsigned test_bit(const unsigned* block, unsigned  bitpos) BMNOEXCEPT
-{
-    unsigned nbit  = unsigned(bitpos & bm::set_block_mask); 
-    unsigned nword = unsigned(nbit >> bm::set_word_shift); 
-    nbit &= bm::set_word_mask;
-    return (block[nword] >> nbit) & 1u;
-}
 
 
 /*! 
