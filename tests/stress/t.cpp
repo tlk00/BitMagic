@@ -18866,7 +18866,7 @@ void BitRangeAllSetTest()
     {
         b =  bm::bit_block_is_all_one_range(tb1, 0, 65535);
         assert(b);
-        tb1[2047] &= ~(1<<31);
+        tb1[2047] &= ~(1u<<31);
 
         bool all_one = bm::check_block_one(tb1, true);
         assert(!all_one);
@@ -22297,7 +22297,8 @@ void ArrayEncodingTest()
     cout << "---------------------------- ArrayEncodingTest()" << endl;
     unsigned char buf[1024 * 200] = {0, };
     bm::gap_word_t recalc_arr1[65536];
-
+    BM_DECLARE_TEMP_BLOCK(tb_wflags);
+    BM_DECLARE_TEMP_BLOCK(tmp_arr);
     {
         bm::gap_word_t arr1[] = { 0 };
         unsigned sz;
@@ -22306,8 +22307,8 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = 0;
-            bout.encode_array(arr1, recalc_arr1, sz, true, false);
-            bout.encode_array(arr1, recalc_arr1, sz, true, false);
+            bout.encode_array(arr1, recalc_arr1, tb_wflags, (bm::gap_word_t*)tmp_arr, sz, true, false);
+            bout.encode_array(arr1, recalc_arr1, tb_wflags, (bm::gap_word_t*)tmp_arr, sz, true, false);
             bout.flush();
         }
         {
@@ -22331,7 +22332,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, recalc_arr1, sz, true, false);
+            bout.encode_array(arr1, recalc_arr1, tb_wflags, (bm::gap_word_t*)tmp_arr, sz, true, false);
             bout.flush();
         }
         {
@@ -22359,7 +22360,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr2, sz, false, true);
+            bout.encode_array(arr1, arr2, tb_wflags,(bm::gap_word_t*)tmp_arr, sz, false, true);
             bout.flush();
         }
         {
@@ -22390,7 +22391,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr2, sz, true, true, true);
+            bout.encode_array(arr1, arr2, tb_wflags, (bm::gap_word_t*)tmp_arr,sz, true, true, true);
             bout.flush();
         }
 
@@ -22421,7 +22422,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr2, sz, true, true, true);
+            bout.encode_array(arr1, arr2, tb_wflags, (bm::gap_word_t*)tmp_arr,sz, true, true, true);
             bout.flush();
         }
 
@@ -22451,7 +22452,7 @@ void ArrayEncodingTest()
             bm::bit_out<bm::encoder> bout(enc);
 
             sz = sizeof(arr1)/sizeof(arr1[0]);
-            bout.encode_array(arr1, arr2, sz, true, true);
+            bout.encode_array(arr1, arr2, tb_wflags, (bm::gap_word_t*) tmp_arr, sz, tmp_arr, true, true);
             bout.flush();
         }
 
@@ -22497,7 +22498,7 @@ void ArrayEncodingTest()
             {
                 bm::encoder enc(buf, sizeof(buf));
                 bm::bit_out<bm::encoder> bout(enc);
-                bout.encode_array(arr, arr2, sz, false, false);
+                bout.encode_array(arr, arr2, tb_wflags, (bm::gap_word_t*)tmp_arr, sz, false, false);
             }
             {
                 decoder dec(buf);
@@ -35926,9 +35927,9 @@ void TestArrMin0()
 
         bm::bit_block_set(tb0, 0);
         bm::arr_calc_delta_min(test_arr, sz, min0);
-        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 64, tb0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 64, min0, tb0);
         assert(wcnt == 0);
-        wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, min0, tb0);
         assert(wcnt == 0);
         auto cnt = bm::bit_block_count(tb0);
         assert(cnt == 0);
@@ -35940,7 +35941,7 @@ void TestArrMin0()
         bm::bit_block_set(tb0, 0);
         bm::arr_calc_delta_min(test_arr, sz, min0);
         assert(min0);
-        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, min0, tb0);
         assert(wcnt == 3);
         auto cnt = bm::bit_block_count(tb0);
         assert(cnt == 3);
@@ -35963,7 +35964,7 @@ void TestArrMin0()
         bm::bit_block_set(tb0, 0);
         bm::arr_calc_delta_min(test_arr, sz, min0);
         assert(min0);
-        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, min0, tb0);
         assert(wcnt == 1);
         auto cnt = bm::bit_block_count(tb0);
         assert(cnt == 1);
@@ -35988,7 +35989,7 @@ void TestArrMin0()
         bm::bit_block_set(tb0, 0);
         bm::arr_calc_delta_min(test_arr, sz, min0);
         assert(min0);
-        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, tb0);
+        auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, 2, min0, tb0);
         assert(wcnt == 10);
         auto cnt = bm::bit_block_count(tb0);
         assert(cnt == wcnt);
@@ -36030,7 +36031,7 @@ void TestArrMin0()
             assert(min0);
 
             bm::bit_block_set(tb0, 0);
-            auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, w, tb0);
+            auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, w, min0, tb0);
             auto cnt = bm::bit_block_count(tb0);
             assert(cnt == wcnt);
 
@@ -36078,7 +36079,7 @@ void TestArrMin0()
             assert(min0);
 
             bm::bit_block_set(tb0, 0);
-            auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, w, tb0);
+            auto wcnt = bm::arr_calc_delta_min_w(test_arr, sz, w, min0, tb0);
             auto cnt = bm::bit_block_count(tb0);
             assert(cnt == wcnt);
             if (!cnt)
