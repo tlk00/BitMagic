@@ -9908,7 +9908,7 @@ bool bit_block_ex0_split_check(const unsigned* BMRESTRICT /*block*/,
 {
     for (unsigned k = 0; k < ex0_cnt; ++k) // check if ex0 split is correct
     {
-        bool b = bm::test_bit(tb, ex0_arr[k]);
+        bool b = bm::test_bit(tb, ex0_arr[k]); (void) b;
         BM_ASSERT(b);
         b = bm::test_bit(tb, ex0_arr[k]+1);
         BM_ASSERT(b);
