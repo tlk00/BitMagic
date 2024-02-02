@@ -4287,11 +4287,8 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
     case set_block_gap_bienc_v3:
         {
             bm::gap_word_t* ex0_arr = (bm::gap_word_t*) this->ex0_arr_;
-
-            bm::gap_word_t min_v, max_v;
+            bm::gap_word_t min_v{0}, max_v{0}, min0{0}, min1{0};
             unsigned len = (gap_head >> 3);
-
-            bm::gap_word_t min0{0}, min1{0};
             unsigned char head_v3 = decoder.get_8();
             {
                 dst_block[0] =
