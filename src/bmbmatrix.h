@@ -406,7 +406,7 @@ public:
     ///@}
 
 protected:
-    enum vector_cap
+    enum vector_cap : unsigned long long
     {
         max_vector_size = bm::id_max,
         sv_value_slices = 0
