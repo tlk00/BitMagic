@@ -100,7 +100,7 @@ int main(void)
             bmatr_deserial.deserialize(bmatr1, buf);
 
             bool eq = bmatr0.equal(bmatr1);
-            assert(eq);
+            assert(eq); (void)eq;
 
             assert(!bmatr0.is_ro()); // restored matrix is writable
         }
@@ -121,7 +121,7 @@ int main(void)
             bmatr_deserial_ro.deserialize(bmatr1, buf);
 
             bool eq = bmatr0.equal(bmatr1);
-            assert(eq);
+            assert(eq); (void)eq;
 
             assert(bmatr1.is_ro()); // restored matrix is NOT writable
         }
@@ -140,7 +140,7 @@ int main(void)
 
             bmatr_deserial_ro.deserialize_range(bmatr1, buf, 10, 100);
 
-            bool eq = bmatr0.equal(bmatr1);
+            bool eq = bmatr0.equal(bmatr1); (void)eq;
             assert(!eq); // not the same matrix
             assert(bmatr1.is_ro()); // restored matrix is NOT writable
         }
@@ -171,7 +171,7 @@ int main(void)
             if (bv)
                 bv->bit_and(bv_mask);
         } // for i
-        bool eq = bmatr0.equal(bmatr1);
+        bool eq = bmatr0.equal(bmatr1); (void)eq;
         assert(eq); // not the same matrix
 
 
