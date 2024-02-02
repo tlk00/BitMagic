@@ -190,10 +190,10 @@ enum set_operation
 */
 enum operation
 {
-    BM_AND = set_AND,
-    BM_OR  = set_OR,
-    BM_SUB = set_SUB,
-    BM_XOR = set_XOR
+    BM_AND = bm::set_AND,
+    BM_OR  = bm::set_OR,
+    BM_SUB = bm::set_SUB,
+    BM_XOR = bm::set_XOR
 };
 
 

@@ -31,6 +31,7 @@ For more information please visit:  http://bitmagic.io
 
 #ifdef _MSC_VER
 # pragma warning( disable: 4146 )
+# pragma warning( disable: 4310 )
 #endif
 
 namespace bm
@@ -1383,7 +1384,7 @@ void block_expand_by_digest(bm::word_t*   t_block,
 
 /// Returns true if set operation is constant (bitcount)
 inline
-bool is_const_set_operation(set_operation op) BMNOEXCEPT
+bool is_const_set_operation(bm::set_operation op) BMNOEXCEPT
 {
     return (int(op) >= int(set_COUNT));
 }
@@ -2389,7 +2390,7 @@ T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
     tarr[0] = arr[0];
     T delta_acc = 0;
 
-    T min_w_prev = ~T(0);
+    T min_w_prev = T(~0u);
     // process first wave
     for (unsigned i = 1; i < wlen; ++i)
     {
@@ -2489,8 +2490,8 @@ void arr_restore_min_w(T* arr, unsigned arr_len, unsigned wlen,
         {
             if (w_recalc) // prev-min recacl
             {
-                arr[i+j] += min_w_prev + delta_acc;
-                delta_acc += min_w_prev;
+                arr[i+j] += (T)(min_w_prev + delta_acc);
+                delta_acc += (T)min_w_prev;
             }
             else // min0 recalc
             {
@@ -2514,9 +2515,8 @@ void arr_restore_min_w(T* arr, unsigned arr_len, unsigned wlen,
    @ingroup gapfunc
 */
 template<typename T>
-void arr_calc_delta_min(const T* arr, unsigned arr_len,
-                  T& min0,
-                  unsigned* hist, unsigned hist_len) BMNOEXCEPT
+void arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0,
+                        unsigned* hist, unsigned hist_len) BMNOEXCEPT
 {
     min0 = 65535; 
     for (unsigned i = 1; i < arr_len; ++i)
@@ -11083,7 +11083,7 @@ SZ count_nz(const VT* arr, SZ arr_size) BMNOEXCEPT
 /// Possible representations for bit sets
 ///
 /// @internal
-enum bit_representation
+enum class bit_representation
 {
     e_bit_GAP = 0, ///< GAPs
     e_bit_INT,     ///< Int list
@@ -11114,12 +11114,12 @@ bm::bit_representation best_representation(unsigned gc,
     if (!bc)
     {
         *best_metric = bc;
-        return e_bit_0;
+        return bit_representation::e_bit_0;
     }
     if (bc == max_bits)
     {
         *best_metric = 0;
-        return e_bit_1;
+        return bit_representation::e_bit_1;
     }
 
     unsigned ibc = max_bits - bc;
@@ -11130,8 +11130,8 @@ bm::bit_representation best_representation(unsigned gc,
             *best_metric = gc;
             float cost_in_bits = float(gc) * bie_bits_per_int;
             if (cost_in_bits >= float(max_bits))
-                return e_bit_bit;
-            return e_bit_GAP;
+                return bit_representation::e_bit_bit;
+            return bit_representation::e_bit_GAP;
         }
     }
     else // GC >= BC
@@ -11141,15 +11141,15 @@ bm::bit_representation best_representation(unsigned gc,
             *best_metric = bc;
             float cost_in_bits = float(bc) * bie_bits_per_int;
             if (cost_in_bits >= float(max_bits))
-                return e_bit_bit;
-            return e_bit_INT;
+                return bit_representation::e_bit_bit;
+            return bit_representation::e_bit_INT;
         }
     }
     *best_metric = ibc;
     float cost_in_bits = float(ibc) * bie_bits_per_int;
     if (cost_in_bits >= float(max_bits))
-        return e_bit_bit;
-    return e_bit_IINT;
+        return bit_representation::e_bit_bit;
+    return bit_representation::e_bit_IINT;
 }
 
 // --------------------------------------------------------------
