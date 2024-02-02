@@ -11742,9 +11742,10 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
                 assert(0); exit(1);
             }
         }
-
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
+#endif
         {
             bvect bv1(*bvect_full1);
             unsigned idx = unsigned(rand()) % size;
@@ -11812,7 +11813,9 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
                 }
             }
         }
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
         {
             VisitorAllRangeTest(*bvect_full2, 0); // test with automatic step
         }
