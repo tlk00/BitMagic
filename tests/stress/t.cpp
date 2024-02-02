@@ -40517,7 +40517,7 @@ typedef bm::bvector<> bvector_type;
 }
 */
 
-#if 1
+#if (0)
 
 typedef bm::dynamic_heap_matrix<unsigned, bvect::allocator_type> DPMatrix;
 
@@ -40812,13 +40812,6 @@ void pick_subject_mates(bvect& bsc_members,
 typedef std::vector<std::string> TSeqVector;
 typedef std::vector<LCS_result>  TLCS_RowResults;
 
-/*
-void print_seqcluster(const TSeqVector& seq_vect,
-                      const TLCS_RowResults& rr)
-{
-}
-
-*/
 
 
 void load_sequence_file(const char* fname, size_t batch_size,
@@ -41194,98 +41187,6 @@ int main(int argc, char *argv[])
     exit(1);
 #endif
 
-//    test_fastq();
-//    return 0;
-
-
-//    load_fastq();
-//    return 0;
-/*
-    {
-    std::string str1 = "abcdef";
-    std::string str2 = "12defg";
-    DPMatrix dp;
-    LCS_result result = find_LCS(str1, str2, dp);
-
-    if (result.len) {
-        std::cout << "Longest common substring found:\n";
-        std::cout << "Substring: " << str1.substr(result.pos1, result.len) << "\n";
-        std::cout << "Position in str1: " << result.pos1 << "\n";
-        std::cout << "Position in str2: " << result.pos2 << "\n";
-        std::cout << "Length: " << result.len << "\n";
-
-        if (result.pos1)
-        {
-            cyclicRotateString(str1, result.pos1);
-        }
-        if (result.pos2)
-        {
-            cyclicRotateString(str2, result.pos2);
-        }
-        std::cout << "Rotated strings:" << endl;
-        std::cout << " " << str1 << endl;
-        std::cout << " " << str2 << endl;
-
-        if (result.pos1)
-        {
-            cyclicRotateString(str1, -result.pos1);
-        }
-        if (result.pos2)
-        {
-            cyclicRotateString(str2, -result.pos2);
-        }
-        std::cout << "Un-Rotated strings:" << endl;
-        std::cout << " " << str1 << endl;
-        std::cout << " " << str2 << endl;
-
-
-
-
-    } else {
-        std::cout << "No common substring found.\n";
-    }
-    }
-
-    {
-    std::string str1 = "abcdef12";
-    std::string str2 = "34cdefg";
-    DPMatrix dp;
-    LCS_result result = find_LCS(str1, str2, dp);
-
-    if (result.len) {
-        std::cout << "Longest common substring found:\n";
-        std::cout << "Substring: " << str1.substr(result.pos1, result.len) << "\n";
-        std::cout << "Position in str1: " << result.pos1 << "\n";
-        std::cout << "Position in str2: " << result.pos2 << "\n";
-        std::cout << "Length: " << result.len << "\n";
-    } else {
-        std::cout << "No common substring found.\n";
-    }
-    }
-    {
-    std::string str1 = "abcdef12";
-    std::string str2 = "3478qg";
-    DPMatrix dp;
-    LCS_result result = find_LCS(str1, str2, dp);
-
-    if (result.len) {
-        std::cout << "Longest common substring found:\n";
-        std::cout << "Substring: " << str1.substr(result.pos1, result.len) << "\n";
-        std::cout << "Position in str1: " << result.pos1 << "\n";
-        std::cout << "Position in str2: " << result.pos2 << "\n";
-        std::cout << "Length: " << result.len << "\n";
-    } else {
-        std::cout << "No common substring found.\n";
-    }
-    }
-*/
-
-//    BamLoVoTest();
-
-
-    //case3_read2();
-    //return 0;
-
 
     {
     auto ret = parse_args(argc, argv);
@@ -41328,173 +41229,11 @@ int main(int argc, char *argv[])
     }
 #endif
 
-/*
-    test_str_sv_des_fnc();
-    test_chr21();
-
-    return 0;
-*/
-    //VCF_des_test();
 
 
-/*
-    BrennerTest("/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.i",
-                "/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/1.bv",
-                "/Users/anatoliykuznetsov/Desktop/dev/git/BitMagic/tests/stress/new.bv");
-    return 0;
-*/
-
-/*
-    LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.bvdump", 
-               "C:/dev/group-by-sets/sets/geo_organization.bvdump2", 
-               false); // not validate!
-    exit(1);
-*/
-
-/*
-    LoadBVDump("C:/dev/group-by-sets/sets/geo_organization.dat", 
-               "C:/dev/group-by-sets/sets/geo_organization.bvdump", 
-               true); //  validate!
-
-    LoadBVDump("C:/dev/group-by-sets/sets/exec_time_msec_bit.dat", 
-               "C:/dev/group-by-sets/sets/exec_time_msec_bit.bvdump", 
-               true);
-
-    LoadBVDump("C:/dev/group-by-sets/sets/geo_country.dat", 
-               "C:/dev/group-by-sets/sets/geo_country.bvdump", 
-               true);
-    LoadBVDump("C:/dev/group-by-sets/sets/log_displayeduids.dat", 
-               "C:/dev/group-by-sets/sets/log_displayeduids.bvdump", 
-               true);
-
-    //LoadVectors("c:/dev/bv_perf", 3, 27);
-    exit(1);
-*/
-/*
-    {
-
-        BM_DECLARE_TEMP_BLOCK(tb)
-        std::vector<unsigned char> buf_v;
-
-        sparse_vector_serial_layout<str_svect_type > sv_lay;
-        bm::sparse_vector_serialize<str_svect_type >(sv0, sv_lay, tb);
-        const unsigned char* buf = sv_lay.buf();
-
-        str_svect_type sv1;
-        int res = bm::sparse_vector_deserialize(sv1, buf, tb);
-        if (res != 0)
-        {
-            cerr << "De-Serialization error!" << endl;
-            exit(1);
-        }
-
-        bool equal = sv0.equal(sv1);
-        assert(equal);
-    }
-*/
-
-/*
-    {
-    const string file_name = "/Users/anatoliykuznetsov/dev/git/BitMagic/tests/stress/HG_Ref_column.txt";
-    ifstream instr(file_name.c_str(), ios_base::in);
-    if (!instr.good() || !instr.is_open()) {
-        cout << "Failed to read file" << endl;
-        assert(0);
-    }
-
-    cout << "Reading " << file_name << endl;
-    using bvector_type = bm::bvector<>;
-    using TSparseStrVector = bm::str_sparse_vector<char, bvector_type, 390>;
-    TSparseStrVector ref(bm::use_null);
-
-    unsigned num_lines = 0;
-    {
-        auto start = chrono::steady_clock::now();
-        auto vec_it = ref.get_back_inserter();
-        string line;
-
-        while (getline(instr, line)) {
-            if (line.empty() || (!line.empty() && line[0] == '#')) {
-                continue;
-            }
-            ++num_lines;
-            vec_it = line;
-        }
-        vec_it.flush();
-        auto diff = chrono::steady_clock::now() - start;
-        cout << "Reading took "
-            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
-    }
-
-        cout << "Lines: " << num_lines << ", " << ref.size() << endl;
-    {
-        cout << "Remapping..." << endl;
-        auto start = chrono::steady_clock::now();
-        ref.remap();
-        auto diff = chrono::steady_clock::now() - start;
-        cout << "Remap took "
-            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
-    }
-    {
-        cout << "Optimizing..." << endl;
-        auto start = chrono::steady_clock::now();
-        BM_DECLARE_TEMP_BLOCK(tb);
-        ref.optimize(tb);
-        auto diff = chrono::steady_clock::now() - start;
-        cout << "Optimization took "
-            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
-    }
-
-    using TLayout = bm::sparse_vector_serial_layout<TSparseStrVector>;
-    auto layout = make_unique<TLayout>();
-
-    bm::sparse_vector_serializer<TSparseStrVector> str_serializer;
-
-    str_serializer.set_bookmarks(true, 16);
-    str_serializer.enable_xor_compression();
-    assert(str_serializer.is_xor_ref());
-    {
-        cout << "Serializing..." << endl;
-        auto start = chrono::steady_clock::now();
-        str_serializer.serialize(ref, *layout.get());
-        auto diff = chrono::steady_clock::now() - start;
-        cout << "Serialization took "
-            << chrono::duration_cast<chrono::milliseconds>(diff).count() << " ms " << endl;
-    }
-    }
-*/
-/*
-{
-typedef bm::str_sparse_vector<char, bvect, 8> str_sv_type;
-typedef bm::sparse_vector<uint32_t, bvect >   sv_uint_32_type;
-
-    str_sv_type      str_sv0; // sparse-succinct vector
-    sv_uint_32_type  sv_hash0;
-    ReadTestData(str_sv0, sv_hash0, 22, "/Volumes/DATAFAT32/spotnames/read_names2.txt");
-    cout << "remap..." << endl;
-    str_sv0.remap();
-    BM_DECLARE_TEMP_BLOCK(tb)
-    str_sv0.optimize(tb); // optimize the succinct vector
-    str_sv0.freeze();
-
-    cout << 1 << endl;
-}
-         CheckAllocLeaks(false);
-*/
 
 
-//avx2_i32_shift();
-//return 0;
 
-//unsigned long long a = 9223372036854775807ULL;
-//unsigned long long a = 281474976710655ULL;
-//a = a / (65536 * 256);
-/*
-LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/woXOR_ser_align_5736.bin");
-
-LoadTestAlignData("/Volumes/DATAFAT32/CGV-131/ser_align_5736.bin");
-*/
-//    return main2();
 
 /*
 {
@@ -41519,7 +41258,7 @@ typedef bm::sparse_vector_scanner<str_sv_type1, 64> scanner_t;
     }
 
     }
-
+`
     bool found = scanner.bfind_eq_str(name.c_str(), name.size(), pos);
     if (found)
     {
@@ -41530,69 +41269,6 @@ typedef bm::sparse_vector_scanner<str_sv_type1, 64> scanner_t;
         std::cout << name << " - found '" << val << "' at " << pos << std::endl;
     }
 return 0;
-}
-*/
-/*
-{
-    typedef bm::sparse_vector<uint16_t, bm::bvector<> > svector_u16;
-    svector_u16 sv, sv_c;
-    std::ifstream input( "/Volumes/DATAFAT32/incs.txt", ios::in);
-    if (!input.good())
-    {
-        cerr << "cannot open file" << endl;
-        return 1;
-    }
-    string line;
-    size_t idx = 0;
-    size_t o_cnt = 0;
-
-    while (getline(input, line))
-    {
-
-        if (line.empty())
-            continue;
-        auto pos = stoi(line);
-        auto v1 = sv.get_no_check(pos);
-
-        sv.inc(pos);
-        sv_c.inc(pos);
-
-
-        auto v2 = sv.get_no_check(pos);
-        if (v1 + 1 != v2) {
-            cerr << "Mismatch!" << endl;
-            cout << "line:" << idx << ", pos: " << pos << ", v1: " << v1 << ", v2: " << v2 << endl;
-            auto v1_c = sv_c.get(pos);
-            cout << "v1_c=" << v1_c << endl;
-
-            return 1;
-        }
-        //if (o_cnt > 1) // start detailed checking
-        if (idx < 23796594)
-        {
-            auto v_c = sv.get(23796594);
-            if (v_c)
-            {
-                cerr << "\n** turned non-zero!" << endl;
-                cerr << "  position match=" << (pos == 23796594) << endl;
-                cout << "line:" << idx << ", pos: " << pos << ", v1: " << v1 << ", v2: " << v2 << endl;
-                auto v1_c = sv_c.get(23796594);
-                cout << "v1_c=" << v1_c << endl;
-                //return 1;
-            }
-        }
-
-        ++idx;
-        if (idx % 8000000 == 0)
-        {
-            svector_u16 sv1(sv);
-            cerr << "O" << flush;
-            sv.optimize();
-            ++o_cnt;
-        }
-    }
-    cout << "processed " << idx << " lines" << endl;
-    return 0;
 }
 */
 /*
