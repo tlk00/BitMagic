@@ -2389,7 +2389,7 @@ T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
     tarr[0] = arr[0];
     T delta_acc = 0;
 
-    T min_w_prev = T(~0u);
+    T min_w_prev = ~T(0);
     // process first wave
     for (unsigned i = 1; i < wlen; ++i)
     {
@@ -9694,24 +9694,24 @@ bm::set_representation best_representation(unsigned bit_count,
 
     if ((gap_size < block_size) && (gap_size < arr_size) && (gap_size < inv_arr_size))
     {
-        return bm::set_gap;
+        return bm::set_representation::set_gap;
     }
 
     if (arr_size < inv_arr_size)
     {
         if ((arr_size < block_size) && (arr_size < gap_size))
         {
-            return bm::set_array1;
+            return bm::set_representation::set_array1;
         }
     }
     else
     {
         if ((inv_arr_size < block_size) && (inv_arr_size < gap_size))
         {
-            return bm::set_array0;
+            return bm::set_representation::set_array0;
         }
     }
-    return bm::set_bitset;
+    return bm::set_representation::set_bitset;
 }
 
 /*!

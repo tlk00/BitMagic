@@ -1780,7 +1780,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
             continue;
 
         unsigned total_windows = (sz + w_size - 1) / w_size;
-        float bits_extra = total_windows + 1 + 8 + 8;
+        float bits_extra = float(total_windows + 1 + 8 + 8);
         float save_per_window = 0.15f * w_size; // apprx .2 bits per element
         float total_save = save_per_window * wcnt;
         total_save -= bits_extra;

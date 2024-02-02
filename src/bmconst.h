@@ -214,7 +214,7 @@ enum sort_order
     @brief set representation variants
     @internal
 */
-enum set_representation
+enum class set_representation
 {
     set_bitset  = 0,  //!< Simple bitset
     set_gap     = 1,  //!< GAP-RLE compression
