@@ -61,8 +61,7 @@ int main(void)
         // In our case it is the whole number because it all fits into 2-bits
         // sparse_vector uses variable bit length
         unsigned u = sv1.get_unsigned_bits(i, 2);
-        assert(v == u);
-
+        assert(v == u); (void)v;
 
         cout << sv1.at(i) << ",";
     }
