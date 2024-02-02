@@ -5941,7 +5941,7 @@ void AS_test1()
             for (unsigned i = 0; i < 1000000; ++i) {
                 const std::pair<string, unsigned>& sp = tsample_v[i];
                 bool f = scanner_32.bfind_eq_str(sp.first.c_str(), sp.first.size(), pos);
-                assert(f);
+                assert(f); (void)f;
                 assert(pos == i);
                 s0+=pos;
             }
@@ -5954,7 +5954,7 @@ void AS_test1()
                 const std::pair<string, unsigned>& sp = tsample_v[i];
                 bool f = scanner_32.bfind_eq_str(sp.first.c_str(), pos);
                 s1+=pos;
-                assert(f);
+                assert(f); (void)f;
                 assert(pos == i);
             }
         }
