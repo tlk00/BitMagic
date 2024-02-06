@@ -2940,8 +2940,7 @@ void gap_restore_mins(T* buf, T min0, T min1) BMNOEXCEPT
     BM_ASSERT(*pend == 65535);
 
     ++pcurr;
-    T prev;
-    prev = *pcurr = (*pcurr + min0);
+    *pcurr = (*pcurr + min0);
     T delta_acc = min0;
 
     for (++pcurr; pcurr <= pend; )
@@ -2953,15 +2952,12 @@ void gap_restore_mins(T* buf, T min0, T min1) BMNOEXCEPT
         }
 
         BM_ASSERT(*pcurr < 65535);
-        BM_ASSERT((int(*pcurr) + min1 + delta_acc) > prev);
-        prev = *pcurr = *pcurr + min1 + delta_acc;
+        *pcurr = *pcurr + min1 + delta_acc;
         delta_acc += min1;
-        ++pcurr;
-        if (pcurr < pend)
+        if (++pcurr < pend)
         {
             BM_ASSERT(*pcurr < 65535);
-            BM_ASSERT((int(*pcurr) + min0 + delta_acc) > prev);
-            prev = *pcurr = *pcurr + min0 + delta_acc;
+            *pcurr = *pcurr + min0 + delta_acc;
             delta_acc += min0;
             ++pcurr;
         }
