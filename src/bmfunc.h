@@ -2888,8 +2888,7 @@ T gap_recalc_mins(T* tbuf, const T* buf, T min0, T min1) BMNOEXCEPT
     *tcurr = *pcurr; // copy head word
 
     ++pcurr; ++tcurr;
-    T prev;
-    prev = *tcurr = (*pcurr - min0);
+    T prev = *tcurr = (*pcurr - min0); (void)prev;
     T delta_acc = min0;
 
     ++pcurr; ++tcurr;
@@ -2950,7 +2949,6 @@ void gap_restore_mins(T* buf, T min0, T min1) BMNOEXCEPT
             BM_ASSERT(*pcurr == 65535);
             break;
         }
-
         BM_ASSERT(*pcurr < 65535);
         *pcurr = *pcurr + min1 + delta_acc;
         delta_acc += min1;
