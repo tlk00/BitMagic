@@ -1618,6 +1618,7 @@ const unsigned char h3f_ex_upper2 = 1 | (1 << 1); // lower two bits mask for cod
 // 11 - reserved (gamma length)
 
 const unsigned char h3f_ex_arr_1 = (1 << 4); /// array of 1s (otherwise 0s)
+const unsigned char h3f_use_gamma = (1 << 3); /// use gamma code for size
 const unsigned char h3f_ex_arr_ex_EOC = (1 << 5); /// End-of-Chain
 //
 const unsigned char h3f_ex_arr_min0_0 = (1 << 6); /// min0 is zero somehow
@@ -1627,6 +1628,7 @@ const unsigned char h3f_ex_minmax_v = (1 << 7); /// min-max range used to encode
 const unsigned char h3f_ex_noop = (1 << 7); /// nothing encoded, no-operation
 const unsigned char h3f_ex_gamma_zero_correct = (1 << 7); /// zero correction
 
+const unsigned wcnt_cutoff = 15;
 
 
 template<typename TEncoder>
@@ -1640,6 +1642,9 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
                                      unsigned force_code,
                                      bool save_size) BMNOEXCEPT
 {
+#define BM_ENCODE_SIZE(b, s)  if (b) \
+        { if (h3_flag & bm::h3f_use_gamma) this->gamma(s-1); else this->put_16_no(s); }
+
     BM_ASSERT(sz < 65536);
     BM_ASSERT(arr && arr != recalc_arr);
 
@@ -1651,11 +1656,10 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
     if (EOC_flag)
         h3_flag |= bm::h3f_ex_arr_ex_EOC;
 
-
     if (sz == 0)
     {
         h3_flag |= bm::h3f_ex_upper2; // same flag as single value
-        h3_flag |= bm::h3f_ex_noop; // uses same flag as h3f_ex_minmax_v
+        h3_flag |= bm::h3f_ex_noop; // (1<<7) uses same flag as h3f_ex_minmax_v
         this->put_bits(h3_flag, 8);
         return;
     }
@@ -1664,15 +1668,26 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         h3_flag |= bm::h3f_ex_upper2; // same flag as single value
         if (arr[0] == 0)
         {
-            h3_flag |= (1 << 3); // 1000
+            h3_flag |= bm::h3f_ex_arr_min0_0; // (1<<6)
             this->put_bits(h3_flag, 8);
             return;
         }
+
+        auto gamma_size = bm::gamma_size(arr[0]);
+        if (gamma_size < 16)
+            h3_flag |= bm::h3f_use_gamma;
+
         this->put_bits(h3_flag, 8);
-        this->put_16_no(arr[0]);
+        if (h3_flag & bm::h3f_use_gamma)
+            this->gamma(arr[0]);
+        else
+            this->put_16_no(arr[0]);
         return;
     } // single value encoding
 
+    auto gamma_size = bm::gamma_size(sz-1);
+    if (gamma_size < 16)
+        h3_flag |= bm::h3f_use_gamma;
 
     // -----------------------------------------------------
     switch (force_code)
@@ -1699,8 +1714,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
             h3_flag |= bm::h3f_ex_arr_min0_0;
 
         this->put_bits(h3_flag, 8);
-        if (save_size)
-            this->put_16_no(sz);
+        BM_ENCODE_SIZE(save_size, sz)
         if (min0)
             this->gamma(min0);
         for (unsigned i = 0; i < sz; ++i)
@@ -1731,8 +1745,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         if (!min0)
             h3_flag |= bm::h3f_ex_arr_min0_0;
         this->put_bits(h3_flag, 8);
-        if (save_size)
-            this->put_16_no(sz);
+        BM_ENCODE_SIZE(save_size, sz)
         if (min0)
             this->gamma(min0);
         if (zero_correct)
@@ -1754,66 +1767,69 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
     // -----------------------------------------------------
     // calculate DR compression parameter
     //
-    bm::arr_calc_delta_min(arr, sz, min0);
-    if (min0 < 65535)
-    {
-        BM_ASSERT(min0 > 0);
-    }
-    else
+    if (sz <= 2)
         min0 = 0;
+    else
+    {
+        bm::arr_calc_delta_min(arr, sz, min0);
+        if (min0 < 65535)
+        {
+            BM_ASSERT(min0 > 0);
+        }
+        else
+            min0 = 0;
+    }
 
     // evaluate feasibility for window-DR
     //
-    bool use_wdr = false;
-
-    unsigned win_size = 0;
-    float best_save = 0.0f;
-    for (unsigned w_size = 20; w_size <= 78; w_size += 2)
+    bool use_wdr = false; unsigned win_size = 0; float best_save = 0.0f;
+    if (sz > (20 * 3))
     {
-        bm::bit_block_set(tb_wflags, 0); // TODO: optimize
-
-        auto wcnt = bm::arr_calc_delta_min_w(arr, sz, w_size, min0, tb_wflags);
-        BM_ASSERT(wcnt == bm::bit_block_count(tb_wflags));
-        if (!wcnt)
-            break;
-        if (wcnt > 4096)
-            continue;
-
-        unsigned total_windows = (sz + w_size - 1) / w_size;
-        float bits_extra = float(total_windows + 1 + 8 + 8);
-        float save_per_window = 0.15f * w_size; // apprx .2 bits per element
-        float total_save = save_per_window * wcnt;
-        total_save -= bits_extra;
-        if (total_save > 0.0f) // positive savings
+        for (unsigned w_size = 20; w_size <= 78; w_size += 2)
         {
-            if (!use_wdr) // first possible value
+            bm::bit_block_set(tb_wflags, 0); // TODO: optimize
+
+            auto wcnt = bm::arr_calc_delta_min_w(arr, sz, w_size, min0, tb_wflags);
+            BM_ASSERT(wcnt == bm::bit_block_count(tb_wflags));
+            if (!wcnt)
+                break;
+            if (wcnt > 4096)
+                continue;
+
+            unsigned total_windows = (sz + w_size - 1) / w_size;
+            float bits_extra = float(total_windows + 1 + 8 + 8);
+            float save_per_window = 0.15f * w_size; // apprx .2 bits per element
+            float total_save = save_per_window * wcnt;
+            total_save -= bits_extra;
+            if (total_save > 0.0f) // positive savings
             {
-                use_wdr = true; win_size = w_size; best_save = total_save;
-            }
-            else
-                if (total_save >= best_save)
+                if (!use_wdr) // first possible value
                 {
-                    win_size = w_size; best_save = total_save;
+                    use_wdr = true; win_size = w_size; best_save = total_save;
                 }
                 else
-                {
-                    break; // no improvement
-                }
-        }
-        else // no total save
-        {
-            if (use_wdr) // we already have a solution, new one got worse
-                break;
-        }
-    } // for w_size
+                    if (total_save >= best_save)
+                    {
+                        win_size = w_size; best_save = total_save;
+                    }
+                    else
+                    {
+                        break; // no improvement
+                    }
+            }
+            else // no total save
+            {
+                if (use_wdr) // we already have a solution, new one got worse
+                    break;
+            }
+        } // for w_size
+    } // if sz > XYZ
 
     unsigned max_wd = 0;
-    if (best_save < 16.0f)
+    if (best_save < 10.0f) // 16.0f
         use_wdr = false;
     if (use_wdr)
-    {
         max_wd = (sz / win_size) + 1;
-    }
 
     if (min0)
         --min0;
@@ -1832,7 +1848,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         auto delta_acc =
         bm::arr_recalc_min_w(recalc_arr, arr, sz, win_size, min0, tb_wflags);
         BM_ASSERT((tb_wflags[0] & 1) == 0);
-        if (delta_acc < 300) // if DR compression was not really efficient
+        if (delta_acc < 10 || wcnt < wcnt_cutoff) // (300) if DR compression efficient?
         {
             use_wdr = false;
             goto use_min0; // quick fallback to old method
@@ -1843,7 +1859,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         {
         use_min0:
             auto delta_acc = bm::arr_recalc_min(recalc_arr, arr, sz, min0);
-            if (delta_acc < 10) // if DR compression was not efficient
+            if (delta_acc < 10)
             {
                 min0 = 0;
                 recalc_arr = const_cast<bm::gap_word_t*>(arr);
@@ -1862,24 +1878,29 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
     BM_ASSERT(min_v < max_v);
 
     unsigned range_reduct = min_v + (65536 - max_v);
-    if ((sz > 16) && (range_reduct > 1*256))
+    if ((sz > 10) && (range_reduct > 2*256))
         h3_flag |= bm::h3f_ex_minmax_v;
 
     this->put_bits(h3_flag, 8);
-    if (save_size)
-        this->put_16_no(sz);
+    BM_ENCODE_SIZE(save_size, sz)
     if (!(h3_flag & bm::h3f_ex_arr_min0_0))
-    {
         this->gamma(min0);
-    }
+
     if (h3_flag & bm::h3f_ex_minmax_v)
     {
         this->put_16_no(min_v);
         this->put_16_no(max_v);
         recalc_arr = &recalc_arr[1];
         sz-=2;
+        if (!sz)
+        {
+            BM_ASSERT(!use_wdr);
+            this->flush_if_full();
+            return;
+        }
+        ++min_v; --max_v;
     }
-    else
+    else // use default range
     {
         min_v = 0; max_v = 65535; // BIC dflt range [0..65535]
     }
@@ -1894,22 +1915,24 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         BM_ASSERT(wcnt && win_size);
         BM_ASSERT((wcnt * win_size) <= (sz + win_size-1));
         BM_ASSERT(max_wd);
-
-//        bm::gap_word_t tmp_arr[4096];
         {
             unsigned arr_len =
                 bm::bit_block_convert_to_arr(tmp_arr, tb_wflags, false);
             BM_ASSERT(arr_len == wcnt);
             BM_ASSERT(max_wd >= tmp_arr[arr_len-1]);
 
-            this->gamma(win_size/2);
-            this->gamma(wcnt);
-
+            BM_ASSERT(win_size/2 > 9);
+            this->gamma((win_size/2) - 9);
+            this->gamma(wcnt - (wcnt_cutoff - 1));
             this->flush_if_full();
+
+            // Note: saving min_v (1) does not improve compression here
             this->bic_encode_u16(tmp_arr, arr_len, 1, (bm::gap_word_t)max_wd);
         }
     }
     this->flush_if_full();
+
+#undef BM_ENCODE_SIZE
 }
 
 
@@ -2328,13 +2351,6 @@ ret:
 template<class TDecoder>
 unsigned bit_in<TDecoder>::get_16_no() BMNOEXCEPT
 {
-/*
-    bool use_8 = this->get_bit();
-    BM_ASSERT(!use_8);
-    unsigned lo = get_bits(8);
-    if (use_8)
-        return lo;
-*/
     unsigned lo = get_bits(8);
     unsigned hi = get_bits(8);
     unsigned v = lo | (hi << 8);
@@ -2420,14 +2436,18 @@ unsigned bit_in<TDecoder>::decode_array(bm::gap_word_t* arr,
     if ((h3_flag & bm::h3f_ex_upper2) == bm::h3f_ex_upper2) // single value
     {
         *sz = 1;
-        arr[0] = (h3_flag & (1 << 3)) ? // 1000
+        arr[0] = (h3_flag & bm::h3f_ex_arr_min0_0) ? // (1<<6)
             0 :
-            (bm::gap_word_t) this->get_16_no();
+            (h3_flag & bm::h3f_use_gamma) ?
+                  (bm::gap_word_t) this->gamma()
+                : (bm::gap_word_t) this->get_16_no();
     }
     else // BIC-DR or gamma
     {
 
-        *sz = default_sz ? default_sz : this->get_16_no();
+        *sz = default_sz ? default_sz :
+                (h3_flag & bm::h3f_use_gamma) ? (this->gamma()+1)
+                                              : this->get_16_no();
         bm::gap_word_t min0 =
                 (h3_flag & bm::h3f_ex_arr_min0_0) ?
                 0 :
@@ -2465,9 +2485,10 @@ unsigned bit_in<TDecoder>::decode_array(bm::gap_word_t* arr,
             {
                 bm::gap_word_t min_v = (bm::gap_word_t) this->get_16_no();
                 bm::gap_word_t max_v = (bm::gap_word_t) this->get_16_no();
-
-                arr[0] = min_v;
-                arr[*sz-1] = max_v;
+                arr[0] = min_v; arr[*sz-1] = max_v;
+                if (*sz == 2)
+                    return h3_flag;
+                ++min_v; --max_v;
                 this->bic_decode_u16(&arr[1], *sz-2, min_v, max_v);
             }
             else
@@ -2478,16 +2499,15 @@ unsigned bit_in<TDecoder>::decode_array(bm::gap_word_t* arr,
             auto use_wdr = this->get_bit();
             if (use_wdr)
             {
-                BM_DECLARE_TEMP_BLOCK(tb_wflags);
+                BM_DECLARE_TEMP_BLOCK(tb_wflags); // TODO: make dynamic!
                 bm::bit_block_set(tb_wflags, 0);
-
                 unsigned win_size = this->gamma();
                 unsigned wcnt = this->gamma();
-
-                win_size = win_size * 2;
+                wcnt += bm::wcnt_cutoff - 1;
+                win_size = (win_size+9) * 2;
                 unsigned max_wd = (*sz / win_size) + 1;
-
                 this->bic_decode_u16_bitset(tb_wflags, wcnt, 1, (bm::gap_word_t)max_wd);
+
                 BM_ASSERT(wcnt == bm::bit_block_count(tb_wflags));
 
                 bm::arr_restore_min_w(arr, *sz, win_size, min0, tb_wflags);
