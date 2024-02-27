@@ -24,7 +24,7 @@ BitMagic was used as a building blocks for:
   building blocks for binary clusterizations, self-organizing maps
 - Construction of memory compressed bioinformatics models 
   - sequence alignments 
-  - collections of variations and SNPs 
+  - collections of variations and SNPs
   - compression of sequence reads 
   - k-mer classification systems
 - Visualization of data-sets in the memory constrained edge configurations
@@ -73,7 +73,7 @@ Please visit our tech.notes:
 - compressed bit-vector container 
 - iterator (bm::bvector<>::enumerator to decode the bitset to integers
 - set algebraic operations: AND, OR, XOR, MINUS, NOT on bit-vectors and integer sets
-- fast bit-vector ierator (enumerator) for bit-vector traversal, algorithms for functor-based traversals (similar to std::for_each)
+- fast bit-vector iterator (enumerator) for bit-vector traversal, algorithms for functor-based traversals (similar to std::for_each)
 - fast import (compression) of integer lists (C++ style bulk_insert_iterator or using C array)
 - aggregator: fast vectorized logical AND, OR, AND-MINUS operations on groups of bit-vectors
 - serialization/hybernation of bit-vector containers into compressed BLOBs for persistence (or in-RAM compression)
