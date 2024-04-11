@@ -1721,10 +1721,10 @@ public:
     /**
         Bit count all blocks to determine if it is very sparse
     */
-    bool is_sparse_sblock(unsigned i, unsigned sparse_cut_off) const BMNOEXCEPT
+    bool is_sparse_sblock(unsigned i, unsigned sparse_cut_off,
+                          bm::bv_sub_survey& sub_stat) const BMNOEXCEPT
     {
-        if (!sparse_cut_off)
-            return false;
+        BM_ASSERT(sparse_cut_off);
         const unsigned non_sparse_cut_off = sparse_cut_off * bm::set_sub_array_size;
 
         BM_ASSERT(i < top_block_size());
@@ -1734,52 +1734,76 @@ public:
         bm::word_t** blk_blk = blk_root[i];
         if (!blk_blk || (bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
             return false;
+
         bm::id_t cnt_sum(0), effective_blocks(0), gap_len_sum(0);
         for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
-            const bm::word_t* blk = blk_blk[j]; //  this->get_block(i, j);
+            const bm::word_t* blk = sub_stat.blocks[j] = blk_blk[j];
             if (blk == FULL_BLOCK_FAKE_ADDR)
-                return false;
-            if (blk)
             {
-                bm::id_t cnt;
-                if (BM_IS_GAP(blk))
-                {
-                    const bm::gap_word_t* gp = BMGAP_PTR(blk);
-                    cnt = bm::gap_bit_count_unr(gp);
-                    gap_len_sum += bm::gap_length(gp);
-                }
-                else // bitset
-                {
-                    cnt = bm::bit_block_count(blk);
-                }
-                if (cnt)
-                {
-                    ++effective_blocks;
-                    cnt_sum += cnt;
-                    if (cnt_sum > non_sparse_cut_off) // too many bits set
-                        return false;
-                }
+                sub_stat.bv_count += sub_stat.bc_arr[j] = bm::gap_max_bits;
+                cnt_sum += bm::gap_max_bits;;
+                sub_stat.full_blocks++;
             }
+            else
+                if (blk)
+                {
+                    unsigned bc;
+                    if (BM_IS_GAP(blk))
+                    {
+                        const bm::gap_word_t* gp = BMGAP_PTR(blk);
+                        bc = sub_stat.bc_arr[j] = bm::gap_bit_count_unr(gp);
+                        gap_len_sum += (gp[0] >> 3); // bm::gap_length(gp);
+                        sub_stat.gap_len_sum += (gp[0] >> 3);
+                        sub_stat.gap_blocks++;
+                    }
+                    else // bitset
+                    {
+                        bm::bit_block_change_bc(blk, &sub_stat.gc_arr[j], &bc);
+                        sub_stat.bc_arr[j] = bc;
+                        sub_stat.bit_blocks++;
+                    }
+
+                    if (bc)
+                    {
+                        ++effective_blocks;
+                        sub_stat.bv_count += bc;
+                        cnt_sum += bc;
+                    }
+                }
+                else // NULL block
+                {
+                    sub_stat.empty_blocks++; sub_stat.bc_arr[j] = 0;
+                }
         } // for j
 
         BM_ASSERT(effective_blocks <= bm::set_sub_array_size);
+        BM_ASSERT(sub_stat.bit_blocks + sub_stat.gap_blocks +
+                  sub_stat.empty_blocks +
+                  sub_stat.full_blocks == bm::set_sub_array_size);
+
+        if (cnt_sum > non_sparse_cut_off /*|| sub_stat.full_blocks*/) // too many bits set
+            return false;
+
         if (effective_blocks > 1)
         {
-            if (cnt_sum < 5) // super-duper sparse ...
-                return false;
-            
-            bm::id_t blk_avg = cnt_sum / effective_blocks;
-            if (blk_avg <= sparse_cut_off)
+            if (cnt_sum < 5) // super-duper sparse, rare don't bother...
             {
-                if (gap_len_sum)
-                {
-                    gap_len_sum += effective_blocks * 3;
-                    if (gap_len_sum < cnt_sum)
-                        return false;
-                }
-                return true;
+                return false;
             }
+            if (gap_len_sum)
+            {
+                gap_len_sum += effective_blocks * 4; // 3
+                if (gap_len_sum < cnt_sum) // lens are smaller than BC
+                {
+                    unsigned diff = cnt_sum - gap_len_sum;
+                    float cut_off = cnt_sum * 0.14f;
+                    if (diff < cut_off)
+                        return true;
+                    return false;
+                }
+            }
+            return true;
         }
         return false;
     }

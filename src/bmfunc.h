@@ -84,7 +84,7 @@ struct bv_statistics
         ++gap_blocks;
         size_t mem_used = (capacity * sizeof(gap_word_t));
         memory_used += mem_used;
-        max_serialize_mem += (unsigned)(length * sizeof(gap_word_t));
+        max_serialize_mem += (unsigned)(length * sizeof(gap_word_t)) + 3;
         BM_ASSERT(length <= capacity);
         gap_cap_overhead += (capacity - length) * sizeof(gap_word_t);
         if (level < bm::gap_levels)
@@ -119,7 +119,7 @@ struct bv_statistics
         if (bit_blocks)
             max_serialize_mem += sizeof(bm::word_t) * bm::set_block_size;
         // 10% increment
-        size_t safe_inc = max_serialize_mem / 10;
+        size_t safe_inc = max_serialize_mem / 15;
         if (!safe_inc) safe_inc = 1024;
         max_serialize_mem += safe_inc;
     }
@@ -157,6 +157,59 @@ struct bv_arena_statistics
         sz += (ptr_sub_blocks_sz + top_block_size) * sizeof(void*);
         return sz;
     }
+};
+/**
+    Basic stats on second level group of blocks
+    @internal
+ */
+struct bv_sub_survey
+{
+    void*          bv_ptr=0;           ///< pointer to bit-vector
+    unsigned       top_level_idx=~0u;  ///< index of the sub-block of blocks
+
+    bm::gap_word_t bit_blocks;        ///< Number of bit blocks
+    bm::gap_word_t gap_blocks;        ///< Number of GAP blocks
+    bm::gap_word_t empty_blocks;      ///< how many empty
+    bm::gap_word_t full_blocks;       ///< how many FULL blocks
+    size_t bv_count;                  ///< popcount
+    size_t gap_len_sum;               ///< total length of all GAPs
+
+    unsigned bc_arr[bm::set_sub_array_size];
+    unsigned gc_arr[bm::set_sub_array_size];
+    const bm::word_t* blocks[bm::set_sub_array_size];
+
+    void init(void* bv, unsigned i) BMNOEXCEPT
+    {
+        bv_ptr = bv; top_level_idx = i;
+        bit_blocks = gap_blocks = empty_blocks = full_blocks = 0;
+        bv_count = gap_len_sum = 0;
+    }
+
+    /// true if sub contains multiple gap blocks and nothing else
+    ///
+    bool is_only_gaps() const BMNOEXCEPT
+    {
+        return (!bit_blocks && (gap_blocks > 1) && !full_blocks);
+    }
+
+    /// average length of GAP blocks
+    unsigned avg_gap_len() const BMNOEXCEPT
+    {
+        return gap_blocks ? unsigned(gap_len_sum / gap_blocks) : 0u;
+    }
+#if (0)
+    void print()
+    {
+        for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
+        {
+            if (blocks[i])
+                std::cout << bc_arr[i] << ", ";
+            else
+                std::cout << "N, ";
+        }
+        std::cout << std::endl;
+    }
+#endif
 };
 
 /**
@@ -2292,9 +2345,14 @@ bm::id64_t sum_arr(const T* first, const T* last) BMNOEXCEPT
    @ingroup gapfunc
 */
 template<typename T>
-void arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
+bool arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
 {
-    min0 = 65535;
+    if (arr_len < 2)
+    {
+        min0 = 0;
+        return false;
+    }
+    min0 = (T) ~0;
     for (unsigned i = 1; i < arr_len; ++i)
     {
         BM_ASSERT(arr[i] > arr[i-1]);
@@ -2303,9 +2361,13 @@ void arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
         {
             min0 = delta;
             if (min0 < 2) //
-                break;
+            {
+                min0 = 0;
+                return false;
+            }
         }
     } // for i
+    return true;
 }
 
 
@@ -2338,6 +2400,7 @@ unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
         if (T delta = arr[i] - arr[i-1]; delta < min_w_prev)
             min_w_prev = delta;
     } // for i
+    min_w_prev -= bool(min_w_prev);
 
     unsigned wave = 1;
     // process the rest of the array
@@ -2355,23 +2418,25 @@ unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
         {
             BM_ASSERT(i+j < arr_len);
             BM_ASSERT(arr[i+j] > arr[i+j-1]);
-            T delta = arr[i+j] - arr[i+j-1];
-            if (delta < min_w_prev)
+            T delta = arr[i+j] - arr[i+j];
+            if (delta <= min_w_prev)
                 w_ok = false;
+            BM_ASSERT(!w_ok || (arr[i+j-1]+min_w_prev < arr[i+j]));
             if (delta < min_w)
                 min_w = delta;
         } // for j
         if (w_ok)
         {
-            if (min_w > min0) // improved over global
+            if (min_w_prev && (min_w > min0)) // improved over global
             {
                 ++wcnt;
                 bm::set_bit(wflags, wave);
             }
         }
         min_w_prev = min_w;
-    } // for i
+        min_w_prev = (min_w > min0) ? min_w - 1 : min0;
 
+    } // for i
     return wcnt;
 }
 
@@ -2405,12 +2470,10 @@ T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
         BM_ASSERT(tarr[i-1] < tarr[i]);
         delta_acc += min0;
     } // for i
-
     min_w_prev -= bool(min_w_prev);
 
     // process the rest of the array
-    unsigned wave = 1;
-    for (unsigned i = wlen; i < arr_len; ++wave, i+=wlen)
+    for (unsigned wave = 1, i=wlen; i < arr_len; i+=wlen, ++wave)
     {
         if (i + wlen > arr_len) // out of bounds
         {
@@ -2424,10 +2487,11 @@ T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
         {
             BM_ASSERT(i+j < arr_len);
             BM_ASSERT(arr[i+j] > arr[i+j-1]);
-            if (T delta = arr[i+j] - arr[i+j-1]; delta < min_w)
+            if (T delta = arr[i+j] - arr[i+j]; delta < min_w)
                 min_w = delta;
             if (w_recalc) // prev-min recacl
             {
+                BM_ASSERT(min_w_prev);
                 tarr[i+j] = arr[i+j] - min_w_prev - delta_acc;
                 delta_acc += min_w_prev;
             }
@@ -2559,14 +2623,13 @@ void arr_delta1_split(T* arr_d1,  unsigned& d1_len,
 }
 
 /*!
-   \brief Recalculate array using two minimal delta for better BIC compression
+   \brief Recalculate array using minimal delta for better BIC compression
    @internal
 */
 template<typename T>
-T arr_recalc_min(T* tarr, const T* arr, unsigned arr_len, T min0) BMNOEXCEPT
+T arr_recalc_min(T* tarr, const T* arr, unsigned arr_len, T min0, T delta_acc=0) BMNOEXCEPT
 {
-    tarr[0] = arr[0];
-    T delta_acc = 0;
+    tarr[0] = arr[0] - delta_acc;
     for (unsigned i = 1; i < arr_len; ++i)
     {
         tarr[i] = arr[i] - min0 - delta_acc;
@@ -2580,9 +2643,9 @@ T arr_recalc_min(T* tarr, const T* arr, unsigned arr_len, T min0) BMNOEXCEPT
    \brief Restore array using two minimal delta for better BIC compression
 */
 template<typename T>
-void arr_restore_min(T* arr, unsigned arr_len, T min0) BMNOEXCEPT
+void arr_restore_min(T* arr, unsigned arr_len, T min0, T delta_acc=0) BMNOEXCEPT
 {
-    T delta_acc = 0;
+    arr[0] = arr[0] + delta_acc;
     for (unsigned i = 1; i < arr_len; ++i)
     {
         arr[i] += min0 + delta_acc;
@@ -2671,6 +2734,7 @@ void gap_calc_hist(const T*  buf, unsigned len, /*T& min0, T& min1,*/
         }
     } // for
 }
+
 
 template<typename T>
 unsigned gap_set_value(unsigned val,
@@ -11145,6 +11209,60 @@ bm::bit_representation best_representation(unsigned gc,
         return bit_representation::e_bit_bit;
     return bit_representation::e_bit_IINT;
 }
+
+/// @internal
+template<typename T>
+bool compute_wdr_params(const T* arr, unsigned sz, bm::word_t* tb_wflags,
+                        unsigned min0,
+                        unsigned& win_size, float& best_save)
+{
+    bool use_wdr = false;
+    if (sz > (20 * 3))
+    {
+        for (unsigned w_size = 20; w_size <= 78; w_size += 2)
+        {
+            bm::bit_block_set(tb_wflags, 0); // TODO: optimize
+
+            auto wcnt = bm::arr_calc_delta_min_w(arr, sz, w_size, min0, tb_wflags);
+            BM_ASSERT(wcnt == bm::bit_block_count(tb_wflags));
+            if (!wcnt)
+                break;
+            if (wcnt > 4096)
+                continue;
+
+            unsigned total_windows = (sz + w_size - 1) / w_size;
+            float bits_extra = float(total_windows + 1 + 8 + 8);
+            float save_per_window = 0.15f * w_size; // apprx .2 bits per element
+            float total_save = save_per_window * wcnt;
+            total_save -= bits_extra;
+            if (total_save > 0.0f) // positive savings
+            {
+                if (!use_wdr) // first possible value
+                {
+                    use_wdr = true; win_size = w_size; best_save = total_save;
+                }
+                else
+                    if (total_save >= best_save)
+                    {
+                        win_size = w_size; best_save = total_save;
+                    }
+                    else
+                    {
+                        break; // no improvement
+                    }
+            }
+            else // no total save
+            {
+                if (use_wdr) // we already have a solution, new one got worse
+                    break;
+            }
+        } // for w_size
+    } // if sz > XYZ
+    return use_wdr;
+}
+
+
+
 
 // --------------------------------------------------------------
 // sort related utils
