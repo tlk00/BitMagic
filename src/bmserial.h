@@ -2396,8 +2396,8 @@ serializer<BV>::find_bit_best_encoding(
             unsigned arr_size_inv =
                 unsigned(sizeof(gap_word_t) + (bit_stat_.ibc * sizeof(gap_word_t)));
             
-            add_model(bm::set_block_arrbit, arr_size+8);
-            add_model(bm::set_block_arrbit_inv, arr_size_inv+8);
+            add_model(bm::set_block_arrbit, arr_size*8); // in bits
+            add_model(bm::set_block_arrbit_inv, arr_size_inv*8);
             
             if (compression_level_ >= 4)
             {
@@ -2914,7 +2914,7 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
     unsigned len = (unsigned)sb_bit_idx_arr_.size();
     BM_ASSERT(len);
 
-    unsigned min0 = 0; unsigned delta_acc = 0;
+    unsigned min0 = 0; unsigned delta_acc = 0; (void) delta_acc;
 
     unsigned* sb_arr = sb_bit_idx_arr_.data();
     bm::arr_calc_delta_min(sb_arr, len, min0);
