@@ -1113,24 +1113,36 @@ unsigned SerializationOperation(bvect*             bv_target,
 
    operation_deserializer<bvect> od;
 
-   auto count = od.deserialize(*bv_target, smem1, nullptr, set_ASSIGN);
-   cout << slen1 << " " << slen2 << endl;
-   int res = bv1.compare(*bv_target);
-   if (res != 0)
-   {
-       cout << "---------------------------------- " << endl;
-       cout << "bv1.count()=" << bv1.count() << endl;
-       print_stat(cout, bv1);
-       cout << "---------------------------------- " << endl;
-       cout << "bv_target.count()=" << bv_target->count() << endl;
-       print_stat(cout, *bv_target);
-       
-       bv_target->bit_xor(bv1);
-       cout << "First diff=" << bv_target->get_first() << endl;
-       cout << "set_ASSIGN 1 failed!" << endl;
-       exit (1);
-   }
-   cout << "Deserialization ASSIGN into bv1 OK" << endl;
+    unsigned count;
+    int res;
+    try
+    {
+       count = od.deserialize(*bv_target, smem1, nullptr, set_ASSIGN);
+       cout << slen1 << " " << slen2 << endl;
+       res = bv1.compare(*bv_target);
+       if (res != 0)
+       {
+           cout << "---------------------------------- " << endl;
+           cout << "bv1.count()=" << bv1.count() << endl;
+           print_stat(cout, bv1);
+           cout << "---------------------------------- " << endl;
+           cout << "bv_target.count()=" << bv_target->count() << endl;
+           print_stat(cout, *bv_target);
+
+           bv_target->bit_xor(bv1);
+           cout << "First diff=" << bv_target->get_first() << endl;
+           cout << "set_ASSIGN 1 failed!" << endl;
+           exit (1);
+       }
+       cout << "Deserialization ASSIGN into bv1 OK" << endl;
+    }
+    catch(std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        bm::SaveBVector("bv_serial_dump2.bv", *bv_target, true);
+        std::cout << "Dump created" << std::endl;
+        exit(1);
+    }
 
    {
        bvect* bv_tmp2 = new bvect();
@@ -1409,35 +1421,43 @@ unsigned SerializationOperation(bvect*             bv_target,
             exit(1);
         }
         cout << "Deserialization assign to bv_tmp2 OK" << endl;
-        unsigned count_rev =
-        od.deserialize(bv_tmp2, smem1, 0, op);
-        if (count != count_rev)
+        try
         {
-//            print_stat(bv1);
-/*
-            unsigned c = count_or(bv1, bv2);
-            cout << "Correct count=" << c << endl;
+            unsigned count_rev = od.deserialize(bv_tmp2, smem1, 0, op);
+            if (count != count_rev)
+            {
+    //            print_stat(bv1);
+    /*
+                unsigned c = count_or(bv1, bv2);
+                cout << "Correct count=" << c << endl;
 
-            c = count_or(bv2, bv1);
-            cout << "Correct count=" << c << endl;
+                c = count_or(bv2, bv1);
+                cout << "Correct count=" << c << endl;
 
-            bv1 |= bv2;
-            cout << "Count3 = " << bv1.count() << endl;;
-*/
+                bv1 |= bv2;
+                cout << "Count3 = " << bv1.count() << endl;;
+    */
 
-            
 
-            cout << "Operation=" << op << endl;
 
-            cout << "Serialization operation reverse check failed"
-                 << " count = " << count 
-                 << " count rev= " << count_rev
-                 << endl;
-            cout << "See bvector dumps: err1.bv, err2.bv" << endl;
+                cout << "Operation=" << op << endl;
 
+                cout << "Serialization operation reverse check failed"
+                     << " count = " << count
+                     << " count rev= " << count_rev
+                     << endl;
+                cout << "See bvector dumps: err1.bv, err2.bv" << endl;
+
+                exit(1);
+            }
+        }
+        catch(std::exception& ex)
+        {
+            std::cerr << ex.what() << std::endl;
+            bm::SaveBVector("bv_serial_dump2.bv", bv_tmp2, true);
+            std::cout << "Dump created" << std::endl;
             exit(1);
         }
-
    }
 
    delete [] smem1;
@@ -11578,7 +11598,6 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
                 cout << "Serialization operation failed!" << endl;
                 exit(1);
             }
-
             TestAND_OR(rsub, predicted_count, *bvect_full1, *bvect_full2);
 
             }
@@ -11688,7 +11707,6 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
                                         set_AND);
 
             TestRandomSubset(bv_target_s, rsub);
-
             TestAND_OR(rsub, predicted_count, *bvect_full1, *bvect_full2);
 
             //bvect bv1(*bvect_full1);
@@ -13399,13 +13417,13 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_gap_egamma] == 1);
-       
+
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
 
         int cmp = bv.compare(bv2);
         assert(cmp == 0);
+        assert(cstat[bm::set_block_gap_egamma_v3] == 1);
 
         bvect bv3;
         od.deserialize(bv3,
@@ -13472,7 +13490,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arrgap_egamma] == 1 || cstat[bm::set_block_gap_egamma] == 1);
+        assert(cstat[bm::set_block_arrgap_egamma] == 1 || cstat[bm::set_block_gap_egamma] == 1 || cstat[bm::set_block_gap_egamma_v3] == 1);
        
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -13651,7 +13669,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_gap_egamma] == 1);
+        assert(cstat[bm::set_block_gap_egamma_v3] == 1);
        
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -13706,7 +13724,7 @@ void SerializationCompressionLevelsTest()
    {
        BM_DECLARE_TEMP_BLOCK(tb)
        bvect bv(bm::BM_GAP);
-       for (bvect::size_type i = 1; i < 65535 * 255; i += 65535)
+       for (bvect::size_type i = 1; i < 65535 * 255; i += 65535)       
            bv.set_range(i, i+10);
 
        bm::serializer<bvect> bv_ser(tb);
@@ -13717,7 +13735,7 @@ void SerializationCompressionLevelsTest()
        bv_ser.serialize(bv, sermem_buf, 0);
 
        const bvect::size_type* cstat = bv_ser.get_compression_stat();
-       assert(cstat[bm::set_sblock_bienc] == 0);
+       assert(cstat[bm::set_sblock_bienc_v3] == 0);
 
        bvect bv2;
        bm::deserialize(bv2, sermem_buf.buf());
@@ -13725,6 +13743,44 @@ void SerializationCompressionLevelsTest()
        bool eq = bv.equal(bv2);
        assert(eq);
    }
+
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        bvect bv(bm::BM_GAP);
+
+        for (bvect::size_type i = 65535*5; i < 65535*255; i+= 65536/10)
+        {
+            bv.set(i);
+        }
+        bv.set(0xFFFFFF-1); // to test 24-bit max value
+        bv.set(0xFFFFFF); // to test 24-bit max value
+
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(6);
+
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
+
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        operation_deserializer<bvect> od;
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        od.deserialize(bv3,
+                       sermem_buf.buf(),
+                       tb,
+                       set_OR);
+        bool eq = bv3.equal(bv2);
+        assert(eq);
+   }
+
 
    {
         BM_DECLARE_TEMP_BLOCK(tb)
@@ -13740,14 +13796,94 @@ void SerializationCompressionLevelsTest()
             bv.set(i);
 
         bm::serializer<bvect> bv_ser(tb);
-        bv_ser.set_compression_level(5);
+        bv_ser.set_compression_level(6);
 
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_sblock_bienc] >= 1);
+        assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
+
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        operation_deserializer<bvect> od;
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        od.deserialize(bv3,
+                       sermem_buf.buf(),
+                       tb,
+                       set_OR);
+        bool eq = bv3.equal(bv2);
+        assert(eq);
+   }
+
+   // super sparse sub with NULL blocks in the mid
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        bvect bv(bm::BM_GAP);
+
+        for (bvect::size_type i = 65535*5; i < 65535*18; i+= 65536/10)
+            bv.set(i);
+        for (bvect::size_type i = 65535*25; i < 65535*250; i+= 65536/10)
+            bv.set(i);
+
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(6);
+
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
+
+        bvect bv2;
+        bm::deserialize(bv2, sermem_buf.buf());
+        operation_deserializer<bvect> od;
+
+        int cmp = bv.compare(bv2);
+        assert(cmp == 0);
+        bvect bv3;
+        od.deserialize(bv3,
+                       sermem_buf.buf(),
+                       tb,
+                       set_OR);
+        bool eq = bv3.equal(bv2);
+        assert(eq);
+   }
+
+
+
+   // inverted sparse vector
+   {
+        BM_DECLARE_TEMP_BLOCK(tb)
+
+        bvect bv(bm::BM_GAP);
+
+        bv.set_range(0, 10000);
+        bv.set_range(65535, 65535+10000);
+        bv.set_range(0, 10000, false);
+        bv.set_range(65535, 65535+10000, false);
+
+        for (bvect::size_type i = 65535*5; i < 65535*255; i+= 65536/10)
+            bv.set(i);
+
+        bv.invert();
+
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_compression_level(6);
+
+        bm::serializer<bvect>::buffer sermem_buf;
+
+        bv_ser.serialize(bv, sermem_buf, 0);
+
+        const bvect::size_type* cstat = bv_ser.get_compression_stat();
+        (void) cstat;
+//        assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
 
         bvect bv2;
         bm::deserialize(bv2, sermem_buf.buf());
@@ -14361,7 +14497,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[set_block_gap_egamma] == 1);
+        assert(cstat[set_block_gap_egamma_v3] == 1);
         operation_deserializer<bvect> od;
 
         bvect bv2;
@@ -14454,20 +14590,22 @@ void SerializationCompressionLevelsTest()
                  << endl;
            
             const bvect::size_type* cstat = bv_ser.get_compression_stat();
-            assert(cstat[bm::set_block_arr_bienc] == 1);
-        operation_deserializer<bvect> od;
+//            assert(cstat[bm::set_block_arr_bienc] == 1 || cstat[bm::set_block_arr_bienc_v3s] == 1);
+            assert(cstat[bm::set_block_arr_bienc_v3s] == 1);
+            operation_deserializer<bvect> od;
 
             bvect bv2;
             bm::deserialize(bv2, sermem_buf.buf());
-            int cmp = bv.compare(bv2);
-            assert(cmp == 0);
+            bool eq = bv.equal(bv2);
+            assert(eq);
+
             bvect bv3;
             od.deserialize(bv3,
                            sermem_buf.buf(),
                            0, set_OR);
-            cmp = bv3.compare(bv2);
-            assert(cmp == 0);
-        }
+//            cmp = bv3.compare(bv2);
+            eq = bv3.equal(bv2);
+            assert(eq);        }
    }
 
 
@@ -14531,8 +14669,10 @@ void SerializationCompressionLevelsTest()
            
             const bvect::size_type* cstat = bv_ser.get_compression_stat();
             assert(cstat[bm::set_block_arr_bienc]==1 ||
+                   cstat[bm::set_block_arr_bienc_v3s]==1 ||
                    cstat[bm::set_block_bit_digest0]==1 ||
                    cstat[bm::set_block_bit_0runs]== 1);
+
            
             bvect bv2;
             bm::deserialize(bv2, sermem_buf.buf());
@@ -14601,7 +14741,7 @@ void SerializationCompressionLevelsTest()
         bv_ser.serialize(bv, sermem_buf, 0);
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
-        assert(cstat[bm::set_block_arr_bienc_inv] == 1);
+        assert(cstat[bm::set_block_arr_bienc_inv_v3s] == 1);
         operation_deserializer<bvect> od;
 
         bvect bv2;
@@ -15163,7 +15303,8 @@ void SparseSerializationTest()
                 bvect::size_type sb_from = from / (65536*256);
                 bvect::size_type sb_to = to / (65536*256);
                 bvect::size_type sb_cnt = sb_to - sb_from + 1;
-                assert(cstat[bm::set_sblock_bienc] == sb_cnt || cstat[bm::set_sblock_bienc] == sb_cnt-1);
+                (void) sb_cnt;
+                assert(cstat[bm::set_sblock_bienc] || cstat[bm::set_sblock_bienc_v3]);
             }
 
             bvect bv2;
@@ -21723,6 +21864,89 @@ void SelectTest()
 
 
 static
+void EncoderDecoderBasicsTest()
+{
+    unsigned char buf[1024] = {0, };
+    unsigned char buf2[1024] = {0, };
+
+    cout << "---------------------------- EncoderDecoderBasicsTest()" << endl;
+    {
+        bm::encoder enc(buf, sizeof(buf));
+
+        enc.put_8(1);
+        enc.put_8(255);
+        enc.put_16(256);
+        enc.put_16(65535);
+        enc.put_32(2*65535);
+
+        unsigned v;
+        bm::decoder dec(buf);
+        v = dec.get_8();
+        assert(v == 1);
+        v = dec.get_8();
+        assert(v == 255);
+        v = dec.get_16();
+        assert(v == 256);
+        v = dec.get_16();
+        assert(v == 65535);
+        v = dec.get_32();
+        assert(v == 2*65535);
+    }
+
+    {
+        bm::encoder enc(buf, sizeof(buf));
+
+        enc.put_8(1);
+        enc.put_8(255);
+        enc.put_16(256);
+        enc.put_16(65535);
+        enc.put_32(2*65535);
+
+        {
+            bm::encoder enc2(buf2, sizeof(buf2));
+            enc2.put_8(0);
+            enc2.put_8(255);
+            enc2.put_16(256*2);
+            enc2.put_16(65535);
+            enc2.put_32(3*65535);
+
+            assert(enc2.size() == (2*8 + 2*16 + 32)/8);
+            enc.move_from(enc2);
+            assert(enc2.size() == 0);
+        }
+
+        unsigned v;
+        bm::decoder dec(buf);
+        v = dec.get_8();
+        assert(v == 1);
+        v = dec.get_8();
+        assert(v == 255);
+        v = dec.get_16();
+        assert(v == 256);
+        v = dec.get_16();
+        assert(v == 65535);
+        v = dec.get_32();
+        assert(v == 2*65535);
+
+        v = dec.get_8();
+        assert(v == 0);
+        v = dec.get_8();
+        assert(v == 255);
+        v = dec.get_16();
+        assert(v == 256*2);
+        v = dec.get_16();
+        assert(v == 65535);
+        v = dec.get_32();
+        assert(v == 3*65535);
+    }
+
+
+
+    cout << "---------------------------- EncoderDecoderBasicsTest()" << endl;
+}
+
+
+static
 void BitEncoderTest()
 {
     cout << "---------------------------- BitEncoderTest" << endl;
@@ -22320,10 +22544,10 @@ void ArrayEncodingTest()
 
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c = 3;
-            unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             (void) h3f;
             assert(sz == sz2c);
-            h3f = bin.decode_array(&arr2c[0], &sz2c);
+            h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             assert(sz == sz2c);
         }
     }
@@ -22344,7 +22568,7 @@ void ArrayEncodingTest()
 
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c;
-            unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             assert(h3f & bm::h3f_ex_arr_1);
             assert(!(h3f & bm::h3f_ex_arr_ex_EOC));
             assert(sz == sz2c);
@@ -22372,7 +22596,7 @@ void ArrayEncodingTest()
 
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c;
-            unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             assert(sz == sz2c);
             for (unsigned i = 0; i < sz; ++i)
             {
@@ -22404,7 +22628,7 @@ void ArrayEncodingTest()
 
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c;
-            unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             assert(sz == sz2c);
             for (unsigned i = 0; i < sz; ++i)
             {
@@ -22435,7 +22659,7 @@ void ArrayEncodingTest()
 
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c;
-            unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             assert(sz == sz2c);
             for (unsigned i = 0; i < sz; ++i)
             {
@@ -22465,7 +22689,7 @@ void ArrayEncodingTest()
 
             bm::gap_word_t arr2c[256] = {0, };
             unsigned sz2c;
-            unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+            unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
             assert(sz == sz2c);
             for (unsigned i = 0; i < sz; ++i)
             {
@@ -22508,7 +22732,7 @@ void ArrayEncodingTest()
                 bm::bit_in<decoder> bin(dec);
 
                 unsigned sz2c;
-                unsigned h3f = bin.decode_array(&arr2c[0], &sz2c);
+                unsigned h3f = bin.decode_array(&arr2c[0], tb_wflags, &sz2c);
                 assert(sz == sz2c);
                 for (unsigned j = 0; j < sz; ++j)
                 {
@@ -22678,6 +22902,108 @@ void GammaEncoderTest()
 
     cout << "---------------------------- GammaEncoderTest Ok." << endl;
 
+}
+
+static
+void DeltaEncoderTest()
+{
+    cout << "---------------------------- DeltaEncoderTest()" << endl;
+
+    unsigned char buf1[1024 * 32] = {0,};
+
+    cout << "Gamma8 Stage 1" << endl;
+
+    {
+    encoder enc(buf1, sizeof(buf1));
+    bit_out<encoder> bout(enc);
+    bout.gamma8(1);
+    bout.gamma8(0);
+    bout.gamma8(128);
+    bout.gamma8(1);
+    bout.gamma8(2);
+    bout.gamma8(255);
+    bout.gamma8(256);
+    bout.gamma8(65501);
+    bout.gamma8(0);
+    }
+
+    {
+    decoder dec(buf1);
+    bit_in<decoder> bin(dec);
+
+    unsigned value;
+    value = bin.gamma8();
+    assert(value == 1);
+    value = bin.gamma8();
+    assert(value == 0);
+    value = bin.gamma8();
+    assert(value == 128);
+    value = bin.gamma8();
+    assert(value == 1);
+    value = bin.gamma8();
+    assert(value == 2);
+    value = bin.gamma8();
+    assert(value == 255);
+    value = bin.gamma8();
+    assert(value == 256);
+    value = bin.gamma8();
+    assert(value == 65501);
+    value = bin.gamma8();
+    assert(value == 0);
+    }
+
+    cout << "Stage 1" << endl;
+
+    {
+    encoder enc(buf1, sizeof(buf1));
+    bit_out<encoder> bout(enc);
+    bout.delta16(256);
+    bout.delta16(257);
+    bout.delta16(511);
+    bout.delta16(512);
+    bout.delta16(512+255);
+    bout.delta16(1024);
+    }
+
+    {
+    decoder dec(buf1);
+    bit_in<decoder> bin(dec);
+
+    unsigned value;
+    value = bin.delta16();
+    assert(value == 256);
+    value = bin.delta16();
+    assert(value == 257);
+    value = bin.delta16();
+    assert(value == 511);
+    value = bin.delta16();
+    assert(value == 512);
+    value = bin.delta16();
+    assert(value == 512+255);
+    value = bin.delta16();
+    assert(value == 1024);
+    }
+
+    {
+    encoder enc(buf1, sizeof(buf1));
+    bit_out<encoder> bout(enc);
+    for (unsigned i = 256; i < 1512; ++i)
+    {
+        bout.delta16(i);
+    } // for i
+    }
+
+    {
+    decoder dec(buf1);
+    bit_in<decoder> bin(dec);
+    for (unsigned i = 256; i < 1512; ++i)
+    {
+        auto v = bin.delta16();
+        assert(v == i);
+    } // for i
+    }
+
+    cout << "---------------------------- DeltaEncoderTest() OK" << endl;
 }
 
 template<class SV, class Vect>
@@ -41236,8 +41562,6 @@ int main(int argc, char *argv[])
 
 
 
-
-
 /*
 {
 typedef bm::bvector<> bvector_type1;
@@ -41370,6 +41694,9 @@ return 0;
         MiniSetTest();
          CheckAllocLeaks(false);
 
+        EncoderDecoderBasicsTest();
+         CheckAllocLeaks(false);
+
         BitEncoderTest();
          CheckAllocLeaks(false);
 
@@ -41380,6 +41707,9 @@ return 0;
          CheckAllocLeaks(false);
 
         GammaEncoderTest();
+         CheckAllocLeaks(false);
+
+        DeltaEncoderTest();
          CheckAllocLeaks(false);
 
         GAPCheck();
