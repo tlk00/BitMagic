@@ -2224,17 +2224,19 @@ serializer<BV>::find_bit_best_encoding_l5(
         return bm::set_block_bit_1bit;
     if (!ibc)
         return bm::set_block_aone;
-/*
+
+    // TODO: consider retiring this code, but if removed it asserts in BIE code
+    // not supporting corner case of very small arrays (1-sized)
     {
         unsigned arr_size =
             unsigned(sizeof(gap_word_t) + (bc * sizeof(gap_word_t)));
         unsigned arr_size_inv =
             unsigned(sizeof(gap_word_t) + (ibc * sizeof(gap_word_t)));
 
-        add_model(bm::set_block_arrbit, arr_size * 8);
+        add_model(bm::set_block_arrbit, arr_size * 8); // in bits
         add_model(bm::set_block_arrbit_inv, arr_size_inv * 8);
     }
-*/
+
     float gcf=float(gc);
     if (gc > 3 && gc < bm::gap_max_buff_len)
         add_model(bm::set_block_gap_bienc,
