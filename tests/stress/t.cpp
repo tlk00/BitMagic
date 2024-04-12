@@ -41605,7 +41605,7 @@ return 0;
 */
     if (is_all || is_low_level)
     {
-/*
+
         TestNibbleArr();
 
         TestHasZeroByte();
@@ -41671,7 +41671,7 @@ return 0;
          BitSplitTest();
 
          TestBlockDigest();
-*/
+
          TestArrMin0();
 
         //BitBlockTransposeTest();
