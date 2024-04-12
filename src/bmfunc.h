@@ -2360,7 +2360,7 @@ bool arr_calc_delta_min(const T* arr, unsigned arr_len, T& min0) BMNOEXCEPT
         if (delta < min0)
         {
             min0 = delta;
-            if (min0 < 2) //
+            if (min0 <= 1) // detected sequential numbers (+1 order)... quit :(
             {
                 min0 = 0;
                 return false;
@@ -2418,7 +2418,7 @@ unsigned arr_calc_delta_min_w(const T* arr, unsigned arr_len, unsigned wlen,
         {
             BM_ASSERT(i+j < arr_len);
             BM_ASSERT(arr[i+j] > arr[i+j-1]);
-            T delta = arr[i+j] - arr[i+j];
+            T delta = arr[i+j] - arr[i+j-1];
             if (delta <= min_w_prev)
                 w_ok = false;
             BM_ASSERT(!w_ok || (arr[i+j-1]+min_w_prev < arr[i+j]));
@@ -2487,7 +2487,7 @@ T arr_recalc_min_w(T* tarr, const T* arr, unsigned arr_len, unsigned wlen,
         {
             BM_ASSERT(i+j < arr_len);
             BM_ASSERT(arr[i+j] > arr[i+j-1]);
-            if (T delta = arr[i+j] - arr[i+j]; delta < min_w)
+            if (T delta = arr[i+j] - arr[i+j-1]; delta < min_w)
                 min_w = delta;
             if (w_recalc) // prev-min recacl
             {
