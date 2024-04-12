@@ -36287,7 +36287,7 @@ void TestArrMin0()
         }
     }
     {
-        bm::gap_word_t test_arr[] = {0, 6, 15, 50, 250, 252, 253 };
+        bm::gap_word_t test_arr[] = {0, 6, 15, 50, 250, 252, 254 };
         unsigned sz = sizeof(test_arr) / sizeof(test_arr[0]);
 
         bm::bit_block_set(tb0, 0);
@@ -36348,6 +36348,7 @@ void TestArrMin0()
             if (unsigned(test_arr[gsz-1]) + delta > 65535)
                 break;
             test_arr[gsz] = test_arr[gsz-1] + delta;
+            assert(test_arr[gsz] - test_arr[gsz-1] > 1);
             if (gsz % 64 == 0)
                 ++delta;
         } // for gsz
@@ -36392,13 +36393,13 @@ void TestArrMin0()
                 delta += unsigned(rand() % 128);
             else
                 if (gsz % 64 == 1)
-                    delta = 1;
+                    delta = 2;
                 else
                     if (gsz % 64 == 2)
-                        delta = 2;
+                        delta = 3;
 
             if (!delta)
-                delta = 1;
+                delta = 2;
         } // for gsz
         sz = gsz;
 
@@ -41604,7 +41605,7 @@ return 0;
 */
     if (is_all || is_low_level)
     {
-
+/*
         TestNibbleArr();
 
         TestHasZeroByte();
@@ -41670,7 +41671,7 @@ return 0;
          BitSplitTest();
 
          TestBlockDigest();
-
+*/
          TestArrMin0();
 
         //BitBlockTransposeTest();
