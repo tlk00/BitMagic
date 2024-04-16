@@ -186,6 +186,14 @@ void SDemo2()
     sv_ser.disable_xor_compression();
     assert(!sv_ser.is_xor_ref());
 
+    // here we access the low level bit-vector serializer
+    // (see bm::serializer<BV> )
+    // to adjust compression settings for faster operation
+    // (but at the expense of size)
+    //
+    sv_ser.get_bv_serializer().set_bic_dynamic_range_reduce(false);
+    sv_ser.get_bv_serializer().set_bic_coeff(2.5f);
+
     sv_ser.serialize(sv2, sv_lay0);
 
     buf = sv_lay0.data();
