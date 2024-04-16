@@ -1018,19 +1018,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     for (unsigned i = 0; i < planes; ++i)
     {
         typename SV::bvector_type_const_ptr bv = bmatr.row(i);
-/*
-typename SV::bvector_type bv_tmp;
-if (i != 43)
-{
-    if (bv)
-        bv = &bv_tmp;
-}
-else
-{
-    typename SV::bvector_type* b = (typename SV::bvector_type*) bv;    
-//    b->keep_range(0, 65536*2);
-}
-*/
         if (!bv)  // empty plane
         {
             BM_ASSERT(!plane_digest_bv_.test(i));

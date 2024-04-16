@@ -3634,12 +3634,12 @@ serializer<BV>::serialize(const BV& bv,
 
                 bool is_sparse_sub =
                     bman.is_sparse_sblock(i0, sparse_cutoff_, sub_stat);
-                if (compression_level_ >= 5)
+
+                // XOR reference compression disables the sparse SUB serial.
+                if ((compression_level_ >= 5) && (ref_vect_ == 0))
                 {
                     if (is_sparse_sub)
                     {
-//sub_stat.print();
-//std::cout << std::endl;
                         header_flag_ |= BM_HM_SPARSE;
                         bienc_arr_sblock(bv, i0, enc);
                         i += (bm::set_sub_array_size - j0) - 1;
