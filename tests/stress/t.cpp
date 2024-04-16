@@ -42012,6 +42012,7 @@ return 0;
 
         if (is_all || is_sv || is_sv0)
         {
+
             TestSparseVector();
              CheckAllocLeaks(false);
 
