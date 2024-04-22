@@ -121,7 +121,7 @@ public:
         3 - variant of 2 with different cut-offs
         4 - delta transforms plus Elias Gamma encoding where possible legacy)
         5 - Binary Interpolative Coding (BIC) - light settings
-        6 - Binary Interpolative Coding (BIC) - harder settings
+        6 - Binary Interpolative Coding (BIC) - harder settings (tries different laternative strategies)
 
         @sa get_compression_level
     */
@@ -384,6 +384,9 @@ protected:
     /*! Encode GAP block with using binary interpolated encoder v3 */
     bool interpolated_encode_gap_block_v3(const bm::gap_word_t* gap_block,
                                           bm::encoder& enc, unsigned len);
+
+    void interpolated_encode_gap_block_v3s(const bm::gap_word_t* gap_block,
+                                           bm::encoder& enc, unsigned len);
 
     /**
         Encode BIT block with repeatable runs of zeroes
@@ -1236,13 +1239,14 @@ const unsigned char set_block_xor_ref16_um      = 59; //!< block is un-masked XO
 const unsigned char set_block_xor_ref32_um      = 60; //!< ..... 32-bit (should never happen)
 
 const unsigned char set_block_gap_bienc_v3      = 61; //!< Interpolated GAP array (v3)
-const unsigned char set_block_arr_bienc_v3      = 62; //!< Interpolated array (v3)
-const unsigned char set_block_arr_bienc_inv_v3  = 63; //!< Interpolated array (v3)
-const unsigned char set_block_arr_bienc_v3s     = 64; //!< Interpolated array (v3)
-const unsigned char set_block_arr_bienc_inv_v3s = 65; //!< Interpolated array (v3)
-const unsigned char set_block_gap_egamma_v3     = 66; //!< Gamma compressed GAP block (v3)
-const unsigned char set_sblock_bienc_v3         = 67; //!< super-block interpolated list v3
-const unsigned char set_sblock_bienc_gaps_v3    = 68; //!< super-block of sparse GAPs
+const unsigned char set_block_gap_bienc_v3s     = 62; //!< Interpolated GAP array (v3)
+const unsigned char set_block_arr_bienc_v3      = 63; //!< Interpolated array (v3)
+const unsigned char set_block_arr_bienc_inv_v3  = 64; //!< Interpolated array (v3)
+const unsigned char set_block_arr_bienc_v3s     = 65; //!< Interpolated array (v3)
+const unsigned char set_block_arr_bienc_inv_v3s = 66; //!< Interpolated array (v3)
+const unsigned char set_block_gap_egamma_v3     = 67; //!< Gamma compressed GAP block (v3)
+const unsigned char set_sblock_bienc_v3         = 68; //!< super-block interpolated list v3
+const unsigned char set_sblock_bienc_gaps_v3    = 69; //!< super-block of sparse GAPs
 
 const unsigned sparse_max_l5 = 48;
 const unsigned sparse_max_l6 = 256;
@@ -1828,12 +1832,71 @@ encode_GAP:
         }
     } // dynamic range BIC
 
-    //gamma_gap_block(gap_block, enc);
-    //return true;
-
     return false;
 }
 
+template<class BV>
+void serializer<BV>::interpolated_encode_gap_block_v3s(
+            const bm::gap_word_t* gap_block, bm::encoder& enc, unsigned len)
+{
+    unsigned h_len = bm::gap_length(gap_block)-1;
+    if (len == h_len) // length can be encoded using header
+    {
+        // v2 encoding
+        encoder::position_type enc_pos0 = enc.get_pos();
+
+        bm::gap_word_t head = gap_block[0];
+        head &= bm::gap_word_t(~(3 << 1)); // clear the level flags
+        bm::gap_word_t min_v = gap_block[1];
+        bm::gap_word_t max_v = gap_block[len-1];
+        bm::gap_word_t tail_delta = bm::gap_word_t(65535 - max_v);
+
+        if (min_v < 256)
+            head |= bm::h2f_min_v_8bit; // (1 << 1);
+        if (tail_delta < 256)
+            head |= bm::h2f_max_v_8bit; // (1 << 2);
+
+        enc.put_8(bm::set_block_gap_bienc_v3s);
+        bit_out_type bout(enc);
+
+        bout.delta16s(head);
+
+        if (min_v < 256)
+            bout.gamma8(min_v);
+        else
+            bout.put_16_no(min_v);
+
+        if (tail_delta < 256)
+            bout.gamma8(tail_delta);
+        else
+            bout.put_16_no(tail_delta);
+
+        bout.flush_if_full();
+        bout.bic_encode_u16(&gap_block[2], len-3, min_v, max_v);
+        bout.flush();
+
+        // re-evaluate coding efficiency
+        //
+        encoder::position_type enc_pos1 = enc.get_pos();
+        unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0);
+        unsigned plain_size = (len-1)*sizeof(gap_word_t);
+        if (enc_size > plain_size)
+        {
+            enc.set_pos(enc_pos0);
+        }
+        else
+        {
+            compression_stat_[bm::set_block_gap_bienc]++;
+            return;
+        }
+    }
+    else
+    {
+        BM_ASSERT(0);
+    }
+
+    gamma_gap_block(gap_block, enc);
+}
 
 
 template<class BV>
@@ -1845,70 +1908,50 @@ void serializer<BV>::interpolated_encode_gap_block(
     BM_ASSERT(len);
     BM_ASSERT(gap_block[len] == 65535);
 
-    if (len >= 4) // BIC encoding
+
+    if (len >= 4) // fit for BIC encoding
     {
-        bool ret = interpolated_encode_gap_block_v3(gap_block, enc, len);
-        if (ret)
+        bm::encoder enc_try((unsigned char*)try_buf_, 65536);
+        size_t s_size;
         {
+            encoder::position_type enc_try_pos0 = enc_try.get_pos();
+
+            interpolated_encode_gap_block_v3s(gap_block, enc_try, len);
+
+            encoder::position_type enc_try_pos1 = enc_try.get_pos();
+            s_size = size_t(enc_try_pos1 - enc_try_pos0);
+            BM_ASSERT(s_size);
+        }
+
+        encoder::position_type enc_pos0 = enc.get_pos();
+
+        bool v3_ok = interpolated_encode_gap_block_v3(gap_block, enc, len);
+        if (v3_ok)
+        {
+            encoder::position_type enc_pos1 = enc.get_pos();
+            size_t dr_size = size_t(enc_pos1 - enc_pos0);
+            if (s_size && (s_size < dr_size)) // re-evaluluate DR-BIC efficiency
+            {
+                enc.set_pos(enc_pos0); // rollback the bit stream
+                enc.move_from(enc_try);
+            }
+            else
+            {
+            }
             return;
         }
-        else
+        else // DR BIC did not produce results
         {
-        }
-
-        unsigned h_len = bm::gap_length(gap_block)-1;
-        if (len == h_len) // length can be encoded using header
-        {
-            // v2 encoding
-            encoder::position_type enc_pos0 = enc.get_pos();
-
-            bm::gap_word_t head = gap_block[0];
-            head &= bm::gap_word_t(~(3 << 1)); // clear the level flags
-            bm::gap_word_t min_v = gap_block[1];
-            bm::gap_word_t max_v = gap_block[len-1];
-            bm::gap_word_t tail_delta = bm::gap_word_t(65535 - max_v);
-
-            if (min_v < 256)
-                head |= bm::h2f_min_v_8bit; // (1 << 1);
-            if (tail_delta < 256)
-                head |= bm::h2f_max_v_8bit; // (1 << 2);
-
-            enc.put_8(bm::set_block_gap_bienc_v2);
-            enc.put_16(head);
-            if (min_v < 256)
-                enc.put_8((unsigned char)min_v);
-            else
-                enc.put_16(min_v);
-
-            if (tail_delta < 256)
-                enc.put_8((unsigned char)tail_delta);
-            else
-                enc.put_16(tail_delta);
-
-            bit_out_type bout(enc);
-            bout.bic_encode_u16(&gap_block[2], len-3, min_v, max_v);
-            bout.flush();
-
-            // re-evaluate coding efficiency
-            //
-            encoder::position_type enc_pos1 = enc.get_pos();
-            unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0);
-            if (enc_size > (len-1)*sizeof(gap_word_t))
-            {
-                enc.set_pos(enc_pos0);
-            }
-            else
-            {
-                compression_stat_[bm::set_block_gap_bienc]++;
-                return;
-            }
-        }
-        else
-        {
-            BM_ASSERT(0);
+            BM_ASSERT(s_size);
+            enc.move_from(enc_try);
+            return;
         }
     }
-    gamma_gap_block(gap_block, enc);
+    else
+    {
+        gamma_gap_block(gap_block, enc);
+    }
+
     compression_stat_[bm::set_block_gap]++;
 }
 
@@ -1985,12 +2028,6 @@ void serializer<BV>::gamma_gap_block(const bm::gap_word_t* gap_block,
 
         encoder::position_type enc_pos1 = enc.get_pos();
         unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0); (void) enc_size;
-/*
-        if (enc_size > (len * sizeof(gap_word_t) ) )
-        {
-            BM_ASSERT(0);
-        }
-*/
     }
     encoder::position_type enc_pos1 = enc.get_pos();
     unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0); (void) enc_size;
@@ -4820,6 +4857,31 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
             dst_block[len] = bm::gap_max_bits - 1;
         }
         break;
+    case set_block_gap_bienc_v3s:
+        {
+            bm::gap_word_t min_v, max_v;
+            BM_ASSERT(!gap_head);
+
+            bit_in_type bin(decoder);
+
+            gap_head = (bm::gap_word_t) bin.delta16s();
+
+            unsigned len = (gap_head >> 3);
+            bm::gap_word_t min8 = gap_head & bm::h2f_min_v_8bit;
+            bm::gap_word_t tail8 = gap_head & bm::h2f_max_v_8bit;
+            gap_head &= bm::gap_word_t(~(3 << 1)); // clear the flags
+
+            min_v = (bm::gap_word_t) ((min8) ? bin.gamma8() : bin.get_16_no());
+            max_v = (bm::gap_word_t) ((tail8) ? bin.gamma8() :  bin.get_16_no());
+            max_v = bm::gap_word_t(65535 - max_v); // tail correction
+
+            dst_block[0] = gap_head;
+            dst_block[1] = min_v;
+            bin.bic_decode_u16(&dst_block[2], len-3, min_v, max_v);
+            dst_block[len-1] = max_v;
+            dst_block[len] = bm::gap_max_bits - 1;
+        }
+        break;
     case set_block_gap_bienc_v3:
         {
             bm::gap_word_t* ex0_arr = (bm::gap_word_t*) this->ex0_arr_;
@@ -4832,14 +4894,6 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
             unsigned char head_v3 = (unsigned char) bin.get_bits(8);
             gap_head = (bm::gap_word_t) bin.delta16s();
             unsigned len = (gap_head >> 3);
-/*
-if (len < 8)
-    std::cout << "-";
-else if (len < 256)
-    std::cout << ".";
-    else
-    std::cout << "+";
-*/
             dst_block[0] = gap_head & bm::gap_word_t(~(3 << 1)); // clear the flags
 
             unsigned ex0_cnt{0};
@@ -5228,6 +5282,10 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype,
         this->read_gap_block(dec, btype, gap_temp_block, gap_head);
         break;
     case bm::set_block_gap_bienc_v3:
+        gap_head = 0; // dec.get_16();
+        this->read_gap_block(dec, btype, gap_temp_block, gap_head);
+        break;
+    case bm::set_block_gap_bienc_v3s:
         gap_head = 0; // dec.get_16();
         this->read_gap_block(dec, btype, gap_temp_block, gap_head);
         break;
@@ -5712,6 +5770,7 @@ dec_last_size = dec_size;
         case set_block_arrgap_bienc_v2:
         case set_block_arrgap_bienc_inv_v2:
         case set_block_gap_bienc_v3:
+        case set_block_gap_bienc_v3s:
         case set_block_gap_egamma_v3:
             deserialize_gap(btype, dec, bv, bman, nb_i, blk);
             break;
@@ -6358,6 +6417,8 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
             state_ = e_gap_block;
             break;
 
+        case set_block_gap_bienc_v3s:
+            BM_FALLTHROUGH;
         case set_block_gap_bienc_v3:
             BM_FALLTHROUGH;
         case set_block_gap_egamma_v3:
