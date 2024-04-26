@@ -5697,7 +5697,7 @@ void SparseSerializationTest()
                 bvect::size_type sb_from = from / (65536 * 256);
                 bvect::size_type sb_to = to / (65536 * 256);
                 bvect::size_type sb_cnt = sb_to - sb_from + 1;
-                assert(cstat[bm::set_sblock_bienc] == sb_cnt || cstat[bm::set_sblock_bienc] == sb_cnt - 1);
+                assert(cstat[bm::set_sblock_bienc_v3] == sb_cnt || cstat[bm::set_sblock_bienc_v3] == sb_cnt - 1);
             }
 
             bvect bv2;
@@ -20031,6 +20031,7 @@ int main(int argc, char *argv[])
     if (is_all || is_bvser || is_bvbasic)
     {
         //SerializationCompressionLevelsTest();
+
         SerializationTest();
         CheckAllocLeaks(false);
 
