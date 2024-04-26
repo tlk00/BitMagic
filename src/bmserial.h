@@ -3675,7 +3675,7 @@ serializer<BV>::serialize(const BV& bv,
                 // XOR reference compression disables the sparse SUB serial.
                 if ((compression_level_ >= 5) && (ref_vect_ == 0))
                 {
-                    if (is_sparse_sub)
+                    if (is_sparse_sub && sub_stat.bv_count < 65536)
                     {
                         header_flag_ |= BM_HM_SPARSE;
                         bienc_arr_sblock(bv, i0, enc);
