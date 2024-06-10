@@ -152,6 +152,16 @@ void serialize_df0(const sample_data_frame& df,
     bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3;
     bm::sparse_vector_serial_layout<sparse_vector_u16> sv_lay0;
 
+    // it is possible to use the low level bit-vector serializer methods
+    // (see bm::serializer<BV> )
+    // to adjust compression settings for faster operation
+    // (but at the expense of compression rate)
+    //
+#if (0)
+    csv_ser.get_bv_serializer().set_bic_dynamic_range_reduce(false);
+    csv_ser.get_bv_serializer().set_bic_coeff(2.5f);
+    sv16_ser.get_bv_serializer().set_bic_dynamic_range_reduce(false);
+#endif
     // serialize all data-frame vectors in their natural order (1, 2, 3 ... N)
     //
     csv_ser.serialize(df.csv1, sv_lay1);
@@ -278,6 +288,8 @@ void serialize_df2(const sample_data_frame& df,
         // buffers for serialization
         bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay1, sv_lay2, sv_lay3;
         bm::sparse_vector_serial_layout<sparse_vector_u16> sv_lay0;
+        
+        
 
         // serialize all data-frame vectors in their natural order (1, 2, 3 ... N)
         //
