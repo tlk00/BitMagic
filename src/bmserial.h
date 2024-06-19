@@ -3109,22 +3109,6 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
     }
     encoder::position_type pos1 = enc.get_pos();
     unsigned enc_size = (unsigned)(pos1 - pos0); (void) enc_size;
-/*
-    unsigned size32 = (max_v <= 0xFFFFFF) ? 5 + (3 * len) : 5 + (4 * len); // plain list encoding
-    if (size32 < enc_size)
-    {
-    unsigned loss = enc_size - size32;
-    static size_t tloss = 0;
-        tloss += loss;
-        std::cout << "-" << len << "(" << tloss << ") ";
-    }
-    else
-    {
-        //std::cout << "+";
-    }
-*/
-//    double c_rate = double(enc_size * 8) / double(len);
-//std::cout << len << ": r=" << std::setprecision(3) << c_rate << "  m0=" << min0 << " da=" << delta_acc << std::endl;
 
     compression_stat_[scode]++;
 }
