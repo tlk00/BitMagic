@@ -803,7 +803,8 @@ public:
         \brief Re-calculate rank-select index for faster access to vector
         \param force - force recalculation even if it is already recalculated
         \param sync_size - do "true size" sync, it calculates the last vector element (not null)
-                          and sets vector size baed on that
+            and sets vector size based on that. Effectively it can reduce size() of vector by truncating tail NULL elements.
+                                                        
         @sa sync_size()
     */
     void sync(bool force, bool sync_size);
