@@ -4387,7 +4387,7 @@ void bvector<Alloc>::import_block(const size_type* ids,
         #endif
         if (new_blocks_strat_ == BM_GAP) // optimization required
         {
-            BM_DECLARE_TEMP_BLOCK(temp_blk);
+            BM_DECLARE_TEMP_BLOCK(temp_blk)
             unsigned i0, j0;
             bm::get_block_coord(nblock, i0, j0);
             blockman_.optimize_block(i0, j0, blk, temp_blk, opt_compress, 0);

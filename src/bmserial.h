@@ -627,7 +627,7 @@ protected:
                             block_idx_type expect_nb) BMNOEXCEPT;
 
 protected:
-    BM_DECLARE_TEMP_BLOCK(tb_wflags_); ///< temp flags for sub-block DR compression
+    BM_DECLARE_TEMP_BLOCK(tb_wflags_) ///< temp flags for sub-block DR compression
 
     bm::gap_word_t*   id_array_ = 0; ///< ptr to idx array for temp decode use
     unsigned*         sb_id_array_=0; ///< ptr to super-block idx array (temp)
