@@ -4374,7 +4374,7 @@ void bvector<Alloc>::import_block(const size_type* ids,
         {
             if (stop-start == 1)
             {
-                unsigned nbit = unsigned(ids[0] & bm::set_block_mask);
+                unsigned nbit = unsigned(ids[start] & bm::set_block_mask);
                 gap_block_set_no_ret(BMGAP_PTR(blk), true, nblock, nbit);
                 return;
             }
