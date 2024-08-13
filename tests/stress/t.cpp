@@ -4347,6 +4347,21 @@ void BasicFunctionalityTest()
         bv.calc_stat(&st);
         assert(st.ptr_sub_blocks == 256);
     }
+    // test for the fix submitted by yrivardmulrooney (github)
+    {
+        bm::bvector<> bv;
+        bv.set(65540);
+        bv.optimize();
+        {
+            bm::bvector<>::bulk_insert_iterator it(bv);
+            *it = 0;
+            *it = 65540;
+        }
+        
+        assert(bv.count() == 2);
+        assert(bv.get_bit(0));
+        assert(bv.get_bit(65540));
+    }
 
     // filling vectors with regular values
     
