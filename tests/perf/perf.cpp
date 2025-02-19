@@ -70,6 +70,8 @@ typedef  bitset<BSIZE>  test_bitset;
 
 unsigned platform_test = 1;
 
+unsigned long long c_acc = 0; ///< technical var. to help silence some code analysis warnings and too smart optimizer
+
 std::random_device rand_dev;
 std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
 std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs for [1, vector_max]
@@ -356,6 +358,7 @@ void BitCountTest()
     volatile unsigned* p = &value;
     unsigned c1;
     c1 = value = 0;
+    c_acc+= c1;
 
     if (!platform_test)
     {
@@ -366,7 +369,8 @@ void BitCountTest()
     }
     }
 
-    c1 = *p;
+    (c1 = *p); c_acc += c1;
+    
     c1 = value = 0;
     stringstream s;
     s << value << c1; // to fool the optimization
@@ -876,6 +880,7 @@ void BitCountSparseTest()
     }
 
     c1 = *p;
+    ::memcpy(&c_acc, &c1, sizeof(c1)); // to trick static anal.and optimizer
     value = c1 = 0;
 
     bvect*  bv_c = new bvect(*bv);
@@ -2415,9 +2420,9 @@ void AndCountTest()
     }
     assert(count3 == count2);
 
-
-    count1 = count2 = 0;
-
+    ::memcpy(&c_acc, &count1, sizeof(count1));
+    //count1 = count2 = 0;
+ 
 
     delete bv1;
     delete bv2;
@@ -2440,7 +2445,6 @@ void TI_MetricTest()
     SimpleFillSets(bset2, *bv2, 0, BSIZE, 250);
 
     unsigned count1 = 0;
-    unsigned count2 = 0;
     unsigned countA=0, countB=0, test_countA=0, test_countB=0;
     unsigned test_count = 0;
     double ti1=0, ti2=0, ti3=0;
@@ -2506,7 +2510,8 @@ void TI_MetricTest()
         cout << ti1 << " " << ti2 << endl;
         exit(1);
     }
-    count1 = count2 = 0;
+    c_acc += count1 ;
+    //count1 = 0;
 
     // -----------------------------------------
     if (!platform_test)
@@ -2582,8 +2587,8 @@ void TI_MetricTest()
         cout << ti1 << " " << ti2 << endl;
         exit(1);
     }
-    count1 = count2 = 0;
-    count1 = count2 = 0;
+    //count1 = 0;
+
 
     // -----------------------------------------
     if (!platform_test)
@@ -3507,6 +3512,7 @@ void RSC_SparseVectorRandomAccesTest()
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (BIT)", REPEATS*10 );
         unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
+        c_acc += sz; // to fool optimizer a bit
         }
         // validate
         for (unsigned i = 0; i < test_idx.size(); ++i)
@@ -3587,6 +3593,7 @@ void RSC_SparseVectorRandomAccesTest()
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (GAP)", REPEATS*10 );
         unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
+        c_acc += sz; // to fool optimizer
         }
         // validate
         for (unsigned i = 0; i < test_idx.size(); ++i)
@@ -3613,6 +3620,7 @@ void RSC_SparseVectorRandomAccesTest()
         bm::chrono_taker tt(cout, "rsc_sparse_vector<>::gather() (GAP) (RO)", REPEATS*10 );
         unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
+        c_acc += sz; // to fool optimizer
         }
 
         // validate
@@ -5659,6 +5667,7 @@ void StrSparseVectorTest()
             {
                 cerr << "String bfind_eq_str() failure!" << endl;
                 found2 = scanner_4.bfind_eq_str(s.c_str(), pos2);
+                cerr << found2 << endl;
                 assert(0); exit(1);
             }
             f_sum2_4 += pos2;
@@ -6279,8 +6288,8 @@ int main(void)
         StrSparseVectorTest();
         cout << endl;
 
-        if (g_fl_cnt < 0) // ... to fool compiler optimizers not to exclude code
-            cout << "";
+        if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code
+            cout << "" << "\r";
 
 //        AS_test1();
 //        AS_test2();
