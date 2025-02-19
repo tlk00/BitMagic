@@ -245,10 +245,10 @@ template<bool T> struct _copyright
 
 #define BM_VERSION_MAJOR 8
 #define BM_VERSION_MINOR 0
-#define BM_VERSION_PATCH 0
+#define BM_VERSION_PATCH 1
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic Library. v.8.0.0 (c) 2002-2023 Anatoliy Kuznetsov.";
+    "BitMagic Library. v.8.0.1 (c) 2002-2023 Anatoliy Kuznetsov.";
 template<bool T> const unsigned _copyright<T>::_v[3] =
                     { BM_VERSION_MAJOR, BM_VERSION_MINOR, BM_VERSION_PATCH };
 
