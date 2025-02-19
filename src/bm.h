@@ -2857,15 +2857,17 @@ bvector<Alloc>::block_count_to(const bm::word_t*    block,
 
     BM_ASSERT(first == bm::bit_block_calc_count_to(block, rs3_border0));
     BM_ASSERT(second == bm::bit_block_calc_count_range(block, rs3_border0+1, rs3_border1));
-
-
+#if (0) // debug code
     {
         unsigned cnt, aux0(bm::gap_word_t(sub >> 32)); (void)cnt; (void)aux0;
-        BM_ASSERT(aux0 == (cnt =bm::bit_block_calc_count_to(block, bm::rs3_border0_1)));
+        cnt = bm::bit_block_calc_count_to(block, bm::rs3_border0_1);
+        BM_ASSERT(aux0 == cnt);
         unsigned cnt1, aux1(bm::gap_word_t(sub >> 48)); (void)aux1; (void) cnt1;
-        BM_ASSERT(aux1 == (cnt1 =bm::bit_block_calc_count_to(block, bm::rs3_border1_1)));
+        cnt1 = bm::bit_block_calc_count_to(block, bm::rs3_border1_1);
+        BM_ASSERT(aux1 == cnt1);
     }
-
+#endif
+    
     size_type c=0;
     unsigned sub_choice =
         bm::get_nibble(bm::rs_intervals<true>::_c._lut, nbit_right);

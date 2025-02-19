@@ -3196,6 +3196,25 @@ unsigned gap_bit_count_range(const T* const buf,
 
 }
 
+/**
+ \brief Debug function for verification in DEBUG mode
+ @internal
+ */
+
+template<typename T>
+bool debug_check_count_range(const T* const buf, const unsigned left,
+                             const unsigned start_pos,
+                             const unsigned is_set) BMNOEXCEPT
+{
+    unsigned is_set_c, pos;
+    pos = bm::gap_bfind(buf, left, &is_set_c);
+    bool r = (pos == (start_pos) && bool(is_set) == bool(is_set_c));
+    BM_ASSERT(bool(is_set) == bool(is_set_c));
+    BM_ASSERT(pos == start_pos);
+    return r;
+}
+ 
+
 /*!
    \brief Counts 1 bits in GAP buffer in the closed [left, right] range using position hint to avoid bfind
    \param buf - GAP buffer pointer.
@@ -3219,12 +3238,16 @@ unsigned gap_bit_count_range_hint(const T* const buf,
     is_set = hint & 1;
     is_set = ~(is_set - 1u); // 0xFFF.. if true (mask for branchless code)
     unsigned start_pos = hint >> 1;
+    
+    BM_ASSERT(debug_check_count_range(buf, left, start_pos, is_set));
+    /*
     {
         unsigned is_set_c; (void)is_set_c;
         unsigned pos; (void)pos;
         BM_ASSERT((pos = bm::gap_bfind(buf, left, &is_set_c))==start_pos);
         BM_ASSERT(bool(is_set) == bool(is_set_c));
     }
+     */
 
     const T* pcurr = buf + start_pos;
     if (right <= *pcurr) // we are in the target gap right now
@@ -6028,10 +6051,10 @@ bool bit_block_is_all_one_range(const bm::word_t* const BMRESTRICT block,
     BM_ASSERT(left <= right);
     BM_ASSERT(right <= bm::gap_max_bits-1);
 
-    unsigned nword, nbit, bitcount, temp;
+    unsigned nbit, bitcount, temp;
     nbit = left & bm::set_word_mask;
     const bm::word_t* word =
-        block + (nword = unsigned(left >> bm::set_word_shift));
+        block + (unsigned(left >> bm::set_word_shift));
     if (left == right)  // special case (only 1 bit to check)
         return (*word >> nbit) & 1u;
 
