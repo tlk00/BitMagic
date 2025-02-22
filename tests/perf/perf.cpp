@@ -4301,7 +4301,7 @@ void IntervalsTest()
                         if (i == istart + ilen)
                         {
                             cerr << "Error: is_interval test failed! (1)" << endl;
-                            is_int = bm::is_interval(bv, istart, i);
+                            is_int = bm::is_interval(bv, istart, i); (void) is_int;
                             assert(0); exit(1);
                         }
                     }
