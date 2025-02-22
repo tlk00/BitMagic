@@ -98,7 +98,10 @@ struct sparse_vector_serial_layout
     
     /// Set new serialized size
     void resize(size_t ssize) { buf_.resize(ssize);  }
-    
+
+    /// Set new serialized size (shrink)
+    void shrink(size_t ssize) { buf_.shrink(ssize);  }
+
     /// return serialization buffer capacity
     size_t  capacity() const BMNOEXCEPT { return buf_.capacity(); }
     
@@ -139,8 +142,7 @@ protected:
     buffer_type       buf_;                       ///< serialization buffer
     ptr_vector_type   plane_ptrs_; ///< pointers on serialized bit-planes
     sizet_vector_type plane_size_; ///< serialized plane size
-//    unsigned char* plane_ptrs_[SV::sv_slices]; ///< pointers on serialized bit-planes
-//    size_t         plane_size_[SV::sv_slices]; ///< serialized plane size
+
 };
 
 
@@ -1093,7 +1095,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
             enc_o.put_8('6');
             // save the offset table as a list of 64-bit values
             //
-//std::cout << "Plane OFFS:" << std::endl;
             for (unsigned i = 0; i < planes; ++i)
             {
                 const unsigned char* p = sv_layout.get_plane(i);
@@ -1101,18 +1102,8 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
                 {
                     size_t offset = size_t(p - buf);
                     enc_o.put_64(offset);
-//std::cout << offset << ", ";
                 }
             } // for
-/*
-std::cout << "Plane OFFS:" << std::endl;
-for (unsigned k = 0; k < plane_off_vect_.size(); ++k)
-{
-    std::cout << plane_off_vect_.data()[k] << ", ";
-}
-*/
-//std::cout << std::endl;
-
         }
         else  // searialize 32-bit offset table using BIC
         {
@@ -1131,21 +1122,13 @@ for (unsigned k = 0; k < plane_off_vect_.size(); ++k)
                                  min_v, max_v);
             bo.flush();
             }
-/*
-std::cout << "Plane OFFS:" << std::endl;
-for (unsigned k = 0; k < plane_off_vect_.size(); ++k)
-{
-    std::cout << plane_off_vect_.data()[k] << ", ";
-}
-std::cout << std::endl;
-*/
         }
         buf_ptr += enc_o.size();
     }
 
 
 
-    sv_layout.resize(size_t(buf_ptr - buf)); // set the true occupied size
+    sv_layout.shrink(size_t(buf_ptr - buf)); // set the true occupied size
 
     // -----------------------------------------------------
     // save the header

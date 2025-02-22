@@ -1219,7 +1219,8 @@ public:
             block = FULL_BLOCK_FAKE_ADDR;
 
         unsigned nblk_blk = unsigned(nb >> bm::set_array_shift);
-        reserve_top_blocks(nblk_blk+1);
+        auto top_block_sz = reserve_top_blocks(nblk_blk+1); (void)top_block_sz;
+        BM_ASSERT(top_block_sz > nblk_blk);
         
         if (!top_blocks_[nblk_blk])
         {
@@ -2725,7 +2726,7 @@ public:
                 blk_root[i] = (bm::word_t**)FULL_BLOCK_FAKE_ADDR;
                 continue;
             }
-
+            BM_ASSERT(t_blk_blk);
             blk_root[i] = t_blk_blk;
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
             {
