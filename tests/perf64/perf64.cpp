@@ -196,7 +196,7 @@ void bvector64_Serialization()
                 cmp = bv_tc.compare(bv_t);
                 bm::deserialize(bv_t_c, sbuf1.buf());
 
-                std::cerr << "Serialization intergity check failed!" << std::endl;
+                std::cerr << "Serialization intergity check failed!" << cmp << std::endl;
                 assert(0); exit(1);
             }
         }
