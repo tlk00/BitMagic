@@ -2341,6 +2341,8 @@ bm::id64_t sum_arr(const T* first, const T* last) BMNOEXCEPT
    \brief calculate minimal delta between monotonic growing numbers
    \param arr -array buffer pointer
    \param arr_len - array length
+   \param min0 [out] - minimal delta between elements or can be zero if algorithm detected a +1 sequence
+   @return false if +1 sequence is detected
 
    @ingroup gapfunc
 */

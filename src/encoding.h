@@ -1977,13 +1977,20 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         min0 = 0;
     else
     {
-        bm::arr_calc_delta_min(arr, sz, min0);
-        if (min0 < 65535)
+        bool r = bm::arr_calc_delta_min(arr, sz, min0);
+        if (r)
         {
-            BM_ASSERT(min0 > 0);
+            if (min0 < 65535)
+            {
+                BM_ASSERT(min0 > 0); // impossible because min0==0 should be !r
+            }
+            else
+                min0 = 0;
         }
-        else
-            min0 = 0;
+        else // !r (no feasible delta found)
+        {
+            BM_ASSERT(min0==0);
+        }
     }
 
     // evaluate feasibility for window-DR
@@ -2021,6 +2028,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         }
     }
     else // non WDR range compression
+    {
         if (min0)
         {
         use_min0:
@@ -2035,6 +2043,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
         {
             recalc_arr = const_cast<bm::gap_word_t*>(arr);
         }
+    }
     if (!min0)
         h3_flag |= bm::h3f_ex_arr_min0_0;
 
@@ -2057,8 +2066,6 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
     {
         this->put_16_no(min_v); // delta16 is not efficient (for this use now)
         this->put_16_no(max_v);
-//        this->delta16(min_v);
-//        this->delta16(max_v_delta);
 
         recalc_arr = &recalc_arr[1];
         sz-=2;
