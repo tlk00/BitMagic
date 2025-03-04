@@ -41694,7 +41694,6 @@ return 0;
     
     if (is_all || is_support)
     {
-
         TestHeapVector();
          CheckAllocLeaks(false);
 
