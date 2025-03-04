@@ -1,7 +1,7 @@
 #ifndef BMCONST__H__INCLUDED__
 #define BMCONST__H__INCLUDED__
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2025 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -248,7 +248,7 @@ template<bool T> struct _copyright
 #define BM_VERSION_PATCH 1
 
 template<bool T> const char _copyright<T>::_p[] = 
-    "BitMagic Library. v.8.0.1 (c) 2002-2023 Anatoliy Kuznetsov.";
+    "BitMagic Library. v.8.0.1 (c) 2002-2025 Anatoliy Kuznetsov.";
 template<bool T> const unsigned _copyright<T>::_v[3] =
                     { BM_VERSION_MAJOR, BM_VERSION_MINOR, BM_VERSION_PATCH };
 
