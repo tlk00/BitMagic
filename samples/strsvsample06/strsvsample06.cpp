@@ -144,7 +144,7 @@ int main(void)
         {
             cout << endl;
             cout << "Mismatch at: " << idx << endl;
-            cout << "value=" << str_sv1[idx] << endl;
+            cout << "value=" << str_sv1[idx].get() << endl;
         }
         cout << endl;
 
@@ -162,7 +162,7 @@ int main(void)
                 for (;en.valid(); ++en)
                 {
                     idx = *en;
-                    cout << idx << ": " << str_sv1[idx] << endl;
+                    cout << idx << ": " << str_sv1[idx].get() << endl;
                 } // for
             }
 
@@ -174,7 +174,7 @@ int main(void)
             for (;en.valid(); ++en)
             {
                 idx = *en;
-                cout << idx << ": " << str_sv1[idx] << endl;
+                cout << idx << ": " << str_sv1[idx].get() << endl;
             } // for
 
 

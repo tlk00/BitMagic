@@ -60,8 +60,9 @@ int main(void)
         std::string str00 = "00";
         
         str_sv.set(0, s0);       // set a C-string
+
         str_sv.push_back(str1);  // add from an STL string
-        
+
         str_sv.assign(3, str3);  // assign element 3 from an STL string
         
         // please note that container automatically resizes
@@ -69,6 +70,7 @@ int main(void)
         
         str_sv.insert(0, str00); // insert element
 
+        
         str_sv.erase(0);         // erase element 0
 
 
@@ -82,8 +84,7 @@ int main(void)
         //
         for (str_sv_type::size_type i = 0; i < str_sv.size(); ++i)
         {
-            const char* s = str_sv[i];
-            cout << i << ":" << s << endl;
+            cout << i << ":" << str_sv[i].get() << endl;
         } // for i
         cout << "----" << endl;
         
@@ -131,6 +132,21 @@ int main(void)
             } // for it.valid()
             cout << endl;
         }
+        
+        // print out vector content without NULL check
+        {
+            str_sv_type::const_iterator it = str_sv2.begin();
+            for (; it.valid(); ++it)
+            {
+                const char* s = *it;
+                if (!s) // we should expect it returns nullptr for NULL values ion vectors
+                    cout << "NULL, ";
+                else
+                    cout << *it << ", ";
+            } // for it.valid()
+            cout << endl;
+        }
+
     }
     catch(std::exception& ex)
     {

@@ -80,15 +80,14 @@ int main(void)
         
         
         // print out the container content using [] reference
-        //
+        // (random access can be slower than iterator for iterative pattern of access)
         for (str_sv_type::size_type i = 0; i < str_sv.size(); ++i)
         {
             if (str_sv[i].is_null())
                 cout << i << ":NULL" << endl;
             else
             {
-                const char* s = str_sv[i];
-                cout << i << ":" << s << endl;
+                cout << i << ":" << str_sv[i].get() << endl;
             }
         } // for i
         cout << endl;

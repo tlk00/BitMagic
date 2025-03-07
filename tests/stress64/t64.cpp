@@ -16929,14 +16929,14 @@ void TestStrSparseVector()
         // reference test / serialization test
         {
             auto ref = str_sv0[3];
-            const char* s = ref;
+            const char* s = ref.get();
             cmp = ::strcmp(s, str0.c_str());
             assert(cmp == 0);
             str_sv0[3] = "333";
             str_sv0.get(3, str, sizeof(str));
 
             ref = str_sv0[3];
-            s = ref;
+            s = ref.get();
             cmp = ::strcmp(s, "333");
             assert(cmp == 0);
 

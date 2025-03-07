@@ -168,22 +168,23 @@ public:
         {
             this->buf_.resize(str_sv.effective_max_str());
         }
-
+        /*
         operator const value_type*() const BMNOEXCEPT
         {
             return get();
         }
-
+        */
         const value_type* get() const BMNOEXCEPT
         {
             str_sv_.get(idx_, this->buf_.data(), str_sv_.effective_max_str());
-            return this->buf_.data();
+            const value_type* v = this->buf_.data();
+            return v;
         }
 
         reference& operator=(const reference& ref)
         {
-            // TO DO: implement element copy bit by bit
-            str_sv_.set(idx_, (const value_type*)ref);
+            // TODO: implement element copy bit by bit
+            str_sv_.set(idx_, ref.get());
             return *this;
         }
 
