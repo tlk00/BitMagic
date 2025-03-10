@@ -277,7 +277,8 @@ int load_FASTA(const std::string& fname, CSequenceColl& seq_coll)
         }
         for (std::string::iterator it = line.begin(); it != line.end(); ++it)
             seq_vect->push_back(*it);
-    } // for
+        (void)i;
+    } // for i
 
     if (!acc.empty())
     {

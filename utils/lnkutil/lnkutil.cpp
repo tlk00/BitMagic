@@ -1085,12 +1085,13 @@ int load_bv(const std::string& fname, bm::bvector<>& bv)
                 unsigned long id = std::stoul(ms2);
                 if (id)
                 {
-                    bv.set(id);
+                    bv.set(bm::id_t(id));
                 }
                 
             } // for
 
         } // for j
+        (void)i;
     } // for i
     bv.optimize();
 
@@ -1229,7 +1230,7 @@ void run_benchmark(link_matrix& lm)
                 {
                     std::cerr << "row not found! " << id << std::endl;
                 }
-
+                (void)k;
              } // for k
             
             bv_res = bv_remap;
@@ -1265,6 +1266,7 @@ void remap(const link_matrix& lm, const bm::bvector<>& bv_in)
             {
                 bm::combine_or(bv_remap, vect.begin(), vect.end());
             }
+            (void)k;
         } // for k
 
         

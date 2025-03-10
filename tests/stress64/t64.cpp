@@ -10636,7 +10636,7 @@ bool agg_shift_right_and(bm::aggregator<bvect>& agg,
     va_start(args, bv);
     agg.add(bv);
     
-    for (int i = 0; true; ++i)
+    for (; true;)
     {
         const bvect* bv_arg = (const bvect*)va_arg(args, void*);
         if (!bv_arg)

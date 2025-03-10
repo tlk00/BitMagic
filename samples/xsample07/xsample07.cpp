@@ -130,7 +130,8 @@ int load_FASTA(const std::string& fname, vector_char_type& seq_vect)
             continue;
         for (std::string::iterator it = line.begin(); it != line.end(); ++it)
             seq_vect.push_back(*it);
-    } // for
+        (void)i;
+    } // for i
     return 0;
 }
 

@@ -112,7 +112,7 @@ void data_model::add_layout(size_t plane, bm::bvector<>* bv)
     unique_ptr<bm::bvector<> > ap(bv);
     if (layout_v.size() == plane) // push back requested
     {
-        layout_v.emplace_back(move(ap));
+        layout_v.emplace_back(std::move(ap));
     }
     else
     {
@@ -127,7 +127,7 @@ void data_model::add_strand(size_t plane, rsc_vector_u8* strand)
     unique_ptr<rsc_vector_u8 > ap(strand);
     if (strand_v.size() == plane) // push back requested
     {
-        strand_v.emplace_back(move(ap));
+        strand_v.emplace_back(std::move(ap));
     }
     else
     {
@@ -150,7 +150,7 @@ void set_feature_strand(data_model& dm, size_t   plane,
     while (dm.strand_v.size() <= plane) // add planes
     {
         std::unique_ptr<rsc_vector_u8> p2(new rsc_vector_u8());
-        dm.strand_v.emplace_back(move(p2));
+        dm.strand_v.emplace_back(std::move(p2));
     }
 
     rsc_vector_u8* strand_plane = dm.strand_v[plane].get();
