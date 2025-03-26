@@ -4445,7 +4445,15 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
                 len = dec.get_16();
             else
                 len = dec.get_8();
-
+            if (!len) // there is a known issue in older version which could produce this
+            {
+                //BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            }
             bm::word_t min_v;
             if (sb_flag & bm::sblock_flag_min24)
                 if (sb_flag & bm::sblock_flag_min16) // 24 and 16
