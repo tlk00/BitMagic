@@ -281,6 +281,9 @@ public:
         /** add a series of consequitve NULLs (no-value) to the container */
         void add_null(size_type count) BMNOEXCEPT;
         
+        /** return true if insertion buffer is empty */
+        bool empty() const { return sv_bi_.empty(); }
+        
         /** flush the accumulated buffer */
         void flush();
     protected:
