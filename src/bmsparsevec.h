@@ -2034,7 +2034,8 @@ void sparse_vector<Val, BV>::set_value_no_null(size_type idx,
                 unsigned i0, j0;
                 bm::get_block_coord(nb, i0, j0);
 
-                if (const bm::word_t* blk = this->bmatr_.get_block(j, i0, j0))
+                if (/* const bm::word_t* blk = */
+                    this->bmatr_.get_block(j, i0, j0))
                 {
                     // TODO: more efficient set/clear on the block
                     bvector_type* bv = this->bmatr_.get_row(j);
