@@ -6,6 +6,8 @@
 
 typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparse_vector_u32;
 
+namespace bm{
+
 class sparse_vector_float{
  
 public:
@@ -190,3 +192,7 @@ void sparse_vector_float::push_back(value_type v)
 
 
 //---------------------------------------------------------------------
+
+
+}//namespace bm
+
