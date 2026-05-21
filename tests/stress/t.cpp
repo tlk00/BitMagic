@@ -9972,7 +9972,7 @@ void AggregatorTest()
 
     {
         bm::aggregator<bvect> agg;
-        bm::aggregator<bvect>::pipeline agg_pipe;
+        bm::aggregator<bvect>::pipeline<> agg_pipe;
         {
             bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
             assert(args);
@@ -10286,7 +10286,7 @@ void AggregatorTest()
             bvect bv0{ 1, 65536 }, bv1{ 1, 65536 }, bv2 {65536};
 
             {
-                bm::aggregator<bvect>::pipeline agg_pipe;
+                bm::aggregator<bvect>::pipeline<> agg_pipe;
                 {
                     bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
                     args->add(&bv0, 0); // AND
@@ -10492,7 +10492,7 @@ void AggregatorTest()
         bv1.optimize();
         bv2.optimize();
             {
-                bm::aggregator<bvect>::pipeline agg_pipe;
+                bm::aggregator<bvect>::pipeline<> agg_pipe;
                 {
                     bm::aggregator<bvect>::arg_groups* args = agg_pipe.add();
                     args->add(&bv0, 0); // AND
