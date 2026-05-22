@@ -114,7 +114,7 @@ public:
     };
 
     const_iterator begin() const;
-    const_iterator end() const;
+    const_iterator end() const { return const_iterator(this, bm::id_max); };
 
     sparse_vector_float();
     sparse_vector_float(const sparse_vector_float&);
@@ -161,7 +161,12 @@ public:
                 size_type arr_size,
                 size_type offset = 0,
                 bool      set_not_null = true);
-    
+
+protected:
+    enum buf_size_e{
+        n_buf_size = 1024 * 8
+    };
+
 private:
     size_type size_ = 0;
     bm::bvector<> signs;
@@ -171,6 +176,7 @@ private:
 };
 
 //---------------------------------------------------------------------
+//sparse_vector_float methods
 
 sparse_vector_float::sparse_vector_float(){}
 
@@ -184,11 +190,19 @@ sparse_vector_float::~sparse_vector_float(){}
 
 //---------------------------------------------------------------------
 
+sparse_vector_float::const_iterator sparse_vector_float::begin() const{
+    typedef typename sparse_vector_float::const_iterator it_type;
+    return it_type(this);
+}
+
+//---------------------------------------------------------------------
+
 sparse_vector_float& sparse_vector_float::operator=(const sparse_vector_float& svf){
     signs = svf.signs;
     exponents = svf.exponents;
     mantissas = svf.mantissas;
     size_ = svf.size_;
+    return *this;
 }
 
 //---------------------------------------------------------------------
@@ -220,7 +234,7 @@ bool sparse_vector_float::operator!=(const sparse_vector_float& svf) const{
 }
 
 //---------------------------------------------------------------------
-void bm::sparse_vector_float::swap(bm::sparse_vector_float &svf){
+void sparse_vector_float::swap(sparse_vector_float &svf){
     signs.swap(svf.signs);
     exponents.swap(svf.exponents);
     mantissas.swap(svf.mantissas);
@@ -265,7 +279,78 @@ void sparse_vector_float::push_back(value_type v)
 
 
 //---------------------------------------------------------------------
+//const_iterator methods
 
+sparse_vector_float::const_iterator::const_iterator() BMNOEXCEPT
+: sv_(0), pos_(bm::id_max), buf_ptr_(0) {}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv) BMNOEXCEPT
+: sv_(sv), buf_ptr_(0){
+    BM_ASSERT(sv_);
+    pos_ = sv_->empty() ? bm::id_max : 0u;
+}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT
+: sv_(sv), buf_ptr_(0) {
+    BM_ASSERT(sv_);
+    this->go_to(pos);
+}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::const_iterator::const_iterator(const const_iterator& it) BMNOEXCEPT
+: sv_(it.sv_), pos_(it.pos_), buf_ptr_(0) {}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::const_iterator::value_type sparse_vector_float::const_iterator::value() const{
+    //todo
+}
+
+//---------------------------------------------------------------------
+
+bool sparse_vector_float::const_iterator::is_null() const BMNOEXCEPT{
+    //todo
+}
+
+//---------------------------------------------------------------------
+
+void sparse_vector_float::const_iterator::go_to(size_type pos) BMNOEXCEPT{
+    pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
+    buf_ptr_ = 0;
+}
+
+//---------------------------------------------------------------------
+
+bool sparse_vector_float::const_iterator::advance() BMNOEXCEPT{
+    if (pos_ == bm::id_max) // nothing to do, we are at the end
+        return false;
+    ++pos_;
+
+    if (pos_ >= sv_->size()){
+        this->invalidate();
+        return false;
+    }
+
+    if (buf_ptr_){
+        ++buf_ptr_;
+        if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
+            buf_ptr_ = 0;
+    }
+    return true;
+}
+
+//---------------------------------------------------------------------
+
+void sparse_vector_float::const_iterator::skip_zero_values() BMNOEXCEPT{
+    //todo
+}
+
+//---------------------------------------------------------------------
 
 }//namespace bm
 
