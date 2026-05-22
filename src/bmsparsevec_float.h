@@ -120,12 +120,12 @@ public:
     sparse_vector_float(const sparse_vector_float&);
     ~sparse_vector_float();
 
-    sparse_vector_float& operator=(const sparse_vector_float&);
-    bool operator==(const sparse_vector_float&) const;
-    bool operator!=(const sparse_vector_float&) const;
+    sparse_vector_float& operator=(const sparse_vector_float& svf);
+    bool operator==(const sparse_vector_float& svf) const;
+    bool operator!=(const sparse_vector_float& svf) const;
 
 
-    void swap(sparse_vector_float&);
+    void swap(sparse_vector_float& svf);
 
     /*! \brief return size of the vector
         \return size of sparse vector
@@ -169,6 +169,79 @@ private:
     sparse_vector_u32 mantissas;
     
 };
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::sparse_vector_float(){}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::sparse_vector_float(const sparse_vector_float&){}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float::~sparse_vector_float(){}
+
+//---------------------------------------------------------------------
+
+sparse_vector_float& sparse_vector_float::operator=(const sparse_vector_float& svf){
+    signs = svf.signs;
+    exponents = svf.exponents;
+    mantissas = svf.mantissas;
+    size_ = svf.size_;
+}
+
+//---------------------------------------------------------------------
+
+bool sparse_vector_float::operator==(const sparse_vector_float& svf) const{
+    if (size_ == svf.size_ && signs == svf.signs){
+        //(exponents == svf.exponents) && (mantissas == svf.mantissas)
+        for(size_t i = 0; i < size_; i++){
+            unsigned int thisSVF = exponents.get(i);
+            unsigned int otherSVF = svf.exponents.get(i);
+
+            if(thisSVF != otherSVF) return false;
+
+            thisSVF = mantissas.get(i);
+            otherSVF = svf.mantissas.get(i);
+
+            if(thisSVF != otherSVF) return false;
+        }
+
+        return true;
+    }
+    return false;
+}
+
+//---------------------------------------------------------------------
+
+bool sparse_vector_float::operator!=(const sparse_vector_float& svf) const{
+    return !operator==(svf);
+}
+
+//---------------------------------------------------------------------
+void bm::sparse_vector_float::swap(bm::sparse_vector_float &svf){
+    signs.swap(svf.signs);
+    exponents.swap(svf.exponents);
+    mantissas.swap(svf.mantissas);
+    std::swap(size_, svf.size_);
+}
+
+//---------------------------------------------------------------------
+
+typename sparse_vector_float::value_type 
+sparse_vector_float::get(typename sparse_vector_float::size_type idx) const BMNOEXCEPT{
+    unsigned int sign = signs.test(idx) ? 1 : 0;
+    unsigned int exponent = exponents.get(idx);
+    unsigned int mantissa = mantissas.get(idx);
+    
+    unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+
+    float toReturn;
+    memcpy(&toReturn, &bits, sizeof(float));
+
+    return toReturn;
+}
 
 //---------------------------------------------------------------------
 
