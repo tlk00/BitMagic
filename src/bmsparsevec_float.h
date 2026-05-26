@@ -104,13 +104,11 @@ public:
         /// @return true if it is still valid
         bool advance() BMNOEXCEPT;
         
-        void skip_zero_values() BMNOEXCEPT;
-        
     private:
         const sparse_vector_type*         sv_;      ///!< ptr to parent
         size_type                         pos_;     ///!< Position
-        mutable buffer_type               buffer_;  ///!< value buffer
-        mutable value_type*               buf_ptr_; ///!< position in the buffer
+        sparse_vector_u32::const_iterator            exp_it_;
+        sparse_vector_u32::const_iterator            mant_it_;
     };
 
     const_iterator begin() const;
@@ -126,6 +124,7 @@ public:
 
 
     void swap(sparse_vector_float& svf);
+    
 
     /*! \brief return size of the vector
         \return size of sparse vector
@@ -161,6 +160,9 @@ public:
                 size_type arr_size,
                 size_type offset = 0,
                 bool      set_not_null = true);
+
+    void optimize(bm::word_t* temp_block = 0,
+          typename bvector_type::optmode opt_mode = bvector_type::opt_compress);
 
 protected:
     enum buf_size_e{
@@ -276,18 +278,57 @@ void sparse_vector_float::push_back(value_type v)
 
 //---------------------------------------------------------------------
 
+void sparse_vector_float::import(const value_type* arr, size_type arr_size, size_type offset, bool set_not_null){
+    if (offset > size_) {
+        for (size_type i = size_; i < offset; ++i) {
+            push_back(0.0f);
+        }
+    }
 
+    for (size_type i = 0; i < arr_size; ++i) {
+        unsigned int bits;
+        memcpy(&bits, &arr[i], sizeof(float));
+
+        unsigned int sign     = (bits >> 31) & 0x1;
+        unsigned int exponent = (bits >> 23) & 0xFF;
+        unsigned int mantissa =  bits        & 0x7FFFFF;
+
+        size_type idx = offset + i;
+
+        if (sign == 1)
+            signs.set(idx);
+        else
+            signs.clear(idx);
+
+        exponents.set(idx, exponent);
+        mantissas.set(idx, mantissa);
+    }
+
+    size_type new_size = offset + arr_size;
+    if (new_size > size_)
+        size_ = new_size;
+}
+
+//---------------------------------------------------------------------
+
+void sparse_vector_float::optimize(bm::word_t* temp_block, typename bvector_type::optmode opt_mode){
+    signs.optimize(temp_block, opt_mode);
+    exponents.optimize(temp_block, opt_mode);
+    mantissas.optimize(temp_block, opt_mode);
+}
+
+//---------------------------------------------------------------------
 
 //---------------------------------------------------------------------
 //const_iterator methods
 
 sparse_vector_float::const_iterator::const_iterator() BMNOEXCEPT
-: sv_(0), pos_(bm::id_max), buf_ptr_(0) {}
+: sv_(0), pos_(bm::id_max), exp_it_(), mant_it_() {}
 
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv) BMNOEXCEPT
-: sv_(sv), buf_ptr_(0){
+: sv_(sv), exp_it_(sv->exponents.begin()), mant_it_(sv->mantissas.begin()){
     BM_ASSERT(sv_);
     pos_ = sv_->empty() ? bm::id_max : 0u;
 }
@@ -295,7 +336,7 @@ sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT
-: sv_(sv), buf_ptr_(0) {
+: sv_(sv), exp_it_(sv->exponents.begin()), mant_it_(sv->mantissas.begin()) {
     BM_ASSERT(sv_);
     this->go_to(pos);
 }
@@ -303,25 +344,35 @@ sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::const_iterator(const const_iterator& it) BMNOEXCEPT
-: sv_(it.sv_), pos_(it.pos_), buf_ptr_(0) {}
+: sv_(it.sv_), pos_(it.pos_), exp_it_(it.exp_it_), mant_it_(it.mant_it_) {}
 
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::value_type sparse_vector_float::const_iterator::value() const{
-    //todo
+    unsigned int sign = sv_->signs.test(pos_) ? 1 : 0;
+    unsigned int exponent = exp_it_.value();
+    unsigned int mantissa = mant_it_.value();
+    
+    unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+
+    float toReturn;
+    memcpy(&toReturn, &bits, sizeof(float));
+
+    return toReturn;
 }
 
 //---------------------------------------------------------------------
 
 bool sparse_vector_float::const_iterator::is_null() const BMNOEXCEPT{
-    //todo
+    return false; // no such thing as null
 }
 
 //---------------------------------------------------------------------
 
 void sparse_vector_float::const_iterator::go_to(size_type pos) BMNOEXCEPT{
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
-    buf_ptr_ = 0;
+    exp_it_.go_to(pos_);
+    mant_it_.go_to(pos_);
 }
 
 //---------------------------------------------------------------------
@@ -329,25 +380,18 @@ void sparse_vector_float::const_iterator::go_to(size_type pos) BMNOEXCEPT{
 bool sparse_vector_float::const_iterator::advance() BMNOEXCEPT{
     if (pos_ == bm::id_max) // nothing to do, we are at the end
         return false;
+    
     ++pos_;
-
-    if (pos_ >= sv_->size()){
+    if (pos_ >= sv_->size())
+    {
         this->invalidate();
         return false;
     }
 
-    if (buf_ptr_){
-        ++buf_ptr_;
-        if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
-            buf_ptr_ = 0;
-    }
+    ++exp_it_;
+    ++mant_it_;
+
     return true;
-}
-
-//---------------------------------------------------------------------
-
-void sparse_vector_float::const_iterator::skip_zero_values() BMNOEXCEPT{
-    //todo
 }
 
 //---------------------------------------------------------------------

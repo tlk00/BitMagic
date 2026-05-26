@@ -5,6 +5,10 @@
 #include <bm.h>
 #include <bmsparsevec_float.h>
 
+void SparseVecFloatTests();
+void SparseVecFloatGeneralTests();
+void SparseVecFloatConstIteratorTests();
+void SparseVecFloatImportTest();
 
 int main(int argc, char *argv[]){
     SparseVecFloatTests();
@@ -14,8 +18,8 @@ void SparseVecFloatTests(){
 
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
-
     SparseVecFloatImportTest();
+    std::cout << "Sparse Vector Float Tests Complete" << std::endl;
 }
 
 void SparseVecFloatConstIteratorTests(){
@@ -36,7 +40,7 @@ void SparseVecFloatConstIteratorTests(){
     bm::sparse_vector_float::const_iterator itBegin = testSVF.begin();
     bm::sparse_vector_float::const_iterator itEnd   = testSVF.end();
     bm::sparse_vector_float::const_iterator itCopy(itBegin);
-
+    
     // --- operator* and value() ---
     assert(floatEq(*itBegin, toAdd[0]));
     assert(floatEq(itBegin.value(), toAdd[0]));
@@ -45,7 +49,7 @@ void SparseVecFloatConstIteratorTests(){
     // --- valid() ---
     assert(itBegin.valid());
     assert(!itEnd.valid());
-
+    
     // --- invalidate() ---
     bm::sparse_vector_float::const_iterator itInvalid = testSVF.begin();
     itInvalid.invalidate();
@@ -142,6 +146,19 @@ void SparseVecFloatImportTest(){
     testSVF.import(temp.data(), N);
 
     int errorCount;
+    for(int i = 0; i < N; i++){
+        float err = std::fabs(temp[i] - testSVF.get(i));
+        if (err > 0.0f) {
+            errorCount++;
+        }
+    }
+
+    assert(errorCount == 0);
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    testSVF.optimize();
+
+    errorCount = 0;
     for(int i = 0; i < N; i++){
         float err = std::fabs(temp[i] - testSVF.get(i));
         if (err > 0.0f) {
