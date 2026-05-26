@@ -150,6 +150,13 @@ public:
     void push_back(value_type v);
 
     /*!
+        \brief set specified element with bounds checking and automatic resize
+        \param idx - element index
+        \param v   - element value
+    */
+    void set(size_type idx, value_type v);
+
+    /*!
         \brief Import list of elements from a C-style array
         \param arr  - source array
         \param arr_size - source size
@@ -274,6 +281,23 @@ void sparse_vector_float::push_back(value_type v)
     mantissas.push_back(mantissa);
 
     ++(this->size_);
+}
+
+//---------------------------------------------------------------------
+
+void sparse_vector_float::set(size_type idx, value_type v){
+    if (idx >= size()) this->size_ = idx+1;
+
+    unsigned int bits;
+    memcpy(&bits, &v, sizeof(float));
+
+    unsigned int sign     = (bits >> 31) & 0x1;
+    if(sign == 1) signs.set(idx);
+    else signs.clear(idx);
+    unsigned int exponent = (bits >> 23) & 0xFF;
+    exponents.set(idx, exponent);
+    unsigned int mantissa =  bits        & 0x7FFFFF;
+    mantissas.set(idx, mantissa);
 }
 
 //---------------------------------------------------------------------

@@ -215,6 +215,15 @@ void SparseVecFloatGeneralTests(){
     assert(floatEq(testSVFAssigned.get(2), toAdd[2]));
     assert(testSVFAssigned.size() == testSVF.size());
 
+    testSVF.set(1, 8.258f);
+    assert(!floatEq(testSVF.get(1), toAdd[1]));
+    assert(floatEq(testSVF.get(1), 8.258f));
+
+    testSVF.set(100, 100.001f);
+    assert(testSVF.size() == 101);
+    assert(floatEq(testSVF.get(100), 100.001f));
+    assert(floatEq(testSVF.get(50), 0.0f));
+
     bm::sparse_vector_float svA;
     bm::sparse_vector_float svB;
     float aVals[] = {1.0f, 2.0f, 3.0f};
