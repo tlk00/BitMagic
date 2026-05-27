@@ -3,12 +3,13 @@
 #include <cassert>
 
 #include <bm.h>
-#include <bmsparsevec_float.h>
+#include <bmsparsevec_float_serial.h>
 
 void SparseVecFloatTests();
 void SparseVecFloatGeneralTests();
 void SparseVecFloatConstIteratorTests();
 void SparseVecFloatImportTest();
+void SparseVecFloatSerializeTest();
 
 int main(int argc, char *argv[]){
     SparseVecFloatTests();
@@ -244,4 +245,25 @@ void SparseVecFloatGeneralTests(){
     assert(floatEq(svA.get(0), aVals[0]));
     assert(floatEq(svA.get(1), aVals[1]));
     assert(floatEq(svA.get(2), aVals[2]));
+}
+
+void SparseVecFloatSerializeTest(){
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    float toAdd[] = {1.0123, 2.468, 340000.56};
+
+    bm::sparse_vector_float testSVF;
+    testSVF.import(toAdd, 3);
+
+    bm::sparse_vector_float_serialized testSVFSerial;
+    testSVFSerial.serialize(testSVF);
+
+    testSVFSerial.deserialize(testSVF);
+
+    assert(testSVF.size() == 3);
+    assert(floatEq(testSVF.get(0), toAdd[0]));
+    assert(floatEq(testSVF.get(1), toAdd[1]));
+    assert(floatEq(testSVF.get(2), toAdd[2]));
 }

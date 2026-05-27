@@ -9,7 +9,7 @@ typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparse_vector_u32;
 namespace bm{
 
 class sparse_vector_float{
- 
+    friend class sparse_vector_float_serialized;
 public:
     //
     typedef float                                       value_type;
