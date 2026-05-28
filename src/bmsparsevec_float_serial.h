@@ -2,9 +2,13 @@
 #include <memory.h>
 
 #include "bm.h"
+
+#ifndef BM_SPARSE_VEC_FLOAT_SERIAL
+#define BM_SPARSE_VEC_FLOAT_SERIAL
+
+#include "bmsparsevec_float.h"
 #include "bmsparsevec.h"
 #include "bmsparsevec_serial.h"
-#include "bmsparsevec_float.h"
 
 typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparse_vector_u32;
 
@@ -19,6 +23,8 @@ public:
 
     void serialize(sparse_vector_float& svf);
     void deserialize(sparse_vector_float& svf);
+
+    size_t size();
         
 private:
     serializer<bm::bvector<>>::buffer sign_buf;
@@ -54,5 +60,9 @@ void sparse_vector_float_serialized::deserialize(sparse_vector_float& svf){
 
 //---------------------------------------------------------------------
 
-}//namespace bm
+size_t sparse_vector_float_serialized::size(){
+    return sign_buf.size() + exp_lay.size() + mant_lay.size();
+}
 
+}//namespace bm
+#endif

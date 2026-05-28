@@ -70,7 +70,8 @@ For more information please visit:  http://bitmagic.io
 #include <bmtask.h>
 #include <bmsparsevec_parallel.h>
 #include <bmthreadpool.h>
-#include <bmsparsevec_float.h>
+//#include <bmsparsevec_float.h>
+#include <bmsparsevec_float_serial.h>
 
 using namespace bm;
 using namespace std;
@@ -40816,11 +40817,33 @@ void SparseVecFloatGeneralTests(){
     assert(floatEq(svA.get(2), aVals[2]));
 }
 
+void SparseVecFloatSerializeTest(){
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    float toAdd[] = {1.0123, 2.468, 340000.56};
+
+    bm::sparse_vector_float testSVF;
+    testSVF.import(toAdd, 3);
+
+    bm::sparse_vector_float_serialized testSVFSerial;
+    testSVFSerial.serialize(testSVF);
+
+    testSVFSerial.deserialize(testSVF);
+
+    assert(testSVF.size() == 3);
+    assert(floatEq(testSVF.get(0), toAdd[0]));
+    assert(floatEq(testSVF.get(1), toAdd[1]));
+    assert(floatEq(testSVF.get(2), toAdd[2]));
+}
+
 void SparseVecFloatTests(){
 
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();
+    SparseVecFloatSerializeTest();
     std::cout << "Sparse Vector Float Tests Complete" << std::endl;
 }
 

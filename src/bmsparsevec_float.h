@@ -1,6 +1,9 @@
 
 #include <memory.h>
 
+#ifndef BM_SPARSE_VEC_FLOAT
+#define BM_SPARSE_VEC_FLOAT
+
 #include "bm.h"
 #include "bmsparsevec.h"
 
@@ -422,3 +425,4 @@ bool sparse_vector_float::const_iterator::advance() BMNOEXCEPT{
 
 }//namespace bm
 
+#endif

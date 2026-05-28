@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include <bm.h>
+#include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 
 void SparseVecFloatTests();
