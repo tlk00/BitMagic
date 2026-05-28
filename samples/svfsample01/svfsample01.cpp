@@ -31,12 +31,10 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector_float::import
   \sa bm::sparse_vector_float::swap
   \sa bm::sparse_vector_float::optimize
-  \sa bm::sparse_vector_float::begin()
-  \sa bm::sparse_vector_float::end()
 */
 
 /*! \file svfsample01.cpp
-    \brief Example: sparse_vector<> container set values
+    \brief Example: sparse_vector_float container set values
 */
 
 #include <iostream>
@@ -122,103 +120,6 @@ void Demo2(){
 
 }
 
-void Demo3(){
-    bm::sparse_vector_float svf1;
-
-    float toAdd[] = {1.0123, 2.468, 340000.56};
-    svf1.import(toAdd, 3);
-
-    BM_DECLARE_TEMP_BLOCK(tb)
-    svf1.optimize(tb);
-
-    // Serializing a sparse_vector_float is a little different to sparse_vector<> and bitvector<>
-    //in order to serialize the sparse_vector_float, create a sparse_vector_float_serialized class
-    //in this class call .serialize(sparse_vector_float) to serialize
-    //or .deserialize(sparse_vector_float) to deserialize
-    bm::sparse_vector_float_serialized svf1Serial;
-    svf1Serial.serialize(svf1);
-
-    // .size() returns the size in bytes used instead of number of elements
-    std::cout << "svf1Serial.size() = " << svf1Serial.size() << std::endl;
-
-    svf1Serial.deserialize(svf1);
-    
-    std::cout << "svf1.size() = " << svf1.size();
-
-    for(int i = 0; i < svf1.size(); i++){
-        std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
-        std::cout << "toAdd[" << i << "] = " << toAdd[i] << std::endl;
-    }
-}
-
-void Demo4(){
-    
-    bm::sparse_vector_float svf1;
-    bm::sparse_vector_float svf2;
-    float toAdd1[] = {1.0123, 2.468, 340000.56};
-    float toAdd2[] = {7.000, 89000.01, 324.5006};
-
-    //you can import entire arrays into svfs
-    svf1.import(toAdd1, 3);
-    svf2.import(toAdd2, 3);
-
-    // optimize memory allocation of sparse vector float
-    BM_DECLARE_TEMP_BLOCK(tb)
-    svf1.optimize(tb);
-    svf2.optimize(tb);
-    
-    // You can create a const_iterator for a svf in multiple ways
-    
-    // From the start of a svf: bm::sparse_vector_float::const_iterator itFromSV(&svf1);
-    // You can also use .begin()
-    bm::sparse_vector_float::const_iterator itBegin = svf1.begin();
-    // From a specific element of a svf: bm::sparse_vector_float::const_iterator itFromSVPos(&svf1, 1);
-    // From the last element of a svf: bm::sparse_vector_float::const_iterator itEnd   = svf1.end();
-    // Copying another const_iterator: bm::sparse_vector_float::const_iterator itCopy(itBegin);
-    
-    // operator* and value() return the current element
-    std::cout << "*itBegin = " << *itBegin << std::endl;
-    std::cout << "itBegin.value() = " << itBegin.value() << std::endl;
-    std::cout << "toAdd[0] = " << toAdd1[0] << std::endl;
-
-    // pos() returns the current position of the iterator
-    std::cout << "itBegin.pos() = " << itBegin.pos() << std::endl;
-
-    // valid() returns true if the const_iterator is in a valid position, not bm::id_max
-    // invalidate() invalidates the const_iterator
-    std::cout << "itBegin.valid() = " << itBegin.valid() << std::endl;
-    
-
-    // operator== and operator!= returns true/false if 2 const_iterators are at the same position 
-    // of the same svf
-    bm::sparse_vector_float::const_iterator itA = svf1.begin();
-    bm::sparse_vector_float::const_iterator itB = svf1.begin();
-    std::cout << "itA == itB = " << (itA == itB) << std::endl;
-    std::cout << "itA != itB = " << (itA != itB) << std::endl;
-
-    //You can use .advance() or ++ as a prefix or postfix to increase the position of the const_iterator by 1
-    itB.advance();
-    ++itB;
-    std::cout << "itB.pos() = " << itB.pos() << std::endl;
-
-    // the < <= > >= operators check the position difference between 2 const_iterators
-    // They do not check that the 2 const_iterators are based on the same svf
-    std::cout << "itA < itB = " << (itA < itB) << std::endl;
-    std::cout << "itA <= itB = " << (itA <= itB) << std::endl;
-    std::cout << "itA <= itA = " << (itA <= itB) << std::endl;
-    std::cout << "itA > itB = " << (itA > itB) << std::endl;
-    std::cout << "itA >= itB = " << (itA >= itB) << std::endl;
-    std::cout << "itA >= itA = " << (itA >= itA) << std::endl;
-
-    // You can use go_to() in order to advance to any position in the const_iterator, forwards or backwards
-    itBegin.go_to(2);
-    std::cout << "itBegin.pos() = " << itBegin.pos() << std::endl;
-
-    itBegin.go_to(0);
-    std::cout << "itBegin.pos() = " << itBegin.pos() << std::endl;
-
-}
-
 int main(void){
     try
     {
@@ -229,16 +130,6 @@ int main(void){
 
         //Demo2 for importing an array, optimizing it, and swapping 2 sparse_vector_floats
         Demo2();
-
-        std::cout << std::endl << std::endl;
-
-        //Demo3 for serializing a sparse_vector_float
-        Demo3();
-
-        std::cout << std::endl << std::endl;
-
-        //Demo4 for sparse_vector const_iterator methods
-        Demo4();
     }
     catch(std::exception& ex)
     {

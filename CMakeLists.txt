@@ -173,6 +173,7 @@ add_executable(xsample09 ${PROJECT_SOURCE_DIR}/samples/xsample09/xsample09.cpp $
 add_executable(xsample10 ${PROJECT_SOURCE_DIR}/samples/xsample10/xsample10.cpp ${BM_HEADERS})
 
 add_executable(svfsample01 ${PROJECT_SOURCE_DIR}/samples/svfsample01/svfsample01.cpp ${BM_HEADERS})
+add_executable(svfsample02 ${PROJECT_SOURCE_DIR}/samples/svfsample02/svfsample02.cpp ${BM_HEADERS})
 
 add_executable(svsample01 ${PROJECT_SOURCE_DIR}/samples/svsample01/svsample01.cpp ${BM_HEADERS})
 add_executable(svsample02 ${PROJECT_SOURCE_DIR}/samples/svsample02/svsample02.cpp ${BM_HEADERS})
