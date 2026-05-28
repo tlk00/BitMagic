@@ -158,7 +158,7 @@ void SparseVecFloatImportTest(){
     assert(errorCount == 0);
 
     BM_DECLARE_TEMP_BLOCK(tb)
-    testSVF.optimize();
+    testSVF.optimize(tb);
 
     errorCount = 0;
     for(int i = 0; i < N; i++){
@@ -257,6 +257,8 @@ void SparseVecFloatSerializeTest(){
 
     bm::sparse_vector_float testSVF;
     testSVF.import(toAdd, 3);
+    BM_DECLARE_TEMP_BLOCK(tb)
+    testSVF.optimize(tb);
 
     bm::sparse_vector_float_serialized testSVFSerial;
     testSVFSerial.serialize(testSVF);
