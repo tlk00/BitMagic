@@ -40710,14 +40710,17 @@ void SparseVecFloatImportTest(){
     int N = 128000;
     float m = 0.5f;
     bm::sparse_vector_float testSVF;
-    std::vector<float> temp(N);
+    std::vector<float> temp(N*2);
 
     for(int i = 0; i < N; i++){
         temp[i] = (i * 0.001) * m;
     }
+    for(int i = N; i < N*2; i++){
+        temp[i] = -1*(i * 0.001) * m;
+    }
     
     testSVF.import(temp.data(), N);
-
+    
     int errorCount;
     for(int i = 0; i < N; i++){
         float err = std::fabs(temp[i] - testSVF.get(i));
@@ -40725,11 +40728,11 @@ void SparseVecFloatImportTest(){
             errorCount++;
         }
     }
-
+    
     assert(errorCount == 0);
     BM_DECLARE_TEMP_BLOCK(tb)
     testSVF.optimize(tb);
-
+    
     errorCount = 0;
     for(int i = 0; i < N; i++){
         float err = std::fabs(temp[i] - testSVF.get(i));
@@ -40737,21 +40740,19 @@ void SparseVecFloatImportTest(){
             errorCount++;
         }
     }
-
+    
     assert(errorCount == 0);
 }
 
 void SparseVecFloatGeneralTests(){
-
     auto floatEq = [](float a, float b) {
         return std::fabs(a - b) < 0.001f;
     };
 
-    float toAdd[] = {1.0123, 2.468, 340000.56};
+    float toAdd[] = {1.0123, -2.468, 340000.56};
 
     bm::sparse_vector_float testSVF;
     
-
     assert(testSVF.empty());
 
     testSVF.push_back(toAdd[0]);
@@ -40773,7 +40774,7 @@ void SparseVecFloatGeneralTests(){
     assert(testSVF  == testSVF2);
     assert(!(testSVF != testSVF2));
 
-    float toAdd2[] = {9.0f, 8.0f, 7.0f};
+    float toAdd2[] = {9.0f, -8.0f, -7.0f};
     bm::sparse_vector_float testSVF3;
     testSVF3.import(toAdd2, 3);
     assert(testSVF  != testSVF3);
@@ -40798,8 +40799,8 @@ void SparseVecFloatGeneralTests(){
 
     bm::sparse_vector_float svA;
     bm::sparse_vector_float svB;
-    float aVals[] = {1.0f, 2.0f, 3.0f};
-    float bVals[] = {4.0f, 5.0f, 6.0f};
+    float aVals[] = {1.0f, -2.0f, 3.0f};
+    float bVals[] = {-4.0f, -5.0f, 6.0f};
     svA.import(aVals, 3);
     svB.import(bVals, 3);
 
@@ -40823,7 +40824,7 @@ void SparseVecFloatSerializeTest(){
         return std::fabs(a - b) < 0.001f;
     };
 
-    float toAdd[] = {1.0123, 2.468, 340000.56};
+    float toAdd[] = {1.0123, -2.468, 340000.56};
 
     bm::sparse_vector_float testSVF;
     testSVF.import(toAdd, 3);
@@ -40842,7 +40843,6 @@ void SparseVecFloatSerializeTest(){
 }
 
 void SparseVecFloatTests(){
-
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();

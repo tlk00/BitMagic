@@ -1,10 +1,31 @@
+#ifndef BM_SPARSE_VEC_FLOAT_SERIAL_INCLUDED
+#define BM_SPARSE_VEC_FLOAT_SERIAL_INCLUDED
+
+/*
+Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+For more information please visit:  http://bitmagic.io
+*/
+
+/*! \file sparse_vector_float_serial.h
+    \brief Serialization for sparse_vector_float
+*/
 
 #include <memory.h>
 
 #include "bm.h"
-
-#ifndef BM_SPARSE_VEC_FLOAT_SERIAL
-#define BM_SPARSE_VEC_FLOAT_SERIAL
 
 #include "bmsparsevec_float.h"
 #include "bmsparsevec.h"
@@ -21,9 +42,19 @@ public:
     sparse_vector_float_serialized(const sparse_vector_float_serialized&);
     ~sparse_vector_float_serialized();
 
+    /*!
+        \brief Serializes a given sparse_vector_float
+        \param svf   sparse_vector_float to serialize
+    */
     void serialize(sparse_vector_float& svf);
+
+    /*!
+        \brief Deserializes a sparse_vector_float
+        \param svf   sparse_vector_float to deserialize into
+    */
     void deserialize(sparse_vector_float& svf);
 
+    /// return current serialized size
     size_t size();
         
 private:

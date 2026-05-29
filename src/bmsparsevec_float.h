@@ -1,8 +1,29 @@
 
-#include <memory.h>
+#ifndef BM_SPARSE_VEC_FLOAT_INCLUDED
+#define BM_SPARSE_VEC_FLOAT_INCLUDED
+/*
+Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
-#ifndef BM_SPARSE_VEC_FLOAT
-#define BM_SPARSE_VEC_FLOAT
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+For more information please visit:  http://bitmagic.io
+*/
+
+/*! \file sparse_vector_float.h
+    \brief Wrapper class for sparse_vector<>, sparse_vector_float that allows storage of floats
+*/
+
+#include <memory.h>
 
 #include "bm.h"
 #include "bmsparsevec.h"
@@ -78,7 +99,6 @@ public:
         
         /// \brief Advance to the next available value
         const_iterator& operator++() BMNOEXCEPT { this->advance(); return *this; }
-
         /// \brief Advance to the next available value
         ///
         const_iterator operator++(int)
@@ -295,8 +315,12 @@ void sparse_vector_float::set(size_type idx, value_type v){
     memcpy(&bits, &v, sizeof(float));
 
     unsigned int sign     = (bits >> 31) & 0x1;
-    if(sign == 1) signs.set(idx);
-    else signs.clear(idx);
+    bool neg = false;
+    if (sign == 1)
+        neg = true;
+
+    signs.set(idx, neg);
+    
     unsigned int exponent = (bits >> 23) & 0xFF;
     exponents.set(idx, exponent);
     unsigned int mantissa =  bits        & 0x7FFFFF;
@@ -322,11 +346,11 @@ void sparse_vector_float::import(const value_type* arr, size_type arr_size, size
 
         size_type idx = offset + i;
 
+        bool neg = false;
         if (sign == 1)
-            signs.set(idx);
-        else
-            signs.clear(idx);
+            neg = true;
 
+        signs.set(idx, neg);
         exponents.set(idx, exponent);
         mantissas.set(idx, mantissa);
     }
