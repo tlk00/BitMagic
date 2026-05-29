@@ -58,6 +58,7 @@ public:
     size_t size();
         
 private:
+    bm::bvector<>::size_type size_;
     serializer<bm::bvector<>>::buffer sign_buf;
     sparse_vector_serial_layout<sparse_vector_u32> exp_lay;
     sparse_vector_serial_layout<sparse_vector_u32> mant_lay;
@@ -72,10 +73,12 @@ sparse_vector_float_serialized::~sparse_vector_float_serialized(){}
 //---------------------------------------------------------------------
 
 void sparse_vector_float_serialized::serialize(sparse_vector_float& svf){
+    size_ = svf.size_;
     serializer<bm::bvector<>> bvs;
     bvs.serialize(svf.signs, sign_buf);
     sparse_vector_serialize(svf.exponents, exp_lay);
     sparse_vector_serialize(svf.mantissas, mant_lay);
+    
 }
 
 //---------------------------------------------------------------------
@@ -87,6 +90,7 @@ void sparse_vector_float_serialized::deserialize(sparse_vector_float& svf){
     bm::sparse_vector_deserialize(svf.exponents, exp_lay.buf());
 
     bm::sparse_vector_deserialize(svf.mantissas, mant_lay.buf());
+    svf.size_ = size_;
 }
 
 //---------------------------------------------------------------------
