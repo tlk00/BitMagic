@@ -2,7 +2,7 @@
 #ifndef BM_SPARSE_VEC_FLOAT_INCLUDED
 #define BM_SPARSE_VEC_FLOAT_INCLUDED
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2026 Anatoliy Kuznetsov(tolikkuznetsov66 at gmail.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,26 +28,18 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmsparsevec.h"
 
-typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparse_vector_u32;
+namespace bm
+{
 
-namespace bm{
-
-class sparse_vector_float{
+class sparse_vector_float
+{
     friend class sparse_vector_float_serialized;
 public:
     //
-    typedef float                                       value_type;
-    typedef bm::bvector<>                               bvector_type;
-    typedef bvector_type*                               bvector_type_ptr;
-    typedef typename bvector_type::size_type            size_type;
-    typedef typename bvector_type::block_idx_type       block_idx_type;
-    typedef const bvector_type*                         bvector_type_const_ptr;
-	typedef const value_type&                           const_reference;
-    typedef typename bvector_type::allocator_type       allocator_type;
-    typedef typename bvector_type::allocation_policy    allocation_policy_type;
-    typedef typename bvector_type::enumerator           bvector_enumerator_type;
-    typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
-    typedef bm::basic_bmatrix<bvector_type>                 bmatrix_type;
+    typedef float                                           value_type;
+    typedef bm::bvector<>                                   bvector_type;
+    typedef typename bvector_type::size_type                size_type;
+    typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparse_vector_u32;
     
     /*
     const_iterator for traversing the sparse_vector_float
@@ -152,7 +144,7 @@ public:
     /*! \brief return size of the vector
         \return size of sparse vector
     */
-    size_type size() const BMNOEXCEPT { return this->size_; };
+    size_type size() const BMNOEXCEPT { return this->mantissas.size(); };
 
     /*! \brief return true if vector is empty
         \return true if empty
@@ -200,58 +192,64 @@ protected:
     };
 
 private:
-    size_type size_ = 0;
-    bm::bvector<> signs;
-    sparse_vector_u32 exponents;
-    sparse_vector_u32 mantissas;
+    bm::bvector<>       signs;
+    sparse_vector_u32   exponents;
+    sparse_vector_u32   mantissas;
     
 };
 
 //---------------------------------------------------------------------
 //sparse_vector_float methods
 
-sparse_vector_float::sparse_vector_float(){}
+sparse_vector_float::sparse_vector_float()
+{}
 
 //---------------------------------------------------------------------
 
-sparse_vector_float::sparse_vector_float(const sparse_vector_float&){}
+sparse_vector_float::sparse_vector_float(const sparse_vector_float&)
+{}
 
 //---------------------------------------------------------------------
 
-sparse_vector_float::~sparse_vector_float(){}
+sparse_vector_float::~sparse_vector_float()
+{}
 
 //---------------------------------------------------------------------
 
-sparse_vector_float::const_iterator sparse_vector_float::begin() const{
+sparse_vector_float::const_iterator sparse_vector_float::begin() const
+{
     typedef typename sparse_vector_float::const_iterator it_type;
     return it_type(this);
 }
 
 //---------------------------------------------------------------------
 
-sparse_vector_float& sparse_vector_float::operator=(const sparse_vector_float& svf){
+sparse_vector_float& sparse_vector_float::operator=(const sparse_vector_float& svf)
+{
     signs = svf.signs;
     exponents = svf.exponents;
     mantissas = svf.mantissas;
-    size_ = svf.size_;
     return *this;
 }
 
 //---------------------------------------------------------------------
 
-bool sparse_vector_float::operator==(const sparse_vector_float& svf) const{
-    if (size_ == svf.size_ && signs == svf.signs){
+bool sparse_vector_float::operator==(const sparse_vector_float& svf) const
+{
+    if (mantissas.size() == svf.mantissas.size() && signs == svf.signs)
+    {
         //(exponents == svf.exponents) && (mantissas == svf.mantissas)
-        for(size_t i = 0; i < size_; i++){
+        for (size_t i = 0; i < mantissas.size(); i++)
+        {
             unsigned int thisSVF = exponents.get(i);
             unsigned int otherSVF = svf.exponents.get(i);
 
-            if(thisSVF != otherSVF) return false;
+            if (thisSVF != otherSVF) return false;
 
             thisSVF = mantissas.get(i);
             otherSVF = svf.mantissas.get(i);
 
-            if(thisSVF != otherSVF) return false;
+            if (thisSVF != otherSVF) return false;
         }
 
         return true;
@@ -261,22 +259,24 @@ bool sparse_vector_float::operator==(const sparse_vector_float& svf) const{
 
 //---------------------------------------------------------------------
 
-bool sparse_vector_float::operator!=(const sparse_vector_float& svf) const{
+bool sparse_vector_float::operator!=(const sparse_vector_float& svf) const
+{
     return !operator==(svf);
 }
 
 //---------------------------------------------------------------------
-void sparse_vector_float::swap(sparse_vector_float &svf){
+void sparse_vector_float::swap(sparse_vector_float &svf)
+{
     signs.swap(svf.signs);
     exponents.swap(svf.exponents);
     mantissas.swap(svf.mantissas);
-    std::swap(size_, svf.size_);
 }
 
 //---------------------------------------------------------------------
 
 typename sparse_vector_float::value_type 
-sparse_vector_float::get(typename sparse_vector_float::size_type idx) const BMNOEXCEPT{
+sparse_vector_float::get(typename sparse_vector_float::size_type idx) const BMNOEXCEPT
+{
     unsigned int sign = signs.test(idx) ? 1 : 0;
     unsigned int exponent = exponents.get(idx);
     unsigned int mantissa = mantissas.get(idx);
@@ -297,27 +297,24 @@ void sparse_vector_float::push_back(value_type v)
     memcpy(&bits, &v, sizeof(float));
 
     unsigned int sign     = (bits >> 31) & 0x1;
-    if(sign == 1) signs.set(size_);
+    if (sign == 1) signs.set(mantissas.size());
     unsigned int exponent = (bits >> 23) & 0xFF;
     exponents.push_back(exponent);
     unsigned int mantissa =  bits        & 0x7FFFFF;
     mantissas.push_back(mantissa);
-
-    ++(this->size_);
 }
 
 //---------------------------------------------------------------------
 
-void sparse_vector_float::set(size_type idx, value_type v){
-    if (idx >= size()) this->size_ = idx+1;
+void sparse_vector_float::set(size_type idx, value_type v)
+{
 
     unsigned int bits;
     memcpy(&bits, &v, sizeof(float));
 
     unsigned int sign     = (bits >> 31) & 0x1;
     bool neg = false;
-    if (sign == 1)
-        neg = true;
+    if (sign == 1) neg = true;
 
     signs.set(idx, neg);
     
@@ -329,9 +326,15 @@ void sparse_vector_float::set(size_type idx, value_type v){
 
 //---------------------------------------------------------------------
 
-void sparse_vector_float::import(const value_type* arr, size_type arr_size, size_type offset, bool set_not_null){
-    if (offset > size_) {
-        for (size_type i = size_; i < offset; ++i) {
+void sparse_vector_float::import(const value_type* arr, 
+                                size_type arr_size, 
+                                size_type offset, 
+                                bool set_not_null)
+{
+    if (offset > mantissas.size())
+    {
+        for (size_type i = mantissas.size(); i < offset; ++i)
+        {
             push_back(0.0f);
         }
     }
@@ -356,13 +359,12 @@ void sparse_vector_float::import(const value_type* arr, size_type arr_size, size
     }
 
     size_type new_size = offset + arr_size;
-    if (new_size > size_)
-        size_ = new_size;
 }
 
 //---------------------------------------------------------------------
 
-void sparse_vector_float::optimize(bm::word_t* temp_block, typename bvector_type::optmode opt_mode){
+void sparse_vector_float::optimize(bm::word_t* temp_block, typename bvector_type::optmode opt_mode)
+{
     signs.optimize(temp_block, opt_mode);
     exponents.optimize(temp_block, opt_mode);
     mantissas.optimize(temp_block, opt_mode);
@@ -374,12 +376,14 @@ void sparse_vector_float::optimize(bm::word_t* temp_block, typename bvector_type
 //const_iterator methods
 
 sparse_vector_float::const_iterator::const_iterator() BMNOEXCEPT
-: sv_(0), pos_(bm::id_max), exp_it_(), mant_it_() {}
+: sv_(0), pos_(bm::id_max), exp_it_(), mant_it_() 
+{}
 
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv) BMNOEXCEPT
-: sv_(sv), exp_it_(sv->exponents.begin()), mant_it_(sv->mantissas.begin()){
+: sv_(sv), exp_it_(sv->exponents.begin()), mant_it_(sv->mantissas.begin())
+{
     BM_ASSERT(sv_);
     pos_ = sv_->empty() ? bm::id_max : 0u;
 }
@@ -387,7 +391,8 @@ sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT
-: sv_(sv), exp_it_(sv->exponents.begin()), mant_it_(sv->mantissas.begin()) {
+: sv_(sv), exp_it_(sv->exponents.begin()), mant_it_(sv->mantissas.begin()) 
+{
     BM_ASSERT(sv_);
     this->go_to(pos);
 }
@@ -395,11 +400,13 @@ sparse_vector_float::const_iterator::const_iterator(const sparse_vector_type* sv
 //---------------------------------------------------------------------
 
 sparse_vector_float::const_iterator::const_iterator(const const_iterator& it) BMNOEXCEPT
-: sv_(it.sv_), pos_(it.pos_), exp_it_(it.exp_it_), mant_it_(it.mant_it_) {}
+: sv_(it.sv_), pos_(it.pos_), exp_it_(it.exp_it_), mant_it_(it.mant_it_) 
+{}
 
 //---------------------------------------------------------------------
 
-sparse_vector_float::const_iterator::value_type sparse_vector_float::const_iterator::value() const{
+sparse_vector_float::const_iterator::value_type sparse_vector_float::const_iterator::value() const
+{
     unsigned int sign = sv_->signs.test(pos_) ? 1 : 0;
     unsigned int exponent = exp_it_.value();
     unsigned int mantissa = mant_it_.value();
@@ -414,13 +421,15 @@ sparse_vector_float::const_iterator::value_type sparse_vector_float::const_itera
 
 //---------------------------------------------------------------------
 
-bool sparse_vector_float::const_iterator::is_null() const BMNOEXCEPT{
+bool sparse_vector_float::const_iterator::is_null() const BMNOEXCEPT
+{
     return false; // no such thing as null
 }
 
 //---------------------------------------------------------------------
 
-void sparse_vector_float::const_iterator::go_to(size_type pos) BMNOEXCEPT{
+void sparse_vector_float::const_iterator::go_to(size_type pos) BMNOEXCEPT
+{
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
     exp_it_.go_to(pos_);
     mant_it_.go_to(pos_);
@@ -428,7 +437,8 @@ void sparse_vector_float::const_iterator::go_to(size_type pos) BMNOEXCEPT{
 
 //---------------------------------------------------------------------
 
-bool sparse_vector_float::const_iterator::advance() BMNOEXCEPT{
+bool sparse_vector_float::const_iterator::advance() BMNOEXCEPT
+{
     if (pos_ == bm::id_max) // nothing to do, we are at the end
         return false;
     
