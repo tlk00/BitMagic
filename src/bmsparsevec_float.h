@@ -184,6 +184,11 @@ public:
     */
     void set(size_type idx, value_type v);
 
+    void clear() BMNOEXCEPT;
+    sparse_vector_float<BV>& clear_range(size_type left,
+                                        size_type right,
+                                        bool set_null = false);
+
     /*!
         \brief Import list of elements from a C-style array
         \param arr  - source array
@@ -347,6 +352,30 @@ void sparse_vector_float<BV>::set(size_type idx, value_type v)
     exponents.set(idx, exponent);
     unsigned int mantissa =  bits        & 0x7FFFFF;
     mantissas.set(idx, mantissa);
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void sparse_vector_float<BV>::clear() BMNOEXCEPT
+{
+    signs.clear();
+    exponents.clear();
+    mantissas.clear();
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>& sparse_vector_float<BV>::clear_range(size_type left,
+                                    size_type right,
+                                    bool set_null = false)
+{
+    signs.clear_range(left, right);
+    exponents.clear_range(left, right, set_null);
+    mantissas.clear_range(left, right, set_null);
+
+    return *this;
 }
 
 //---------------------------------------------------------------------
