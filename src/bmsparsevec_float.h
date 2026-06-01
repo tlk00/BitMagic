@@ -44,7 +44,7 @@ namespace bm
    @ingroup sv
 */
 template<class BV>
-class sparse_vector_float : public base_sparse_vector_float<BV>
+class sparse_vector_float
 {
     friend class sparse_vector_float_serialized;
 public:
