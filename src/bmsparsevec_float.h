@@ -185,9 +185,13 @@ public:
     void set(size_type idx, value_type v);
 
     void clear() BMNOEXCEPT;
+
     sparse_vector_float<BV>& clear_range(size_type left,
                                         size_type right,
                                         bool set_null = false);
+
+    bool equal(const sparse_vector_float<BV>& sv,
+               bm::null_support null_able = bm::use_null) const BMNOEXCEPT;
 
     /*!
         \brief Import list of elements from a C-style array
@@ -376,6 +380,16 @@ sparse_vector_float<BV>& sparse_vector_float<BV>::clear_range(size_type left,
     mantissas.clear_range(left, right, set_null);
 
     return *this;
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+bool sparse_vector_float<BV>::equal(const sparse_vector_float<BV>& sv,
+                                    bm::null_support null_able = bm::use_null) const BMNOEXCEPT
+{
+    if (signs.equal(sv.signs) && exponents.equal(sv.exponents, null_able) && mantissas.equal(sv.mantissas, null_able)) return true;
+    return false;
 }
 
 //---------------------------------------------------------------------
