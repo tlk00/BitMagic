@@ -247,6 +247,45 @@ public:
     int compare(size_type idx, const value_type val, float epsilon = std::numeric_limits<float>::epsilon()) const BMNOEXCEPT;
 
     /*!
+        \brief join all with another sparse vector using OR operation
+            NOTE: if you join 2 floats together and one is not 0.0, ie -1.5f and -2.5f
+            it is possible for the float to become NaN if the exponent becomes entirely 11111111
+        \param sv - argument vector to join with
+        \return slf reference
+        @sa merge
+    */
+    sparse_vector_float<BV>& join(const sparse_vector_float<BV>& svf);
+
+    /*!
+        \brief merge with another sparse vector using OR operation
+        Merge is different from join(), because it borrows data from the source
+        vector, so it gets modified.
+     
+        \param sv - [in, out]argument vector to join with (vector mutates)
+     
+        \return slf reference
+        @sa join
+    */
+    sparse_vector_float<BV>& merge(sparse_vector_float<BV>& svf);
+
+    /**
+        @brief copy range of values from another sparse vector
+     
+        Copy [left..right] values from the source vector,
+        clear everything outside the range.
+     
+        \param sv - source vector
+        \param left  - index from in losed diapason of [left..right]
+        \param right - index to in losed diapason of [left..right]
+        \param slice_null - "use_null" copy range for NULL vector or
+                             do not copy it
+    */
+    void copy_range(const sparse_vector_float<BV>& svf,
+                    size_type left, size_type right,
+                    bm::null_support slice_null = bm::use_null);
+
+
+    /*!
         \brief Import list of elements from a C-style array
         \param arr  - source array
         \param arr_size - source size
@@ -483,6 +522,45 @@ int sparse_vector_float<BV>::compare(size_type idx, const value_type val, float 
 
 //---------------------------------------------------------------------
 
+
+template<class BV>
+sparse_vector_float<BV>& sparse_vector_float<BV>::join(const sparse_vector_float<BV>& svf)
+{
+    signs_.join(svf.signs_);
+    exponents_.join(svf.exponents_);
+    mantissas_.join(svf.mantissas_);
+    
+    return *this;
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>& sparse_vector_float<BV>::merge(sparse_vector_float<BV>& svf)
+{
+    signs_.merge(svf.signs_);
+    exponents_.merge(svf.exponents_);
+    mantissas_.merge(svf.mantissas_);
+    
+    return *this;
+}
+
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void sparse_vector_float<BV>::copy_range(const sparse_vector_float<BV>& svf,
+                                        size_type left, size_type right,
+                                        bm::null_support slice_null)
+{
+    signs_.copy_range(svf.signs_, left, right, slice_null);
+    exponents_.copy_range(svf.exponents_, left, right, slice_null);
+    mantissas_.copy_range(svf.mantissas_, left, right, slice_null);
+}
+
+
+//---------------------------------------------------------------------
+
 template<class BV>
 void sparse_vector_float<BV>::import(const value_type* arr, 
                                 size_type arr_size, 
@@ -528,6 +606,8 @@ void sparse_vector_float<BV>::optimize(bm::word_t* temp_block, typename bvector_
     exponents_.optimize(temp_block, opt_mode);
     mantissas_.optimize(temp_block, opt_mode);
 }
+
+//---------------------------------------------------------------------
 
 template<class BV>
 void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statistics* st) const BMNOEXCEPT
