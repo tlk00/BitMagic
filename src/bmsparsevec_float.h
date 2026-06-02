@@ -53,6 +53,8 @@ public:
     typedef BV                                      bvector_type;
     typedef typename bvector_type::size_type        size_type;
     typedef bm::sparse_vector<unsigned int, BV>     sparse_vector_u32;
+    typedef typename BV::allocator_type             allocator_type;
+    typedef typename bvector_type::allocation_policy allocation_policy_type;
     
     /*
     const_iterator for traversing the sparse_vector_float
@@ -142,8 +144,29 @@ public:
     const_iterator begin() const;
     const_iterator end() const { return const_iterator(this, bm::id_max); };
 
-    sparse_vector_float();
-    sparse_vector_float(const sparse_vector_float&);
+
+    /*!
+        \brief Sparse vector constructor
+     
+        \param null_able - defines if vector supports NULL values flag
+            by default it is OFF, use bm::use_null to enable it
+        \param ap - allocation strategy for underlying bit-vectors
+        Default allocation policy uses BM_BIT setting (fastest access)
+        \param bv_max_size - maximum possible size of underlying bit-vectors
+        Please note, this is NOT size of svector itself, it is dynamic upper limit
+        which should be used very carefully if we surely know the ultimate size
+        \param alloc - allocator for bit-vectors
+        
+        \sa bvector<>
+        \sa bm::bvector<>::allocation_policy
+        \sa bm::startegy
+    */
+    sparse_vector_float(bm::null_support null_able = bm::no_null,
+                        allocation_policy_type ap = allocation_policy_type(),
+                        size_type bv_max_size = bm::id_max,
+                        const allocator_type&   alloc  = allocator_type());
+
+    sparse_vector_float(const sparse_vector_float& svf);
     ~sparse_vector_float();
 
     sparse_vector_float& operator=(const sparse_vector_float& svf);
@@ -250,14 +273,23 @@ private:
 //---------------------------------------------------------------------
 //sparse_vector_float methods
 
+//---------------------------------------------------------------------
+
 template<class BV>
-sparse_vector_float<BV>::sparse_vector_float()
+sparse_vector_float<BV>::sparse_vector_float(bm::null_support null_able,
+                                             allocation_policy_type ap,
+                                             size_type bv_max_size,
+                                             const allocator_type&   alloc)
+:signs(null_able, ap, bv_max_size, alloc),
+ exponents(null_able, ap, bv_max_size, alloc),
+ mantissas(null_able, ap, bv_max_size, alloc)
 {}
 
 //---------------------------------------------------------------------
 
 template<class BV>
-sparse_vector_float<BV>::sparse_vector_float(const sparse_vector_float&)
+sparse_vector_float<BV>::sparse_vector_float(const sparse_vector_float& svf)
+:signs(svf.signs), exponents(svf.exponents), mantissas(svf.mantissas)
 {}
 
 //---------------------------------------------------------------------
