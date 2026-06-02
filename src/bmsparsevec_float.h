@@ -184,14 +184,41 @@ public:
     */
     void set(size_type idx, value_type v);
 
+    /*! \brief resize to zero, free memory */
     void clear() BMNOEXCEPT;
 
+    /*!
+        \brief clear range (assign bit 0 for all planes)
+        \param left  - interval start
+        \param right - interval end (closed interval)
+        \param set_null - set cleared values to unassigned (NULL)
+    */
     sparse_vector_float<BV>& clear_range(size_type left,
                                         size_type right,
                                         bool set_null = false);
 
+     /*!
+        \brief check if another sparse vector float has the same content and size
+     
+        \param sv        - sparse vector for comparison
+        \param null_able - flag to consider NULL vector in comparison (default)
+                           or compare only value content planes
+     
+        \return true, if it is the same
+    */
     bool equal(const sparse_vector_float<BV>& sv,
                bm::null_support null_able = bm::use_null) const BMNOEXCEPT;
+
+    /**
+        \brief Compare vector element with argument
+     
+        \param idx - vactor element index
+        \param val - argument to compare with
+        \param epsilon - amount of precision
+     
+        \return 0 - equal, -1 - vect[i] < val, 1 otherwise
+    */
+    int compare(size_type idx, const value_type val, float epsilon = std::numeric_limits<float>::epsilon()) const BMNOEXCEPT;
 
     /*!
         \brief Import list of elements from a C-style array
@@ -390,6 +417,20 @@ bool sparse_vector_float<BV>::equal(const sparse_vector_float<BV>& sv,
 {
     if (signs.equal(sv.signs) && exponents.equal(sv.exponents, null_able) && mantissas.equal(sv.mantissas, null_able)) return true;
     return false;
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+int sparse_vector_float<BV>::compare(size_type idx, const value_type val, float epsilon) const BMNOEXCEPT
+{
+    value_type svf_value = get(idx);
+
+    float diff = svf_value - val;
+
+    if (std::fabs(diff) <= epsilon)     return 0;
+    else if (diff > 0)                  return 1;
+    else                                return -1;
 }
 
 //---------------------------------------------------------------------
