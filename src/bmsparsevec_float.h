@@ -80,7 +80,7 @@ public:
 
         reference& operator=(value_type val)
         {
-            sv_.set(idx_, val);
+            svf_.set(idx_, val);
             return *this;
         }
 
@@ -362,7 +362,7 @@ sparse_vector_float<BV>::sparse_vector_float(bm::null_support null_able,
                                              allocation_policy_type ap,
                                              size_type bv_max_size,
                                              const allocator_type&   alloc)
-:signs_(null_able, ap, bv_max_size, alloc),
+:signs_(ap.strat, ap.glevel_len, bv_max_size, alloc),
  exponents_(null_able, ap, bv_max_size, alloc),
  mantissas_(null_able, ap, bv_max_size, alloc)
 {}
@@ -513,7 +513,7 @@ void sparse_vector_float<BV>::clear() BMNOEXCEPT
 template<class BV>
 sparse_vector_float<BV>& sparse_vector_float<BV>::clear_range(size_type left,
                                     size_type right,
-                                    bool set_null = false)
+                                    bool set_null)
 {
     signs_.clear_range(left, right);
     exponents_.clear_range(left, right, set_null);
@@ -526,7 +526,7 @@ sparse_vector_float<BV>& sparse_vector_float<BV>::clear_range(size_type left,
 
 template<class BV>
 bool sparse_vector_float<BV>::equal(const sparse_vector_float<BV>& sv,
-                                    bm::null_support null_able = bm::use_null) const BMNOEXCEPT
+                                    bm::null_support null_able) const BMNOEXCEPT
 {
     if (signs_.equal(sv.signs_) && exponents_.equal(sv.exponents_, null_able) && mantissas_.equal(sv.mantissas_, null_able)) return true;
     return false;
@@ -552,7 +552,7 @@ int sparse_vector_float<BV>::compare(size_type idx, const value_type val, float 
 template<class BV>
 sparse_vector_float<BV>& sparse_vector_float<BV>::join(const sparse_vector_float<BV>& svf)
 {
-    signs_.join(svf.signs_);
+    signs_ |= svf.signs_;
     exponents_.join(svf.exponents_);
     mantissas_.join(svf.mantissas_);
     
@@ -579,7 +579,7 @@ void sparse_vector_float<BV>::copy_range(const sparse_vector_float<BV>& svf,
                                         size_type left, size_type right,
                                         bm::null_support slice_null)
 {
-    signs_.copy_range(svf.signs_, left, right, slice_null);
+    signs_.copy_range(svf.signs_, left, right);
     exponents_.copy_range(svf.exponents_, left, right, slice_null);
     mantissas_.copy_range(svf.mantissas_, left, right, slice_null);
 }
@@ -643,7 +643,7 @@ void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statisti
     bm::bvector<>::statistics signStat;
     signs_.calc_stat(signStat);
 
-    sparse_vector_u32::statistics expStat, mantStat;
+    typename sparse_vector_u32::statistics expStat, mantStat;
     exponents_.calc_stat(expStat);
     mantissas_.calc_stat(mantStat);
 

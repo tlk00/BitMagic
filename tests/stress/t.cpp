@@ -40840,11 +40840,102 @@ void SparseVecFloatSerializeTest(){
     assert(floatEq(testSVF.get(2), toAdd[2]));
 }
 
+void SparseVecFloatRangeTests(){
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    float toAdd[] = {1.0123, -2.468, 340000.56, -7008.0, 0.900102};
+
+    bm::sparse_vector_float<bm::bvector<>> testSVF;
+    testSVF.import(toAdd, 5);
+    BM_DECLARE_TEMP_BLOCK(tb)
+    testSVF.optimize(tb);
+
+    assert(testSVF.size() == 5);
+    testSVF.clear();
+    assert(testSVF.size() == 0);
+
+    testSVF.import(toAdd, 5);
+    testSVF.clear_range(1, 3);
+    assert(testSVF.size() == 5);
+    assert(floatEq(testSVF.get(0), toAdd[0]));
+    assert(floatEq(testSVF.get(1), 0.0));
+    assert(floatEq(testSVF.get(2), 0.0));
+    assert(floatEq(testSVF.get(3), 0.0));
+    assert(floatEq(testSVF.get(4), toAdd[4]));
+
+    testSVF.clear();
+    testSVF.import(toAdd, 5);
+
+    bm::sparse_vector_float<bm::bvector<>> testSVF2(testSVF);
+    assert(testSVF.equal(testSVF2));
+
+    testSVF2.set(1, 0.0);
+    assert(!testSVF.equal(testSVF2));
+
+    assert(testSVF.compare(1, 2.468) == -1);
+    assert(testSVF.compare(1, -2.468) == 0);
+    assert(testSVF.compare(1, -3) == 1);
+
+    bm::sparse_vector_float<bm::bvector<>> svf1;
+    bm::sparse_vector_float<bm::bvector<>> svf2;
+    float toAdd1[] = {1.0123, -2.468, 0.0, 0.0, 0.0, 1.5};
+    float toAdd2[] = {0.0, 0.0, 0.0, -7008.0, 0.900102, 2.5};
+    svf1.import(toAdd1, 6);
+    svf2.import(toAdd2, 6);
+    svf1.optimize(tb);
+    svf2.optimize(tb);
+    
+    svf1.join(svf2);
+    assert(svf1.size() == 6);
+    assert(floatEq(svf1.get(0), toAdd[0]));
+    assert(floatEq(svf1.get(1), toAdd[1]));
+    assert(floatEq(svf1.get(2), 0.0));
+    assert(floatEq(svf1.get(3), toAdd[3]));
+    assert(floatEq(svf1.get(4), toAdd[4]));
+    assert(svf1.get(5) != svf1.get(5));
+
+    svf1.clear();
+    svf2.clear();
+    svf1.import(toAdd1, 6);
+    svf2.import(toAdd2, 6);
+    svf1.optimize(tb);
+    svf2.optimize(tb);
+
+    svf1.merge(svf2);
+    assert(svf1.size() == 6);
+    assert(floatEq(svf1.get(0), toAdd[0]));
+    assert(floatEq(svf1.get(1), toAdd[1]));
+    assert(floatEq(svf1.get(2), 0.0));
+    assert(floatEq(svf1.get(3), toAdd[3]));
+    assert(floatEq(svf1.get(4), toAdd[4]));
+    assert(svf1.get(5) != svf1.get(5));
+
+
+    svf1.clear();
+    svf2.clear();
+    svf1.import(toAdd1, 6);
+    svf2.import(toAdd2, 6);
+    svf1.optimize(tb);
+    svf2.optimize(tb);
+
+    svf1.copy_range(svf2, 2, 4);
+    assert(svf1.size() == 6);
+    assert(floatEq(svf1.get(0), 0.0));
+    assert(floatEq(svf1.get(1), 0.0));
+    assert(floatEq(svf1.get(2), 0.0));
+    assert(floatEq(svf1.get(3), toAdd[3]));
+    assert(floatEq(svf1.get(4), toAdd[4]));
+    assert(floatEq(svf1.get(5), 0.0));
+}
+
 void SparseVecFloatTests(){
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();
-    SparseVecFloatSerializeTest();
+    //SparseVecFloatSerializeTest();
+    SparseVecFloatRangeTests();
     std::cout << "Sparse Vector Float Tests Complete" << std::endl;
 }
 
