@@ -58,10 +58,6 @@ public:
 
     struct statistics : public bv_statistics
     {};
-    
-    /*
-    const_iterator for traversing the sparse_vector_float
-    */
 
     /**
          Reference class to access elements via common [] operator
@@ -97,6 +93,10 @@ public:
         size_type               idx_;
     };
 
+
+    /*
+    const_iterator for traversing the sparse_vector_float
+    */
     class const_iterator
     {
     public:
@@ -106,17 +106,8 @@ public:
         typedef std::input_iterator_tag  iterator_category;
 #endif
         typedef sparse_vector_float                        sparse_vector_type;
-        typedef sparse_vector_type*                        sparse_vector_type_ptr;
         typedef typename sparse_vector_type::value_type    value_type;
         typedef typename sparse_vector_type::size_type     size_type;
-        typedef typename sparse_vector_type::bvector_type  bvector_type;
-        typedef typename bvector_type::allocator_type      allocator_type;
-        typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
-        typedef bm::byte_buffer<allocator_type>            buffer_type;
-
-        typedef unsigned                    difference_type;
-        typedef unsigned*                   pointer;
-        typedef value_type&                 reference;
 
     public:
         const_iterator() BMNOEXCEPT;
@@ -174,9 +165,9 @@ public:
         
     private:
         const sparse_vector_type*         sv_;      ///!< ptr to parent
-        size_type                         pos_;     ///!< Position
-        sparse_vector_u32::const_iterator            exp_it_;
-        sparse_vector_u32::const_iterator            mant_it_;
+        size_type                           pos_;      ///!< Position
+        sparse_vector_u32::const_iterator   exp_it_;   ///!< exponent iterator
+        sparse_vector_u32::const_iterator   mant_it_;  ///!< mantissa iterator
     };
 
     const_iterator begin() const;
@@ -212,8 +203,8 @@ public:
     bool operator!=(const sparse_vector_float& svf) const;
 
 
+    /*! \brief swaps the elements in this sparse_vector_float and the given one */
     void swap(sparse_vector_float& svf);
-    
 
     /*! \brief return size of the vector
         \return size of sparse vector
@@ -224,7 +215,6 @@ public:
         \return true if empty
     */
     bool empty() const BMNOEXCEPT { return (size() == 0); }
-
 
     /*!
         \brief get specified element without bounds checking
@@ -356,9 +346,9 @@ protected:
     };
 
 private:
-    bm::bvector<>       signs_;
-    sparse_vector_u32   exponents_;
-    sparse_vector_u32   mantissas_;
+    bm::bvector<>       signs_;      ///!< sign bit vector
+    sparse_vector_u32   exponents_;  ///!< exponent sparse vector
+    sparse_vector_u32   mantissas_;  ///!< mantissa sparse vector
     
 };
 
