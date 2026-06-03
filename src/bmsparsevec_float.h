@@ -62,6 +62,41 @@ public:
     /*
     const_iterator for traversing the sparse_vector_float
     */
+
+    /**
+         Reference class to access elements via common [] operator
+         @ingroup sv
+    */
+    class reference
+    {
+    public:
+        reference(sparse_vector_float<BV>& svf, size_type idx) BMNOEXCEPT
+        : svf_(svf), idx_(idx)
+        {}
+
+        operator value_type() const BMNOEXCEPT { return svf_.get(idx_); }
+
+        reference& operator=(const reference& ref)
+        {
+            svf_.set(idx_, (value_type)ref);
+            return *this;
+        }
+
+        reference& operator=(value_type val)
+        {
+            sv_.set(idx_, val);
+            return *this;
+        }
+
+        bool operator==(const reference& ref) const BMNOEXCEPT
+                                { return bool(*this) == bool(ref); }
+
+        //bool is_null() const BMNOEXCEPT { return svf_.is_null(idx_); }
+    private:
+        sparse_vector_float<BV>& svf_;
+        size_type               idx_;
+    };
+
     class const_iterator
     {
     public:
@@ -189,6 +224,7 @@ public:
         \return true if empty
     */
     bool empty() const BMNOEXCEPT { return (size() == 0); }
+
 
     /*!
         \brief get specified element without bounds checking
