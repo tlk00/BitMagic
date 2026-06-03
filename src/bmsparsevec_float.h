@@ -340,6 +340,10 @@ public:
     void calc_stat(
         struct sparse_vector_float<BV>::statistics* st) const BMNOEXCEPT;
 
+    /*! \brief syncronize internal structures, build fast access index
+    */
+    void sync(bool /*force*/, bool /*sync_size*/);
+
 protected:
     enum buf_size_e{
         n_buf_size = 1024 * 8
@@ -664,6 +668,15 @@ void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statisti
                               + expStat.gaps_by_level[i] 
                               + mantStat.gaps_by_level[i];
     }
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void sparse_vector_float<BV>::sync(bool /*force*/, bool /*sync_size*/){
+    signs_.sync_size();
+    exponents_.sync();
+    mantissas_.sync();
 }
 
 //---------------------------------------------------------------------
