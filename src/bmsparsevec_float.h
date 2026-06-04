@@ -795,7 +795,8 @@ sparse_vector_float<BV>::extract(value_type* arr,
     size_type remaining = size;
     size_type pos = offset;
 
-    while (remaining > 0) {
+    while (remaining > 0)
+    {
         size_type chunk = std::min(remaining, CHUNK);
 
         // bulk extract exponents and mantissas for this chunk
@@ -803,7 +804,8 @@ sparse_vector_float<BV>::extract(value_type* arr,
         mantissas_.extract(mant_buf, chunk, pos);
 
         // convert each element in the chunk to float
-        for (size_type i = 0; i < chunk; i++) {
+        for (size_type i = 0; i < chunk; i++)
+        {
             unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
             unsigned int exponent = exp_buf[i];
             unsigned int mantissa = mant_buf[i];
@@ -834,13 +836,15 @@ sparse_vector_float<BV>::extract_range(value_type* arr,
     size_type remaining = size;
     size_type pos = offset;
 
-    while (remaining > 0) {
+    while (remaining > 0)
+    {
         size_type chunk = std::min(remaining, CHUNK);
 
         exponents_.extract_range(exp_buf, chunk, pos);
         mantissas_.extract_range(mant_buf, chunk, pos);
 
-        for (size_type i = 0; i < chunk; i++) {
+        for (size_type i = 0; i < chunk; i++)
+        {
             unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
             unsigned int exponent = exp_buf[i];
             unsigned int mantissa = mant_buf[i];
@@ -883,13 +887,15 @@ sparse_vector_float<BV>::gather(value_type* arr,
     size_type remaining = size;
     size_type pos = 0;
 
-    while (remaining > 0) {
+    while (remaining > 0)
+    {
         size_type chunk = std::min(remaining, CHUNK);
 
-        exponents_.gather(exp_buf, idx, chunk, sorted_idx);
-        mantissas_.gather(mant_buf, idx, chunk, sorted_idx);
+        exponents_.gather(exp_buf, idx + pos, chunk, sorted_idx);
+        mantissas_.gather(mant_buf, idx + pos, chunk, sorted_idx);
 
-        for (size_type i = 0; i < chunk; i++) {
+        for (size_type i = 0; i < chunk; i++)
+        {
             unsigned int sign     = signs_.test(idx[pos + i]) ? 1 : 0;
             unsigned int exponent = exp_buf[i];
             unsigned int mantissa = mant_buf[i];
@@ -900,6 +906,7 @@ sparse_vector_float<BV>::gather(value_type* arr,
 
         remaining -= chunk;
         pos += chunk;
+        
     }
 }
 

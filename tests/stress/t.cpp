@@ -70,8 +70,8 @@ For more information please visit:  http://bitmagic.io
 #include <bmtask.h>
 #include <bmsparsevec_parallel.h>
 #include <bmthreadpool.h>
-//#include <bmsparsevec_float.h>
-#include <bmsparsevec_float_serial.h>
+#include <bmsparsevec_float.h>
+//#include <bmsparsevec_float_serial.h>
 
 using namespace bm;
 using namespace std;
@@ -40817,7 +40817,7 @@ void SparseVecFloatGeneralTests(){
     assert(floatEq(svA.get(2), aVals[2]));
 }
 
-void SparseVecFloatSerializeTest(){
+/*void SparseVecFloatSerializeTest(){
     auto floatEq = [](float a, float b) {
         return std::fabs(a - b) < 0.001f;
     };
@@ -40838,7 +40838,7 @@ void SparseVecFloatSerializeTest(){
     assert(floatEq(testSVF.get(0), toAdd[0]));
     assert(floatEq(testSVF.get(1), toAdd[1]));
     assert(floatEq(testSVF.get(2), toAdd[2]));
-}
+}*/
 
 void SparseVecFloatRangeTests(){
     auto floatEq = [](float a, float b) {
@@ -40930,12 +40930,78 @@ void SparseVecFloatRangeTests(){
     assert(floatEq(svf1.get(5), 0.0));
 }
 
+void SparseVecFloatExtractionTests(){
+
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    int N = 128000;
+    float m = 0.5f;
+    bm::sparse_vector_float<bm::bvector<>> testSVF;
+    std::vector<float> temp(N*2);
+
+    for(int i = 0; i < N; i++){
+        temp[i] = (i * 0.001) * m;
+    }
+    for(int i = N; i < N*2; i++){
+        temp[i] = -1*(i * 0.001) * m;
+    }
+
+    testSVF.import(temp.data(), N*2);
+    testSVF.optimize();
+
+    std::vector<float> testExtract(N*2);
+    testSVF.decode(testExtract.data(), 0, N*2);
+
+    int errorCount = 0;
+    for (int i = 0; i < N*2; i++) {
+        if (!floatEq(testExtract[i], temp[i])){
+            errorCount++;
+        }
+    }
+    assert(errorCount == 0);
+
+    
+    std::vector<float> testExtractRange(48000);
+    testSVF.extract_range(testExtractRange.data(), 48000, 16000);
+
+    errorCount = 0;
+    for (int i = 16000; i < 64000; i++) {
+        if (!floatEq(testExtractRange[i-16000], temp[i])){
+            errorCount++;
+        }
+    }
+    assert(errorCount == 0);
+
+    bm::id_t gatherIndeces[1024];
+    for(int i = 0; i < 1024; i++){
+        gatherIndeces[i] = rand() % 128000;
+    }
+
+    std::vector<float> testGather(1024);
+    testSVF.gather(testGather.data(), gatherIndeces, 1024, bm::BM_UNKNOWN);
+
+    errorCount = 0;
+    for (int i = 0; i < 1024; i++) {
+        if (!floatEq(testGather[i], temp[gatherIndeces[i]])){
+            errorCount++;
+            std::cout << "Mismatch at sample " << i 
+                  << " (Index " << gatherIndeces[i] << "): "
+                  << temp[gatherIndeces[i]] << " vs " << testGather[i] 
+                  << std::endl;
+        }
+    }
+    assert(errorCount == 0);
+}
+
 void SparseVecFloatTests(){
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();
     //SparseVecFloatSerializeTest();
     SparseVecFloatRangeTests();
+    SparseVecFloatExtractionTests();
     std::cout << "Sparse Vector Float Tests Complete" << std::endl;
 }
 
