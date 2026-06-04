@@ -344,6 +344,104 @@ public:
     */
     void sync(bool /*force*/, bool /*sync_size*/);
 
+    /*!
+        \brief Bulk export list of elements to a C-style array
+     
+        Use of all extract() methods is restricted.
+        Please consider decode() for the same purpose.
+     
+        \param arr  - dest array
+        \param size - dest size
+        \param offset - target index in the sparse vector to export from
+        \param zero_mem - set to false if target array is pre-initialized
+                          with 0s to avoid performance penalty   
+        \return effective size(number) of exported elements
+     
+        \sa decode
+     
+        @internal
+    */
+    size_type extract(value_type* arr,
+                      size_type size,
+                      size_type offset = 0,
+                      bool      zero_mem = true) const BMNOEXCEPT2;
+
+    /** \brief extract small window without use of masking vector
+        \sa decode
+        @internal
+    */
+    size_type extract_range(value_type* arr,
+                            size_type size,
+                            size_type offset,
+                            bool      zero_mem = true) const;
+
+    /*!
+        \brief Bulk export list of elements to a C-style array
+     
+        For efficiency, this is left as a low level function,
+        it does not do any bounds checking on the target array, it will
+        override memory and crash if you are not careful with allocation
+        and request size.
+     
+        \param arr  - dest array
+        \param idx_from - index in the sparse vector to export from
+        \param dec_size - decoding size (array allocation should match)
+        \param zero_mem - set to false if target array is pre-initialized
+                          with 0s to avoid performance penalty
+     
+        \return number of actually exported elements (can be less than requested)
+     
+        \sa gather
+    */
+    size_type decode(value_type* arr,
+                     size_type   idx_from,
+                     size_type   dec_size,
+                     bool        zero_mem = true) const;
+
+    /*!
+        \brief Gather elements to a C-style array
+     
+        Gather collects values from different locations, for best
+        performance feed it with sorted list of indexes.
+     
+        Faster than one-by-one random access.
+     
+        For efficiency, this is left as a low level function,
+        it does not do any bounds checking on the target array, it will
+        override memory and crash if you are not careful with allocation
+        and request size.
+     
+        \param arr  - dest array
+        \param idx - index list to gather elements
+        \param size - decoding index list size (array allocation should match)
+        \param sorted_idx - sort order directive for the idx array
+                            (BM_UNSORTED, BM_SORTED, BM_UNKNOWN)
+        Sort order affects both performance and correctness(!), use BM_UNKNOWN
+        if not sure.
+     
+        \return number of actually exported elements (can be less than requested)
+     
+        \sa decode
+    */
+    size_type gather(value_type* arr,
+                     const size_type* idx,
+                     size_type   size,
+                     bm::sort_order sorted_idx) const;
+
+
+    /**
+        @brief Turn sparse vector into immutable mode
+        Read-only (immutable) vector uses less memory and allows faster searches.
+        Before freezing it is recommenede to call optimize() to get full memory saving effect
+        @sa optimize
+     */
+    void freeze();
+
+    /** Returns true if vector is in read-only mode.
+         @sa freeze
+    */
+    bool is_ro() const BMNOEXCEPT;
+
 protected:
     enum buf_size_e{
         n_buf_size = 1024 * 8
@@ -673,10 +771,154 @@ void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statisti
 //---------------------------------------------------------------------
 
 template<class BV>
-void sparse_vector_float<BV>::sync(bool /*force*/, bool /*sync_size*/){
-    signs_.sync_size();
+void sparse_vector_float<BV>::sync(bool /*force*/, bool /*sync_size*/)
+{
+    //signs_.sync_size();
     exponents_.sync();
     mantissas_.sync();
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::size_type 
+sparse_vector_float<BV>::extract(value_type* arr,
+                                 size_type size,
+                                 size_type offset,
+                                 bool      zero_mem) const BMNOEXCEPT2
+{
+    const size_type CHUNK = 256;
+
+    unsigned int exp_buf[CHUNK];
+    unsigned int mant_buf[CHUNK];
+
+    size_type remaining = size;
+    size_type pos = offset;
+
+    while (remaining > 0) {
+        size_type chunk = std::min(remaining, CHUNK);
+
+        // bulk extract exponents and mantissas for this chunk
+        exponents_.extract(exp_buf, chunk, pos);
+        mantissas_.extract(mant_buf, chunk, pos);
+
+        // convert each element in the chunk to float
+        for (size_type i = 0; i < chunk; i++) {
+            unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
+            unsigned int exponent = exp_buf[i];
+            unsigned int mantissa = mant_buf[i];
+
+            unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+            memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+        }
+
+        pos       += chunk;
+        remaining -= chunk;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::size_type 
+sparse_vector_float<BV>::extract_range(value_type* arr,
+                                       size_type size,
+                                       size_type offset,
+                                       bool      zero_mem) const
+{
+    const size_type CHUNK = 256;
+
+    unsigned int exp_buf[CHUNK];
+    unsigned int mant_buf[CHUNK];
+
+    size_type remaining = size;
+    size_type pos = offset;
+
+    while (remaining > 0) {
+        size_type chunk = std::min(remaining, CHUNK);
+
+        exponents_.extract_range(exp_buf, chunk, pos);
+        mantissas_.extract_range(mant_buf, chunk, pos);
+
+        for (size_type i = 0; i < chunk; i++) {
+            unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
+            unsigned int exponent = exp_buf[i];
+            unsigned int mantissa = mant_buf[i];
+
+            unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+            memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+        }
+
+        pos       += chunk;
+        remaining -= chunk;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::size_type
+sparse_vector_float<BV>::decode(value_type* arr,
+                                size_type   idx_from,
+                                size_type   dec_size,
+                                bool        zero_mem) const
+{
+    return extract(arr, dec_size, idx_from, zero_mem);
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::size_type 
+sparse_vector_float<BV>::gather(value_type* arr,
+                                const size_type* idx,
+                                size_type   size,
+                                bm::sort_order sorted_idx) const
+{
+    const size_type CHUNK = 256;
+
+    unsigned int exp_buf[CHUNK];
+    unsigned int mant_buf[CHUNK];
+
+    size_type remaining = size;
+    size_type pos = 0;
+
+    while (remaining > 0) {
+        size_type chunk = std::min(remaining, CHUNK);
+
+        exponents_.gather(exp_buf, idx, chunk, sorted_idx);
+        mantissas_.gather(mant_buf, idx, chunk, sorted_idx);
+
+        for (size_type i = 0; i < chunk; i++) {
+            unsigned int sign     = signs_.test(idx[pos + i]) ? 1 : 0;
+            unsigned int exponent = exp_buf[i];
+            unsigned int mantissa = mant_buf[i];
+
+            unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+            memcpy(&arr[pos + i], &bits, sizeof(float));
+        }
+
+        remaining -= chunk;
+        pos += chunk;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void sparse_vector_float<BV>::freeze()
+{
+    signs_.freeze();
+    exponents_.freeze();
+    mantissas_.freeze();
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+bool sparse_vector_float<BV>::is_ro() const BMNOEXCEPT
+{
+    return mantissas_.is_ro();
 }
 
 //---------------------------------------------------------------------
