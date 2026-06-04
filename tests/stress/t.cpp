@@ -40995,6 +40995,36 @@ void SparseVecFloatExtractionTests(){
     assert(errorCount == 0);
 }
 
+void SparseVecFloatBackInsertTests(){
+
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    bm::sparse_vector_float<bm::bvector<>> testSVF;
+
+    bm::sparse_vector_float<bm::bvector<>>::back_insert_iterator testBI(&testSVF);
+
+    testBI.add(1.0023);
+    assert(testSVF.size() == 1);
+    assert(floatEq(testSVF.get(0), 1.0023));
+
+    testBI.add(400005.6);
+    assert(testSVF.size() == 2);
+    assert(floatEq(testSVF.get(1), 400005.6));
+
+    bm::sparse_vector_float<bm::bvector<>>::back_insert_iterator testBI2(testBI);
+    testBI2=78.9;
+    assert(testSVF.size() == 3);
+    assert(floatEq(testSVF.get(2), 78.9));
+
+    bm::sparse_vector_float<bm::bvector<>>::back_insert_iterator testBI3(std::move(testBI));
+    testBI3=12345.6789;
+    assert(testSVF.size() == 4);
+    assert(floatEq(testSVF.get(3), 12345.6789));
+
+}
+
 void SparseVecFloatTests(){
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
@@ -41002,6 +41032,7 @@ void SparseVecFloatTests(){
     //SparseVecFloatSerializeTest();
     SparseVecFloatRangeTests();
     SparseVecFloatExtractionTests();
+    SparseVecFloatBackInsertTests();
     std::cout << "Sparse Vector Float Tests Complete" << std::endl;
 }
 

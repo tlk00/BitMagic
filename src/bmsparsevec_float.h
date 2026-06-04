@@ -39,7 +39,10 @@ namespace bm
  */
 
 /*!
-   \brief Wrapper for sparse vector that supports floats
+   \brief Wrapper for sparse vector in order to add float support
+    
+   This wrapper takes in floats and splits them up into their sign, exponent, and mantissa
+   It stores the sign in a bvector, and the exponent and mantissa in sparse vectors as unsigned ints
  
    @ingroup sv
 */
@@ -171,12 +174,12 @@ public:
     };
 
 
+    /**
+        Back insert iterator for inserting to the end of the sparse_vector_float
+    */
     class back_insert_iterator
     {
     public:
-#ifndef BM_NO_STL
-        typedef std::output_iterator_tag  iterator_category;
-#endif
         typedef sparse_vector_float<BV>                    sparse_vector_type;
         typedef typename sparse_vector_type::value_type    value_type;
 
