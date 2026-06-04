@@ -170,6 +170,50 @@ public:
         sparse_vector_u32::const_iterator   mant_it_;  ///!< mantissa iterator
     };
 
+
+    class back_insert_iterator
+    {
+    public:
+#ifndef BM_NO_STL
+        typedef std::output_iterator_tag  iterator_category;
+#endif
+        typedef sparse_vector_float<BV>                    sparse_vector_type;
+        typedef typename sparse_vector_type::value_type    value_type;
+
+        typedef void difference_type;
+        typedef void pointer;
+        typedef void reference;
+        
+    public:
+        /*! @name Construction and assignment  */
+        ///@{
+
+        back_insert_iterator();
+        back_insert_iterator(sparse_vector_type* svf);
+        back_insert_iterator(const back_insert_iterator& bi);
+        
+        /** move constructor */
+        back_insert_iterator(back_insert_iterator&& bi) BMNOEXCEPT;
+
+        ~back_insert_iterator();
+
+        /** push value to the vector */
+        //back_insert_iterator&
+        void operator=(value_type v) { this->add(v); /*return *this;*/ }
+        /** noop */
+        back_insert_iterator& operator*() { return *this; }
+        /** noop */
+        back_insert_iterator& operator++() { return *this; }
+        /** noop */
+        back_insert_iterator& operator++( int ) { return *this; }
+        
+        /** add value to the container*/
+        void add(value_type v);
+
+    private:
+        bm::sparse_vector_float<BV>* svf_ = 0;      ///!< pointer on the parent vector
+    };
+
     const_iterator begin() const;
     const_iterator end() const { return const_iterator(this, bm::id_max); };
 
@@ -703,7 +747,8 @@ void sparse_vector_float<BV>::import(const value_type* arr,
         }
     }
 
-    for (size_type i = 0; i < arr_size; ++i) {
+    for (size_type i = 0; i < arr_size; ++i)
+    {
         unsigned int bits;
         memcpy(&bits, &arr[i], sizeof(float));
 
@@ -758,7 +803,8 @@ void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statisti
     st->bv_count          = 1 + expStat.bv_count + mantStat.bv_count; // 1 for signs bvector
 
     // gap levels - take the max across all components
-    for (int i = 0; i < bm::gap_levels; i++) {
+    for (int i = 0; i < bm::gap_levels; i++)
+    {
         st->gap_levels[i] = std::max({signStat.gap_levels[i], 
                                       expStat.gap_levels[i], 
                                       mantStat.gap_levels[i]});
@@ -1022,6 +1068,51 @@ bool sparse_vector_float<BV>::const_iterator::advance() BMNOEXCEPT
 }
 
 //---------------------------------------------------------------------
+
+//---------------------------------------------------------------------
+//back_insert_iterator methods
+
+template<class BV>
+sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator()
+{}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator(sparse_vector_type* svf)
+: svf_(svf)
+{}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator(const back_insert_iterator& bi)
+: svf_(bi.svf_)
+{}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::back_insert_iterator::~back_insert_iterator()
+{}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+void sparse_vector_float<BV>::back_insert_iterator::add(value_type v)
+{
+    svf_->push_back(v);
+}
+
+//---------------------------------------------------------------------
+
+template<class BV>
+sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator(back_insert_iterator&& bi) BMNOEXCEPT
+: svf_(bi.svf_)
+{
+    bi.svf_ = nullptr;
+}
+
 
 }//namespace bm
 
