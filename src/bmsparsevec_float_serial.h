@@ -94,7 +94,7 @@ public:
     bm::serializer<bvector_type>::xor_sim_model_type xor_sim_model_type;
 
 public:
-    sparse_vector_float_serializer();
+    sparse_vector_float_serializer() {}
 
     /**
         Add skip-markers for faster range deserialization
@@ -112,12 +112,14 @@ public:
         @sa set_xor_ref
         @sa disable_xor_compression
      */
-    void enable_xor_compression() BMNOEXCEPT;
+    void enable_xor_compression() BMNOEXCEPT
+        { set_xor_ref(true); }
 
     /**
         Disable XOR compression on serialization
      */
-    void disable_xor_compression() BMNOEXCEPT;
+    void disable_xor_compression() BMNOEXCEPT
+        { set_xor_ref(false); }
 
     /** Turn ON and OFF XOR compression of sparse vectors
         Enables XOR reference compression for the sparse vector.
@@ -170,7 +172,7 @@ public:
         as defined in bm::serialization_flags
     */
     void serialize(const SV&                        sv,
-                   sparse_vector_serial_layout<SV>& sv_layout);
+                   sparse_vector_float_serial_layout<SV>& sv_layout);
 
 
 protected:
@@ -206,9 +208,9 @@ class sparse_vector_deserializer
 */
 template<class SV>
 void sparse_vector_float_serialize(
-                const SV&                        sv,
-                sparse_vector_serial_layout<SV>& sv_layout,
-                bm::word_t*                      temp_block = 0)
+                const SV&                              sv,
+                sparse_vector_float_serial_layout<SV>& sv_layout,
+                bm::word_t*                            temp_block = 0)
 {
     (void)temp_block;
     bm::sparse_vector_float_serializer<SV> sv_serializer;
@@ -218,12 +220,73 @@ void sparse_vector_float_serialize(
 
 
 //---------------------------------------------------------------------
-
+//sparse_vec_float_serial_layout methods
 
 template<class SV>
 sparse_vector_float_serial_layout<SV>::sparse_vector_float_serial_layout(const sparse_vector_float_serial_layout<SV>&)
 {}
 
+//---------------------------------------------------------------------
+//sparse_vec_float_serializer methods
+
+template<class SV>
+void sparse_vector_float_serializer<SV>::set_bookmarks(bool enable, unsigned bm_interval) BMNOEXCEPT
+{
+    signSerializer_.set_bookmarks(enable, bm_interval);
+    exponentSerializer_.set_bookmarks(enable, bm_interval);
+    mantissaSerializer_.set_bookmarks(enable, bm_interval);
+}
+
+template<class SV>
+void sparse_vector_float_serializer<SV>::set_xor_ref(bool is_enabled) BMNOEXCEPT
+{
+    exponentSerializer_.set_xor_ref(is_enabled);
+    mantissaSerializer_.set_xor_ref(is_enabled);
+}
+
+template<class SV>
+void sparse_vector_float_serializer<SV>::set_xor_ref(const bv_ref_vector_type* bv_ref_ptr) BMNOEXCEPT
+{
+    exponentSerializer_.set_xor_ref(bv_ref_ptr);
+    mantissaSerializer_.set_xor_ref(bv_ref_ptr);
+}
+
+template<class SV>
+void sparse_vector_float_serializer<SV>::compute_sim_model(xor_sim_model_type& sim_model,
+                                                            const bv_ref_vector_type& ref_vect,
+                                                            const bm::xor_sim_params& params)
+{
+    //todo, unsure how this should work currently
+}
+
+template<class SV>
+void sparse_vector_float_serializer<SV>::set_sim_model(const xor_sim_model_type* sim_model) BMNOEXCEPT
+{
+    signSerializer_.set_sim_model(sim_model);
+    exponentSerializer_.set_sim_model(sim_model);
+    mantissaSerializer_.set_sim_model(sim_model);
+}
+
+template<class SV>
+bool sparse_vector_float_serializer<SV>::is_xor_ref() const BMNOEXCEPT
+{
+    return mantissaSerializer_.is_xor_ref();
+}
+
+template<class SV>
+void sparse_vector_float_serializer<SV>::serialize(const SV&                        sv,
+                                                    sparse_vector_float_serial_layout<SV>& sv_layout)
+{
+    signSerializer_.serialize(sv.signs, sv_layout.sign_buf);
+    exponentSerializer_.serialize(sv.floats, sv_layout.exp_lay);
+    mantissaSerializer_.serialize(sv.mantissas, sv_layout.mant_lay);
+}
+
+//---------------------------------------------------------------------
+//sparse_vec_float_deserializer methods
+
+
+//---------------------------------------------------------------------
 
 
 }//namespace bm
