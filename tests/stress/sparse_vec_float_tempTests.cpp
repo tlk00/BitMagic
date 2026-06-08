@@ -4,7 +4,7 @@
 
 #include <bm.h>
 #include <bmsparsevec_float.h>
-//#include <bmsparsevec_float_serial.h>
+#include <bmsparsevec_float_serial.h>
 #include <random>
 
 
@@ -239,7 +239,7 @@ void SparseVecFloatGeneralTests(){
 }
 
 //----------------------------------------------------------------
-/*
+
 void SparseVecFloatSerializeTest(){
     auto floatEq = [](float a, float b) {
         return std::fabs(a - b) < 0.001f;
@@ -252,16 +252,15 @@ void SparseVecFloatSerializeTest(){
     BM_DECLARE_TEMP_BLOCK(tb)
     testSVF.optimize(tb);
 
-    bm::sparse_vector_float_serialized<bm::bvector<>> testSVFSerial;
-    testSVFSerial.serialize(testSVF);
+    bm::sparse_vector_float_serial_layout<bm::sparse_vector_float<bm::bvector<>>> testLayout;
 
-    testSVFSerial.deserialize(testSVF);
+    bm::sparse_vector_float_serialize(testSVF, testLayout);
 
     assert(testSVF.size() == 3);
     assert(floatEq(testSVF.get(0), toAdd[0]));
     assert(floatEq(testSVF.get(1), toAdd[1]));
     assert(floatEq(testSVF.get(2), toAdd[2]));
-}*/
+}
 
 //----------------------------------------------------------------
 
@@ -616,7 +615,7 @@ void SparseVecFloatTests(){
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();
-
+    SparseVecFloatSerializeTest();
     SparseVecFloatRangeTests();
     SparseVecFloatExtractionTests();
     SparseVecFloatBackInsertTests();
