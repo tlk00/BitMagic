@@ -381,7 +381,8 @@ void sparse_vector_float_serial_layout<SV>::resize(size_t ssize)
 template<class SV>
 void sparse_vector_float_serial_layout<SV>::shrink(size_t ssize)
 {
-    
+    if (ssize < size_)
+        size_ = ssize;
 }
 
 //---------------------------------------------------------------------
@@ -397,7 +398,13 @@ size_t sparse_vector_float_serial_layout<SV>::capacity() const BMNOEXCEPT
 template<class SV>
 void sparse_vector_float_serial_layout<SV>::freemem() BMNOEXCEPT
 {
-    
+    if (buf_)
+    {
+        ::free(buf_);
+        buf_      = nullptr;
+        capacity_ = 0;
+        size_     = 0;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -526,6 +533,9 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
                                                         const unsigned char* buf,
                                                         bool clear_sv )
 {
+    if (clear_sv)
+        sv.clear();
+
    size_t sign_size, exp_size, mant_size;
     
     std::memcpy(&sign_size, buf, sizeof(size_t)); buf += sizeof(size_t);
@@ -548,7 +558,24 @@ void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsig
                                                             size_type from, size_type to,
                                                             bool clear_sv)
 {
+    if (clear_sv)
+        sv.clear();
+    
+    const unsigned char* ptr = buf;
 
+    size_t sign_size, exp_size, mant_size;
+    std::memcpy(&sign_size, ptr, sizeof(size_t)); 
+    ptr += sizeof(size_t);
+    std::memcpy(&exp_size,  ptr, sizeof(size_t)); 
+    ptr += sizeof(size_t);
+    std::memcpy(&mant_size, ptr, sizeof(size_t)); 
+    ptr += sizeof(size_t);
+    
+    bm::deserialize_range(sv.signs_,    ptr,              from, to);
+    ptr += sign_size;
+    exponentDeserializer_.deserialize_range(sv.exponents_, ptr, from, to);
+    ptr += exp_size;
+    mantissaDeserializer_.deserialize_range(sv.mantissas_, ptr, from, to);
 }
 
 //---------------------------------------------------------------------
@@ -558,7 +585,24 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
                                                         const unsigned char* buf,
                                                         const bvector_type& mask_bv)
 {
-    
+    sv.clear();
+
+    const unsigned char* ptr = buf;
+
+    size_t sign_size, exp_size, mant_size;
+    std::memcpy(&sign_size, ptr, sizeof(size_t)); 
+    ptr += sizeof(size_t);
+    std::memcpy(&exp_size,  ptr, sizeof(size_t)); 
+    ptr += sizeof(size_t);
+    std::memcpy(&mant_size, ptr, sizeof(size_t)); 
+    ptr += sizeof(size_t);
+
+    // pass buffer pointers and mask directly to existing deserializers
+    bm::deserialize(sv.signs_, ptr, mask_bv);
+    ptr += sign_size;
+    exponentDeserializer_.deserialize(sv.exponents_, ptr, mask_bv);
+    ptr += exp_size;
+    mantissaDeserializer_.deserialize(sv.mantissas_, ptr, mask_bv);
 }
 
 //---------------------------------------------------------------------
