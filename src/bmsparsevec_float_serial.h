@@ -37,7 +37,8 @@ namespace bm
 template<class SV>
 class sparse_vector_float_serial_layout
 {
- 
+    template<class SVT> friend class sparse_vector_float_serializer;
+    template<class SVT> friend class sparse_vector_float_deserializer;
 public:
     typedef typename SV::value_type   value_type;
     typedef typename SV::bvector_type bvector_type;
@@ -45,7 +46,7 @@ public:
 
     
     sparse_vector_float_serial_layout() BMNOEXCEPT {}
-    ~sparse_vector_float_serial_layout() {}
+    ~sparse_vector_float_serial_layout() {if(buf_)free(buf_);}
     sparse_vector_float_serial_layout(const sparse_vector_float_serial_layout&);
 
     
@@ -70,15 +71,17 @@ public:
     
     /// free memory
     void freemem() BMNOEXCEPT;
+
+    /// Return serialization buffer pointer
+    const unsigned char* buf() const BMNOEXCEPT { return buf_;  }
+
+    /// Return serialization buffer pointer
+    const unsigned char* data() const BMNOEXCEPT { return buf_;  }
     
 private:
-    unsigned char* buf_;
-    size_t size_;
-    size_t capacity_;
-
-    size_t sign_size_;
-    size_t exp_size_;
-    size_t mant_size_;
+    unsigned char* buf_ = nullptr;
+    size_t size_ = 0;
+    size_t capacity_ = 0;
 };
 
 
@@ -97,6 +100,7 @@ public:
     bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
     typedef typename
     bm::serializer<bvector_type>::xor_sim_model_type xor_sim_model_type;
+    typedef typename SV::sparse_vector_u32   sparse_vector_type;
 
 public:
     sparse_vector_float_serializer() {}
@@ -182,8 +186,8 @@ public:
 
 protected:
     bm::serializer<bvector_type>     signSerializer_;
-    bm::sparse_vector_serializer<bvector_type> exponentSerializer_;
-    bm::sparse_vector_serializer<bvector_type> mantissaSerializer_;
+    bm::sparse_vector_serializer<sparse_vector_type> exponentSerializer_;
+    bm::sparse_vector_serializer<sparse_vector_type> mantissaSerializer_;
     
 };
 
@@ -202,6 +206,7 @@ class sparse_vector_float_deserializer
     typedef typename SV::size_type          size_type;
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
     typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
+    typedef typename SV::sparse_vector_u32   sparse_vector_type;
 
 public:
     sparse_vector_float_deserializer();
@@ -276,18 +281,9 @@ public:
                      const unsigned char* buf,
                      const bvector_type& mask_bv);
 
-
-    /*!
-        Load serialization descriptor, create vectors but DO NOT perform full deserialization
-        @param sv - [out] target sparse vector to populate
-        @param buf - source memory pointer
-    */
-    void deserialize_structure(SV& sv,
-                               const unsigned char* buf);
-
 private:
-    bm::sparse_vector_deserializer<bvector_type> expDeserializer;
-    bm::sparse_vector_deserializer<bvector_type> mantDeserializer;
+    bm::sparse_vector_deserializer<sparse_vector_type> exponentDeserializer_;
+    bm::sparse_vector_deserializer<sparse_vector_type> mantissaDeserializer_;
 };
 
 //---------------------------------------------------------------------
@@ -331,12 +327,12 @@ void sparse_vector_float_serialize(
     @sa sparse_vector_deserializer
 */
 template<class SV>
-int sparse_vector_deserialize(SV& sv,
+int sparse_vector_float_deserialize(SV& sv,
                               const unsigned char* buf,
                               bm::word_t* temp_block=0)
 {
     (void)temp_block;
-    bm::sparse_vector_deserializer<SV> sv_deserializer;
+    bm::sparse_vector_float_deserializer<SV> sv_deserializer;
     sv_deserializer.deserialize(sv, buf);
     return 0;
 }
@@ -455,31 +451,39 @@ template<class SV>
 void sparse_vector_float_serializer<SV>::serialize(const SV&                        sv,
                                                     sparse_vector_float_serial_layout<SV>& sv_layout)
 {
-    serializer<bm::bvector<>>::buffer signBufTemp;
-    sparse_vector_serial_layout<sparse_vector_u32> expLayTemp;
-    sparse_vector_serial_layout<sparse_vector_u32> mantLayTemp;
+    typedef typename SV::sparse_vector_u32 sparse_vector_u32_type;
 
-    signSerializer_.serialize(sv.signs, signBufTemp);
-    exponentSerializer_.serialize(sv.floats, expLayTemp);
-    mantissaSerializer_.serialize(sv.mantissas, mantLayTemp);
+    typename serializer<typename SV::bvector_type>::buffer signBufTemp;
+    sparse_vector_serial_layout<sparse_vector_u32_type> expLayTemp;
+    sparse_vector_serial_layout<sparse_vector_u32_type> mantLayTemp;
 
-    sv_layout.sign_size_ = signBufTemp.size();
-    sv_layout.exp_size_ = expLayTemp.size();
-    sv_layout.mant_size_ = mantLayTemp.size();
+    signSerializer_.serialize(sv.signs_, signBufTemp);
+    exponentSerializer_.serialize(sv.exponents_, expLayTemp);
+    mantissaSerializer_.serialize(sv.mantissas_, mantLayTemp);
 
-    size_t totalSize = signBufTemp.size() + expLayTemp.size() + mantLayTemp.size();
+    size_t sign_size_ = signBufTemp.size();
+    size_t exp_size_ = expLayTemp.size();
+    size_t mant_size_ = mantLayTemp.size();
+
+    size_t header_size = sizeof(size_t) * 3;
+    size_t totalSize = header_size + signBufTemp.size() + expLayTemp.size() + mantLayTemp.size();
 
     sv_layout.resize(totalSize);
-
     unsigned char* dest = sv_layout.buf_;
 
-    std::memcpy(dest, sign_temp_buf.data(), sv_layout.sign_size_);
-    dest += sv_layout.sign_size_;
 
-    std::memcpy(dest, exp_temp_lay.get_buf(), sv_layout.exp_size_);
-    dest += sv_layout.exp_size_;
+    std::memcpy(dest, &sign_size_, sizeof(size_t));
+    dest += sizeof(size_t);
+    std::memcpy(dest, &exp_size_, sizeof(size_t));
+    dest += sizeof(size_t);
+    std::memcpy(dest, &mant_size_, sizeof(size_t));
+    dest += sizeof(size_t);
 
-    std::memcpy(dest, mant_temp_lay.get_buf(), sv_layout.mant_size_);
+    std::memcpy(dest, signBufTemp.data(), sign_size_);
+    dest += sign_size_;
+    std::memcpy(dest, expLayTemp.buf(), exp_size_);
+    dest += exp_size_;
+    std::memcpy(dest, mantLayTemp.buf(), mant_size_);
 
 }
 
@@ -488,6 +492,7 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
 
 template<class SV>
 sparse_vector_float_deserializer<SV>::sparse_vector_float_deserializer()
+: exponentDeserializer_(), mantissaDeserializer_()
 {}
 
 //---------------------------------------------------------------------
@@ -500,47 +505,60 @@ sparse_vector_float_deserializer<SV>::~sparse_vector_float_deserializer()
 
 template<class SV>
 void sparse_vector_float_deserializer<SV>::set_finalization(bm::finalization is_final)
-{}
-
-//---------------------------------------------------------------------
-
-template<class SV>
-void sparse_vector_float_deserializer<SV>::set_xor_ref(bv_ref_vector_type* bv_ref_ptr)
-{}
-
-//---------------------------------------------------------------------
-
-template<class SV>
-void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
-                    const unsigned char* buf,
-                    bool clear_sv )
-{}
-
-//---------------------------------------------------------------------
-
-template<class SV>
-void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsigned char* buf,
-                        size_type from, size_type to,
-                        bool clear_sv)
-{}
-
-//---------------------------------------------------------------------
-
-template<class SV>
-void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
-                    const unsigned char* buf,
-                    const bvector_type& mask_bv)
 {
-    
+    exponentDeserializer_.set_finalization(is_final);
+    mantissaDeserializer_.set_finalization(is_final);
 }
 
 //---------------------------------------------------------------------
 
 template<class SV>
-void sparse_vector_float_deserializer<SV>::deserialize_structure(SV& sv,
-                                                                 const unsigned char* buf)
+void sparse_vector_float_deserializer<SV>::set_xor_ref(bv_ref_vector_type* bv_ref_ptr)
+{
+    exponentDeserializer_.set_xor_ref(bv_ref_ptr);
+    mantissaDeserializer_.set_xor_ref(bv_ref_ptr);
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
+                                                        const unsigned char* buf,
+                                                        bool clear_sv )
+{
+   size_t sign_size, exp_size, mant_size;
+    
+    std::memcpy(&sign_size, buf, sizeof(size_t)); buf += sizeof(size_t);
+    std::memcpy(&exp_size,  buf, sizeof(size_t)); buf += sizeof(size_t);
+    std::memcpy(&mant_size, buf, sizeof(size_t)); buf += sizeof(size_t);
+
+    bm::deserialize(sv.signs_, buf);
+    buf += sign_size;
+
+    exponentDeserializer_.deserialize(sv.exponents_, buf, clear_sv);
+    buf += exp_size;
+
+    mantissaDeserializer_.deserialize(sv.mantissas_, buf, clear_sv);
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsigned char* buf,
+                                                            size_type from, size_type to,
+                                                            bool clear_sv)
 {
 
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
+                                                        const unsigned char* buf,
+                                                        const bvector_type& mask_bv)
+{
+    
 }
 
 //---------------------------------------------------------------------

@@ -253,9 +253,12 @@ void SparseVecFloatSerializeTest(){
     testSVF.optimize(tb);
 
     bm::sparse_vector_float_serial_layout<bm::sparse_vector_float<bm::bvector<>>> testLayout;
-
+    
     bm::sparse_vector_float_serialize(testSVF, testLayout);
 
+    const unsigned char* buf = testLayout.buf();
+    bm::sparse_vector_float_deserialize(testSVF, buf);
+    
     assert(testSVF.size() == 3);
     assert(floatEq(testSVF.get(0), toAdd[0]));
     assert(floatEq(testSVF.get(1), toAdd[1]));
@@ -536,7 +539,7 @@ void SparseVecFloatStressTests(){
     }
 
 }
-/*
+
 void SparseVecFloatSerialStressTests(){
     //Serializing then deserializing a large random data set
     {
@@ -554,13 +557,13 @@ void SparseVecFloatSerialStressTests(){
         BM_DECLARE_TEMP_BLOCK(tb)
         sv.optimize(tb);
 
-        // serialize
-        bm::sparse_vector_float_serialized<bm::bvector<>> serial;
-        serial.serialize(sv);
+        bm::sparse_vector_float_serial_layout<bm::sparse_vector_float<bm::bvector<>>> testLayout;
+        bm::sparse_vector_float_serialize(sv, testLayout);
 
         // deserialize into a fresh vector
         bm::sparse_vector_float<bm::bvector<>> sv_restored;
-        serial.deserialize(sv_restored);
+        const unsigned char* buf = testLayout.buf();
+        bm::sparse_vector_float_deserialize(sv_restored, buf);
 
         // validate
         assert((int)sv_restored.size() == N);
@@ -588,12 +591,13 @@ void SparseVecFloatSerialStressTests(){
         BM_DECLARE_TEMP_BLOCK(tb)
         sv.optimize(tb);
 
-        bm::sparse_vector_float_serialized<bm::bvector<>> serial;
-        serial.serialize(sv);
+        bm::sparse_vector_float_serial_layout<bm::sparse_vector_float<bm::bvector<>>> testLayout;
+        bm::sparse_vector_float_serialize(sv, testLayout);
 
-        // deserialize and validate
+        // deserialize into a fresh vector
         bm::sparse_vector_float<bm::bvector<>> sv_restored;
-        serial.deserialize(sv_restored);
+        const unsigned char* buf = testLayout.buf();
+        bm::sparse_vector_float_deserialize(sv_restored, buf);
 
         assert((int)sv_restored.size() == N);
         int errorCount = 0;
@@ -605,10 +609,10 @@ void SparseVecFloatSerialStressTests(){
 
         // check that serialized size is smaller than raw size
         size_t rawSize        = N * sizeof(float);
-        size_t serializedSize = serial.size();
+        size_t serializedSize = testLayout.size();
         assert(serializedSize < rawSize);
     }
-}*/
+}
 
 void SparseVecFloatTests(){
 
@@ -623,7 +627,7 @@ void SparseVecFloatTests(){
 }
 
 int main(int argc, char *argv[]){
-    SparseVecFloatTests();
+    //SparseVecFloatTests();
     //SparseVecFloatStressTests();
-    //SparseVecFloatSerialStressTests();
+    SparseVecFloatSerialStressTests();
 }

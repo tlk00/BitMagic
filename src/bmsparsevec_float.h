@@ -49,7 +49,8 @@ namespace bm
 template<class BV>
 class sparse_vector_float
 {
-    friend class sparse_vector_float_serialized;
+    template<class SV> friend class sparse_vector_float_serializer;
+    template<class SV> friend class sparse_vector_float_deserializer;
 public:
     //
     typedef float                                   value_type;
