@@ -16,9 +16,9 @@ limitations under the License.
 For more information please visit:  http://bitmagic.io
 */
 
-/** \example svfsample02.cpp
-  Example of how to use bm::sparse_vector_float template class to serialize bm::sparse_vector_float
-  with bm_sparse_vector_float_serialized and how to use bm::sparse_vector_float's const_iterator
+/** \example svfsample03.cpp
+  Example of how to use bm::sparse_vector_float template class to clear it, compare values, and interact
+    with other sparse_vector_float's
 
   bm::sparse_vector_float is a wrapper of bm::sparse_vector<> that takes in floats and converts them into
   a bitvector of signs, and 2 sparse_vectors of the floats exponent and mantissa
@@ -31,6 +31,8 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector_float::join
   \sa bm::sparse_vector_float::merge
   \sa bm::sparse_vector_float::copy_range
+  \sa bm::sparse_vector_float::freeze
+  \sa bm::sparse_vector_float::is_ro
 */
 
 /*! \file svfsample03.cpp
@@ -135,6 +137,11 @@ void Demo2(){
     for(int i = 0; i < svf1.size(); i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
     }
+
+    //freeze will put the svf into read only mode, making it immutible
+    svf1.freeze();
+    //You can check if the svf is read only with is_ro()
+    std::cout << "svf1.is_ro() = " << svf1.is_ro() << std::endl;
 }
 
 int main(void){

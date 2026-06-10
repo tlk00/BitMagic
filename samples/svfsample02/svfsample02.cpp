@@ -112,7 +112,7 @@ void Demo1(){
     std::cout << svf1.size() << std::endl;
     for(int i = 0; i < 3; i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
-        std::cout << "toAdd[]" << i << "] = " << toAdd[i] << std::endl;
+        std::cout << "toAdd[" << i << "] = " << toAdd[i] << std::endl;
     }
 
     //The freemem() method frees the buf and resets the layout
@@ -147,12 +147,13 @@ void Demo1(){
     
     //it will deserialize into the given indeces of the new SVF, not at the start or end of it
     int errorCount = 0;
-    for (int i = 300; i <= 400; i++) {
+    for (int i = 300; i < 400; i++) {
         float f = i * 0.000123;
-        if (std::fabs(svf2_restored.get(i) - f) < 0.001f){
+        if (std::fabs(svf2_restored.get(i) - f) > 0.001f){
             errorCount++;
         }
     }
+    std::cout << errorCount << std::endl;
     assert(errorCount == 0);
 
 
@@ -168,7 +169,6 @@ void Demo1(){
     svfD.deserialize(svf2_masked, buf, mask_bv);
 
     //The given indeces in the mask will be deserialized into the given svf, and those not in it will be set to 0
-    errorCount = 0;
     for (int i = 0; i < maskSize; i++) {
         int idx   = maskIndices[i];
         float f   = idx * 0.000123f;
