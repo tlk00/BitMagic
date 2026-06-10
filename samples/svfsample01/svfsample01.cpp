@@ -1,5 +1,5 @@
 /*
-Copyright(c) 2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2026 Anatoliy Kuznetsov(tolikkuznetsov66 at gmail.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ For more information please visit:  http://bitmagic.io
 
 void Demo1(){
 
-    bm::sparse_vector_float svf1;
+    bm::sparse_vector_float<bm::bvector<>> svf1;
 
     //initially the sparse_vector_float is empty
     std::cout << "svf1.empty() = " << svf1.empty() << std::endl;
@@ -81,8 +81,8 @@ void Demo1(){
 
 void Demo2(){
 
-    bm::sparse_vector_float svf1;
-    bm::sparse_vector_float svf2;
+    bm::sparse_vector_float<bm::bvector<>> svf1;
+    bm::sparse_vector_float<bm::bvector<>> svf2;
     float toAdd1[] = {1.0123, 2.468, 340000.56};
     float toAdd2[] = {7.000, 89000.01, 324.5006};
 
