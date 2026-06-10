@@ -597,8 +597,8 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
     std::memcpy(&mant_size, ptr, sizeof(size_t)); 
     ptr += sizeof(size_t);
 
-    // pass buffer pointers and mask directly to existing deserializers
-    bm::deserialize(sv.signs_, ptr, mask_bv);
+    bm::deserialize(sv.signs_, ptr);
+    sv.signs_ &= mask_bv;
     ptr += sign_size;
     exponentDeserializer_.deserialize(sv.exponents_, ptr, mask_bv);
     ptr += exp_size;

@@ -71,7 +71,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_parallel.h>
 #include <bmthreadpool.h>
 #include <bmsparsevec_float.h>
-//#include <bmsparsevec_float_serial.h>
+#include <bmsparsevec_float_serial.h>
 
 using namespace bm;
 using namespace std;
@@ -40817,7 +40817,7 @@ void SparseVecFloatGeneralTests(){
     assert(floatEq(svA.get(2), aVals[2]));
 }
 
-/*void SparseVecFloatSerializeTest(){
+void SparseVecFloatSerializeTest(){
     auto floatEq = [](float a, float b) {
         return std::fabs(a - b) < 0.001f;
     };
@@ -40829,16 +40829,65 @@ void SparseVecFloatGeneralTests(){
     BM_DECLARE_TEMP_BLOCK(tb)
     testSVF.optimize(tb);
 
-    bm::sparse_vector_float_serialized<bm::bvector<>> testSVFSerial;
-    testSVFSerial.serialize(testSVF);
+    bm::sparse_vector_float_serial_layout<bm::sparse_vector_float<bm::bvector<>>> testLayout;
+    
+    bm::sparse_vector_float_serialize(testSVF, testLayout);
 
-    testSVFSerial.deserialize(testSVF);
-
+    const unsigned char* buf = testLayout.buf();
+    bm::sparse_vector_float_deserialize(testSVF, buf);
+    
     assert(testSVF.size() == 3);
     assert(floatEq(testSVF.get(0), toAdd[0]));
     assert(floatEq(testSVF.get(1), toAdd[1]));
     assert(floatEq(testSVF.get(2), toAdd[2]));
-}*/
+
+    bm::sparse_vector_float<bm::bvector<>> testSVF2;
+    int N = 10000;
+    for(int i = 0; i < N; i++){
+        float f = i * 0.000123;
+        testSVF2.push_back(f);
+    }
+
+    testSVF2.optimize(tb);
+    bm::sparse_vector_float_serial_layout<bm::sparse_vector_float<bm::bvector<>>> testLayout2;
+    bm::sparse_vector_float_serialize(testSVF2, testLayout2);
+
+    buf = testLayout2.buf();
+    bm::sparse_vector_float_deserializer<bm::sparse_vector_float<bm::bvector<>>> testDeserializer;
+    bm::sparse_vector_float<bm::bvector<>> testSVF2_restored;
+    testDeserializer.deserialize_range(testSVF2_restored, buf, 300, 400, true);
+    
+    int errorCount = 0;
+    for (int i = 300; i <= 400; i++) {
+        float f = i * 0.000123;
+        if (!floatEq(testSVF2_restored.get(i), f)){
+            errorCount++;
+        }
+    }
+    assert(errorCount == 0);
+
+    bm::bvector<> mask_bv;
+    int maskIndices[] = {0, 1, 50, 100, 500, 999, 5000, 9999};
+    int maskSize = sizeof(maskIndices) / sizeof(maskIndices[0]);
+    for (int i = 0; i < maskSize; i++)
+        mask_bv.set(maskIndices[i]);
+    
+    bm::sparse_vector_float<bm::bvector<>> testSVF2_masked;
+    testDeserializer.deserialize(testSVF2_masked, buf, mask_bv);
+
+    errorCount = 0;
+    for (int i = 0; i < maskSize; i++) {
+        int idx   = maskIndices[i];
+        float f   = idx * 0.000123f;
+        if (!floatEq(testSVF2_masked.get(idx), f))
+            errorCount++;
+    }
+    assert(errorCount == 0);
+
+    assert(floatEq(testSVF2_masked.get(2),    0.0f));
+    assert(floatEq(testSVF2_masked.get(200),  0.0f));
+    assert(floatEq(testSVF2_masked.get(1000), 0.0f));
+}
 
 void SparseVecFloatRangeTests(){
     auto floatEq = [](float a, float b) {
@@ -41029,7 +41078,7 @@ void SparseVecFloatTests(){
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();
-    //SparseVecFloatSerializeTest();
+    SparseVecFloatSerializeTest();
     SparseVecFloatRangeTests();
     SparseVecFloatExtractionTests();
     SparseVecFloatBackInsertTests();
