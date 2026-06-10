@@ -46,7 +46,7 @@ public:
 
     
     sparse_vector_float_serial_layout() BMNOEXCEPT {}
-    ~sparse_vector_float_serial_layout() {if(buf_)free(buf_);}
+    ~sparse_vector_float_serial_layout() {if (buf_)free(buf_);}
     sparse_vector_float_serial_layout(const sparse_vector_float_serial_layout&);
 
     
@@ -90,12 +90,6 @@ class sparse_vector_float_serializer
 {
 public:
     typedef typename SV::bvector_type       bvector_type;
-    typedef const bvector_type*             bvector_type_const_ptr;
-    typedef bvector_type*                   bvector_type_ptr;
-    typedef typename SV::value_type         value_type;
-    typedef typename SV::size_type          size_type;
-    typedef typename bvector_type::allocator_type       alloc_type;
-    typedef typename alloc_type::allocator_pool_type    allocator_pool_type;
     typedef typename
     bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
     typedef typename
@@ -200,11 +194,7 @@ class sparse_vector_float_deserializer
 {
     public:
     typedef typename SV::bvector_type       bvector_type;
-    typedef const bvector_type*             bvector_type_const_ptr;
-    typedef bvector_type*                   bvector_type_ptr;
-    typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
-    typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
     typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
     typedef typename SV::sparse_vector_u32   sparse_vector_type;
 
@@ -349,9 +339,11 @@ sparse_vector_float_serial_layout<SV>::sparse_vector_float_serial_layout(const s
 template<class SV>
 unsigned char* sparse_vector_float_serial_layout<SV>::reserve(size_t capacity)
 {
-    if (capacity > capacity_) {
+    if (capacity > capacity_)
+    {
             unsigned char* new_buf = (unsigned char*)realloc(buf_, capacity);
-            if (new_buf) {
+            if (new_buf)
+            {
                 buf_ = new_buf;
                 capacity_ = capacity;
             }

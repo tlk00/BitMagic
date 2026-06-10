@@ -44,6 +44,8 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 
+typedef bm::sparse_vector_float<bm::bvector<>> sparse_vec_float;
+
 void Demo1(){
     auto floatEq = [](float a, float b) {
         return std::fabs(a - b) < 0.001f;
@@ -51,7 +53,7 @@ void Demo1(){
 
     int N = 128000;
     float m = 0.5f;
-    bm::sparse_vector_float<bm::bvector<>> svf1;
+    sparse_vec_float svf1;
     std::vector<float> temp(N*2);
 
     for(int i = 0; i < N; i++){
@@ -116,10 +118,10 @@ void Demo1(){
 }
 
 void Demo2(){
-    bm::sparse_vector_float<bm::bvector<>> svf1;
+    sparse_vec_float svf1;
 
     //You can create a back insert iterator for sparse_vector_float like this
-    bm::sparse_vector_float<bm::bvector<>>::back_insert_iterator testBI(&svf1);
+    sparse_vec_float::back_insert_iterator testBI(&svf1);
 
     //You can add elements to the sparse_vector using add or the = operator
     //This calles push_back on the svf
@@ -133,8 +135,8 @@ void Demo2(){
     std::cout << "svf1.get(2) = " << svf1.get(2) << std::endl;
 
     //You can copy a back insert iterator or move it like this, the move disconnects the old inserter
-    bm::sparse_vector_float<bm::bvector<>>::back_insert_iterator testBI2(testBI);
-    bm::sparse_vector_float<bm::bvector<>>::back_insert_iterator testBI3(std::move(testBI));
+    sparse_vec_float::back_insert_iterator testBI2(testBI);
+    sparse_vec_float::back_insert_iterator testBI3(std::move(testBI));
     testBI2=100;
     testBI3=12345.6789;
     std::cout << "svf1.size() = " << svf1.size() << std::endl;

@@ -45,9 +45,11 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 
+typedef bm::sparse_vector_float<bm::bvector<>> sparse_vec_float;
+
 void Demo1(){
 
-    bm::sparse_vector_float<bm::bvector<>> svf1;
+    sparse_vec_float svf1;
 
     //initially the sparse_vector_float is empty
     std::cout << "svf1.empty() = " << svf1.empty() << std::endl;
@@ -81,8 +83,8 @@ void Demo1(){
 
 void Demo2(){
 
-    bm::sparse_vector_float<bm::bvector<>> svf1;
-    bm::sparse_vector_float<bm::bvector<>> svf2;
+    sparse_vec_float svf1;
+    sparse_vec_float svf2;
     float toAdd1[] = {1.0123, 2.468, 340000.56};
     float toAdd2[] = {7.000, 89000.01, 324.5006};
 

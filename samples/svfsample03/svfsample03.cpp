@@ -47,10 +47,12 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 
+typedef bm::sparse_vector_float<bm::bvector<>> sparse_vec_float;
+
 void Demo1(){
     float toAdd[] = {1.0123, -2.468, 340000.56, -7008.0, 0.900102};
 
-    bm::sparse_vector_float<bm::bvector<>> svf1;
+    sparse_vec_float svf1;
     svf1.import(toAdd, 5);
     BM_DECLARE_TEMP_BLOCK(tb)
     svf1.optimize(tb);
@@ -74,7 +76,7 @@ void Demo1(){
     svf1.import(toAdd, 5);
 
     //Copy constructor
-    bm::sparse_vector_float<bm::bvector<>> svf2(svf1);
+    sparse_vec_float svf2(svf1);
 
     //equal() checks if two svf's have the same values in them
     std::cout << "svf1.equal(svf2) = " << svf1.equal(svf2) << std::endl;
@@ -91,8 +93,8 @@ void Demo1(){
 }
 
 void Demo2(){
-    bm::sparse_vector_float<bm::bvector<>> svf1;
-    bm::sparse_vector_float<bm::bvector<>> svf2;
+    sparse_vec_float svf1;
+    sparse_vec_float svf2;
     float toAdd1[] = {1.0123, -2.468, 0.0, 0.0, 0.0, 1.5};
     float toAdd2[] = {0.0, 0.0, 0.0, -7008.0, 0.900102, 2.5};
     svf1.import(toAdd1, 6);
