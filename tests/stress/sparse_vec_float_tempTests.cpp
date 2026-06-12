@@ -727,7 +727,8 @@ void in_pos_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, s
     }
 }
 
-void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out){
+void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out)
+{
     typename sparseVecFloat::size_type sz = sv.size();
 
     svfScanner scan;
@@ -761,7 +762,8 @@ void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, s
     }
 }
 
-void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out){
+void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out)
+{
     typename sparseVecFloat::size_type sz = sv.size();
 
     svfScanner scan;
@@ -807,7 +809,8 @@ void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, s
     bv_out |= pos_exp_range;
 }
 
-void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out){
+void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
     
     if(from > to)
         std::swap(to, from);
@@ -826,19 +829,90 @@ void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_t
     }
 }
 
-void TestScanner(){
-    BM_DECLARE_TEMP_BLOCK(tb)
+void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    for(int i = 0; i < fv.size(); i++){
+        if(fv[i] >= from && fv[i] <= to){
+            bv_out.set(i);
+        }
+    }
+}
 
-    auto floatEq = [](float a, float b) {
-        return std::fabs(a - b) < 0.0001f;
-    };
+void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    sparseVecFloat::const_iterator ci = sv.begin();
+    sparseVecFloat::const_iterator ciEnd = sv.end();
 
-    auto print_time = [](const char* test_name, std::chrono::high_resolution_clock::time_point start,
-                                                std::chrono::high_resolution_clock::time_point end)
+    for (; ci != ciEnd; ci++){
+        float v = ci.value();
+        if(v >= from && v <= to){
+            bv_out.set(ci.pos());
+        }
+    }
+}
+
+void runTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to, int test){
+
+    bm::bvector<> bv_range;
+    bm::bvector<> bv_vector;
+    bm::bvector<> bv_const;
+
+    std::cout << "Test " << test << "[" << from << ", " << to << "]" << std::endl;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    in_range(testSVF, from, to, bv_range);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Scanner " << duration/1000 << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    in_range_vect(temp, from, to, bv_vector);
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Vector " << duration/1000 << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    in_range_const(testSVF, from, to, bv_const);
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Const Iterator " << duration/1000 << "ms" << std::endl;
+
+    bool range_eq_vector = (bv_range == bv_vector);
+    bool range_eq_const  = (bv_range == bv_const);
+
+    if (range_eq_vector && range_eq_const)
     {
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        std::cout << test_name << ": (" << duration / 1000.0 << " ms)\n";
-    };
+        std::cout << "Test " << test << ": ALL 3 results match\n";
+    }
+    else
+    {
+        std::cout << "Test " << test << ": MISMATCH\n";
+        if (!range_eq_vector)
+        {
+            bm::bvector<> diff;
+            diff = bv_range ^ bv_vector;   // XOR shows differing bits
+            std::cout << "  range vs vector differs at " << diff.count() << " positions\n";
+            // print first few differing positions
+            auto en = diff.first();
+            for (int i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if (!range_eq_const)
+        {
+            bm::bvector<> diff;
+            diff = bv_range ^ bv_const;
+            std::cout << "  range vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (int i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+    }
+
+    std::cout << std::endl << std::endl;
+}
+
+void TestScannerLinear(){
+    BM_DECLARE_TEMP_BLOCK(tb)
 
     int N = 20000000;
     std::vector<float> temp(N);
@@ -852,233 +926,59 @@ void TestScanner(){
     testSVF.import(temp.data(), N);
     testSVF.optimize(tb);
 
-    bm::bvector<> bv_out;
-
     // --- Test 1: large positive range ---
     {
         float from = 100.0f;
         float to   = 500.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 1 - large positive range [100, 500]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to){
-                assert(bv_out.test(i));
-            }
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 1);
     }
 
     // --- Test 2: small positive range ---
     {
         float from = 1.0f;
         float to   = 2.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 2 - small positive range [1, 2]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 2);
+        
     }
 
     // --- Test 3: large negative range ---
     {
         float from = -500.0f;
         float to   = -100.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 3 - large negative range [-500, -100]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 3);
     }
 
     // --- Test 4: small negative range ---
     {
         float from = -2.0f;
         float to   = -1.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 4 - small negative range [-2, -1]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 4);
     }
 
     // --- Test 5: range crossing zero ---
     {
         float from = -10.0f;
         float to   =  10.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 5 - range crossing zero [-10, 10]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 5);
     }
 
     // --- Test 6: range with no results ---
     {
         float from = 99999.0f;
         float to   = 99999.9f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 6 - empty range [99999, 99999.9]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        assert(bv_out.count() == 0);
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 6);
     }
 
     // --- Test 7: tiny range near zero ---
     {
         float from = -0.001f;
         float to   =  0.001f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 7 - tiny range near zero [-0.001, 0.001]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 7);
     }
-
-    // --- Test 8: inverted range ---
-    {
-        float from = 10.0f;
-        float to   =  5.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 8 - inverted range (10, 5) -> swapped to [5, 10]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= 5.0f && v <= 10.0f);
-        }
-        bv_out.clear();
-    }
-
-    // --- also time a naive float comparison for reference ---
-    {
-        float from = 100.0f;
-        float to   = 500.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        bm::bvector<> naive_out;
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                naive_out.set(i);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Naive std::vector float comparison [100, 500] (reference)", start, end);
-        std::cout << "  hits: " << naive_out.count() << "\n";
-    }
-    
 }
 
 void TestScannerRandom(){
     BM_DECLARE_TEMP_BLOCK(tb)
-
-    auto floatEq = [](float a, float b) {
-        return std::fabs(a - b) < 0.0001f;
-    };
-
-    auto print_time = [](const char* test_name, std::chrono::high_resolution_clock::time_point start,
-                                                std::chrono::high_resolution_clock::time_point end)
-    {
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        std::cout << test_name << ": (" << duration / 1000.0 << " ms)\n";
-    };
 
     int N = 20000000;
     std::vector<float> temp(N);
@@ -1106,173 +1006,134 @@ void TestScannerRandom(){
     {
         float from = 10000.0f;
         float to   = 500000.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 1 - large positive range [10k, 500k]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to){
-                assert(bv_out.test(i));
-            }
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 1);
     }
 
     // --- Test 2: small positive range ---
     {
         float from = 1.0f;
         float to   = 2.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 2 - small positive range [1, 2]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 2);
     }
 
     // --- Test 3: large negative range ---
     {
         float from = -500000.0f;
         float to   = -10000.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 3 - large negative range [-500k, -10k]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 3);
     }
 
     // --- Test 4: small negative range ---
     {
         float from = -2.0f;
         float to   = -1.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 4 - small negative range [-2, -1]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 4);
     }
 
     // --- Test 5: range crossing zero ---
     {
         float from = -10000.0f;
         float to   =  10000.0f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 5 - range crossing zero [-10k, 10k]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 5);
     }
 
     // --- Test 6: range with no results ---
     {
         float from = 99999999.0f;
         float to   = 99999999.9f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 6 - empty range [99999, 99999.9]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        assert(bv_out.count() == 0);
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 6);
     }
 
     // --- Test 7: tiny range near zero ---
     {
         float from = -0.001f;
         float to   =  0.001f;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        in_range(testSVF, from, to, bv_out);
-        auto end = std::chrono::high_resolution_clock::now();
-        print_time("Test 7 - tiny range near zero [-0.001, 0.001]", start, end);
-        std::cout << "hits: " << bv_out.count() << "\n";
-
-        bm::bvector<>::enumerator en     = bv_out.first();
-        bm::bvector<>::enumerator en_end = bv_out.end();
-        for (; en != en_end; ++en)
-        {
-            float v = temp[*en];
-            assert(v >= from && v <= to);
-        }
-        for (int i = 0; i < N; i++)
-        {
-            if (temp[i] >= from && temp[i] <= to)
-                assert(bv_out.test(i));
-        }
-        bv_out.clear();
+        runTest(temp, testSVF, from, to, 7);
     }
+}
+
+void TestScannerSkewed(){
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    int N = 20000000;
+    std::vector<float> temp(N);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    float upper = 1000000;
+    float lower = -1000000;
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    for (size_t i = 19000000; i < N; ++i) {
+        temp[i] = dis(gen);
+    }
+
+    sparseVecFloat testSVF;
+    testSVF.import(temp.data(), N);
+    testSVF.optimize(tb);
+
+    bm::bvector<> bv_out;
+
+    //Using a completely random dataset
+
+    // --- Test 1: large positive range ---
+    {
+        float from = 10000.0f;
+        float to   = 500000.0f;
+        runTest(temp, testSVF, from, to, 1);
+    }
+
+    // --- Test 2: small positive range ---
+    {
+        float from = 1.0f;
+        float to   = 2.0f;
+        runTest(temp, testSVF, from, to, 2);
+    }
+
+    // --- Test 3: large negative range ---
+    {
+        float from = -500000.0f;
+        float to   = -10000.0f;
+        runTest(temp, testSVF, from, to, 3);
+    }
+
+    // --- Test 4: small negative range ---
+    {
+        float from = -2.0f;
+        float to   = -1.0f;
+        runTest(temp, testSVF, from, to, 4);
+    }
+
+    // --- Test 5: range crossing zero ---
+    {
+        float from = -10000.0f;
+        float to   =  10000.0f;
+        runTest(temp, testSVF, from, to, 5);
+    }
+
+    // --- Test 6: range with no results ---
+    {
+        float from = 99999999.0f;
+        float to   = 99999999.9f;
+        runTest(temp, testSVF, from, to, 6);
+    }
+
+    // --- Test 7: tiny range near zero ---
+    {
+        float from = -0.001f;
+        float to   =  0.001f;
+        runTest(temp, testSVF, from, to, 7);
+    }
+}
+
+void TestScanner(){
+    std::cout << "Linear" << std::endl;
+    TestScannerLinear();
+    std::cout << "Random" << std::endl;
+    TestScannerRandom();
+    std::cout << "Skewed" << std::endl;
+    TestScannerSkewed();
 }
 
 int main(int argc, char *argv[]){
@@ -1280,5 +1141,4 @@ int main(int argc, char *argv[]){
     //SparseVecFloatStressTests();
     //SparseVecFloatSerialStressTests();
     TestScanner();
-    //TestScannerRandom();
 }
