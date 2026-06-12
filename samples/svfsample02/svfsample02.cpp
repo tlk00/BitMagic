@@ -68,20 +68,20 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 
-typedef bm::sparse_vector_float<bm::bvector<>> sparse_vec_float;
+typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bm::bvector<>>> sparseVecFloat;
 
 void Demo1(){
 
 
     //Creating and optimizing a sparse_vector_float
     float toAdd[] = {1.0123, -2.468, 340000.56};
-    sparse_vec_float svf1;
+    sparseVecFloat svf1;
     svf1.import(toAdd, 3);
     BM_DECLARE_TEMP_BLOCK(tb)
     svf1.optimize(tb);
 
     //To serialize a sparse_vector_float you need to create a sparse_vector_float_serial_layout
-    bm::sparse_vector_float_serial_layout<sparse_vec_float> layout1;
+    bm::sparse_vector_float_serial_layout<sparseVecFloat> layout1;
     
     //You can then serialize by calling sparse_vector_float's serialize method giving it the svf to serialize and the
     //layout to serialize into
@@ -124,7 +124,7 @@ void Demo1(){
 
 
 
-    sparse_vec_float svf2;
+    sparseVecFloat svf2;
     int N = 10000;
     for(int i = 0; i < N; i++){
         float f = i * 0.000123;
@@ -132,14 +132,14 @@ void Demo1(){
     }
 
     svf2.optimize(tb);
-    bm::sparse_vector_float_serial_layout<sparse_vec_float> layout2;
+    bm::sparse_vector_float_serial_layout<sparseVecFloat> layout2;
     bm::sparse_vector_float_serialize(svf2, layout2);
 
 
     buf = layout2.buf();
     //Instead of just calling deserialize, you can create a deserializer to customize the deserialization
-    bm::sparse_vector_float_deserializer<sparse_vec_float> svfD;
-    sparse_vec_float svf2_restored;
+    bm::sparse_vector_float_deserializer<sparseVecFloat> svfD;
+    sparseVecFloat svf2_restored;
 
     //This deserializer is what gets called in the deserialize(testSVF, buf) function
     //Using a customized deserializer you can instead not clear the svf you deserialize into
@@ -169,7 +169,7 @@ void Demo1(){
         mask_bv.set(maskIndices[i]);
     
     //You can also deserialize a mask of indeces
-   sparse_vec_float svf2_masked;
+   sparseVecFloat svf2_masked;
     svfD.deserialize(svf2_masked, buf, mask_bv);
 
     //The given indeces in the mask will be deserialized into the given svf, and those not in it will be set to 0
@@ -184,8 +184,8 @@ void Demo1(){
 
 void Demo2(){
     
-    sparse_vec_float svf1;
-    sparse_vec_float svf2;
+    sparseVecFloat svf1;
+    sparseVecFloat svf2;
     float toAdd1[] = {1.0123, 2.468, 340000.56};
     float toAdd2[] = {7.000, 89000.01, 324.5006};
 
@@ -202,7 +202,7 @@ void Demo2(){
     
     // From the start of a svf: bm::sparse_vector_float::const_iterator itFromSV(&svf1);
     // You can also use .begin()
-    sparse_vec_float::const_iterator itBegin = svf1.begin();
+    sparseVecFloat::const_iterator itBegin = svf1.begin();
     // From a specific element of a svf: bm::sparse_vector_float::const_iterator itFromSVPos(&svf1, 1);
     // From the last element of a svf: bm::sparse_vector_float::const_iterator itEnd   = svf1.end();
     // Copying another const_iterator: bm::sparse_vector_float::const_iterator itCopy(itBegin);
@@ -222,8 +222,8 @@ void Demo2(){
 
     // operator== and operator!= returns true/false if 2 const_iterators are at the same position 
     // of the same svf
-    sparse_vec_float::const_iterator itA = svf1.begin();
-    sparse_vec_float::const_iterator itB = svf1.begin();
+    sparseVecFloat::const_iterator itA = svf1.begin();
+    sparseVecFloat::const_iterator itB = svf1.begin();
     std::cout << "itA == itB = " << (itA == itB) << std::endl;
     std::cout << "itA != itB = " << (itA != itB) << std::endl;
 
