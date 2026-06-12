@@ -42,7 +42,7 @@ class sparse_vector_float_serial_layout
 public:
     typedef typename SV::value_type   value_type;
     typedef typename SV::bvector_type bvector_type;
-    typedef bm::sparse_vector<unsigned int, bvector_type> sparse_vector_u32;
+    typedef SV::sparse_vector_u sparse_vector_u;
 
     
     sparse_vector_float_serial_layout() BMNOEXCEPT {}
@@ -94,7 +94,7 @@ public:
     bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
     typedef typename
     bm::serializer<bvector_type>::xor_sim_model_type xor_sim_model_type;
-    typedef typename SV::sparse_vector_u32   sparse_vector_type;
+    typedef typename SV::sparse_vector_u   sparse_vector_type;
 
 public:
     sparse_vector_float_serializer() {}
@@ -196,7 +196,7 @@ class sparse_vector_float_deserializer
     typedef typename SV::bvector_type       bvector_type;
     typedef typename SV::size_type          size_type;
     typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
-    typedef typename SV::sparse_vector_u32   sparse_vector_type;
+    typedef typename SV::sparse_vector_u   sparse_vector_type;
 
 public:
     sparse_vector_float_deserializer();
@@ -450,11 +450,11 @@ template<class SV>
 void sparse_vector_float_serializer<SV>::serialize(const SV&                        sv,
                                                     sparse_vector_float_serial_layout<SV>& sv_layout)
 {
-    typedef typename SV::sparse_vector_u32 sparse_vector_u32_type;
+    typedef typename SV::sparse_vector_u sparse_vector_u_type;
 
     typename serializer<typename SV::bvector_type>::buffer signBufTemp;
-    sparse_vector_serial_layout<sparse_vector_u32_type> expLayTemp;
-    sparse_vector_serial_layout<sparse_vector_u32_type> mantLayTemp;
+    sparse_vector_serial_layout<sparse_vector_u_type> expLayTemp;
+    sparse_vector_serial_layout<sparse_vector_u_type> mantLayTemp;
 
     signSerializer_.serialize(sv.signs_, signBufTemp);
     exponentSerializer_.serialize(sv.exponents_, expLayTemp);

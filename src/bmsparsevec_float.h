@@ -46,18 +46,19 @@ namespace bm
  
    @ingroup sv
 */
-template<class BV>
+template<class SV>
 class sparse_vector_float
 {
-    template<class SV> friend class sparse_vector_float_serializer;
-    template<class SV> friend class sparse_vector_float_deserializer;
+    template<class SVect, unsigned S_FACTOR> friend class sparse_vector_scanner;
+    template<class SVect> friend class sparse_vector_float_serializer;
+    template<class SVect> friend class sparse_vector_float_deserializer;
 public:
     //
     typedef float                                   value_type;
-    typedef BV                                      bvector_type;
+    typedef SV::bvector_type                        bvector_type;
     typedef typename bvector_type::size_type        size_type;
-    typedef bm::sparse_vector<unsigned int, BV>     sparse_vector_u32;
-    typedef typename BV::allocator_type             allocator_type;
+    typedef SV                                      sparse_vector_u;
+    typedef typename bvector_type::allocator_type   allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
 
     struct statistics : public bv_statistics
@@ -70,7 +71,7 @@ public:
     class reference
     {
     public:
-        reference(sparse_vector_float<BV>& svf, size_type idx) BMNOEXCEPT
+        reference(sparse_vector_float<SV>& svf, size_type idx) BMNOEXCEPT
         : svf_(svf), idx_(idx)
         {}
 
@@ -93,7 +94,7 @@ public:
 
         //bool is_null() const BMNOEXCEPT { return svf_.is_null(idx_); }
     private:
-        sparse_vector_float<BV>& svf_;
+        sparse_vector_float<SV>& svf_;
         size_type               idx_;
     };
 
@@ -170,8 +171,8 @@ public:
     private:
         const sparse_vector_type*         sv_;      ///!< ptr to parent
         size_type                           pos_;      ///!< Position
-        sparse_vector_u32::const_iterator   exp_it_;   ///!< exponent iterator
-        sparse_vector_u32::const_iterator   mant_it_;  ///!< mantissa iterator
+        sparse_vector_u::const_iterator   exp_it_;   ///!< exponent iterator
+        sparse_vector_u::const_iterator   mant_it_;  ///!< mantissa iterator
     };
 
 
@@ -181,7 +182,7 @@ public:
     class back_insert_iterator
     {
     public:
-        typedef sparse_vector_float<BV>                    sparse_vector_type;
+        typedef sparse_vector_float<SV>                    sparse_vector_type;
         typedef typename sparse_vector_type::value_type    value_type;
 
         typedef void difference_type;
@@ -215,7 +216,7 @@ public:
         void add(value_type v);
 
     private:
-        bm::sparse_vector_float<BV>* svf_ = 0;      ///!< pointer on the parent vector
+        bm::sparse_vector_float<SV>* svf_ = 0;      ///!< pointer on the parent vector
     };
 
     const_iterator begin() const;
@@ -293,7 +294,7 @@ public:
         \param right - interval end (closed interval)
         \param set_null - set cleared values to unassigned (NULL)
     */
-    sparse_vector_float<BV>& clear_range(size_type left,
+    sparse_vector_float<SV>& clear_range(size_type left,
                                         size_type right,
                                         bool set_null = false);
 
@@ -306,7 +307,7 @@ public:
      
         \return true, if it is the same
     */
-    bool equal(const sparse_vector_float<BV>& sv,
+    bool equal(const sparse_vector_float<SV>& sv,
                bm::null_support null_able = bm::use_null) const BMNOEXCEPT;
 
     /**
@@ -328,7 +329,7 @@ public:
         \return slf reference
         @sa merge
     */
-    sparse_vector_float<BV>& join(const sparse_vector_float<BV>& svf);
+    sparse_vector_float<SV>& join(const sparse_vector_float<SV>& svf);
 
     /*!
         \brief merge with another sparse vector using OR operation
@@ -340,7 +341,7 @@ public:
         \return slf reference
         @sa join
     */
-    sparse_vector_float<BV>& merge(sparse_vector_float<BV>& svf);
+    sparse_vector_float<SV>& merge(sparse_vector_float<SV>& svf);
 
     /**
         @brief copy range of values from another sparse vector
@@ -354,7 +355,7 @@ public:
         \param slice_null - "use_null" copy range for NULL vector or
                              do not copy it
     */
-    void copy_range(const sparse_vector_float<BV>& svf,
+    void copy_range(const sparse_vector_float<SV>& svf,
                     size_type left, size_type right,
                     bm::null_support slice_null = bm::use_null);
 
@@ -386,7 +387,7 @@ public:
         @sa statistics
     */
     void calc_stat(
-        struct sparse_vector_float<BV>::statistics* st) const BMNOEXCEPT;
+        struct sparse_vector_float<SV>::statistics* st) const BMNOEXCEPT;
 
     /*! \brief syncronize internal structures, build fast access index
     */
@@ -495,10 +496,10 @@ protected:
         n_buf_size = 1024 * 8
     };
 
-private:
-    bm::bvector<>       signs_;      ///!< sign bit vector
-    sparse_vector_u32   exponents_;  ///!< exponent sparse vector
-    sparse_vector_u32   mantissas_;  ///!< mantissa sparse vector
+public:
+    bvector_type       signs_;      ///!< sign bit vector
+    sparse_vector_u   exponents_;  ///!< exponent sparse vector
+    sparse_vector_u   mantissas_;  ///!< mantissa sparse vector
     
 };
 
@@ -507,8 +508,8 @@ private:
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::sparse_vector_float(bm::null_support null_able,
+template<class SV>
+sparse_vector_float<SV>::sparse_vector_float(bm::null_support null_able,
                                              allocation_policy_type ap,
                                              size_type bv_max_size,
                                              const allocator_type&   alloc)
@@ -519,21 +520,21 @@ sparse_vector_float<BV>::sparse_vector_float(bm::null_support null_able,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::sparse_vector_float(const sparse_vector_float& svf)
+template<class SV>
+sparse_vector_float<SV>::sparse_vector_float(const sparse_vector_float& svf)
 :signs_(svf.signs_), exponents_(svf.exponents_), mantissas_(svf.mantissas_)
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::~sparse_vector_float()
+template<class SV>
+sparse_vector_float<SV>::~sparse_vector_float()
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::const_iterator sparse_vector_float<BV>::begin() const
+template<class SV>
+sparse_vector_float<SV>::const_iterator sparse_vector_float<SV>::begin() const
 {
     typedef typename sparse_vector_float::const_iterator it_type;
     return it_type(this);
@@ -541,8 +542,8 @@ sparse_vector_float<BV>::const_iterator sparse_vector_float<BV>::begin() const
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>& sparse_vector_float<BV>::operator=(const sparse_vector_float& svf)
+template<class SV>
+sparse_vector_float<SV>& sparse_vector_float<SV>::operator=(const sparse_vector_float& svf)
 {
     signs_ = svf.signs_;
     exponents_ = svf.exponents_;
@@ -552,8 +553,8 @@ sparse_vector_float<BV>& sparse_vector_float<BV>::operator=(const sparse_vector_
 
 //---------------------------------------------------------------------
 
-template<class BV>
-bool sparse_vector_float<BV>::operator==(const sparse_vector_float<BV>& svf) const
+template<class SV>
+bool sparse_vector_float<SV>::operator==(const sparse_vector_float<SV>& svf) const
 {
     if (mantissas_.size() == svf.mantissas_.size() && signs_ == svf.signs_)
     {
@@ -577,16 +578,16 @@ bool sparse_vector_float<BV>::operator==(const sparse_vector_float<BV>& svf) con
 
 //---------------------------------------------------------------------
 
-template<class BV>
-bool sparse_vector_float<BV>::operator!=(const sparse_vector_float<BV>& svf) const
+template<class SV>
+bool sparse_vector_float<SV>::operator!=(const sparse_vector_float<SV>& svf) const
 {
     return !operator==(svf);
 }
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::swap(sparse_vector_float<BV> &svf)
+template<class SV>
+void sparse_vector_float<SV>::swap(sparse_vector_float<SV> &svf)
 {
     signs_.swap(svf.signs_);
     exponents_.swap(svf.exponents_);
@@ -595,9 +596,9 @@ void sparse_vector_float<BV>::swap(sparse_vector_float<BV> &svf)
 
 //---------------------------------------------------------------------
 
-template<class BV>
-typename sparse_vector_float<BV>::value_type 
-sparse_vector_float<BV>::get(typename sparse_vector_float<BV>::size_type idx) const BMNOEXCEPT
+template<class SV>
+typename sparse_vector_float<SV>::value_type 
+sparse_vector_float<SV>::get(typename sparse_vector_float<SV>::size_type idx) const BMNOEXCEPT
 {
     unsigned int sign = signs_.test(idx) ? 1 : 0;
     unsigned int exponent = exponents_.get(idx);
@@ -613,8 +614,8 @@ sparse_vector_float<BV>::get(typename sparse_vector_float<BV>::size_type idx) co
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::push_back(value_type v)
+template<class SV>
+void sparse_vector_float<SV>::push_back(value_type v)
 {
     unsigned int bits;
     memcpy(&bits, &v, sizeof(float));
@@ -629,8 +630,8 @@ void sparse_vector_float<BV>::push_back(value_type v)
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::set(size_type idx, value_type v)
+template<class SV>
+void sparse_vector_float<SV>::set(size_type idx, value_type v)
 {
 
     unsigned int bits;
@@ -650,8 +651,8 @@ void sparse_vector_float<BV>::set(size_type idx, value_type v)
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::clear() BMNOEXCEPT
+template<class SV>
+void sparse_vector_float<SV>::clear() BMNOEXCEPT
 {
     signs_.clear();
     exponents_.clear();
@@ -660,8 +661,8 @@ void sparse_vector_float<BV>::clear() BMNOEXCEPT
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>& sparse_vector_float<BV>::clear_range(size_type left,
+template<class SV>
+sparse_vector_float<SV>& sparse_vector_float<SV>::clear_range(size_type left,
                                     size_type right,
                                     bool set_null)
 {
@@ -674,8 +675,8 @@ sparse_vector_float<BV>& sparse_vector_float<BV>::clear_range(size_type left,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-bool sparse_vector_float<BV>::equal(const sparse_vector_float<BV>& sv,
+template<class SV>
+bool sparse_vector_float<SV>::equal(const sparse_vector_float<SV>& sv,
                                     bm::null_support null_able) const BMNOEXCEPT
 {
     if (signs_.equal(sv.signs_) && exponents_.equal(sv.exponents_, null_able) && mantissas_.equal(sv.mantissas_, null_able)) return true;
@@ -684,8 +685,8 @@ bool sparse_vector_float<BV>::equal(const sparse_vector_float<BV>& sv,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-int sparse_vector_float<BV>::compare(size_type idx, const value_type val, float epsilon) const BMNOEXCEPT
+template<class SV>
+int sparse_vector_float<SV>::compare(size_type idx, const value_type val, float epsilon) const BMNOEXCEPT
 {
     value_type svf_value = get(idx);
 
@@ -699,8 +700,8 @@ int sparse_vector_float<BV>::compare(size_type idx, const value_type val, float 
 //---------------------------------------------------------------------
 
 
-template<class BV>
-sparse_vector_float<BV>& sparse_vector_float<BV>::join(const sparse_vector_float<BV>& svf)
+template<class SV>
+sparse_vector_float<SV>& sparse_vector_float<SV>::join(const sparse_vector_float<SV>& svf)
 {
     signs_ |= svf.signs_;
     exponents_.join(svf.exponents_);
@@ -711,8 +712,8 @@ sparse_vector_float<BV>& sparse_vector_float<BV>::join(const sparse_vector_float
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>& sparse_vector_float<BV>::merge(sparse_vector_float<BV>& svf)
+template<class SV>
+sparse_vector_float<SV>& sparse_vector_float<SV>::merge(sparse_vector_float<SV>& svf)
 {
     signs_.merge(svf.signs_);
     exponents_.merge(svf.exponents_);
@@ -724,8 +725,8 @@ sparse_vector_float<BV>& sparse_vector_float<BV>::merge(sparse_vector_float<BV>&
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::copy_range(const sparse_vector_float<BV>& svf,
+template<class SV>
+void sparse_vector_float<SV>::copy_range(const sparse_vector_float<SV>& svf,
                                         size_type left, size_type right,
                                         bm::null_support slice_null)
 {
@@ -737,8 +738,8 @@ void sparse_vector_float<BV>::copy_range(const sparse_vector_float<BV>& svf,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::import(const value_type* arr, 
+template<class SV>
+void sparse_vector_float<SV>::import(const value_type* arr, 
                                 size_type arr_size, 
                                 size_type offset, 
                                 bool set_not_null)
@@ -776,8 +777,8 @@ void sparse_vector_float<BV>::import(const value_type* arr,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::optimize(bm::word_t* temp_block, typename bvector_type::optmode opt_mode)
+template<class SV>
+void sparse_vector_float<SV>::optimize(bm::word_t* temp_block, typename bvector_type::optmode opt_mode)
 {
     signs_.optimize(temp_block, opt_mode);
     exponents_.optimize(temp_block, opt_mode);
@@ -786,15 +787,15 @@ void sparse_vector_float<BV>::optimize(bm::word_t* temp_block, typename bvector_
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statistics* st) const BMNOEXCEPT
+template<class SV>
+void sparse_vector_float<SV>::calc_stat(struct sparse_vector_float<SV>::statistics* st) const BMNOEXCEPT
 {
     BM_ASSERT(st);
 
     bm::bvector<>::statistics signStat;
     signs_.calc_stat(signStat);
 
-    typename sparse_vector_u32::statistics expStat, mantStat;
+    typename sparse_vector_u::statistics expStat, mantStat;
     exponents_.calc_stat(expStat);
     mantissas_.calc_stat(mantStat);
 
@@ -820,8 +821,8 @@ void sparse_vector_float<BV>::calc_stat(struct sparse_vector_float<BV>::statisti
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::sync(bool /*force*/, bool /*sync_size*/)
+template<class SV>
+void sparse_vector_float<SV>::sync(bool /*force*/, bool /*sync_size*/)
 {
     //signs_.sync_size();
     exponents_.sync();
@@ -830,9 +831,9 @@ void sparse_vector_float<BV>::sync(bool /*force*/, bool /*sync_size*/)
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::size_type 
-sparse_vector_float<BV>::extract(value_type* arr,
+template<class SV>
+sparse_vector_float<SV>::size_type 
+sparse_vector_float<SV>::extract(value_type* arr,
                                  size_type size,
                                  size_type offset,
                                  bool      zero_mem) const BMNOEXCEPT2
@@ -871,9 +872,9 @@ sparse_vector_float<BV>::extract(value_type* arr,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::size_type 
-sparse_vector_float<BV>::extract_range(value_type* arr,
+template<class SV>
+sparse_vector_float<SV>::size_type 
+sparse_vector_float<SV>::extract_range(value_type* arr,
                                        size_type size,
                                        size_type offset,
                                        bool      zero_mem) const
@@ -910,9 +911,9 @@ sparse_vector_float<BV>::extract_range(value_type* arr,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::size_type
-sparse_vector_float<BV>::decode(value_type* arr,
+template<class SV>
+sparse_vector_float<SV>::size_type
+sparse_vector_float<SV>::decode(value_type* arr,
                                 size_type   idx_from,
                                 size_type   dec_size,
                                 bool        zero_mem) const
@@ -922,9 +923,9 @@ sparse_vector_float<BV>::decode(value_type* arr,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::size_type 
-sparse_vector_float<BV>::gather(value_type* arr,
+template<class SV>
+sparse_vector_float<SV>::size_type 
+sparse_vector_float<SV>::gather(value_type* arr,
                                 const size_type* idx,
                                 size_type   size,
                                 bm::sort_order sorted_idx) const
@@ -962,8 +963,8 @@ sparse_vector_float<BV>::gather(value_type* arr,
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::freeze()
+template<class SV>
+void sparse_vector_float<SV>::freeze()
 {
     signs_.freeze();
     exponents_.freeze();
@@ -972,8 +973,8 @@ void sparse_vector_float<BV>::freeze()
 
 //---------------------------------------------------------------------
 
-template<class BV>
-bool sparse_vector_float<BV>::is_ro() const BMNOEXCEPT
+template<class SV>
+bool sparse_vector_float<SV>::is_ro() const BMNOEXCEPT
 {
     return mantissas_.is_ro();
 }
@@ -983,15 +984,15 @@ bool sparse_vector_float<BV>::is_ro() const BMNOEXCEPT
 //---------------------------------------------------------------------
 //const_iterator methods
 
-template<class BV>
-sparse_vector_float<BV>::const_iterator::const_iterator() BMNOEXCEPT
+template<class SV>
+sparse_vector_float<SV>::const_iterator::const_iterator() BMNOEXCEPT
 : sv_(0), pos_(bm::id_max), exp_it_(), mant_it_() 
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::const_iterator::const_iterator(const sparse_vector_type* sv) BMNOEXCEPT
+template<class SV>
+sparse_vector_float<SV>::const_iterator::const_iterator(const sparse_vector_type* sv) BMNOEXCEPT
 : sv_(sv), exp_it_(sv->exponents_.begin()), mant_it_(sv->mantissas_.begin())
 {
     BM_ASSERT(sv_);
@@ -1000,8 +1001,8 @@ sparse_vector_float<BV>::const_iterator::const_iterator(const sparse_vector_type
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::const_iterator::const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT
+template<class SV>
+sparse_vector_float<SV>::const_iterator::const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT
 : sv_(sv), exp_it_(sv->exponents_.begin()), mant_it_(sv->mantissas_.begin()) 
 {
     BM_ASSERT(sv_);
@@ -1010,15 +1011,15 @@ sparse_vector_float<BV>::const_iterator::const_iterator(const sparse_vector_type
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::const_iterator::const_iterator(const const_iterator& it) BMNOEXCEPT
+template<class SV>
+sparse_vector_float<SV>::const_iterator::const_iterator(const const_iterator& it) BMNOEXCEPT
 : sv_(it.sv_), pos_(it.pos_), exp_it_(it.exp_it_), mant_it_(it.mant_it_) 
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::const_iterator::value_type sparse_vector_float<BV>::const_iterator::value() const
+template<class SV>
+sparse_vector_float<SV>::const_iterator::value_type sparse_vector_float<SV>::const_iterator::value() const
 {
     unsigned int sign = sv_->signs_.test(pos_) ? 1 : 0;
     unsigned int exponent = exp_it_.value();
@@ -1034,16 +1035,16 @@ sparse_vector_float<BV>::const_iterator::value_type sparse_vector_float<BV>::con
 
 //---------------------------------------------------------------------
 
-template<class BV>
-bool sparse_vector_float<BV>::const_iterator::is_null() const BMNOEXCEPT
+template<class SV>
+bool sparse_vector_float<SV>::const_iterator::is_null() const BMNOEXCEPT
 {
     return false; // no such thing as null
 }
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
+template<class SV>
+void sparse_vector_float<SV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
 {
     pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
     exp_it_.go_to(pos_);
@@ -1052,8 +1053,8 @@ void sparse_vector_float<BV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
 
 //---------------------------------------------------------------------
 
-template<class BV>
-bool sparse_vector_float<BV>::const_iterator::advance() BMNOEXCEPT
+template<class SV>
+bool sparse_vector_float<SV>::const_iterator::advance() BMNOEXCEPT
 {
     if (pos_ == bm::id_max) // nothing to do, we are at the end
         return false;
@@ -1076,42 +1077,42 @@ bool sparse_vector_float<BV>::const_iterator::advance() BMNOEXCEPT
 //---------------------------------------------------------------------
 //back_insert_iterator methods
 
-template<class BV>
-sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator()
+template<class SV>
+sparse_vector_float<SV>::back_insert_iterator::back_insert_iterator()
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator(sparse_vector_type* svf)
+template<class SV>
+sparse_vector_float<SV>::back_insert_iterator::back_insert_iterator(sparse_vector_type* svf)
 : svf_(svf)
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator(const back_insert_iterator& bi)
+template<class SV>
+sparse_vector_float<SV>::back_insert_iterator::back_insert_iterator(const back_insert_iterator& bi)
 : svf_(bi.svf_)
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::back_insert_iterator::~back_insert_iterator()
+template<class SV>
+sparse_vector_float<SV>::back_insert_iterator::~back_insert_iterator()
 {}
 
 //---------------------------------------------------------------------
 
-template<class BV>
-void sparse_vector_float<BV>::back_insert_iterator::add(value_type v)
+template<class SV>
+void sparse_vector_float<SV>::back_insert_iterator::add(value_type v)
 {
     svf_->push_back(v);
 }
 
 //---------------------------------------------------------------------
 
-template<class BV>
-sparse_vector_float<BV>::back_insert_iterator::back_insert_iterator(back_insert_iterator&& bi) BMNOEXCEPT
+template<class SV>
+sparse_vector_float<SV>::back_insert_iterator::back_insert_iterator(back_insert_iterator&& bi) BMNOEXCEPT
 : svf_(bi.svf_)
 {
     bi.svf_ = nullptr;
