@@ -689,7 +689,7 @@ SplitFloat split_float(float f) {
 
 typedef bm::sparse_vector_scanner<bm::sparse_vector<unsigned int, bm::bvector<>>> svfScanner;
 
-void in_pos_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, bm::bvector<> &bv_out)
+void in_pos_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out)
 {
     typename sparseVecFloat::size_type sz = sv.size();
 
@@ -727,7 +727,7 @@ void in_pos_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, b
     }
 }
 
-void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, bm::bvector<> &bv_out){
+void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out){
     typename sparseVecFloat::size_type sz = sv.size();
 
     svfScanner scan;
@@ -761,7 +761,7 @@ void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, b
     }
 }
 
-void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, bm::bvector<> &bv_out){
+void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out){
     typename sparseVecFloat::size_type sz = sv.size();
 
     svfScanner scan;
@@ -807,7 +807,7 @@ void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, b
     bv_out |= pos_exp_range;
 }
 
-void in_range(sparseVecFloat sv, float from, float to, bm::bvector<> &bv_out){
+void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out){
     
     if(from > to)
         std::swap(to, from);
@@ -1279,6 +1279,6 @@ int main(int argc, char *argv[]){
     //SparseVecFloatTests();
     //SparseVecFloatStressTests();
     //SparseVecFloatSerialStressTests();
-    //TestScanner();
-    TestScannerRandom();
+    TestScanner();
+    //TestScannerRandom();
 }
