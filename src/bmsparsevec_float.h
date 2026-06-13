@@ -495,7 +495,7 @@ protected:
     enum buf_size_e{
         n_buf_size = 1024 * 8
     };
-
+//private:
 public:
     bvector_type       signs_;      ///!< sign bit vector
     sparse_vector_u   exponents_;  ///!< exponent sparse vector

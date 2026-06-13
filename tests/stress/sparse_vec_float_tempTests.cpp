@@ -687,150 +687,15 @@ SplitFloat split_float(float f) {
     };
 }
 
-typedef bm::sparse_vector_scanner<bm::sparse_vector<unsigned int, bm::bvector<>>> svfScanner;
-
-void in_pos_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out)
-{
-    typename sparseVecFloat::size_type sz = sv.size();
-
-    svfScanner scan;
-    scan.find_range(sv.exponents_, fromSplit.exponent, toSplit.exponent, bv_out);
-    bv_out -= sv.signs_;
-
-    if(bv_out.none()) return;
-
-    bm::bvector<> onBounds;
-    scan.find_eq(sv.exponents_, fromSplit.exponent, onBounds);
-    onBounds &= bv_out;
-    
-
-    if (onBounds.any()) 
-    {
-        bm::bvector<> invalid_min_mantissas;
-        scan.find_lt(sv.mantissas_, fromSplit.mantissa, invalid_min_mantissas);
-        
-        onBounds &= invalid_min_mantissas;
-        bv_out -= onBounds;
-    }
-
-    onBounds.clear();
-    scan.find_eq(sv.exponents_, toSplit.exponent, onBounds);
-    onBounds &= bv_out;
-
-    if (onBounds.any()) 
-    {
-        bm::bvector<> invalid_max_mantissas;
-        scan.find_gt(sv.mantissas_, toSplit.mantissa, invalid_max_mantissas);
-        
-        onBounds &= invalid_max_mantissas;
-        bv_out -= onBounds;
-    }
-}
-
-void in_neg_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out)
-{
-    typename sparseVecFloat::size_type sz = sv.size();
-
-    svfScanner scan;
-    scan.find_range(sv.exponents_, fromSplit.exponent, toSplit.exponent, bv_out);
-    bv_out &= sv.signs_;
-    
-    if(bv_out.none()) return;
-
-    bm::bvector<> onBounds;
-    scan.find_eq(sv.exponents_, fromSplit.exponent, onBounds);
-    onBounds &= bv_out;
-
-    if (onBounds.any()) {
-        bm::bvector<> invalid_min_mantissas;
-        scan.find_gt(sv.mantissas_, fromSplit.mantissa, invalid_min_mantissas);
-        
-        onBounds &= invalid_min_mantissas;
-        bv_out -= onBounds;
-    }
-
-    onBounds.clear();
-    scan.find_eq(sv.exponents_, toSplit.exponent, onBounds);
-    onBounds &= bv_out;
-
-    if (onBounds.any()) {
-        bm::bvector<> invalid_max_mantissas;
-        scan.find_lt(sv.mantissas_, toSplit.mantissa, invalid_max_mantissas);
-        
-        onBounds &= invalid_max_mantissas;
-        bv_out -= onBounds;
-    }
-}
-
-void in_arb_range(sparseVecFloat sv, SplitFloat fromSplit, SplitFloat toSplit, sparseVecFloat::bvector_type &bv_out)
-{
-    typename sparseVecFloat::size_type sz = sv.size();
-
-    svfScanner scan;
-    bm::bvector<> neg_exp_range;
-    
-    scan.find_range(sv.exponents_, 0, fromSplit.exponent, neg_exp_range);
-    neg_exp_range &= sv.signs_;
-
-    if (neg_exp_range.any()) {
-        bm::bvector<> neg_bounds;
-        scan.find_eq(sv.exponents_, fromSplit.exponent, neg_bounds);
-        neg_bounds &= neg_exp_range;
-
-        if (neg_bounds.any()) {
-            bm::bvector<> invalid_neg_mantissas;
-            scan.find_gt(sv.mantissas_, fromSplit.mantissa, invalid_neg_mantissas);
-            
-            neg_bounds &= invalid_neg_mantissas;
-            neg_exp_range -= neg_bounds;
-        }
-    }
-
-    bm::bvector<> pos_exp_range;
-    
-    scan.find_range(sv.exponents_, 0, toSplit.exponent, pos_exp_range);
-    pos_exp_range -= sv.signs_;
-
-    if (pos_exp_range.any()) {
-        bm::bvector<> pos_bounds;
-        scan.find_eq(sv.exponents_, toSplit.exponent, pos_bounds);
-        pos_bounds &= pos_exp_range;
-
-        if (pos_bounds.any()) {
-            bm::bvector<> invalid_pos_mantissas;
-            scan.find_gt(sv.mantissas_, toSplit.mantissa, invalid_pos_mantissas);
-            
-            pos_bounds &= invalid_pos_mantissas;
-            pos_exp_range -= pos_bounds; // Drop the invalid ones
-        }
-    }
-
-    bv_out = std::move(neg_exp_range);
-    bv_out |= pos_exp_range;
-}
-
 void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
-    
-    if(from > to)
-        std::swap(to, from);
-
-    SplitFloat fromSplit = split_float(from);
-    SplitFloat toSplit = split_float(to);
-
-    bv_out.clear();
-
-    if(fromSplit.sign == 0 && toSplit.sign == 0){
-        in_pos_range(sv, fromSplit, toSplit, bv_out);
-    }else if(fromSplit.sign == 1 && toSplit.sign == 1){
-        in_neg_range(sv, fromSplit, toSplit, bv_out);
-    }else{
-        in_arb_range(sv, fromSplit, toSplit, bv_out);
-    }
+    bm::sparse_vector_scanner<sparseVecFloat> scan;
+    scan.find_range_float(sv, from, to, bv_out);
 }
 
 void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
+    
     for(int i = 0; i < fv.size(); i++){
         if(fv[i] >= from && fv[i] <= to){
             bv_out.set(i);
@@ -924,7 +789,7 @@ void TestScannerLinear(){
 
     sparseVecFloat testSVF;
     testSVF.import(temp.data(), N);
-    testSVF.optimize(tb);
+    testSVF.optimize(tb);    
 
     // --- Test 1: large positive range ---
     {
