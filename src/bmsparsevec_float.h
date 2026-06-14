@@ -100,7 +100,10 @@ public:
 
 
     /*
-    const_iterator for traversing the sparse_vector_float
+        Const iterator for traversing the sparse_vector_float
+
+        Implementation uses the const_iterators for the exponent and mantissa sparse_vectors
+        and a reference to the sparse_vector_float for signs
     */
     class const_iterator
     {
@@ -137,11 +140,10 @@ public:
         /// \brief Get current position (value)
         value_type operator*() const  { return this->value(); }
         
-        
         /// \brief Advance to the next available value
         const_iterator& operator++() BMNOEXCEPT { this->advance(); return *this; }
+
         /// \brief Advance to the next available value
-        ///
         const_iterator operator++(int)
             { const_iterator tmp(*this);this->advance(); return tmp; }
 
@@ -169,8 +171,8 @@ public:
         bool advance() BMNOEXCEPT;
         
     private:
-        const sparse_vector_type*         sv_;      ///!< ptr to parent
-        size_type                           pos_;      ///!< Position
+        const sparse_vector_type*         sv_;       ///!< ptr to parent
+        size_type                         pos_;      ///!< Position
         sparse_vector_u::const_iterator   exp_it_;   ///!< exponent iterator
         sparse_vector_u::const_iterator   mant_it_;  ///!< mantissa iterator
     };
@@ -191,8 +193,6 @@ public:
         
     public:
         /*! @name Construction and assignment  */
-        ///@{
-
         back_insert_iterator();
         back_insert_iterator(sparse_vector_type* svf);
         back_insert_iterator(const back_insert_iterator& bi);
@@ -219,7 +219,10 @@ public:
         bm::sparse_vector_float<SV>* svf_ = 0;      ///!< pointer on the parent vector
     };
 
+    /*! \brief returns a const_iterator for this sparse_vector_float pointing to the first index */
     const_iterator begin() const;
+
+    /*! \brief returns a const_iterator for this sparse_vector_float pointing to the last index */
     const_iterator end() const { return const_iterator(this, bm::id_max); };
 
 
@@ -244,6 +247,7 @@ public:
                         size_type bv_max_size = bm::id_max,
                         const allocator_type&   alloc  = allocator_type());
 
+    /*! \brief copy constructor*/
     sparse_vector_float(const sparse_vector_float& svf);
     ~sparse_vector_float();
 
@@ -252,11 +256,11 @@ public:
     bool operator!=(const sparse_vector_float& svf) const;
 
 
-    /*! \brief swaps the elements in this sparse_vector_float and the given one */
+    /*! \brief swaps the elements in this sparse_vector_float and the given sparse_vector_float */
     void swap(sparse_vector_float& svf);
 
     /*! \brief return size of the vector
-        \return size of sparse vector
+        \return size of sparse vector float
     */
     size_type size() const BMNOEXCEPT { return this->mantissas_.size(); };
 
@@ -313,7 +317,7 @@ public:
     /**
         \brief Compare vector element with argument
      
-        \param idx - vactor element index
+        \param idx - vector element index
         \param val - argument to compare with
         \param epsilon - amount of precision
      
@@ -322,7 +326,7 @@ public:
     int compare(size_type idx, const value_type val, float epsilon = std::numeric_limits<float>::epsilon()) const BMNOEXCEPT;
 
     /*!
-        \brief join all with another sparse vector using OR operation
+        \brief join all with another sparse vector float using OR operation
             NOTE: if you join 2 floats together and one is not 0.0, ie -1.5f and -2.5f
             it is possible for the float to become NaN if the exponent becomes entirely 11111111
         \param sv - argument vector to join with
@@ -332,7 +336,7 @@ public:
     sparse_vector_float<SV>& join(const sparse_vector_float<SV>& svf);
 
     /*!
-        \brief merge with another sparse vector using OR operation
+        \brief merge with another sparse vector float using OR operation
         Merge is different from join(), because it borrows data from the source
         vector, so it gets modified.
      
@@ -344,7 +348,7 @@ public:
     sparse_vector_float<SV>& merge(sparse_vector_float<SV>& svf);
 
     /**
-        @brief copy range of values from another sparse vector
+        @brief copy range of values from another sparse vector float
      
         Copy [left..right] values from the source vector,
         clear everything outside the range.
@@ -364,7 +368,7 @@ public:
         \brief Import list of elements from a C-style array
         \param arr  - source array
         \param arr_size - source size
-        \param offset - target index in the sparse vector
+        \param offset - target index in the sparse vector float
         \param set_not_null - import should register in not null vector
     */
     void import(const value_type* arr,
@@ -479,7 +483,7 @@ public:
 
 
     /**
-        @brief Turn sparse vector into immutable mode
+        @brief Turn sparse vector float into immutable mode
         Read-only (immutable) vector uses less memory and allows faster searches.
         Before freezing it is recommenede to call optimize() to get full memory saving effect
         @sa optimize
@@ -497,7 +501,7 @@ protected:
     };
 //private:
 public:
-    bvector_type       signs_;      ///!< sign bit vector
+    bvector_type      signs_;      ///!< sign bit vector
     sparse_vector_u   exponents_;  ///!< exponent sparse vector
     sparse_vector_u   mantissas_;  ///!< mantissa sparse vector
     
@@ -505,8 +509,6 @@ public:
 
 //---------------------------------------------------------------------
 //sparse_vector_float methods
-
-//---------------------------------------------------------------------
 
 template<class SV>
 sparse_vector_float<SV>::sparse_vector_float(bm::null_support null_able,
@@ -824,7 +826,6 @@ void sparse_vector_float<SV>::calc_stat(struct sparse_vector_float<SV>::statisti
 template<class SV>
 void sparse_vector_float<SV>::sync(bool /*force*/, bool /*sync_size*/)
 {
-    //signs_.sync_size();
     exponents_.sync();
     mantissas_.sync();
 }
@@ -850,11 +851,9 @@ sparse_vector_float<SV>::extract(value_type* arr,
     {
         size_type chunk = std::min(remaining, CHUNK);
 
-        // bulk extract exponents and mantissas for this chunk
         exponents_.extract(exp_buf, chunk, pos);
         mantissas_.extract(mant_buf, chunk, pos);
 
-        // convert each element in the chunk to float
         for (size_type i = 0; i < chunk; i++)
         {
             unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
@@ -980,8 +979,6 @@ bool sparse_vector_float<SV>::is_ro() const BMNOEXCEPT
 }
 
 //---------------------------------------------------------------------
-
-//---------------------------------------------------------------------
 //const_iterator methods
 
 template<class SV>
@@ -1038,7 +1035,7 @@ sparse_vector_float<SV>::const_iterator::value_type sparse_vector_float<SV>::con
 template<class SV>
 bool sparse_vector_float<SV>::const_iterator::is_null() const BMNOEXCEPT
 {
-    return false; // no such thing as null
+    return mant_it_.is_null();
 }
 
 //---------------------------------------------------------------------
@@ -1071,8 +1068,6 @@ bool sparse_vector_float<SV>::const_iterator::advance() BMNOEXCEPT
 
     return true;
 }
-
-//---------------------------------------------------------------------
 
 //---------------------------------------------------------------------
 //back_insert_iterator methods
@@ -1117,7 +1112,6 @@ sparse_vector_float<SV>::back_insert_iterator::back_insert_iterator(back_insert_
 {
     bi.svf_ = nullptr;
 }
-
 
 }//namespace bm
 

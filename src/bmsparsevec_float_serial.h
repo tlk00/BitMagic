@@ -42,9 +42,9 @@ class sparse_vector_float_serial_layout
 public:
     typedef typename SV::value_type   value_type;
     typedef typename SV::bvector_type bvector_type;
-    typedef SV::sparse_vector_u sparse_vector_u;
+    typedef SV::sparse_vector_u       sparse_vector_u;
 
-    
+    /*! \brief constructor for serial_layout s*/
     sparse_vector_float_serial_layout() BMNOEXCEPT {}
     ~sparse_vector_float_serial_layout() {if (buf_)free(buf_);}
     sparse_vector_float_serial_layout(const sparse_vector_float_serial_layout&);
@@ -79,9 +79,9 @@ public:
     const unsigned char* data() const BMNOEXCEPT { return buf_;  }
     
 private:
-    unsigned char* buf_ = nullptr;
-    size_t size_ = 0;
-    size_t capacity_ = 0;
+    unsigned char* buf_ = nullptr;  ///!< buf storing the serialized sparse_vector_float
+    size_t size_ = 0;               ///!< how much space the buf is using
+    size_t capacity_ = 0;           ///!< how much space is allocated to the buf
 };
 
 
@@ -89,14 +89,15 @@ template<typename SV>
 class sparse_vector_float_serializer
 {
 public:
-    typedef typename SV::bvector_type       bvector_type;
+    typedef typename SV::bvector_type                bvector_type;
     typedef typename
     bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
     typedef typename
     bm::serializer<bvector_type>::xor_sim_model_type xor_sim_model_type;
-    typedef typename SV::sparse_vector_u   sparse_vector_type;
+    typedef typename SV::sparse_vector_u             sparse_vector_type;
 
 public:
+    /// @brief constructor
     sparse_vector_float_serializer() {}
 
     /**
@@ -125,7 +126,7 @@ public:
         { set_xor_ref(false); }
 
     /** Turn ON and OFF XOR compression of sparse vectors
-        Enables XOR reference compression for the sparse vector.
+        Enables XOR reference compression for the sparse vector float.
         Default: disabled
         Reference bit-vectors from the sparse vector itself
     */
@@ -162,11 +163,6 @@ public:
     */
     bool is_xor_ref() const BMNOEXCEPT;
 
-    ///@}
-
-    /*! @name Serialization                                     */
-    ///@{
-
     /*!
         \brief Serialize sparse vector into a memory buffer(s) structure
      
@@ -179,15 +175,14 @@ public:
 
 
 protected:
-    bm::serializer<bvector_type>     signSerializer_;
-    bm::sparse_vector_serializer<sparse_vector_type> exponentSerializer_;
-    bm::sparse_vector_serializer<sparse_vector_type> mantissaSerializer_;
+    bm::serializer<bvector_type>                     signSerializer_;       ///!< serializer for the sign bvector
+    bm::sparse_vector_serializer<sparse_vector_type> exponentSerializer_;   ///!< serializer for the exponent sparse_vector
+    bm::sparse_vector_serializer<sparse_vector_type> mantissaSerializer_;   ///!< serializer for the mantissa sparse_vector
     
 };
 
 /**
     sparse vector de-serializer
-
 */
 template<typename SV>
 class sparse_vector_float_deserializer
@@ -199,6 +194,7 @@ class sparse_vector_float_deserializer
     typedef typename SV::sparse_vector_u   sparse_vector_type;
 
 public:
+    /// @brief constructor
     sparse_vector_float_deserializer();
     ~sparse_vector_float_deserializer();
 
@@ -235,9 +231,9 @@ public:
                      bool clear_sv = true);
 
     /*!
-        Deserialize sparse vector for the range [from, to]
+        Deserialize sparse vector float for the range [from, to]
 
-        @param sv - [out] target sparse vector to populate
+        @param sv - [out] target sparse vector float to populate
         @param buf - input BLOB  source memory pointer
         @param from - start vector index for deserialization range
         @param to - end vector index for deserialization range
@@ -272,16 +268,16 @@ public:
                      const bvector_type& mask_bv);
 
 private:
-    bm::sparse_vector_deserializer<sparse_vector_type> exponentDeserializer_;
-    bm::sparse_vector_deserializer<sparse_vector_type> mantissaDeserializer_;
+    bm::sparse_vector_deserializer<sparse_vector_type> exponentDeserializer_;   ///!< Exponents deserializer
+    bm::sparse_vector_deserializer<sparse_vector_type> mantissaDeserializer_;   ///!< Mantissas deserializer
 };
 
 //---------------------------------------------------------------------
 
 /*!
-    \brief Serialize sparse vector into a memory buffer(s) structure
+    \brief Serialize sparse vector float into a memory buffer(s) structure
  
-    \param sv         - sparse vector to serialize
+    \param sv         - sparse vector float to serialize
     \param sv_layout  - buffer structure to keep the result
     \param temp_block - temporary buffer 
                         (allocate with BM_DECLARE_TEMP_BLOCK(x) for speed)
@@ -299,7 +295,7 @@ void sparse_vector_float_serialize(
 {
     (void)temp_block;
     bm::sparse_vector_float_serializer<SV> sv_serializer;
-//    sv_serializer.enable_xor_compression();
+//  sv_serializer.enable_xor_compression();
     sv_serializer.serialize(sv, sv_layout);
 }
 
