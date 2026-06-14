@@ -1798,8 +1798,8 @@ public:
                 if (gap_len_sum < cnt_sum) // lens are smaller than BC
                 {
                     unsigned diff = cnt_sum - gap_len_sum;
-                    float cut_off = cnt_sum * 0.14f;
-                    if (diff < cut_off)
+                    float cut_off = float(cnt_sum) * 0.14f;
+                    if (float(diff) < cut_off)
                         return true;
                     return false;
                 }

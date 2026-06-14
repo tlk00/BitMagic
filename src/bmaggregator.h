@@ -2909,7 +2909,7 @@ size_t aggregator<BV>::pipeline<Opt>::compute_run_batch() const BMNOEXCEPT
 
     size_t bv_count = unique_vectors();
     size_t args_total = arg_vect_.size(); // number of arg groups
-    if ((bv_count < cached_vect) || (args_total < 2)) // worst case fit in L2
+    if ((float(bv_count) < cached_vect) || (args_total < 2)) // worst case fit in L2
         return args_total;
 
     size_t avg_vect_per_group = total_vect_ / args_total;
