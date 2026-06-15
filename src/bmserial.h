@@ -2361,7 +2361,6 @@ serializer<BV>::find_bit_best_encoding_l5(
             }
             break;
         default:
-            BM_ASSERT(0);
             break;
         } // switch
     }
