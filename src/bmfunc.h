@@ -6612,7 +6612,7 @@ void bit_block_erase(bm::word_t* block,
         unsigned mask_r = bm::mask_r_u32(nbit);
         bm::word_t w = block[nword] & mask_r;
         bm::word_t wl = block[nword] & ~mask_r;
-        w &= ~(1 << nbit); // clear the removed bit
+        w &= ~(1u << nbit); // clear the removed bit
         w >>= 1u;
         w |= wl | (co_flag << 31u);
         block[nword] = w;
@@ -9906,7 +9906,7 @@ void bit_block_ex0_split(unsigned* BMRESTRICT block,
             nword = unsigned(i >> bm::set_word_shift); // nword
             bitpos = i & bm::set_word_mask;
             w = block[nword];
-            w &= ~(1 << bitpos); // clear bit
+            w &= ~(1u << bitpos); // clear bit
             block[nword] = w;
             arr_ex0[ex0_cnt] = (T)i; ++ex0_cnt;
             ++i;
@@ -11257,8 +11257,8 @@ bool compute_wdr_params(const T* arr, unsigned sz, bm::word_t* tb_wflags,
 
             unsigned total_windows = (sz + w_size - 1) / w_size;
             float bits_extra = float(total_windows + 1 + 8 + 8);
-            float save_per_window = 0.15f * w_size; // apprx .2 bits per element
-            float total_save = save_per_window * wcnt;
+            float save_per_window = 0.15f * float(w_size); // apprx .2 bits per element
+            float total_save = save_per_window * float(wcnt);
             total_save -= bits_extra;
             if (total_save > 0.0f) // positive savings
             {

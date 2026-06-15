@@ -2360,6 +2360,8 @@ serializer<BV>::find_bit_best_encoding_l5(
                         bm::set_block_arr_bienc : bm::set_block_arr_bienc_inv;
             }
             break;
+        default:
+            break;
         } // switch
     }
     return model;
