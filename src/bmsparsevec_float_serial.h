@@ -40,9 +40,9 @@ class sparse_vector_float_serial_layout
     template<class SVT> friend class sparse_vector_float_serializer;
     template<class SVT> friend class sparse_vector_float_deserializer;
 public:
-    typedef typename SV::value_type   value_type;
-    typedef typename SV::bvector_type bvector_type;
-    typedef SV::sparse_vector_u       sparse_vector_u;
+    typedef typename SV::value_type         value_type;
+    typedef typename SV::bvector_type       bvector_type;
+    typedef typename SV::sparse_vector_u    sparse_vector_u;
 
     /*! \brief constructor for serial_layout s*/
     sparse_vector_float_serial_layout() BMNOEXCEPT {}

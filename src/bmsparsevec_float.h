@@ -55,7 +55,7 @@ class sparse_vector_float
 public:
     //
     typedef float                                   value_type;
-    typedef SV::bvector_type                        bvector_type;
+    typedef typename SV::bvector_type               bvector_type;
     typedef typename bvector_type::size_type        size_type;
     typedef SV                                      sparse_vector_u;
     typedef typename bvector_type::allocator_type   allocator_type;
@@ -171,10 +171,10 @@ public:
         bool advance() BMNOEXCEPT;
         
     private:
-        const sparse_vector_type*         sv_;       ///!< ptr to parent
-        size_type                         pos_;      ///!< Position
-        sparse_vector_u::const_iterator   exp_it_;   ///!< exponent iterator
-        sparse_vector_u::const_iterator   mant_it_;  ///!< mantissa iterator
+        const sparse_vector_type*         sv_;                ///!< ptr to parent
+        size_type                         pos_;               ///!< Position
+        typename sparse_vector_u::const_iterator   exp_it_;   ///!< exponent iterator
+        typename sparse_vector_u::const_iterator   mant_it_;  ///!< mantissa iterator
     };
 
 
@@ -536,7 +536,7 @@ sparse_vector_float<SV>::~sparse_vector_float()
 //---------------------------------------------------------------------
 
 template<class SV>
-sparse_vector_float<SV>::const_iterator sparse_vector_float<SV>::begin() const
+typename sparse_vector_float<SV>::const_iterator sparse_vector_float<SV>::begin() const
 {
     typedef typename sparse_vector_float::const_iterator it_type;
     return it_type(this);
@@ -560,7 +560,7 @@ bool sparse_vector_float<SV>::operator==(const sparse_vector_float<SV>& svf) con
 {
     if (mantissas_.size() == svf.mantissas_.size() && signs_ == svf.signs_)
     {
-        for (size_t i = 0; i < mantissas_.size(); i++)
+        for (size_type i = 0; i < mantissas_.size(); i++)
         {
             unsigned int thisSVF = exponents_.get(i);
             unsigned int otherSVF = svf.exponents_.get(i);
@@ -833,7 +833,7 @@ void sparse_vector_float<SV>::sync(bool /*force*/, bool /*sync_size*/)
 //---------------------------------------------------------------------
 
 template<class SV>
-sparse_vector_float<SV>::size_type 
+typename sparse_vector_float<SV>::size_type 
 sparse_vector_float<SV>::extract(value_type* arr,
                                  size_type size,
                                  size_type offset,
@@ -846,13 +846,14 @@ sparse_vector_float<SV>::extract(value_type* arr,
 
     size_type remaining = size;
     size_type pos = offset;
+    size_type toReturn = 0;
 
     while (remaining > 0)
     {
         size_type chunk = std::min(remaining, CHUNK);
 
-        exponents_.extract(exp_buf, chunk, pos);
-        mantissas_.extract(mant_buf, chunk, pos);
+        toReturn += exponents_.extract(exp_buf, chunk, pos, zero_mem);
+        toReturn += mantissas_.extract(mant_buf, chunk, pos, zero_mem);
 
         for (size_type i = 0; i < chunk; i++)
         {
@@ -867,12 +868,13 @@ sparse_vector_float<SV>::extract(value_type* arr,
         pos       += chunk;
         remaining -= chunk;
     }
+    return toReturn;
 }
 
 //---------------------------------------------------------------------
 
 template<class SV>
-sparse_vector_float<SV>::size_type 
+typename sparse_vector_float<SV>::size_type 
 sparse_vector_float<SV>::extract_range(value_type* arr,
                                        size_type size,
                                        size_type offset,
@@ -885,13 +887,14 @@ sparse_vector_float<SV>::extract_range(value_type* arr,
 
     size_type remaining = size;
     size_type pos = offset;
+    size_type toReturn = 0;
 
     while (remaining > 0)
     {
         size_type chunk = std::min(remaining, CHUNK);
 
-        exponents_.extract_range(exp_buf, chunk, pos);
-        mantissas_.extract_range(mant_buf, chunk, pos);
+        toReturn += exponents_.extract_range(exp_buf, chunk, pos, zero_mem);
+        toReturn += mantissas_.extract_range(mant_buf, chunk, pos, zero_mem);
 
         for (size_type i = 0; i < chunk; i++)
         {
@@ -906,12 +909,13 @@ sparse_vector_float<SV>::extract_range(value_type* arr,
         pos       += chunk;
         remaining -= chunk;
     }
+    return toReturn;
 }
 
 //---------------------------------------------------------------------
 
 template<class SV>
-sparse_vector_float<SV>::size_type
+typename sparse_vector_float<SV>::size_type
 sparse_vector_float<SV>::decode(value_type* arr,
                                 size_type   idx_from,
                                 size_type   dec_size,
@@ -923,7 +927,7 @@ sparse_vector_float<SV>::decode(value_type* arr,
 //---------------------------------------------------------------------
 
 template<class SV>
-sparse_vector_float<SV>::size_type 
+typename sparse_vector_float<SV>::size_type 
 sparse_vector_float<SV>::gather(value_type* arr,
                                 const size_type* idx,
                                 size_type   size,
@@ -1016,7 +1020,8 @@ sparse_vector_float<SV>::const_iterator::const_iterator(const const_iterator& it
 //---------------------------------------------------------------------
 
 template<class SV>
-sparse_vector_float<SV>::const_iterator::value_type sparse_vector_float<SV>::const_iterator::value() const
+typename sparse_vector_float<SV>::const_iterator::value_type
+sparse_vector_float<SV>::const_iterator::value() const
 {
     unsigned int sign = sv_->signs_.test(pos_) ? 1 : 0;
     unsigned int exponent = exp_it_.value();

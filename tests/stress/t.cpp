@@ -40593,11 +40593,12 @@ void test_str_sv_des_fnc()
     }
 }
 
-typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bm::bvector<>>> sparseVecFloat;
+typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVecFloat;
 
-void SparseVecFloatConstIteratorTests(){
-    
-    float toAdd[] = {1.0123, 2.468, 340000.56};
+void SparseVecFloatConstIteratorTests()
+{
+    std::cout << "-------------------------SparseVecFloatConstIteratorTests()" << std::endl;
+    float toAdd[] = {1.0123f, 2.468f, 340000.56f};
 
     sparseVecFloat testSVF;
     testSVF.import(toAdd, 3);
@@ -40700,31 +40701,38 @@ void SparseVecFloatConstIteratorTests(){
 
     // --- full iteration ---
     int idx = 0;
-    for (auto it = testSVF.begin(); it != testSVF.end(); ++it, ++idx) {
+    for (auto it = testSVF.begin(); it != testSVF.end(); ++it, ++idx)
+    {
         assert(floatEq(*it, toAdd[idx]));
     }
     assert(idx == 3);
 }
 
-void SparseVecFloatImportTest(){
-    int N = 128000;
+void SparseVecFloatImportTest()
+{
+    std::cout << "-------------------------SparseVecFloatImportTest()" << std::endl;
+    sparseVecFloat::size_type N = 128000;
     float m = 0.5f;
     sparseVecFloat testSVF;
     std::vector<float> temp(N*2);
 
-    for(int i = 0; i < N; i++){
-        temp[i] = (i * 0.001) * m;
+    for(sparseVecFloat::size_type i = 0; i < N; i++)
+    {
+        temp[i] = (i * 0.001f) * m;
     }
-    for(int i = N; i < N*2; i++){
-        temp[i] = -1*(i * 0.001) * m;
+    for(sparseVecFloat::size_type i = N; i < N*2; i++)
+    {
+        temp[i] = -1.0f*(i * 0.001f) * m;
     }
     
     testSVF.import(temp.data(), N);
     
-    int errorCount;
-    for(int i = 0; i < N; i++){
+    int errorCount = 0;
+    for(sparseVecFloat::size_type i = 0; i < N; i++)
+    {
         float err = std::fabs(temp[i] - testSVF.get(i));
-        if (err > 0.0f) {
+        if (err > 0.0f) 
+        {
             errorCount++;
         }
     }
@@ -40734,9 +40742,11 @@ void SparseVecFloatImportTest(){
     testSVF.optimize(tb);
     
     errorCount = 0;
-    for(int i = 0; i < N; i++){
+    for(sparseVecFloat::size_type i = 0; i < N; i++)
+    {
         float err = std::fabs(temp[i] - testSVF.get(i));
-        if (err > 0.0f) {
+        if (err > 0.0f)
+        {
             errorCount++;
         }
     }
@@ -40744,12 +40754,15 @@ void SparseVecFloatImportTest(){
     assert(errorCount == 0);
 }
 
-void SparseVecFloatGeneralTests(){
-    auto floatEq = [](float a, float b) {
+void SparseVecFloatGeneralTests()
+{
+    std::cout << "-------------------------SparseVecFloatGeneralTests()" << std::endl;
+    auto floatEq = [](float a, float b)
+    {
         return std::fabs(a - b) < 0.001f;
     };
 
-    float toAdd[] = {1.0123, -2.468, 340000.56};
+    float toAdd[] = {1.0123f, -2.468f, 340000.56f};
 
     sparseVecFloat testSVF;
     
@@ -40819,12 +40832,15 @@ void SparseVecFloatGeneralTests(){
     assert(floatEq(svA.get(2), aVals[2]));
 }
 
-void SparseVecFloatSerializeTest(){
-    auto floatEq = [](float a, float b) {
+void SparseVecFloatSerializeTest()
+{
+    std::cout << "-------------------------SparseVecFloatSerializeTest()" << std::endl;
+    auto floatEq = [](float a, float b)
+    {
         return std::fabs(a - b) < 0.001f;
     };
 
-    float toAdd[] = {1.0123, -2.468, 340000.56};
+    float toAdd[] = {1.0123f, -2.468f, 340000.56f};
 
     sparseVecFloat testSVF;
     testSVF.import(toAdd, 3);
@@ -40844,9 +40860,10 @@ void SparseVecFloatSerializeTest(){
     assert(floatEq(testSVF.get(2), toAdd[2]));
 
     sparseVecFloat testSVF2;
-    int N = 10000;
-    for(int i = 0; i < N; i++){
-        float f = i * 0.000123;
+    sparseVecFloat::size_type N = 10000;
+    for (sparseVecFloat::size_type i = 0; i < N; i++)
+    {
+        float f = i * 0.000123f;
         testSVF2.push_back(f);
     }
 
@@ -40860,26 +40877,29 @@ void SparseVecFloatSerializeTest(){
     testDeserializer.deserialize_range(testSVF2_restored, buf, 300, 400, true);
     
     int errorCount = 0;
-    for (int i = 300; i <= 400; i++) {
-        float f = i * 0.000123;
-        if (!floatEq(testSVF2_restored.get(i), f)){
+    for (sparseVecFloat::size_type i = 300; i <= 400; i++)
+    {
+        float f = i * 0.000123f;
+        if (!floatEq(testSVF2_restored.get(i), f))
+        {
             errorCount++;
         }
     }
     assert(errorCount == 0);
 
     bm::bvector<> mask_bv;
-    int maskIndices[] = {0, 1, 50, 100, 500, 999, 5000, 9999};
-    int maskSize = sizeof(maskIndices) / sizeof(maskIndices[0]);
-    for (int i = 0; i < maskSize; i++)
+    sparseVecFloat::size_type maskIndices[] = {0, 1, 50, 100, 500, 999, 5000, 9999};
+    sparseVecFloat::size_type maskSize = sizeof(maskIndices) / sizeof(maskIndices[0]);
+    for (sparseVecFloat::size_type i = 0; i < maskSize; i++)
         mask_bv.set(maskIndices[i]);
     
     sparseVecFloat testSVF2_masked;
     testDeserializer.deserialize(testSVF2_masked, buf, mask_bv);
 
     errorCount = 0;
-    for (int i = 0; i < maskSize; i++) {
-        int idx   = maskIndices[i];
+    for (sparseVecFloat::size_type i = 0; i < maskSize; i++)
+    {
+        sparseVecFloat::size_type idx   = maskIndices[i];
         float f   = idx * 0.000123f;
         if (!floatEq(testSVF2_masked.get(idx), f))
             errorCount++;
@@ -40891,12 +40911,15 @@ void SparseVecFloatSerializeTest(){
     assert(floatEq(testSVF2_masked.get(1000), 0.0f));
 }
 
-void SparseVecFloatRangeTests(){
-    auto floatEq = [](float a, float b) {
+void SparseVecFloatRangeTests()
+{
+    std::cout << "-------------------------SparseVecFloatRangeTests()" << std::endl;
+    auto floatEq = [](float a, float b)
+    {
         return std::fabs(a - b) < 0.001f;
     };
 
-    float toAdd[] = {1.0123, -2.468, 340000.56, -7008.0, 0.900102};
+    float toAdd[] = {1.0123f, -2.468f, 340000.56f, -7008.0f, 0.900102f};
 
     sparseVecFloat testSVF;
     testSVF.import(toAdd, 5);
@@ -40931,8 +40954,8 @@ void SparseVecFloatRangeTests(){
 
     sparseVecFloat svf1;
     sparseVecFloat svf2;
-    float toAdd1[] = {1.0123, -2.468, 0.0, 0.0, 0.0, 1.5};
-    float toAdd2[] = {0.0, 0.0, 0.0, -7008.0, 0.900102, 2.5};
+    float toAdd1[] = {1.0123f, -2.468f, 0.0f, 0.0f, 0.0f, 1.5f};
+    float toAdd2[] = {0.0f, 0.0f, 0.0f, -7008.0f, 0.900102f, 2.5f};
     svf1.import(toAdd1, 6);
     svf2.import(toAdd2, 6);
     svf1.optimize(tb);
@@ -40942,7 +40965,7 @@ void SparseVecFloatRangeTests(){
     assert(svf1.size() == 6);
     assert(floatEq(svf1.get(0), toAdd[0]));
     assert(floatEq(svf1.get(1), toAdd[1]));
-    assert(floatEq(svf1.get(2), 0.0));
+    assert(floatEq(svf1.get(2), 0.0f));
     assert(floatEq(svf1.get(3), toAdd[3]));
     assert(floatEq(svf1.get(4), toAdd[4]));
     assert(svf1.get(5) != svf1.get(5));
@@ -40958,7 +40981,7 @@ void SparseVecFloatRangeTests(){
     assert(svf1.size() == 6);
     assert(floatEq(svf1.get(0), toAdd[0]));
     assert(floatEq(svf1.get(1), toAdd[1]));
-    assert(floatEq(svf1.get(2), 0.0));
+    assert(floatEq(svf1.get(2), 0.0f));
     assert(floatEq(svf1.get(3), toAdd[3]));
     assert(floatEq(svf1.get(4), toAdd[4]));
     assert(svf1.get(5) != svf1.get(5));
@@ -40973,30 +40996,34 @@ void SparseVecFloatRangeTests(){
 
     svf1.copy_range(svf2, 2, 4);
     assert(svf1.size() == 6);
-    assert(floatEq(svf1.get(0), 0.0));
-    assert(floatEq(svf1.get(1), 0.0));
-    assert(floatEq(svf1.get(2), 0.0));
+    assert(floatEq(svf1.get(0), 0.0f));
+    assert(floatEq(svf1.get(1), 0.0f));
+    assert(floatEq(svf1.get(2), 0.0f));
     assert(floatEq(svf1.get(3), toAdd[3]));
     assert(floatEq(svf1.get(4), toAdd[4]));
-    assert(floatEq(svf1.get(5), 0.0));
+    assert(floatEq(svf1.get(5), 0.0f));
 }
 
-void SparseVecFloatExtractionTests(){
-
-    auto floatEq = [](float a, float b) {
+void SparseVecFloatExtractionTests()
+{
+    std::cout << "-------------------------SparseVecFloatExtractionTests()" << std::endl;
+    auto floatEq = [](float a, float b)
+    {
         return std::fabs(a - b) < 0.001f;
     };
 
-    int N = 128000;
+    sparseVecFloat::size_type N = 128000;
     float m = 0.5f;
     sparseVecFloat testSVF;
     std::vector<float> temp(N*2);
 
-    for(int i = 0; i < N; i++){
-        temp[i] = (i * 0.001) * m;
+    for (sparseVecFloat::size_type i = 0; i < N; i++)
+    {
+        temp[i] = (i * 0.001f) * m;
     }
-    for(int i = N; i < N*2; i++){
-        temp[i] = -1*(i * 0.001) * m;
+    for (sparseVecFloat::size_type i = N; i < N*2; i++)
+    {
+        temp[i] = -1*(i * 0.001f) * m;
     }
 
     testSVF.import(temp.data(), N*2);
@@ -41006,8 +41033,10 @@ void SparseVecFloatExtractionTests(){
     testSVF.decode(testExtract.data(), 0, N*2);
 
     int errorCount = 0;
-    for (int i = 0; i < N*2; i++) {
-        if (!floatEq(testExtract[i], temp[i])){
+    for (sparseVecFloat::size_type i = 0; i < N*2; i++)
+    {
+        if (!floatEq(testExtract[i], temp[i]))
+        {
             errorCount++;
         }
     }
@@ -41018,15 +41047,18 @@ void SparseVecFloatExtractionTests(){
     testSVF.extract_range(testExtractRange.data(), 48000, 16000);
 
     errorCount = 0;
-    for (int i = 16000; i < 64000; i++) {
-        if (!floatEq(testExtractRange[i-16000], temp[i])){
+    for (sparseVecFloat::size_type i = 16000; i < 64000; i++)
+    {
+        if (!floatEq(testExtractRange[i-16000], temp[i]))
+        {
             errorCount++;
         }
     }
     assert(errorCount == 0);
 
     bm::id_t gatherIndeces[1024];
-    for(int i = 0; i < 1024; i++){
+    for(sparseVecFloat::size_type i = 0; i < 1024; i++)
+    {
         gatherIndeces[i] = rand() % 128000;
     }
 
@@ -41034,8 +41066,10 @@ void SparseVecFloatExtractionTests(){
     testSVF.gather(testGather.data(), gatherIndeces, 1024, bm::BM_UNKNOWN);
 
     errorCount = 0;
-    for (int i = 0; i < 1024; i++) {
-        if (!floatEq(testGather[i], temp[gatherIndeces[i]])){
+    for (sparseVecFloat::size_type i = 0; i < 1024; i++)
+    {
+        if (!floatEq(testGather[i], temp[gatherIndeces[i]]))
+        {
             errorCount++;
             std::cout << "Mismatch at sample " << i 
                   << " (Index " << gatherIndeces[i] << "): "
@@ -41046,9 +41080,11 @@ void SparseVecFloatExtractionTests(){
     assert(errorCount == 0);
 }
 
-void SparseVecFloatBackInsertTests(){
-
-    auto floatEq = [](float a, float b) {
+void SparseVecFloatBackInsertTests()
+{
+    std::cout << "-------------------------SparseVecFloatBackInsertTests()" << std::endl;
+    auto floatEq = [](float a, float b)
+    {
         return std::fabs(a - b) < 0.001f;
     };
 
@@ -41056,27 +41092,187 @@ void SparseVecFloatBackInsertTests(){
 
     sparseVecFloat::back_insert_iterator testBI(&testSVF);
 
-    testBI.add(1.0023);
+    testBI.add(1.0023f);
     assert(testSVF.size() == 1);
     assert(floatEq(testSVF.get(0), 1.0023));
 
-    testBI.add(400005.6);
+    testBI.add(400005.6f);
     assert(testSVF.size() == 2);
     assert(floatEq(testSVF.get(1), 400005.6));
 
     sparseVecFloat::back_insert_iterator testBI2(testBI);
-    testBI2=78.9;
+    testBI2=78.9f;
     assert(testSVF.size() == 3);
     assert(floatEq(testSVF.get(2), 78.9));
 
     sparseVecFloat::back_insert_iterator testBI3(std::move(testBI));
-    testBI3=12345.6789;
+    testBI3=12345.6789f;
     assert(testSVF.size() == 4);
     assert(floatEq(testSVF.get(3), 12345.6789));
 
 }
 
-void SparseVecFloatTests(){
+void SparseVecFloatStressTests(){
+    std::cout << "-------------------------SparseVecFloatStressTests()" << std::endl;
+    //Random data import and get test
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dist(-1000000.0f, 1000000.0f);
+
+        sparseVecFloat::size_type N = 1000000;
+        std::vector<float> data(N);
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+            data[i] = dist(gen);
+
+        sparseVecFloat sv;
+        sv.import(data.data(), N);
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv.optimize(tb);
+
+        int errorCount = 0;
+        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+            float restored = sv.get(i);
+            if (std::fabs(restored - data[i]) > 0.001f){
+                errorCount++;
+            }
+        }
+        assert(errorCount == 0);
+        assert((int)sv.size() == N);
+    }
+
+    //Random data push back and iterator tests
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dist(-500.0f, 500.0f);
+
+        sparseVecFloat::size_type N = 500000;
+        std::vector<float> data(N);
+        sparseVecFloat sv;
+        for (sparseVecFloat::size_type i = 0; i < N; i++){
+            data[i] = dist(gen);
+            sv.push_back(data[i]);
+        }
+
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv.optimize(tb);
+
+        // validate via iterator
+        sparseVecFloat::size_type idx = 0;
+        int errorCount = 0;
+        for (auto it = sv.begin(); it != sv.end(); ++it, ++idx) {
+            if (std::fabs(*it - data[idx]) > 0.001f)
+                errorCount++;
+        }
+        assert(errorCount == 0);
+        assert(idx == N);
+    }
+
+    //Decaying Sinusoid Test
+    {
+        sparseVecFloat::size_type N = 2000000;
+        std::vector<float> data(N);
+        const double e = std::exp(1.0);
+        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+            float t = 0.001f * i;
+            data[i] = 100.0f * (float)pow(e, -1.0 * t)
+                      * (cos(5.0f * t + 1.0f) + sin(5.0f * t + 1.0f));
+        }
+
+        sparseVecFloat sv;
+        sv.import(data.data(), N);
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv.optimize(tb);
+
+        int errorCount = 0;
+        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+            if (std::fabs(sv.get(i) - data[i]) > 0.001f)
+                errorCount++;
+        }
+        assert((int)sv.size() == N);
+    }
+
+}
+
+void SparseVecFloatSerialStressTests(){
+    std::cout << "-------------------------SparseVecFloatSerialStressTests()" << std::endl;
+    //Serializing then deserializing a large random data set
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dist(-1000000.0f, 1000000.0f);
+
+        sparseVecFloat::size_type N = 1000000;
+        std::vector<float> data(N);
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+            data[i] = dist(gen);
+
+        sparseVecFloat sv;
+        sv.import(data.data(), N);
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv.optimize(tb);
+
+        bm::sparse_vector_float_serial_layout<sparseVecFloat> testLayout;
+        bm::sparse_vector_float_serialize(sv, testLayout);
+
+        // deserialize into a fresh vector
+        sparseVecFloat sv_restored;
+        const unsigned char* buf = testLayout.buf();
+        bm::sparse_vector_float_deserialize(sv_restored, buf);
+
+        // validate
+        assert((int)sv_restored.size() == N);
+        int errorCount = 0;
+        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+            if (std::fabs(sv_restored.get(i) - data[i]) > 0.001f)
+                errorCount++;
+        }
+        assert(errorCount == 0);
+    }
+
+    // Decaying Sinusoid Compression Test
+    {
+        sparseVecFloat::size_type N = 2000000;
+        std::vector<float> data(N);
+        const double e = std::exp(1.0);
+        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+            float t = 0.001f * i;
+            data[i] = 100.0f * (float)pow(e, -1.0 * t)
+                      * (cos(5.0f * t + 1.0f) + sin(5.0f * t + 1.0f));
+        }
+
+        sparseVecFloat sv;
+        sv.import(data.data(), N);
+        BM_DECLARE_TEMP_BLOCK(tb)
+        sv.optimize(tb);
+
+        bm::sparse_vector_float_serial_layout<sparseVecFloat> testLayout;
+        bm::sparse_vector_float_serialize(sv, testLayout);
+
+        // deserialize into a fresh vector
+        sparseVecFloat sv_restored;
+        const unsigned char* buf = testLayout.buf();
+        bm::sparse_vector_float_deserialize(sv_restored, buf);
+
+        assert((int)sv_restored.size() == N);
+        int errorCount = 0;
+        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+            if (std::fabs(sv_restored.get(i) - data[i]) > 0.001f)
+                errorCount++;
+        }
+        assert(errorCount == 0);
+
+        // check that serialized size is smaller than raw size
+        size_t rawSize        = N * sizeof(float);
+        size_t serializedSize = testLayout.size();
+        assert(serializedSize < rawSize);
+    }
+}
+
+void SparseVecFloatTests()
+{
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
     SparseVecFloatImportTest();
@@ -41084,7 +41280,322 @@ void SparseVecFloatTests(){
     SparseVecFloatRangeTests();
     SparseVecFloatExtractionTests();
     SparseVecFloatBackInsertTests();
+    SparseVecFloatStressTests();
+    SparseVecFloatSerialStressTests();
     std::cout << "Sparse Vector Float Tests Complete" << std::endl;
+}
+
+void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    bm::sparse_vector_scanner<sparseVecFloat> scan;
+    scan.find_range_float(sv, from, to, bv_out);
+}
+
+void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    
+    for(int i = 0; i < fv.size(); i++){
+        if(fv[i] >= from && fv[i] <= to){
+            bv_out.set(i);
+        }
+    }
+}
+
+void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    sparseVecFloat::const_iterator ci = sv.begin();
+    sparseVecFloat::const_iterator ciEnd = sv.end();
+
+    for (; ci != ciEnd; ci++){
+        float v = ci.value();
+        if(v >= from && v <= to){
+            bv_out.set(ci.pos());
+        }
+    }
+}
+
+void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to, int test){
+
+    sparseVecFloat::bvector_type bv_range;
+    sparseVecFloat::bvector_type bv_vector;
+    sparseVecFloat::bvector_type bv_const;
+
+    std::cout << "Test " << test << "[" << from << ", " << to << "]" << std::endl;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    in_range(testSVF, from, to, bv_range);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Scanner " << duration/1000 << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    in_range_vect(temp, from, to, bv_vector);
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Vector " << duration/1000 << "ms" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+    in_range_const(testSVF, from, to, bv_const);
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Const Iterator " << duration/1000 << "ms" << std::endl;
+
+    bool range_eq_vector = (bv_range == bv_vector);
+    bool range_eq_const  = (bv_range == bv_const);
+
+    if (range_eq_vector && range_eq_const)
+    {
+        std::cout << "Test " << test << ": ALL 3 results match\n";
+    }
+    else
+    {
+        std::cout << "Test " << test << ": MISMATCH\n";
+        if (!range_eq_vector)
+        {
+            sparseVecFloat::bvector_type diff;
+            diff = bv_range ^ bv_vector;   // XOR shows differing bits
+            std::cout << "  range vs vector differs at " << diff.count() << " positions\n";
+            // print first few differing positions
+            auto en = diff.first();
+            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if (!range_eq_const)
+        {
+            sparseVecFloat::bvector_type diff;
+            diff = bv_range ^ bv_const;
+            std::cout << "  range vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+    }
+
+    std::cout << std::endl << std::endl;
+}
+
+void TestScannerLinear(){
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    sparseVecFloat::size_type N = 20000000;
+    std::vector<float> temp(N);
+
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        temp[i] = -1.0f * i * 0.00123f;
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        temp[i+N/2] = i * 0.00123f;
+
+    sparseVecFloat testSVF;
+    testSVF.import(temp.data(), N);
+    testSVF.optimize(tb);    
+
+    // --- Test 1: large positive range ---
+    {
+        float from = 100.0f;
+        float to   = 500.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 1);
+    }
+
+    // --- Test 2: small positive range ---
+    {
+        float from = 1.0f;
+        float to   = 2.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 2);
+        
+    }
+
+    // --- Test 3: large negative range ---
+    {
+        float from = -500.0f;
+        float to   = -100.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 3);
+    }
+
+    // --- Test 4: small negative range ---
+    {
+        float from = -2.0f;
+        float to   = -1.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 4);
+    }
+
+    // --- Test 5: range crossing zero ---
+    {
+        float from = -10.0f;
+        float to   =  10.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 5);
+    }
+
+    // --- Test 6: range with no results ---
+    {
+        float from = 99999.0f;
+        float to   = 99999.9f;
+        runSVFScannerTest(temp, testSVF, from, to, 6);
+    }
+
+    // --- Test 7: tiny range near zero ---
+    {
+        float from = -0.001f;
+        float to   =  0.001f;
+        runSVFScannerTest(temp, testSVF, from, to, 7);
+    }
+}
+
+void TestScannerRandom(){
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    sparseVecFloat::size_type N = 20000000;
+    std::vector<float> temp(N);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    float upper = 1000000.0f;
+    float lower = -1000000.0f;
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    for (sparseVecFloat::size_type i = 0; i < N; ++i) {
+        temp[i] = dis(gen);
+    }
+
+    sparseVecFloat testSVF;
+    testSVF.import(temp.data(), N);
+    testSVF.optimize(tb);
+
+    //Using a completely random dataset
+
+    // --- Test 1: large positive range ---
+    {
+        float from = 10000.0f;
+        float to   = 500000.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 1);
+    }
+
+    // --- Test 2: small positive range ---
+    {
+        float from = 1.0f;
+        float to   = 2.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 2);
+    }
+
+    // --- Test 3: large negative range ---
+    {
+        float from = -500000.0f;
+        float to   = -10000.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 3);
+    }
+
+    // --- Test 4: small negative range ---
+    {
+        float from = -2.0f;
+        float to   = -1.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 4);
+    }
+
+    // --- Test 5: range crossing zero ---
+    {
+        float from = -10000.0f;
+        float to   =  10000.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 5);
+    }
+
+    // --- Test 6: range with no results ---
+    {
+        float from = 99999999.0f;
+        float to   = 99999999.9f;
+        runSVFScannerTest(temp, testSVF, from, to, 6);
+    }
+
+    // --- Test 7: tiny range near zero ---
+    {
+        float from = -0.001f;
+        float to   =  0.001f;
+        runSVFScannerTest(temp, testSVF, from, to, 7);
+    }
+}
+
+void TestScannerSkewed(){
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    sparseVecFloat::size_type N = 20000000;
+    std::vector<float> temp(N);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    float upper = 1000000.0f;
+    float lower = -1000000.0f;
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    for (sparseVecFloat::size_type i = 19000000; i < N; ++i) {
+        temp[i] = dis(gen);
+    }
+
+    sparseVecFloat testSVF;
+    testSVF.import(temp.data(), N);
+    testSVF.optimize(tb);
+
+    //Using a completely random dataset
+
+    // --- Test 1: large positive range ---
+    {
+        float from = 10000.0f;
+        float to   = 500000.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 1);
+    }
+
+    // --- Test 2: small positive range ---
+    {
+        float from = 1.0f;
+        float to   = 2.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 2);
+    }
+
+    // --- Test 3: large negative range ---
+    {
+        float from = -500000.0f;
+        float to   = -10000.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 3);
+    }
+
+    // --- Test 4: small negative range ---
+    {
+        float from = -2.0f;
+        float to   = -1.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 4);
+    }
+
+    // --- Test 5: range crossing zero ---
+    {
+        float from = -10000.0f;
+        float to   =  10000.0f;
+        runSVFScannerTest(temp, testSVF, from, to, 5);
+    }
+
+    // --- Test 6: range with no results ---
+    {
+        float from = 99999999.0f;
+        float to   = 99999999.9f;
+        runSVFScannerTest(temp, testSVF, from, to, 6);
+    }
+
+    // --- Test 7: tiny range near zero ---
+    {
+        float from = -0.001f;
+        float to   =  0.001f;
+        runSVFScannerTest(temp, testSVF, from, to, 7);
+    }
+}
+
+void SparseVecFloatScannerTests()
+{
+    std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
+    TestScannerLinear();
+    std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
+    TestScannerRandom();
+    std::cout << "-------------------------SVF Skewed Values Scanner" << std::endl;
+    TestScannerSkewed();
+
+    std::cout << "SVF Scanner Testing Complete" << std::endl;
 }
 
 
@@ -42705,6 +43216,9 @@ return 0;
 
     if(is_svf){
         SparseVecFloatTests();
+        CheckAllocLeaks(false);
+
+        SparseVecFloatScannerTests();
         CheckAllocLeaks(false);
     }
 
