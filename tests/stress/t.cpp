@@ -40879,7 +40879,7 @@ void SparseVecFloatSerializeTest()
     int errorCount = 0;
     for (sparseVecFloat::size_type i = 300; i <= 400; i++)
     {
-        float f = i * 0.000123f;
+        float f = (float)i * 0.000123f;
         if (!floatEq(testSVF2_restored.get(i), f))
         {
             errorCount++;
@@ -40900,7 +40900,7 @@ void SparseVecFloatSerializeTest()
     for (sparseVecFloat::size_type i = 0; i < maskSize; i++)
     {
         sparseVecFloat::size_type idx   = maskIndices[i];
-        float f   = idx * 0.000123f;
+        float f = (float)idx * 0.000123f;
         if (!floatEq(testSVF2_masked.get(idx), f))
             errorCount++;
     }
@@ -41019,11 +41019,11 @@ void SparseVecFloatExtractionTests()
 
     for (sparseVecFloat::size_type i = 0; i < N; i++)
     {
-        temp[i] = (i * 0.001f) * m;
+        temp[i] = ((float)i * 0.001f) * m;
     }
     for (sparseVecFloat::size_type i = N; i < N*2; i++)
     {
-        temp[i] = -1*(i * 0.001f) * m;
+        temp[i] = -1*((float)i * 0.001f) * m;
     }
 
     testSVF.import(temp.data(), N*2);
