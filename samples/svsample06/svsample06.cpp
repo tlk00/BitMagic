@@ -194,7 +194,7 @@ int main(void)
         bm::bvector<> bv_res3;
 
         {
-            bm::chrono_taker tt1(cout, "1. std::vector<> scan ", search_repeats, &timing_map);
+            bm::chrono_taker<> tt1(cout, "1. std::vector<> scan ", search_repeats, &timing_map);
             
             for (unsigned i = 0; i < search_repeats; ++i)
             {
@@ -204,7 +204,7 @@ int main(void)
         }
 
         {
-            bm::chrono_taker tt1(cout, "2. sparse_vector<> scan ", search_repeats, &timing_map);
+            bm::chrono_taker<> tt1(cout, "2. sparse_vector<> scan ", search_repeats, &timing_map);
 
             bm::sparse_vector_scanner<sparse_vector_u32> scanner;
             scanner.find_eq(sv, search_vect.begin(), search_vect.end(), bv_res2);
@@ -219,7 +219,7 @@ int main(void)
         {
             bv_res3.init(); // always init before calling "set_bit_no_check()"
             
-            bm::chrono_taker tt1(cout, "3. sparse_vector<>::const_iterator search ", search_repeats, &timing_map);
+            bm::chrono_taker<> tt1(cout, "3. sparse_vector<>::const_iterator search ", search_repeats, &timing_map);
 
             // prepare a unique search set
             bm::bvector<> bv_search(bm::BM_GAP);

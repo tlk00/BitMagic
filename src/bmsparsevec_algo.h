@@ -943,6 +943,62 @@ public:
 
 
     //@}
+     // --------------------------------------------------
+    //
+    /*! @name Find in sparse_vector_float */
+    //@{
+
+    /**
+        \brief find all elements in a sparse_vector_float greater (>) than value
+
+        \param sv - input sparse_vector_float
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] > value)
+    */
+    void find_gt_float(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+    /**
+        \brief find all elements in a sparse_vector_float greater or equal (>=) than value
+
+        \param sv - input sparse_vector_float
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] >= value)
+    */
+    void find_ge_float(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+
+    /**
+        \brief find all elements in a sparse_vector_float less  (<) than value
+
+        \param sv - input sparse_vector_float
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] < value)
+    */
+    void find_lt_float(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+    /**
+        \brief find all elements in a sparse_vector_float less  or equal (<=) than value
+
+        \param sv - input sparse_vector_float
+        \param value - value to search for
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] <= value)
+    */
+    void find_le_float(const SV& sv, value_type  val, bvector_type&  bv_out);
+
+
+    /**
+        \brief find all elements in a sparse_vector_float in closed range [left..right] interval
+
+        \param sv - input sparse_vector_float
+        \param from - range from
+        \param to - range to
+        \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] <= value)
+    */
+    void find_range_float(const SV&  sv,
+                        value_type from, value_type to,
+                        bvector_type&  bv_out);
+
+    //@}
 
     /**
         \brief find all sparse vector elements EQ to 0
@@ -2726,6 +2782,136 @@ bool sparse_vector_scanner<SV, S_FACTOR>::bfind_eq_str(
         s[in_len] = value_type(0);
     }
     return bfind_eq_str_impl<true>(*bound_sv_, s, in_len, remaped, pos);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    bv_out.clear();
+    unsigned int bits;
+    std::memcpy(&bits, &val, sizeof(float));
+
+    unsigned int sign     = (bits >> 31) & 0x1;
+    unsigned int exponent = (bits >> 23) & 0xFF;
+    unsigned int mantissa =  bits        & 0x7FFFFF;
+
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svfScanner;
+
+    if (sign == 1)
+    {
+        svfScanner.find_le(sv.exponents_, exponent, bv_out);
+        bvector_type pos = sv.signs_;
+        pos.invert();
+        pos.set_range(sv.size(), bm::id_max, false);
+        
+        bvector_type boundsExp;
+        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+
+        bvector_type boundsMant;
+        svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
+        boundsExp &= boundsMant;
+
+        bv_out -= boundsExp;
+        bv_out |= pos;
+    }
+    else
+    {
+        svfScanner.find_ge(sv.exponents_, exponent, bv_out);
+        bv_out -= sv.signs_;
+
+        bvector_type boundsExp;
+        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+
+        bvector_type boundsMant;
+        svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
+        boundsExp &= boundsMant;
+
+        bv_out -= boundsExp;
+    }
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    find_lt_float(sv, val, bv_out);
+    bv_out.invert();
+    bv_out.set_range(sv.size(), bm::id_max, false);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+
+    bv_out.clear();
+    unsigned int bits;
+    std::memcpy(&bits, &val, sizeof(float));
+
+    unsigned int sign     = (bits >> 31) & 0x1;
+    unsigned int exponent = (bits >> 23) & 0xFF;
+    unsigned int mantissa =  bits        & 0x7FFFFF;
+
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svfScanner;
+
+    if (sign == 1)
+    {
+        svfScanner.find_ge(sv.exponents_, exponent, bv_out);
+        bvector_type pos = sv.signs_;
+        pos.invert();
+        pos.set_range(sv.size(), bm::id_max, false);
+        bv_out -= pos;
+        
+        bvector_type boundsExp;
+        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+
+        bvector_type boundsMant;
+        svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
+        boundsExp &= boundsMant;
+
+        bv_out -= boundsExp;
+    }
+    else
+    {
+        svfScanner.find_le(sv.exponents_, exponent, bv_out);
+
+        bvector_type boundsExp;
+        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+
+        bvector_type boundsMant;
+        svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
+        boundsExp &= boundsMant;
+
+        bv_out -= boundsExp;
+        bv_out |= sv.signs_;
+    }
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    find_gt_float(sv, val, bv_out);
+    bv_out.invert();
+    bv_out.set_range(sv.size(), bm::id_max, false);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
+                                                            value_type from, value_type to,
+                                                            bvector_type&  bv_out)
+{
+    find_le_float(sv, to, bv_out);
+    bvector_type  ge;
+    find_ge_float(sv, from, ge);
+    bv_out &= ge;
 }
 
 //----------------------------------------------------------------------------
