@@ -40948,9 +40948,9 @@ void SparseVecFloatRangeTests()
     testSVF2.set(1, 0.0);
     assert(!testSVF.equal(testSVF2));
 
-    assert(testSVF.compare(1, 2.468) == -1);
-    assert(testSVF.compare(1, -2.468) == 0);
-    assert(testSVF.compare(1, -3) == 1);
+    assert(testSVF.compare(1, 2.468f) == -1);
+    assert(testSVF.compare(1, -2.468f) == 0);
+    assert(testSVF.compare(1, -3.0f) == 1);
 
     sparseVecFloat svf1;
     sparseVecFloat svf2;
@@ -41059,7 +41059,7 @@ void SparseVecFloatExtractionTests()
     bm::id_t gatherIndeces[1024];
     for(sparseVecFloat::size_type i = 0; i < 1024; i++)
     {
-        gatherIndeces[i] = rand() % 128000;
+        gatherIndeces[i] = static_cast<bm::id_t>(rand() % 128000);
     }
 
     std::vector<float> testGather(1024);
@@ -41094,21 +41094,21 @@ void SparseVecFloatBackInsertTests()
 
     testBI.add(1.0023f);
     assert(testSVF.size() == 1);
-    assert(floatEq(testSVF.get(0), 1.0023));
+    assert(floatEq(testSVF.get(0), 1.0023f));
 
     testBI.add(400005.6f);
     assert(testSVF.size() == 2);
-    assert(floatEq(testSVF.get(1), 400005.6));
+    assert(floatEq(testSVF.get(1), 400005.6f));
 
     sparseVecFloat::back_insert_iterator testBI2(testBI);
     testBI2=78.9f;
     assert(testSVF.size() == 3);
-    assert(floatEq(testSVF.get(2), 78.9));
+    assert(floatEq(testSVF.get(2), 78.9f));
 
     sparseVecFloat::back_insert_iterator testBI3(std::move(testBI));
     testBI3=12345.6789f;
     assert(testSVF.size() == 4);
-    assert(floatEq(testSVF.get(3), 12345.6789));
+    assert(floatEq(testSVF.get(3), 12345.6789f));
 
 }
 
@@ -41139,7 +41139,7 @@ void SparseVecFloatStressTests(){
             }
         }
         assert(errorCount == 0);
-        assert((int)sv.size() == N);
+        assert(sv.size() == N);
     }
 
     //Random data push back and iterator tests
@@ -41191,7 +41191,8 @@ void SparseVecFloatStressTests(){
             if (std::fabs(sv.get(i) - data[i]) > 0.001f)
                 errorCount++;
         }
-        assert((int)sv.size() == N);
+        assert(errorCount == 0);
+        assert(sv.size() == N);
     }
 
 }
@@ -41223,7 +41224,7 @@ void SparseVecFloatSerialStressTests(){
         bm::sparse_vector_float_deserialize(sv_restored, buf);
 
         // validate
-        assert((int)sv_restored.size() == N);
+        assert(sv_restored.size() == N);
         int errorCount = 0;
         for (sparseVecFloat::size_type i = 0; i < N; i++) {
             if (std::fabs(sv_restored.get(i) - data[i]) > 0.001f)
@@ -41256,7 +41257,7 @@ void SparseVecFloatSerialStressTests(){
         const unsigned char* buf = testLayout.buf();
         bm::sparse_vector_float_deserialize(sv_restored, buf);
 
-        assert((int)sv_restored.size() == N);
+        assert(sv_restored.size() == N);
         int errorCount = 0;
         for (sparseVecFloat::size_type i = 0; i < N; i++) {
             if (std::fabs(sv_restored.get(i) - data[i]) > 0.001f)
@@ -41294,8 +41295,9 @@ void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_t
 void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
     
-    for(int i = 0; i < fv.size(); i++){
-        if(fv[i] >= from && fv[i] <= to){
+    for(sparseVecFloat::size_type i = 0; i < fv.size(); i++){
+        if(fv[i] >= from && fv[i] <= to)
+        {
             bv_out.set(i);
         }
     }
@@ -41308,7 +41310,8 @@ void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bve
 
     for (; ci != ciEnd; ci++){
         float v = ci.value();
-        if(v >= from && v <= to){
+        if(v >= from && v <= to)
+        {
             bv_out.set(ci.pos());
         }
     }

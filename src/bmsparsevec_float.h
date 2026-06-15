@@ -773,8 +773,6 @@ void sparse_vector_float<SV>::import(const value_type* arr,
         exponents_.set(idx, exponent);
         mantissas_.set(idx, mantissa);
     }
-
-    size_type new_size = offset + arr_size;
 }
 
 //---------------------------------------------------------------------
