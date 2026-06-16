@@ -773,6 +773,13 @@ void sparse_vector_float<SV>::import(const value_type* arr,
         exponents_.set(idx, exponent);
         mantissas_.set(idx, mantissa);
     }
+
+    if(set_not_null){
+        if (bvector_type* bv_null = mantissas_.get_null_bvect())
+            bv_null->set_range(offset, offset + arr_size - 1);
+        if (bvector_type* bv_null = exponents_.get_null_bvect())
+            bv_null->set_range(offset, offset + arr_size - 1);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -938,13 +945,14 @@ sparse_vector_float<SV>::gather(value_type* arr,
 
     size_type remaining = size;
     size_type pos = 0;
+    size_type toReturn = 0;
 
     while (remaining > 0)
     {
         size_type chunk = std::min(remaining, CHUNK);
 
-        exponents_.gather(exp_buf, idx + pos, chunk, sorted_idx);
-        mantissas_.gather(mant_buf, idx + pos, chunk, sorted_idx);
+        toReturn += exponents_.gather(exp_buf, idx + pos, chunk, sorted_idx);
+        toReturn += mantissas_.gather(mant_buf, idx + pos, chunk, sorted_idx);
 
         for (size_type i = 0; i < chunk; i++)
         {
@@ -960,6 +968,7 @@ sparse_vector_float<SV>::gather(value_type* arr,
         pos += chunk;
         
     }
+    return toReturn;
 }
 
 //---------------------------------------------------------------------

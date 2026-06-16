@@ -40718,11 +40718,11 @@ void SparseVecFloatImportTest()
 
     for(sparseVecFloat::size_type i = 0; i < N; i++)
     {
-        temp[i] = (i * 0.001f) * m;
+        temp[i] = ((float)i * 0.001f) * m;
     }
     for(sparseVecFloat::size_type i = N; i < N*2; i++)
     {
-        temp[i] = -1.0f*(i * 0.001f) * m;
+        temp[i] = -1.0f*((float)i * 0.001f) * m;
     }
     
     testSVF.import(temp.data(), N);
@@ -40863,7 +40863,7 @@ void SparseVecFloatSerializeTest()
     sparseVecFloat::size_type N = 10000;
     for (sparseVecFloat::size_type i = 0; i < N; i++)
     {
-        float f = i * 0.000123f;
+        float f = (float)i * 0.000123f;
         testSVF2.push_back(f);
     }
 
@@ -40879,7 +40879,7 @@ void SparseVecFloatSerializeTest()
     int errorCount = 0;
     for (sparseVecFloat::size_type i = 300; i <= 400; i++)
     {
-        float f = i * 0.000123f;
+        float f = (float)i * 0.000123f;
         if (!floatEq(testSVF2_restored.get(i), f))
         {
             errorCount++;
@@ -40900,7 +40900,7 @@ void SparseVecFloatSerializeTest()
     for (sparseVecFloat::size_type i = 0; i < maskSize; i++)
     {
         sparseVecFloat::size_type idx   = maskIndices[i];
-        float f   = idx * 0.000123f;
+        float f = (float)idx * 0.000123f;
         if (!floatEq(testSVF2_masked.get(idx), f))
             errorCount++;
     }
@@ -41019,11 +41019,11 @@ void SparseVecFloatExtractionTests()
 
     for (sparseVecFloat::size_type i = 0; i < N; i++)
     {
-        temp[i] = (i * 0.001f) * m;
+        temp[i] = ((float)i * 0.001f) * m;
     }
     for (sparseVecFloat::size_type i = N; i < N*2; i++)
     {
-        temp[i] = -1*(i * 0.001f) * m;
+        temp[i] = -1*((float)i * 0.001f) * m;
     }
 
     testSVF.import(temp.data(), N*2);
@@ -41176,7 +41176,7 @@ void SparseVecFloatStressTests(){
         std::vector<float> data(N);
         const double e = std::exp(1.0);
         for (sparseVecFloat::size_type i = 0; i < N; i++) {
-            float t = 0.001f * i;
+            float t = 0.001f * (float)i;
             data[i] = 100.0f * (float)pow(e, -1.0 * t)
                       * (cos(5.0f * t + 1.0f) + sin(5.0f * t + 1.0f));
         }
@@ -41239,7 +41239,7 @@ void SparseVecFloatSerialStressTests(){
         std::vector<float> data(N);
         const double e = std::exp(1.0);
         for (sparseVecFloat::size_type i = 0; i < N; i++) {
-            float t = 0.001f * i;
+            float t = 0.001f * (float)i;
             data[i] = 100.0f * (float)pow(e, -1.0 * t)
                       * (cos(5.0f * t + 1.0f) + sin(5.0f * t + 1.0f));
         }
@@ -41384,9 +41384,9 @@ void TestScannerLinear(){
     std::vector<float> temp(N);
 
     for(sparseVecFloat::size_type i = 0; i < N/2; i++)
-        temp[i] = -1.0f * i * 0.00123f;
+        temp[i] = -1.0f * (float)i * 0.00123f;
     for(sparseVecFloat::size_type i = 0; i < N/2; i++)
-        temp[i+N/2] = i * 0.00123f;
+        temp[i+N/2] = (float)i * 0.00123f;
 
     sparseVecFloat testSVF;
     testSVF.import(temp.data(), N);
