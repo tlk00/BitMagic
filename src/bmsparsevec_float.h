@@ -24,6 +24,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <memory.h>
+#include <cstring>
 
 #include "bm.h"
 #include "bmsparsevec.h"
@@ -609,7 +610,7 @@ sparse_vector_float<SV>::get(typename sparse_vector_float<SV>::size_type idx) co
     unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
 
     float toReturn;
-    memcpy(&toReturn, &bits, sizeof(float));
+    std::memcpy(&toReturn, &bits, sizeof(float));
 
     return toReturn;
 }
@@ -620,7 +621,7 @@ template<class SV>
 void sparse_vector_float<SV>::push_back(value_type v)
 {
     unsigned int bits;
-    memcpy(&bits, &v, sizeof(float));
+    std::memcpy(&bits, &v, sizeof(float));
 
     unsigned int sign     = (bits >> 31) & 0x1;
     if (sign == 1) signs_.set(mantissas_.size());
@@ -637,7 +638,7 @@ void sparse_vector_float<SV>::set(size_type idx, value_type v)
 {
 
     unsigned int bits;
-    memcpy(&bits, &v, sizeof(float));
+    std::memcpy(&bits, &v, sizeof(float));
 
     unsigned int sign     = (bits >> 31) & 0x1;
     bool neg = false;
@@ -757,7 +758,7 @@ void sparse_vector_float<SV>::import(const value_type* arr,
     for (size_type i = 0; i < arr_size; ++i)
     {
         unsigned int bits;
-        memcpy(&bits, &arr[i], sizeof(float));
+        std::memcpy(&bits, &arr[i], sizeof(float));
 
         unsigned int sign     = (bits >> 31) & 0x1;
         unsigned int exponent = (bits >> 23) & 0xFF;
@@ -867,7 +868,7 @@ sparse_vector_float<SV>::extract(value_type* arr,
             unsigned int mantissa = mant_buf[i];
 
             unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
-            memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+            std::memcpy(&arr[pos - offset + i], &bits, sizeof(float));
         }
 
         pos       += chunk;
@@ -908,7 +909,7 @@ sparse_vector_float<SV>::extract_range(value_type* arr,
             unsigned int mantissa = mant_buf[i];
 
             unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
-            memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+            std::memcpy(&arr[pos - offset + i], &bits, sizeof(float));
         }
 
         pos       += chunk;
@@ -961,7 +962,7 @@ sparse_vector_float<SV>::gather(value_type* arr,
             unsigned int mantissa = mant_buf[i];
 
             unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
-            memcpy(&arr[pos + i], &bits, sizeof(float));
+            std::memcpy(&arr[pos + i], &bits, sizeof(float));
         }
 
         remaining -= chunk;
@@ -1037,7 +1038,7 @@ sparse_vector_float<SV>::const_iterator::value() const
     unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
 
     float toReturn;
-    memcpy(&toReturn, &bits, sizeof(float));
+    std::memcpy(&toReturn, &bits, sizeof(float));
 
     return toReturn;
 }

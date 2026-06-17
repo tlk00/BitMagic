@@ -24,6 +24,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <memory.h>
+#include <cstring>
 
 #include "bm.h"
 

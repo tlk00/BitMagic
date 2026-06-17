@@ -29,6 +29,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <limits>
 #include <string.h>
+#include <cstring>
 
 #include "bmdef.h"
 #include "bmsparsevec.h"
