@@ -63,6 +63,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <cmath>
 
 #include <bm.h>
 #include <bmsparsevec_float.h>

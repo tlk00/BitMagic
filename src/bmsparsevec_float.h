@@ -25,6 +25,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <memory.h>
 #include <cstring>
+#include <cmath>
 
 #include "bm.h"
 #include "bmsparsevec.h"

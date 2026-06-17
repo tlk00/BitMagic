@@ -32,7 +32,7 @@ BASICINCS=src
 
 CSOURCES= 
 
-DESTINATION = svfsample02
+DESTINATION = svfsample04
 
 DESTTYPE = 
 DESTINATIONDIR=samples/svfsample04

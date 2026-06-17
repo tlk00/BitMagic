@@ -40,6 +40,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <fstream>
 #include <cassert>
+#include <cmath>
 
 #include <bm.h>
 #include <bmsparsevec_float.h>
@@ -100,7 +101,7 @@ void Demo2(){
     std::cout << "svf1.size() = " << svf1.size() << std::endl;
     std::cout << "svf2.size() = " << svf2.size() << std::endl;
 
-    for(int i = 0; i < svf1.size(); i++){
+    for(sparseVecFloat::size_type i = 0; i < svf1.size(); i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
         std::cout << "toAdd1[" << i << "] = " << toAdd1[i] << std::endl;
 
@@ -112,7 +113,7 @@ void Demo2(){
     svf1.swap(svf2);
     std::cout << "Swapped" << std::endl;
 
-    for(int i = 0; i < svf1.size(); i++){
+    for(sparseVecFloat::size_type i = 0; i < svf1.size(); i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
         std::cout << "toAdd1[" << i << "] = " << toAdd1[i] << std::endl;
 

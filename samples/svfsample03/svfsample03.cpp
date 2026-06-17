@@ -107,7 +107,7 @@ void Demo2(){
     //Be careful when joining, as when joining 2 floats together, if one of them is not 0 then it is possible
     //to make an NaN float if the exponent becomes all 1's
     svf1.join(svf2);
-    for(int i = 0; i < svf1.size(); i++){
+    for(sparseVecFloat::size_type i = 0; i < svf1.size(); i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
     }
 
@@ -121,7 +121,7 @@ void Demo2(){
     //You can also use the merge operation which is different from join as 
     //it borrows data from the source vector, so it gets modified.
     svf1.merge(svf2);
-    for(int i = 0; i < svf1.size(); i++){
+    for(sparseVecFloat::size_type i = 0; i < svf1.size(); i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
     }
 
@@ -136,7 +136,7 @@ void Demo2(){
     //copy_range(left, right) copies the indeces in the given range, inclusive
     //all indeces outside that range are set to 0
     svf1.copy_range(svf2, 2, 4);
-    for(int i = 0; i < svf1.size(); i++){
+    for(sparseVecFloat::size_type i = 0; i < svf1.size(); i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
     }
 
