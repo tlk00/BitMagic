@@ -40887,7 +40887,7 @@ void SparseVecFloatSerializeTest()
     }
     assert(errorCount == 0);
 
-    bm::bvector<> mask_bv;
+    sparseVecFloat::bvector_type mask_bv;
     sparseVecFloat::size_type maskIndices[] = {0, 1, 50, 100, 500, 999, 5000, 9999};
     sparseVecFloat::size_type maskSize = sizeof(maskIndices) / sizeof(maskIndices[0]);
     for (sparseVecFloat::size_type i = 0; i < maskSize; i++)
