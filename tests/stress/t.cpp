@@ -43217,7 +43217,7 @@ return 0;
 
     }
 
-    if(is_svf){
+    if(is_all || is_svf){
         SparseVecFloatTests();
         CheckAllocLeaks(false);
 
