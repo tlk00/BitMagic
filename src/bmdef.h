@@ -56,20 +56,27 @@ For more information please visit:  http://bitmagic.io
 #endif
 
 
+#if defined(__riscv)
+#define BM_RISCV
+#endif
+
+
 // macro to define/undefine unaligned memory access (x86, PowerPC)
 //
-#if defined(__i386) || defined(__x86_64) || defined(__ppc__) || \
+#if !defined(BM_RISCV) && \
+    (defined(__i386) || defined(__x86_64) || defined(__ppc__) || \
     defined(__ppc64__) || defined(_M_IX86) || defined(_M_AMD64) || \
     defined(_M_IX86) || defined(_M_AMD64) || defined(_M_X64) || \
     defined(_M_ARM) || defined(_M_ARM64) || \
     defined(__arm__) || defined(__aarch64__) || \
-    (defined(_M_MPPC) && !defined(BM_FORBID_UNALIGNED_ACCESS))
+    (defined(_M_MPPC) && !defined(BM_FORBID_UNALIGNED_ACCESS)))
 #define BM_UNALIGNED_ACCESS_OK 1
 #endif
 
-#if defined(_M_IX86) || defined(_M_AMD64) || defined(_M_X64) || \
+#if !defined(BM_RISCV) && \
+    (defined(_M_IX86) || defined(_M_AMD64) || defined(_M_X64) || \
     defined(__i386) || defined(__x86_64) || defined(_M_AMD64) || \
-    defined(BMSSE2OPT) || defined(BMSSE42OPT)
+    defined(BMSSE2OPT) || defined(BMSSE42OPT))
 #define BM_x86
 #endif
 
