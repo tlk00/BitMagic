@@ -41132,9 +41132,11 @@ void SparseVecFloatStressTests(){
         sv.optimize(tb);
 
         int errorCount = 0;
-        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             float restored = sv.get(i);
-            if (std::fabs(restored - data[i]) > 0.001f){
+            if (std::fabs(restored - data[i]) > 0.001f)
+            {
                 errorCount++;
             }
         }
@@ -41151,7 +41153,8 @@ void SparseVecFloatStressTests(){
         sparseVecFloat::size_type N = 500000;
         std::vector<float> data(N);
         sparseVecFloat sv;
-        for (sparseVecFloat::size_type i = 0; i < N; i++){
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             data[i] = dist(gen);
             sv.push_back(data[i]);
         }
@@ -41162,7 +41165,8 @@ void SparseVecFloatStressTests(){
         // validate via iterator
         sparseVecFloat::size_type idx = 0;
         int errorCount = 0;
-        for (auto it = sv.begin(); it != sv.end(); ++it, ++idx) {
+        for (auto it = sv.begin(); it != sv.end(); ++it, ++idx)
+        {
             if (std::fabs(*it - data[idx]) > 0.001f)
                 errorCount++;
         }
@@ -41175,7 +41179,8 @@ void SparseVecFloatStressTests(){
         sparseVecFloat::size_type N = 2000000;
         std::vector<float> data(N);
         const double e = std::exp(1.0);
-        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             float t = 0.001f * (float)i;
             data[i] = 100.0f * (float)pow(e, -1.0 * t)
                       * (cos(5.0f * t + 1.0f) + sin(5.0f * t + 1.0f));
@@ -41187,7 +41192,8 @@ void SparseVecFloatStressTests(){
         sv.optimize(tb);
 
         int errorCount = 0;
-        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             if (std::fabs(sv.get(i) - data[i]) > 0.001f)
                 errorCount++;
         }
@@ -41197,7 +41203,8 @@ void SparseVecFloatStressTests(){
 
 }
 
-void SparseVecFloatSerialStressTests(){
+void SparseVecFloatSerialStressTests()
+{
     std::cout << "-------------------------SparseVecFloatSerialStressTests()" << std::endl;
     //Serializing then deserializing a large random data set
     {
@@ -41226,7 +41233,8 @@ void SparseVecFloatSerialStressTests(){
         // validate
         assert(sv_restored.size() == N);
         int errorCount = 0;
-        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             if (std::fabs(sv_restored.get(i) - data[i]) > 0.001f)
                 errorCount++;
         }
@@ -41238,7 +41246,8 @@ void SparseVecFloatSerialStressTests(){
         sparseVecFloat::size_type N = 2000000;
         std::vector<float> data(N);
         const double e = std::exp(1.0);
-        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             float t = 0.001f * (float)i;
             data[i] = 100.0f * (float)pow(e, -1.0 * t)
                       * (cos(5.0f * t + 1.0f) + sin(5.0f * t + 1.0f));
@@ -41259,7 +41268,8 @@ void SparseVecFloatSerialStressTests(){
 
         assert(sv_restored.size() == N);
         int errorCount = 0;
-        for (sparseVecFloat::size_type i = 0; i < N; i++) {
+        for (sparseVecFloat::size_type i = 0; i < N; i++)
+        {
             if (std::fabs(sv_restored.get(i) - data[i]) > 0.001f)
                 errorCount++;
         }
@@ -41317,7 +41327,8 @@ void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bve
     }
 }
 
-void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to, int test){
+void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to, int test)
+{
 
     sparseVecFloat::bvector_type bv_range;
     sparseVecFloat::bvector_type bv_vector;
@@ -41377,7 +41388,8 @@ void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float fr
     std::cout << std::endl << std::endl;
 }
 
-void TestScannerLinear(){
+void TestScannerLinear()
+{
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloat::size_type N = 20000000;
@@ -41443,7 +41455,8 @@ void TestScannerLinear(){
     }
 }
 
-void TestScannerRandom(){
+void TestScannerRandom()
+{
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloat::size_type N = 20000000;
@@ -41516,7 +41529,8 @@ void TestScannerRandom(){
     }
 }
 
-void TestScannerSkewed(){
+void TestScannerSkewed()
+{
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloat::size_type N = 20000000;
