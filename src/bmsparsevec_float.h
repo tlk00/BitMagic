@@ -48,6 +48,13 @@ namespace bm
  
    @ingroup sv
 */
+
+template<class T>
+struct is_rsc_sparse_vector : std::false_type {};
+
+template<class Val, class SV>
+struct is_rsc_sparse_vector<bm::rsc_sparse_vector<Val, SV>> : std::true_type {};
+
 template<class SV>
 class sparse_vector_float
 {
@@ -593,9 +600,12 @@ bool sparse_vector_float<SV>::operator!=(const sparse_vector_float<SV>& svf) con
 template<class SV>
 void sparse_vector_float<SV>::swap(sparse_vector_float<SV> &svf)
 {
-    signs_.swap(svf.signs_);
-    exponents_.swap(svf.exponents_);
-    mantissas_.swap(svf.mantissas_);
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        signs_.swap(svf.signs_);
+        exponents_.swap(svf.exponents_);
+        mantissas_.swap(svf.mantissas_);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -670,9 +680,12 @@ sparse_vector_float<SV>& sparse_vector_float<SV>::clear_range(size_type left,
                                     size_type right,
                                     bool set_null)
 {
-    signs_.clear_range(left, right);
-    exponents_.clear_range(left, right, set_null);
-    mantissas_.clear_range(left, right, set_null);
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        signs_.clear_range(left, right);
+        exponents_.clear_range(left, right, set_null);
+        mantissas_.clear_range(left, right, set_null);
+    }
 
     return *this;
 }
@@ -683,7 +696,13 @@ template<class SV>
 bool sparse_vector_float<SV>::equal(const sparse_vector_float<SV>& sv,
                                     bm::null_support null_able) const BMNOEXCEPT
 {
-    if (signs_.equal(sv.signs_) && exponents_.equal(sv.exponents_, null_able) && mantissas_.equal(sv.mantissas_, null_able)) return true;
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        if (signs_.equal(sv.signs_) && exponents_.equal(sv.exponents_, null_able) && mantissas_.equal(sv.mantissas_, null_able)) return true;
+        return false;
+    }
+
+    if (signs_.equal(sv.signs_) && exponents_.equal(sv.exponents_) && mantissas_.equal(sv.mantissas_)) return true;
     return false;
 }
 
@@ -707,9 +726,12 @@ int sparse_vector_float<SV>::compare(size_type idx, const value_type val, float 
 template<class SV>
 sparse_vector_float<SV>& sparse_vector_float<SV>::join(const sparse_vector_float<SV>& svf)
 {
-    signs_ |= svf.signs_;
-    exponents_.join(svf.exponents_);
-    mantissas_.join(svf.mantissas_);
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        signs_ |= svf.signs_;
+        exponents_.join(svf.exponents_);
+        mantissas_.join(svf.mantissas_);
+    }
     
     return *this;
 }
@@ -719,10 +741,12 @@ sparse_vector_float<SV>& sparse_vector_float<SV>::join(const sparse_vector_float
 template<class SV>
 sparse_vector_float<SV>& sparse_vector_float<SV>::merge(sparse_vector_float<SV>& svf)
 {
-    signs_.merge(svf.signs_);
-    exponents_.merge(svf.exponents_);
-    mantissas_.merge(svf.mantissas_);
-    
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        signs_.merge(svf.signs_);
+        exponents_.merge(svf.exponents_);
+        mantissas_.merge(svf.mantissas_);
+    }
     return *this;
 }
 
@@ -735,8 +759,14 @@ void sparse_vector_float<SV>::copy_range(const sparse_vector_float<SV>& svf,
                                         bm::null_support slice_null)
 {
     signs_.copy_range(svf.signs_, left, right);
-    exponents_.copy_range(svf.exponents_, left, right, slice_null);
-    mantissas_.copy_range(svf.mantissas_, left, right, slice_null);
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        exponents_.copy_range(svf.exponents_, left, right, slice_null);
+        mantissas_.copy_range(svf.mantissas_, left, right, slice_null);
+    }else{
+        exponents_.copy_range(svf.exponents_, left, right);
+        mantissas_.copy_range(svf.mantissas_, left, right);
+    }
 }
 
 
@@ -776,11 +806,15 @@ void sparse_vector_float<SV>::import(const value_type* arr,
         mantissas_.set(idx, mantissa);
     }
 
-    if(set_not_null){
-        if (bvector_type* bv_null = mantissas_.get_null_bvect())
-            bv_null->set_range(offset, offset + arr_size - 1);
-        if (bvector_type* bv_null = exponents_.get_null_bvect())
-            bv_null->set_range(offset, offset + arr_size - 1);
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        if(set_not_null)
+        {
+            if (bvector_type* bv_null = mantissas_.get_null_bvect())
+                bv_null->set_range(offset, offset + arr_size - 1);
+            if (bvector_type* bv_null = exponents_.get_null_bvect())
+                bv_null->set_range(offset, offset + arr_size - 1);
+        }
     }
 }
 
@@ -846,36 +880,39 @@ sparse_vector_float<SV>::extract(value_type* arr,
                                  size_type offset,
                                  bool      zero_mem) const BMNOEXCEPT2
 {
-    const size_type CHUNK = 256;
-
-    unsigned int exp_buf[CHUNK];
-    unsigned int mant_buf[CHUNK];
-
-    size_type remaining = size;
-    size_type pos = offset;
-    size_type toReturn = 0;
-
-    while (remaining > 0)
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
     {
-        size_type chunk = std::min(remaining, CHUNK);
+        const size_type CHUNK = 256;
 
-        toReturn += exponents_.extract(exp_buf, chunk, pos, zero_mem);
-        toReturn += mantissas_.extract(mant_buf, chunk, pos, zero_mem);
+        unsigned int exp_buf[CHUNK];
+        unsigned int mant_buf[CHUNK];
 
-        for (size_type i = 0; i < chunk; i++)
+        size_type remaining = size;
+        size_type pos = offset;
+        size_type toReturn = 0;
+
+        while (remaining > 0)
         {
-            unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
-            unsigned int exponent = exp_buf[i];
-            unsigned int mantissa = mant_buf[i];
+            size_type chunk = std::min(remaining, CHUNK);
 
-            unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
-            std::memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+            toReturn += exponents_.extract(exp_buf, chunk, pos, zero_mem);
+            toReturn += mantissas_.extract(mant_buf, chunk, pos, zero_mem);
+
+            for (size_type i = 0; i < chunk; i++)
+            {
+                unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
+                unsigned int exponent = exp_buf[i];
+                unsigned int mantissa = mant_buf[i];
+
+                unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+                std::memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+            }
+
+            pos       += chunk;
+            remaining -= chunk;
         }
-
-        pos       += chunk;
-        remaining -= chunk;
+        return toReturn;
     }
-    return toReturn;
 }
 
 //---------------------------------------------------------------------
@@ -887,36 +924,39 @@ sparse_vector_float<SV>::extract_range(value_type* arr,
                                        size_type offset,
                                        bool      zero_mem) const
 {
-    const size_type CHUNK = 256;
-
-    unsigned int exp_buf[CHUNK];
-    unsigned int mant_buf[CHUNK];
-
-    size_type remaining = size;
-    size_type pos = offset;
-    size_type toReturn = 0;
-
-    while (remaining > 0)
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
     {
-        size_type chunk = std::min(remaining, CHUNK);
+        const size_type CHUNK = 256;
 
-        toReturn += exponents_.extract_range(exp_buf, chunk, pos, zero_mem);
-        toReturn += mantissas_.extract_range(mant_buf, chunk, pos, zero_mem);
+        unsigned int exp_buf[CHUNK];
+        unsigned int mant_buf[CHUNK];
 
-        for (size_type i = 0; i < chunk; i++)
+        size_type remaining = size;
+        size_type pos = offset;
+        size_type toReturn = 0;
+
+        while (remaining > 0)
         {
-            unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
-            unsigned int exponent = exp_buf[i];
-            unsigned int mantissa = mant_buf[i];
+            size_type chunk = std::min(remaining, CHUNK);
 
-            unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
-            std::memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+            toReturn += exponents_.extract_range(exp_buf, chunk, pos, zero_mem);
+            toReturn += mantissas_.extract_range(mant_buf, chunk, pos, zero_mem);
+
+            for (size_type i = 0; i < chunk; i++)
+            {
+                unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
+                unsigned int exponent = exp_buf[i];
+                unsigned int mantissa = mant_buf[i];
+
+                unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+                std::memcpy(&arr[pos - offset + i], &bits, sizeof(float));
+            }
+
+            pos       += chunk;
+            remaining -= chunk;
         }
-
-        pos       += chunk;
-        remaining -= chunk;
+        return toReturn;
     }
-    return toReturn;
 }
 
 //---------------------------------------------------------------------
@@ -928,7 +968,40 @@ sparse_vector_float<SV>::decode(value_type* arr,
                                 size_type   dec_size,
                                 bool        zero_mem) const
 {
-    return extract(arr, dec_size, idx_from, zero_mem);
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        return extract(arr, dec_size, idx_from, zero_mem);
+    }
+    else
+    {
+        const size_type CHUNK = 256;
+        unsigned int exp_buf[CHUNK];
+        unsigned int mant_buf[CHUNK];
+        size_type remaining = dec_size;
+        size_type pos = idx_from;
+        size_type toReturn = 0;
+ 
+        while (remaining > 0)
+        {
+            size_type chunk = std::min(remaining, CHUNK);
+ 
+            toReturn += exponents_.decode(exp_buf, pos, chunk, zero_mem);
+            toReturn += mantissas_.decode(mant_buf, pos, chunk, zero_mem);
+ 
+            for (size_type i = 0; i < chunk; i++)
+            {
+                unsigned int sign     = signs_.test(pos + i) ? 1 : 0;
+                unsigned int exponent = exp_buf[i];
+                unsigned int mantissa = mant_buf[i];
+                unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+                std::memcpy(&arr[pos - idx_from + i], &bits, sizeof(float));
+            }
+ 
+            pos       += chunk;
+            remaining -= chunk;
+        }
+        return toReturn;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -953,8 +1026,18 @@ sparse_vector_float<SV>::gather(value_type* arr,
     {
         size_type chunk = std::min(remaining, CHUNK);
 
-        toReturn += exponents_.gather(exp_buf, idx + pos, chunk, sorted_idx);
-        toReturn += mantissas_.gather(mant_buf, idx + pos, chunk, sorted_idx);
+        if constexpr (!is_rsc_sparse_vector<SV>::value)
+        {
+            toReturn += exponents_.gather(exp_buf, idx + pos, chunk, sorted_idx);
+            toReturn += mantissas_.gather(mant_buf, idx + pos, chunk, sorted_idx);
+        }
+        else
+        {
+            size_type idx_tmp_buf[CHUNK];
+
+            toReturn += exponents_.gather(exp_buf, idx + pos, idx_tmp_buf, chunk, sorted_idx);
+            toReturn += mantissas_.gather(mant_buf, idx + pos, idx_tmp_buf, chunk, sorted_idx);
+        }
 
         for (size_type i = 0; i < chunk; i++)
         {
