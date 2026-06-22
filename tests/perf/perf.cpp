@@ -5786,15 +5786,10 @@ typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVe
 typedef bm::sparse_vector<unsigned int, bvect> sparse_vec_u32;
 typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, sparse_vec_u32>> sparseVecFloatRSC;
 
-void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
-{
-    bm::sparse_vector_scanner<sparseVecFloat> scan;
-    scan.find_range_float(sv, from, to, bv_out);
-}
 
 void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
-    
+    if(from > to) std::swap(from, to);
     for (sparseVecFloat::size_type i = 0; i < fv.size(); i++)
     {
         if(fv[i] >= from && fv[i] <= to)
@@ -5809,6 +5804,8 @@ void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bve
     sparseVecFloat::const_iterator ci = sv.begin();
     sparseVecFloat::const_iterator ciEnd = sv.end();
 
+    if(from > to) std::swap(from, to);
+
     for (; ci != ciEnd; ci++)
     {
         float v = ci.value();
@@ -5819,294 +5816,265 @@ void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bve
     }
 }
 
-void runSVFScannerTest(std::vector<float> asVect, sparseVecFloat testSVF, float from, float to, int test)
-{
-
-    sparseVecFloat::bvector_type bv_range;
-    sparseVecFloat::bvector_type bv_vector;
-    sparseVecFloat::bvector_type bv_const;
-
-    std::cout << "Test " << test << "[" << from << ", " << to << "]" << std::endl;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    in_range(testSVF, from, to, bv_range);
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Scanner " << duration/1000 << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
-    in_range_vect(asVect, from, to, bv_vector);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Vector " << duration/1000 << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
-    in_range_const(testSVF, from, to, bv_const);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Const Iterator " << duration/1000 << "ms" << std::endl;
-
-    bool range_eq_vector = (bv_range == bv_vector);
-    bool range_eq_const  = (bv_range == bv_const);
-
-    if (range_eq_vector && range_eq_const)
-    {
-        std::cout << "Test " << test << ": ALL 3 results match\n";
-    }
-    else
-    {
-        std::cout << "Test " << test << ": MISMATCH\n";
-        if (!range_eq_vector)
-        {
-            sparseVecFloat::bvector_type diff;
-            diff = bv_range ^ bv_vector;   // XOR shows differing bits
-            std::cout << "  range vs vector differs at " << diff.count() << " positions\n";
-            // print first few differing positions
-            auto en = diff.first();
-            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
-                std::cout << "  position: " << *en << "\n";
-        }
-        if (!range_eq_const)
-        {
-            sparseVecFloat::bvector_type diff;
-            diff = bv_range ^ bv_const;
-            std::cout << "  range vs const differs at " << diff.count() << " positions\n";
-            auto en = diff.first();
-            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
-                std::cout << "  position: " << *en << "\n";
-        }
-    }
-
-    std::cout << std::endl << std::endl;
-}
-
-void TestScannerLinear()
+void TestSVFScanner()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloat::size_type N = 20000000;
-    std::vector<float> temp(N);
-
-    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
-        temp[i] = -1.0f * (float)i * 0.00123f;
-    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
-        temp[i+N/2] = (float)i * 0.00123f;
-
-    sparseVecFloat testSVF;
-    testSVF.import(temp.data(), N);
-    testSVF.optimize(tb);    
-
-    // --- Test 1: large positive range ---
-    {
-        float from = 100.0f;
-        float to   = 500.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 1);
-    }
-
-    // --- Test 2: small positive range ---
-    {
-        float from = 1.0f;
-        float to   = 2.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 2);
-        
-    }
-
-    // --- Test 3: large negative range ---
-    {
-        float from = -500.0f;
-        float to   = -100.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 3);
-    }
-
-    // --- Test 4: small negative range ---
-    {
-        float from = -2.0f;
-        float to   = -1.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 4);
-    }
-
-    // --- Test 5: range crossing zero ---
-    {
-        float from = -10.0f;
-        float to   =  10.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 5);
-    }
-
-    // --- Test 6: range with no results ---
-    {
-        float from = 99999.0f;
-        float to   = 99999.9f;
-        runSVFScannerTest(temp, testSVF, from, to, 6);
-    }
-
-    // --- Test 7: tiny range near zero ---
-    {
-        float from = -0.001f;
-        float to   =  0.001f;
-        runSVFScannerTest(temp, testSVF, from, to, 7);
-    }
-}
-
-void TestScannerRandom()
-{
-    BM_DECLARE_TEMP_BLOCK(tb)
-
-    sparseVecFloat::size_type N = 20000000;
-    std::vector<float> temp(N);
-
     std::random_device rd;
     std::mt19937 gen(rd());
 
     float upper = 1000000.0f;
     float lower = -1000000.0f;
     std::uniform_real_distribution<float> dis(lower, upper);
+
+    std::vector<float> linData(N);
+
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        linData[i] = -1.0f * (float)i * 0.00123f;
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        linData[i+N/2] = (float)i * 0.00123f;
+
+    sparseVecFloat testSVF;
+    testSVF.import(linData.data(), N);
+    testSVF.optimize(tb);
+
+    unsigned int tests = 1000;
+
+    {
+        sparseVecFloat::bvector_type xorSV;
+        sparseVecFloat::bvector_type xorVect;
+        sparseVecFloat::bvector_type xorConst;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF Scanner Linear Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                bm::sparse_vector_scanner<sparseVecFloat> scan;
+                scan.find_range_float(testSVF, from, to, bv_range);
+
+                xorSV ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "Vector Linear Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                in_range_vect(linData, from, to, bv_range);
+                xorVect ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF Const iterator Linear Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                in_range_const(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+            }
+        }
+
+        bool range_eq_vector = (xorSV == xorVect);
+        bool range_eq_const  = (xorSV == xorConst);
+
+        if (range_eq_vector && range_eq_const)
+        {
+            std::cout << "Linear: ALL 3 results match\n";
+        }
+        else
+        {
+            std::cout << "Linear: MISMATCH\n";
+        }
+    }
+
+    testSVF.clear();
+    std::vector<float> randData(N);
 
     for (sparseVecFloat::size_type i = 0; i < N; ++i)
     {
-        temp[i] = dis(gen);
+        randData[i] = dis(gen);
     }
 
-    sparseVecFloat testSVF;
-    testSVF.import(temp.data(), N);
+    testSVF.import(randData.data(), N);
     testSVF.optimize(tb);
 
-    //Using a completely random dataset
-
-    // --- Test 1: large positive range ---
     {
-        float from = 10000.0f;
-        float to   = 500000.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 1);
+        sparseVecFloat::bvector_type xorSV;
+        sparseVecFloat::bvector_type xorVect;
+        sparseVecFloat::bvector_type xorConst;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF Scanner Random Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                bm::sparse_vector_scanner<sparseVecFloat> scan;
+                scan.find_range_float(testSVF, from, to, bv_range);
+
+                xorSV ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "Vector Random Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                in_range_vect(randData, from, to, bv_range);
+                xorVect ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF Const iterator Random Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                in_range_const(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+            }
+        }
+
+        bool range_eq_vector = (xorSV == xorVect);
+        bool range_eq_const  = (xorSV == xorConst);
+
+        if (range_eq_vector && range_eq_const)
+        {
+            std::cout << "Random: ALL 3 results match\n";
+        }
+        else
+        {
+            std::cout << "Random: MISMATCH\n";
+        }
     }
 
-    // --- Test 2: small positive range ---
+    testSVF.clear();
+    std::vector<float> skewData(N);
+
+    for (sparseVecFloat::size_type i = 19000000; i < N; ++i)
     {
-        float from = 1.0f;
-        float to   = 2.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 2);
+        skewData[i] = dis(gen);
     }
 
-    // --- Test 3: large negative range ---
-    {
-        float from = -500000.0f;
-        float to   = -10000.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 3);
-    }
-
-    // --- Test 4: small negative range ---
-    {
-        float from = -2.0f;
-        float to   = -1.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 4);
-    }
-
-    // --- Test 5: range crossing zero ---
-    {
-        float from = -10000.0f;
-        float to   =  10000.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 5);
-    }
-
-    // --- Test 6: range with no results ---
-    {
-        float from = 99999999.0f;
-        float to   = 99999999.9f;
-        runSVFScannerTest(temp, testSVF, from, to, 6);
-    }
-
-    // --- Test 7: tiny range near zero ---
-    {
-        float from = -0.001f;
-        float to   =  0.001f;
-        runSVFScannerTest(temp, testSVF, from, to, 7);
-    }
-}
-
-void TestScannerSkewed()
-{
-    BM_DECLARE_TEMP_BLOCK(tb)
-
-    sparseVecFloat::size_type N = 20000000;
-    std::vector<float> temp(N);
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    float upper = 1000000.0f;
-    float lower = -1000000.0f;
-    std::uniform_real_distribution<float> dis(lower, upper);
-
-    for (sparseVecFloat::size_type i = 19000000; i < N; ++i) 
-    {
-        temp[i] = dis(gen);
-    }
-
-    sparseVecFloat testSVF;
-    testSVF.import(temp.data(), N);
+    testSVF.import(skewData.data(), N);
     testSVF.optimize(tb);
 
-    //Using a completely random dataset
-
-    // --- Test 1: large positive range ---
     {
-        float from = 10000.0f;
-        float to   = 500000.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 1);
+        sparseVecFloat::bvector_type xorSV;
+        sparseVecFloat::bvector_type xorVect;
+        sparseVecFloat::bvector_type xorConst;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF Scanner Skewed Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                bm::sparse_vector_scanner<sparseVecFloat> scan;
+                scan.find_range_float(testSVF, from, to, bv_range);
+
+                xorSV ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "Vector Skewed Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                in_range_vect(skewData, from, to, bv_range);
+                xorVect ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF Const iterator Skewed Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloat::bvector_type bv_range;
+                in_range_const(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+            }
+        }
+
+        bool range_eq_vector = (xorSV == xorVect);
+        bool range_eq_const  = (xorSV == xorConst);
+
+        if (range_eq_vector && range_eq_const)
+        {
+            std::cout << "Skewed: ALL 3 results match\n";
+        }
+        else
+        {
+            std::cout << "Skewed: MISMATCH\n";
+        }
     }
-
-    // --- Test 2: small positive range ---
-    {
-        float from = 1.0f;
-        float to   = 2.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 2);
-    }
-
-    // --- Test 3: large negative range ---
-    {
-        float from = -500000.0f;
-        float to   = -10000.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 3);
-    }
-
-    // --- Test 4: small negative range ---
-    {
-        float from = -2.0f;
-        float to   = -1.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 4);
-    }
-
-    // --- Test 5: range crossing zero ---
-    {
-        float from = -10000.0f;
-        float to   =  10000.0f;
-        runSVFScannerTest(temp, testSVF, from, to, 5);
-    }
-
-    // --- Test 6: range with no results ---
-    {
-        float from = 99999999.0f;
-        float to   = 99999999.9f;
-        runSVFScannerTest(temp, testSVF, from, to, 6);
-    }
-
-    // --- Test 7: tiny range near zero ---
-    {
-        float from = -0.001f;
-        float to   =  0.001f;
-        runSVFScannerTest(temp, testSVF, from, to, 7);
-    }
-}
-
-void TestSVFScanner()
-{
-    std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
-    TestScannerLinear();
-    std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
-    TestScannerRandom();
-    std::cout << "-------------------------SVF Skewed Values Scanner" << std::endl;
-    TestScannerSkewed();
-
-    std::cout << "SVF Scanner Testing Complete" << std::endl;
 }
 
 
@@ -6137,15 +6105,9 @@ void TestSVFScanner()
 
 
 
-void in_range_rsc(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
-{
-    bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
-    scan.find_range_float(sv, from, to, bv_out);
-}
-
 void in_range_vect_rsc(std::vector<float> fv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
-    
+    if (from > to) std::swap(from, to);
     for (sparseVecFloatRSC::size_type i = 0; i < fv.size(); i++)
     {
         if(fv[i] >= from && fv[i] <= to)
@@ -6157,6 +6119,7 @@ void in_range_vect_rsc(std::vector<float> fv, float from, float to, sparseVecFlo
 
 void in_range_const_rsc(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
+    if (from > to) std::swap(from, to);
     sparseVecFloatRSC::const_iterator ci = sv.begin();
     sparseVecFloatRSC::const_iterator ciEnd = sv.end();
 
@@ -6170,297 +6133,270 @@ void in_range_const_rsc(sparseVecFloatRSC sv, float from, float to, sparseVecFlo
     }
 }
 
-void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, float from, float to, int test)
-{
-
-    sparseVecFloatRSC::bvector_type bv_range;
-    sparseVecFloatRSC::bvector_type bv_vector;
-    sparseVecFloatRSC::bvector_type bv_const;
-
-    std::cout << "Test " << test << "[" << from << ", " << to << "]" << std::endl;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    in_range_rsc(testSVF, from, to, bv_range);
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Scanner " << duration/1000 << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
-    in_range_vect_rsc(temp, from, to, bv_vector);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Vector " << duration/1000 << "ms" << std::endl;
-
-    start = std::chrono::high_resolution_clock::now();
-    in_range_const_rsc(testSVF, from, to, bv_const);
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Const Iterator " << duration/1000 << "ms" << std::endl;
-
-    bool range_eq_vector = (bv_range == bv_vector);
-    bool range_eq_const  = (bv_range == bv_const);
-
-    if (range_eq_vector && range_eq_const)
-    {
-        std::cout << "Test " << test << ": ALL 3 results match\n";
-    }
-    else
-    {
-        std::cout << "Test " << test << ": MISMATCH\n";
-        if (!range_eq_vector)
-        {
-            sparseVecFloat::bvector_type diff;
-            diff = bv_range ^ bv_vector;   // XOR shows differing bits
-            std::cout << "  range vs vector differs at " << diff.count() << " positions\n";
-            // print first few differing positions
-            auto en = diff.first();
-            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
-                std::cout << "  position: " << *en << "\n";
-        }
-        if (!range_eq_const)
-        {
-            sparseVecFloat::bvector_type diff;
-            diff = bv_range ^ bv_const;
-            std::cout << "  range vs const differs at " << diff.count() << " positions\n";
-            auto en = diff.first();
-            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
-                std::cout << "  position: " << *en << "\n";
-        }
-    }
-
-    std::cout << std::endl << std::endl;
-}
-
-void TestScannerLinearRSC()
+void TestSVFScannerRSC()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloatRSC::size_type N = 20000000;
-    std::vector<float> temp(N);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    float upper = 1000000.0f;
+    float lower = -1000000.0f;
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    std::vector<float> linData(N);
 
     for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
-        temp[i] = -1.0f * (float)i * 0.00123f;
+        linData[i] = -1.0f * (float)i * 0.00123f;
     for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
-        temp[i+N/2] = (float)i * 0.00123f;
+        linData[i+N/2] = (float)i * 0.00123f;
 
     sparseVecFloatRSC testSVF;
-    testSVF.import(temp.data(), N);
+    testSVF.import(linData.data(), N);
     testSVF.optimize(tb);    
     testSVF.sync(true, true);
 
-    // --- Test 1: large positive range ---
+    unsigned int tests = 1000;
+
     {
-        float from = 100.0f;
-        float to   = 500.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 1);
+        sparseVecFloatRSC::bvector_type xorRSC;
+        sparseVecFloatRSC::bvector_type xorVect;
+        sparseVecFloatRSC::bvector_type xorConst;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC Scanner Linear Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
+                scan.find_range_float(testSVF, from, to, bv_range);
+
+                xorRSC ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "Vector Linear Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                in_range_vect_rsc(linData, from, to, bv_range);
+                xorVect ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC Const iterator Linear Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                in_range_const_rsc(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+            }
+        }
+
+        bool range_eq_vector = (xorRSC == xorVect);
+        bool range_eq_const  = (xorRSC == xorConst);
+
+        if (range_eq_vector && range_eq_const)
+        {
+            std::cout << "LinearRSC: ALL 3 results match\n";
+        }
+        else
+        {
+            std::cout << "LinearRSC: MISMATCH\n";
+        }
     }
 
-    // --- Test 2: small positive range ---
-    {
-        float from = 1.0f;
-        float to   = 2.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 2);
-        
-    }
-
-    // --- Test 3: large negative range ---
-    {
-        float from = -500.0f;
-        float to   = -100.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 3);
-    }
-
-    // --- Test 4: small negative range ---
-    {
-        float from = -2.0f;
-        float to   = -1.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 4);
-    }
-
-    // --- Test 5: range crossing zero ---
-    {
-        float from = -10.0f;
-        float to   =  10.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 5);
-    }
-
-    // --- Test 6: range with no results ---
-    {
-        float from = 99999.0f;
-        float to   = 99999.9f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 6);
-    }
-
-    // --- Test 7: tiny range near zero ---
-    {
-        float from = -0.001f;
-        float to   =  0.001f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 7);
-    }
-}
-
-void TestScannerRandomRSC()
-{
-    BM_DECLARE_TEMP_BLOCK(tb)
-
-    sparseVecFloatRSC::size_type N = 20000000;
-    std::vector<float> temp(N);
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    float upper = 1000000.0f;
-    float lower = -1000000.0f;
-    std::uniform_real_distribution<float> dis(lower, upper);
+    testSVF.clear();
+    std::vector<float> randData(N);
 
     for (sparseVecFloatRSC::size_type i = 0; i < N; ++i)
     {
-        temp[i] = dis(gen);
+        randData[i] = dis(gen);
     }
 
-    sparseVecFloatRSC testSVF;
-    testSVF.import(temp.data(), N);
+    testSVF.import(randData.data(), N);
     testSVF.optimize(tb);
     testSVF.sync(true, true);
 
     //Using a completely random dataset
 
-    // --- Test 1: large positive range ---
     {
-        float from = 10000.0f;
-        float to   = 500000.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 1);
+        sparseVecFloatRSC::bvector_type xorRSC;
+        sparseVecFloatRSC::bvector_type xorVect;
+        sparseVecFloatRSC::bvector_type xorConst;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC Scanner Random Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
+                scan.find_range_float(testSVF, from, to, bv_range);
+
+                xorRSC ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "Vector Random Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                in_range_vect_rsc(randData, from, to, bv_range);
+                xorVect ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC Const iterator Random Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                in_range_const_rsc(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+            }
+        }
+
+        bool range_eq_vector = (xorRSC == xorVect);
+        bool range_eq_const  = (xorRSC == xorConst);
+
+        if (range_eq_vector && range_eq_const)
+        {
+            std::cout << "RandomRSC: ALL 3 results match\n";
+        }
+        else
+        {
+            std::cout << "RandomRSC: MISMATCH\n";
+        }
     }
 
-    // --- Test 2: small positive range ---
-    {
-        float from = 1.0f;
-        float to   = 2.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 2);
-    }
-
-    // --- Test 3: large negative range ---
-    {
-        float from = -500000.0f;
-        float to   = -10000.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 3);
-    }
-
-    // --- Test 4: small negative range ---
-    {
-        float from = -2.0f;
-        float to   = -1.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 4);
-    }
-
-    // --- Test 5: range crossing zero ---
-    {
-        float from = -10000.0f;
-        float to   =  10000.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 5);
-    }
-
-    // --- Test 6: range with no results ---
-    {
-        float from = 99999999.0f;
-        float to   = 99999999.9f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 6);
-    }
-
-    // --- Test 7: tiny range near zero ---
-    {
-        float from = -0.001f;
-        float to   =  0.001f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 7);
-    }
-}
-
-void TestScannerSkewedRSC()
-{
-    BM_DECLARE_TEMP_BLOCK(tb)
-
-    sparseVecFloatRSC::size_type N = 20000000;
-    std::vector<float> temp(N);
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    float upper = 1000000.0f;
-    float lower = -1000000.0f;
-    std::uniform_real_distribution<float> dis(lower, upper);
+    testSVF.clear();
+    std::vector<float> skewData(N);
 
     for (sparseVecFloatRSC::size_type i = 19000000; i < N; ++i)
     {
-        temp[i] = dis(gen);
+        skewData[i] = dis(gen);
     }
 
-    sparseVecFloatRSC testSVF;
-    testSVF.import(temp.data(), N);
+    testSVF.import(skewData.data(), N);
     testSVF.optimize(tb);
     testSVF.sync(true, true);
 
-    //Using a completely random dataset
-
-    // --- Test 1: large positive range ---
     {
-        float from = 10000.0f;
-        float to   = 500000.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 1);
+        sparseVecFloatRSC::bvector_type xorRSC;
+        sparseVecFloatRSC::bvector_type xorVect;
+        sparseVecFloatRSC::bvector_type xorConst;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC Scanner Skewed Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
+                scan.find_range_float(testSVF, from, to, bv_range);
+
+                xorRSC ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "Vector Skewed Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                in_range_vect_rsc(skewData, from, to, bv_range);
+                xorVect ^= bv_range;
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC Const iterator Skewed Data", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                sparseVecFloatRSC::bvector_type bv_range;
+                in_range_const_rsc(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+            }
+        }
+
+        bool range_eq_vector = (xorRSC == xorVect);
+        bool range_eq_const  = (xorRSC == xorConst);
+
+        if (range_eq_vector && range_eq_const)
+        {
+            std::cout << "SkewedRSC: ALL 3 results match\n";
+        }
+        else
+        {
+            std::cout << "SkewedRSC: MISMATCH\n";
+        }
     }
-
-    // --- Test 2: small positive range ---
-    {
-        float from = 1.0f;
-        float to   = 2.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 2);
-    }
-
-    // --- Test 3: large negative range ---
-    {
-        float from = -500000.0f;
-        float to   = -10000.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 3);
-    }
-
-    // --- Test 4: small negative range ---
-    {
-        float from = -2.0f;
-        float to   = -1.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 4);
-    }
-
-    // --- Test 5: range crossing zero ---
-    {
-        float from = -10000.0f;
-        float to   =  10000.0f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 5);
-    }
-
-    // --- Test 6: range with no results ---
-    {
-        float from = 99999999.0f;
-        float to   = 99999999.9f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 6);
-    }
-
-    // --- Test 7: tiny range near zero ---
-    {
-        float from = -0.001f;
-        float to   =  0.001f;
-        runSVFScannerTestRSC(temp, testSVF, from, to, 7);
-    }
-}
-
-void TestSVFScannerRSC()
-{
-    std::cout << "-------------------------SVF Linear Values Scanner RSC" << std::endl;
-    TestScannerLinearRSC();
-    std::cout << "-------------------------SVF Random Values Scanner RSC" << std::endl;
-    TestScannerRandomRSC();
-    std::cout << "-------------------------SVF Skewed Values Scanner RSC" << std::endl;
-    TestScannerSkewedRSC();
-
-    std::cout << "SVF Scanner RSC Testing Complete" << std::endl;
 }
 
 
@@ -6854,7 +6790,7 @@ int main(void)
     bm::chrono_taker<> tt(cout, "TOTAL", 1);
     try
     {
-        /*cout << endl;
+        cout << endl;
 
         MemCpyTest();
         cout << endl;
@@ -6969,7 +6905,7 @@ int main(void)
         cout << endl;
 
         StrSparseVectorTest();
-        cout << endl;*/
+        cout << endl;
 
         TestSVFScanner();
         cout << endl;

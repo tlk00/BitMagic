@@ -2909,6 +2909,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
                                                             value_type from, value_type to,
                                                             bvector_type&  bv_out)
 {
+    if (from > to) std::swap(from, to);
     find_le_float(sv, to, bv_out);
     bvector_type  ge;
     find_ge_float(sv, from, ge);
