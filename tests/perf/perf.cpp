@@ -6208,9 +6208,16 @@ void TestSVFScannerRSC()
         bool range_eq_vector = (xorRSC == xorVect);
         bool range_eq_const  = (xorRSC == xorConst);
 
+        if (!range_eq_vector)
+        {
+            cerr << "LinearRSC: MISMATCH Vect" << endl;
+        }
+        if (!range_eq_const)
+        {
+            cerr << "LinearRSC: MISMATCH Const" << endl;
+        }
         if (!range_eq_vector || !range_eq_const)
         {
-            cerr << "LinearRSC: MISMATCH" << endl;
             exit(1);
         }
     }
@@ -6298,9 +6305,16 @@ void TestSVFScannerRSC()
         bool range_eq_vector = (xorRSC == xorVect);
         bool range_eq_const  = (xorRSC == xorConst);
 
+        if (!range_eq_vector)
+        {
+            cerr << "LinearRSC: MISMATCH Vect" << endl;
+        }
+        if (!range_eq_const)
+        {
+            cerr << "LinearRSC: MISMATCH Const" << endl;
+        }
         if (!range_eq_vector || !range_eq_const)
         {
-            cerr << "RandomRSC: MISMATCH" << endl;
             exit(1);
         }
     }
@@ -6389,9 +6403,16 @@ void TestSVFScannerRSC()
         bool range_eq_vector = (xorRSC == xorVect);
         bool range_eq_const  = (xorRSC == xorConst);
 
+        if (!range_eq_vector)
+        {
+            cerr << "SkewedRSC: MISMATCH Vect" << endl;
+        }
+        if (!range_eq_const)
+        {
+            cerr << "SkewedRSC: MISMATCH Const" << endl;
+        }
         if (!range_eq_vector || !range_eq_const)
         {
-            cerr << "SkewedRSC: MISMATCH" << endl;
             exit(1);
         }
     }
@@ -6789,7 +6810,7 @@ int main(void)
     try
     {
         cout << endl;
-/*
+
         MemCpyTest();
         cout << endl;
 
@@ -6903,7 +6924,7 @@ int main(void)
         cout << endl;
 
         StrSparseVectorTest();
-        cout << endl;*/
+        cout << endl;
 
         TestSVFScanner();
         cout << endl;

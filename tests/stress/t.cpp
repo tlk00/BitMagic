@@ -41304,7 +41304,7 @@ void in_range(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_t
 
 void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
-    
+    if(from > to) std::swap(from, to);
     for(sparseVecFloat::size_type i = 0; i < fv.size(); i++){
         if(fv[i] >= from && fv[i] <= to)
         {
@@ -41316,14 +41316,11 @@ void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::
 void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
     sparseVecFloat::const_iterator ci = sv.begin();
-    sparseVecFloat::const_iterator ciEnd = sv.end();
-
-    for (; ci != ciEnd; ci++){
-        float v = ci.value();
-        if(v >= from && v <= to)
-        {
+    if (from > to) std::swap(from, to);
+    for (; ci.valid(); ++ci)
+    {
+        if (auto v = ci.value(); (v >= from && v <= to))
             bv_out.set(ci.pos());
-        }
     }
 }
 
@@ -41342,7 +41339,7 @@ void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float fr
 
     if (!range_eq_vector || !range_eq_const)
     {
-        std::cout << "Test[" << from << ", " << to << "] MISMATCH\n";
+        std::cout << "Test[" << std::fixed << std::setprecision(6) << from << ", " << to << "] MISMATCH\n";
         if (!range_eq_vector)
         {
             sparseVecFloat::bvector_type diff;
@@ -41452,7 +41449,7 @@ void in_rangeRSC(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::
 
 void in_range_vectRSC(std::vector<float> fv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
-    
+    if (from > to) std::swap(from, to);
     for(sparseVecFloatRSC::size_type i = 0; i < fv.size(); i++){
         if(fv[i] >= from && fv[i] <= to)
         {
@@ -41463,15 +41460,12 @@ void in_range_vectRSC(std::vector<float> fv, float from, float to, sparseVecFloa
 
 void in_range_constRSC(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
+    if (from > to) std::swap(from, to);
     sparseVecFloatRSC::const_iterator ci = sv.begin();
-    sparseVecFloatRSC::const_iterator ciEnd = sv.end();
-
-    for (; ci != ciEnd; ci++){
-        float v = ci.value();
-        if(v >= from && v <= to)
-        {
+    for (; ci.valid(); ++ci)
+    {
+        if (auto v = ci.value(); v >= from && v <= to)
             bv_out.set(ci.pos());
-        }
     }
 }
 
@@ -41487,10 +41481,11 @@ void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, fl
 
     bool range_eq_vector = (bv_range == bv_vector);
     bool range_eq_const  = (bv_range == bv_const);
+    bool range_eq_const_vector  = (bv_vector == bv_const);
 
     if (!range_eq_vector || !range_eq_const)
     {
-        std::cout << "Test[" << from << ", " << to << "] MISMATCH\n";
+        std::cout << "Test[" << std::fixed << std::setprecision(6) << from << ", " << to << "] MISMATCH\n";
         if (!range_eq_vector)
         {
             sparseVecFloatRSC::bvector_type diff;
@@ -41506,6 +41501,15 @@ void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, fl
             sparseVecFloatRSC::bvector_type diff;
             diff = bv_range ^ bv_const;
             std::cout << "  range vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (sparseVecFloatRSC::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if(!range_eq_const_vector)
+        {
+            sparseVecFloatRSC::bvector_type diff;
+            diff = bv_vector ^ bv_const;
+            std::cout << "  vector vs const differs at " << diff.count() << " positions\n";
             auto en = diff.first();
             for (sparseVecFloatRSC::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
                 std::cout << "  position: " << *en << "\n";
@@ -43244,10 +43248,14 @@ return 0;
     }
 
     if(is_all || is_svf){
+        
         SparseVecFloatTests();
         CheckAllocLeaks(false);
 
         SparseVecFloatScannerTests();
+        CheckAllocLeaks(false);
+        
+        sparseVecFloatRSCScannerTests();
         CheckAllocLeaks(false);
     }
 

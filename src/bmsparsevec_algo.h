@@ -2831,6 +2831,10 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type
 
         bv_out -= boundsExp;
     }
+    
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out &= *non_null_mask;
 }
 
 //----------------------------------------------------------------------------
@@ -2841,6 +2845,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv, value_type
     find_lt_float(sv, val, bv_out);
     bv_out.invert();
     bv_out.set_range(sv.size(), bm::id_max, false);
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out &= *non_null_mask;
 }
 
 //----------------------------------------------------------------------------
@@ -2890,6 +2897,10 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type
         bv_out -= boundsExp;
         bv_out |= sv.signs_;
     }
+    
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out &= *non_null_mask;
 }
 
 //----------------------------------------------------------------------------
@@ -2900,6 +2911,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv, value_type
     find_gt_float(sv, val, bv_out);
     bv_out.invert();
     bv_out.set_range(sv.size(), bm::id_max, false);
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out &= *non_null_mask;
 }
 
 //----------------------------------------------------------------------------
