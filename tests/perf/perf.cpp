@@ -5787,33 +5787,27 @@ typedef bm::sparse_vector<unsigned int, bvect> sparse_vec_u32;
 typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, sparse_vec_u32>> sparseVecFloatRSC;
 
 //Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
-void in_range_vect(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+inline
+void in_range_vect(const std::vector<float>& fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
     if(from > to) std::swap(from, to);
     for (sparseVecFloat::size_type i = 0; i < fv.size(); i++)
     {
-        if(fv[i] >= from && fv[i] <= to)
-        {
+        if (fv[i] >= from && fv[i] <= to)
             bv_out.set(i);
-        }
-    }
+    } // for
 }
 
 //Finds all values in range [from, to] in a given sparse_vector_float using a const_iterator and flips the corresponding bits in bv_out
-void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+inline
+void in_range_const(const sparseVecFloat& sv, float from, float to, sparseVecFloat::bvector_type& bv_out)
 {
     sparseVecFloat::const_iterator ci = sv.begin();
-    sparseVecFloat::const_iterator ciEnd = sv.end();
-
-    if(from > to) std::swap(from, to);
-
-    for (; ci != ciEnd; ci++)
+    if (from > to) std::swap(from, to);
+    for (; ci.valid(); ++ci)
     {
-        float v = ci.value();
-        if(v >= from && v <= to)
-        {
+        if (auto v = ci.value(); (v >= from && v <= to))
             bv_out.set(ci.pos());
-        }
     }
 }
 
@@ -6073,62 +6067,36 @@ void TestSVFScanner()
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 //-----------------------------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
 //Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
-void in_range_vect_rsc(std::vector<float> fv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
+inline
+void in_range_vect_rsc(const std::vector<float>& fv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
     if (from > to) std::swap(from, to);
     for (sparseVecFloatRSC::size_type i = 0; i < fv.size(); i++)
     {
         if(fv[i] >= from && fv[i] <= to)
-        {
             bv_out.set(i);
-        }
     }
 }
 
 //Finds all values in range [from, to] in a given sparse_vector_float which uses a rsc sparse vector 
 //using a const_iterator and flips the corresponding bits in bv_out
-void in_range_const_rsc(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
+inline
+void in_range_const_rsc(const sparseVecFloatRSC& sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
     if (from > to) std::swap(from, to);
     sparseVecFloatRSC::const_iterator ci = sv.begin();
-    sparseVecFloatRSC::const_iterator ciEnd = sv.end();
-
-    for (; ci != ciEnd; ci++)
+    for (; ci.valid(); ++ci)
     {
-        float v = ci.value();
-        if (v >= from && v <= to)
-        {
+        if (auto v = ci.value(); v >= from && v <= to)
             bv_out.set(ci.pos());
-        }
     }
 }
+
+// -------------------------------------------------------------------
 
 void TestSVFScannerRSC()
 {
