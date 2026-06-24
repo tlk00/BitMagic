@@ -6109,13 +6109,32 @@ void TestSVFScannerRSC()
     float upper = 1000000.0f;
     float lower = -1000000.0f;
     std::uniform_real_distribution<float> dis(lower, upper);
+    std::uniform_real_distribution<float> null_chance(0.0f, 1.0f);
 
     std::vector<float> linData(N);
 
     for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
-        linData[i] = -1.0f * (float)i * 0.00123f;
+    {
+        if (null_chance(gen) >= 0.35f)
+        {
+            linData[i] = -1.0f * (float)i * 0.00123f;
+        }
+        else
+        {
+            linData[i] = std::numeric_limits<float>::quiet_NaN();
+        }
+    }
     for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
-        linData[i+N/2] = (float)i * 0.00123f;
+    {
+        if (null_chance(gen) >= 0.35f)
+        {
+            linData[i+N/2] = (float)i * 0.00123f;
+        }
+        else
+        {
+            linData[i] = std::numeric_limits<float>::quiet_NaN();
+        }
+    }
 
     sparseVecFloatRSC testSVF;
     testSVF.import(linData.data(), N);
@@ -6197,7 +6216,14 @@ void TestSVFScannerRSC()
 
     for (sparseVecFloatRSC::size_type i = 0; i < N; ++i)
     {
-        randData[i] = dis(gen);
+        if (null_chance(gen) >= 0.35f)
+        {
+            randData[i] = dis(gen);
+        }
+        else
+        {
+            randData[i] = std::numeric_limits<float>::quiet_NaN();
+        }
     }
 
     testSVF.import(randData.data(), N);
@@ -6276,10 +6302,20 @@ void TestSVFScannerRSC()
 
     testSVF.clear();
     std::vector<float> skewData(N);
-
+    for (sparseVecFloatRSC::size_type i = 0; i < 19000000; ++i)
+    {
+        skewData[i] = std::numeric_limits<float>::quiet_NaN();
+    }
     for (sparseVecFloatRSC::size_type i = 19000000; i < N; ++i)
     {
-        skewData[i] = dis(gen);
+        if (null_chance(gen) >= 0.35f)
+        {
+            skewData[i] = dis(gen);
+        }
+        else
+        {
+            skewData[i] = std::numeric_limits<float>::quiet_NaN();
+        }
     }
 
     testSVF.import(skewData.data(), N);

@@ -778,7 +778,7 @@ void sparse_vector_float<SV>::import(const value_type* arr,
                                 size_type offset, 
                                 bool set_not_null)
 {
-    const size_type CHUNK = 1024;
+    const size_type CHUNK = 256;
     unsigned int exp_buf[CHUNK];
     unsigned int mant_buf[CHUNK];
  
@@ -789,6 +789,7 @@ void sparse_vector_float<SV>::import(const value_type* arr,
     {
         typename sparse_vector_u::sparse_vector_type tempExpSV(bm::use_null);
         typename sparse_vector_u::sparse_vector_type tempMantSV(bm::use_null);
+        bm::bvector<> nullBits(CHUNK);
 
         while (remaining > 0)
         {
@@ -797,6 +798,10 @@ void sparse_vector_float<SV>::import(const value_type* arr,
     
             for (size_type i = 0; i < chunk; i++)
             {
+                if(arr[pos+i] != arr[pos+i]){
+                    nullBits.set(i, true);
+                    continue;
+                }
                 unsigned int bits;
                 std::memcpy(&bits, &arr[pos + i], sizeof(float));
     
@@ -807,12 +812,24 @@ void sparse_vector_float<SV>::import(const value_type* arr,
                 signs_.set(idx + i, sign == 1);
             }
 
-            tempExpSV.import(exp_buf, chunk, idx, set_not_null);
-            tempMantSV.import(mant_buf, chunk, idx, set_not_null);
+            if(nullBits.count() != CHUNK)
+            {
+                tempExpSV.import(exp_buf, chunk, idx, set_not_null);
+                tempMantSV.import(mant_buf, chunk, idx, set_not_null);
 
+                bm::bvector<>::enumerator first = nullBits.first();
+                bm::bvector<>::enumerator end = nullBits.end();
+                while(first != end)
+                {
+                    tempExpSV.clear(*first + pos, true);
+                    tempMantSV.clear(*first + pos, true);
+                    ++first;
+                }
+            }
             
             pos       += chunk;
             remaining -= chunk;
+            nullBits.clear();
         }
 
         exponents_.load_from(tempExpSV);
@@ -911,7 +928,7 @@ sparse_vector_float<SV>::extract(value_type* arr,
 {
     if constexpr (!is_rsc_sparse_vector<SV>::value)
     {
-        const size_type CHUNK = 1024;
+        const size_type CHUNK = 256;
 
         unsigned int exp_buf[CHUNK];
         unsigned int mant_buf[CHUNK];
@@ -955,7 +972,7 @@ sparse_vector_float<SV>::extract_range(value_type* arr,
 {
     if constexpr (!is_rsc_sparse_vector<SV>::value)
     {
-        const size_type CHUNK = 1024;
+        const size_type CHUNK = 256;
 
         unsigned int exp_buf[CHUNK];
         unsigned int mant_buf[CHUNK];
@@ -1003,7 +1020,7 @@ sparse_vector_float<SV>::decode(value_type* arr,
     }
     else
     {
-        const size_type CHUNK = 1024;
+        const size_type CHUNK = 256;
         unsigned int exp_buf[CHUNK];
         unsigned int mant_buf[CHUNK];
         size_type remaining = dec_size;
@@ -1042,7 +1059,7 @@ sparse_vector_float<SV>::gather(value_type* arr,
                                 size_type   size,
                                 bm::sort_order sorted_idx) const
 {
-    const size_type CHUNK = 1024;
+    const size_type CHUNK = 256;
 
     unsigned int exp_buf[CHUNK];
     unsigned int mant_buf[CHUNK];
