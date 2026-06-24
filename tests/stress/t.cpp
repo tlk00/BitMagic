@@ -41363,6 +41363,7 @@ void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float fr
                 std::cout << "  position: " << *en << "\n";
         }
         std::cout << std::endl << std::endl;
+        exit(1);
     }
 }
 
@@ -41510,6 +41511,7 @@ void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, fl
                 std::cout << "  position: " << *en << "\n";
         }
         std::cout << std::endl << std::endl;
+        exit(1);
     }
 }
 

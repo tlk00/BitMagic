@@ -1161,6 +1161,10 @@ template<class SV>
 typename sparse_vector_float<SV>::const_iterator::value_type
 sparse_vector_float<SV>::const_iterator::value() const
 {
+    if (is_null())
+    {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
     unsigned int sign = sv_->signs_.test(pos_) ? 1 : 0;
     unsigned int exponent = exp_it_.value();
     unsigned int mantissa = mant_it_.value();

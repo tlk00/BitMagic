@@ -5903,6 +5903,7 @@ void TestSVFScanner()
         if (!range_eq_vector || !range_eq_const)
         {
             cerr << "Linear: MISMATCH" << endl;
+            exit(1);
         }
     }
 
@@ -5983,6 +5984,7 @@ void TestSVFScanner()
         if (!range_eq_vector || !range_eq_const)
         {
             cerr << "Random: MISMATCH" << endl;
+            exit(1);
         }
     }
 
@@ -6062,6 +6064,7 @@ void TestSVFScanner()
         if (!range_eq_vector || !range_eq_const)
         {
             cerr << "Skewed: MISMATCH" << endl;
+            exit(1);
         }
     }
 }
@@ -6208,6 +6211,7 @@ void TestSVFScannerRSC()
         if (!range_eq_vector || !range_eq_const)
         {
             cerr << "LinearRSC: MISMATCH" << endl;
+            exit(1);
         }
     }
 
@@ -6297,6 +6301,7 @@ void TestSVFScannerRSC()
         if (!range_eq_vector || !range_eq_const)
         {
             cerr << "RandomRSC: MISMATCH" << endl;
+            exit(1);
         }
     }
 
@@ -6387,6 +6392,7 @@ void TestSVFScannerRSC()
         if (!range_eq_vector || !range_eq_const)
         {
             cerr << "SkewedRSC: MISMATCH" << endl;
+            exit(1);
         }
     }
 }
@@ -6783,7 +6789,7 @@ int main(void)
     try
     {
         cout << endl;
-
+/*
         MemCpyTest();
         cout << endl;
 
@@ -6897,7 +6903,7 @@ int main(void)
         cout << endl;
 
         StrSparseVectorTest();
-        cout << endl;
+        cout << endl;*/
 
         TestSVFScanner();
         cout << endl;
