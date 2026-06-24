@@ -328,6 +328,8 @@ If you want to change the default you can do that in makefile.in
 Project now comes with a set of makefiles for cmake, you can just build it or generate project files for any 
 cmake-supported environment.
 
+When targeting `riscv64`, use the default portable build unless you add a dedicated RISC-V SIMD backend. Avoid inheriting host-only `-march=native` settings during cross-target or simulated target builds.
+
 
 ###### Windows:
 ---
