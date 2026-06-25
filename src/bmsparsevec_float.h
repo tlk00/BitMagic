@@ -525,8 +525,8 @@ sparse_vector_float<SV>::sparse_vector_float(bm::null_support null_able,
                                              size_type bv_max_size,
                                              const allocator_type&   alloc)
 :signs_(ap.strat, ap.glevel_len, bv_max_size, alloc),
- exponents_(null_able, ap, bv_max_size, alloc),
- mantissas_(null_able, ap, bv_max_size, alloc)
+ exponents_(is_rsc_sparse_vector<SV>::value ? bm::use_null : null_able, ap, bv_max_size, alloc),
+ mantissas_(is_rsc_sparse_vector<SV>::value ? bm::use_null : null_able, ap, bv_max_size, alloc)
 {}
 
 //---------------------------------------------------------------------

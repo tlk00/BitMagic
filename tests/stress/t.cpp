@@ -38504,14 +38504,14 @@ void TestCompressSparseVector()
         rsc_sparse_vector_u32 csv2;
         csv2.load_from(sv);
         DetailedCompareSparseVectors(csv2, sv);
-        csv1.sync();
-        DetailedCheckCompressedDecode(csv1);
+        csv2.sync();
+        DetailedCheckCompressedDecode(csv2);
 
         csv2.optimize(tb);
         csv2.sync();
 
         DetailedCompareSparseVectors(csv2, sv);
-        DetailedCheckCompressedDecode(csv1);
+        DetailedCheckCompressedDecode(csv2);
         cout << "ok" << endl;
 
         cout << "cmp 4...";
