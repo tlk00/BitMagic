@@ -550,7 +550,7 @@ void BitForEachTest()
     }
     assert(sum1 == sum4);
 
-    g_fl_cnt += value; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(value); // to fool some smart compilers like ICC using global
 
     delete [] test_arr;
 }
@@ -1492,7 +1492,7 @@ void FindTest()
             }
         }
     }
-    g_fl_cnt += pos_sum; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(pos_sum); // to fool some smart compilers like ICC using global
 
     {
         bm::chrono_taker<std::ostream> tt(cout, "bvector<>::find()", REPEATS*100);
@@ -1747,7 +1747,7 @@ void EnumeratorTestGAP()
     }
     s << v << endl; // attempt to fool optimization
 
-    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(cnt); // to fool some smart compilers like ICC using global
 
 
     delete bv;
@@ -1809,7 +1809,7 @@ void SerializationTest()
     }
     }
 
-    g_fl_cnt += id_size; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(id_size); // to fool some smart compilers like ICC using global
 
 
     delete bv;
@@ -3200,7 +3200,7 @@ void SparseVectorAccessTest()
 
     assert(cnt1 == cnt2);
 
-    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(cnt); // to fool some smart compilers like ICC using global
 }
 
 static
@@ -3352,7 +3352,7 @@ void SparseVectorSignedAccessTest()
         }
     }
 
-    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(cnt); // to fool some smart compilers like ICC using global
 
 }
 
@@ -4121,7 +4121,7 @@ void Set2SetTransformTest()
         }
     }
     */
-    g_fl_cnt += cnt; // to fool some smart compilers like ICC using global
+    g_fl_cnt += float(cnt); // to fool some smart compilers like ICC using global
 
 }
 
@@ -4474,7 +4474,7 @@ void IntervalsTest()
                 assert(cnt == cnt_c);
             }
 
-            g_fl_cnt += sum; // to fool some smart compilers like ICC using global
+            g_fl_cnt += float(sum); // to fool some smart compilers like ICC using global
 
         }
 
@@ -4703,11 +4703,12 @@ void generate_search_samples(VECT& search_vect,
     assert(src_vect.size() >= search_size);
     search_vect.reserve(search_size);
     size_t step = src_vect.size() / search_size;
-    for (size_t i = 0; i < search_size; i+= step)
+    for (size_t i = 0; i < src_vect.size(); i+= step)
     {
         auto v = src_vect[i];
         search_vect.push_back(v);
     } // for
+    assert(search_vect.size() >= search_size);
 }
 
 
@@ -5817,7 +5818,7 @@ void TestSVFScanner()
 
     sparseVecFloat::size_type N = 20000000;
     std::random_device rd;
-    std::mt19937 gen(rd());
+    //std::mt19937 gen(rd());
 
     float upper = 1000000.0f;
     float lower = -1000000.0f;
@@ -5861,7 +5862,6 @@ void TestSVFScanner()
                 float from = t.first;
                 float to   = t.second;
 
-                bm::sparse_vector_scanner<sparseVecFloat> scan;
                 scan.find_range_float(testSVF, from, to, bv_range);
 
                 xorSV ^= bv_range;
@@ -6107,7 +6107,6 @@ void TestSVFScannerRSC()
 
     sparseVecFloatRSC::size_type N = 20000000;
     std::random_device rd;
-    std::mt19937 gen(rd());
 
     float upper = 1000000.0f;
     float lower = -1000000.0f;
