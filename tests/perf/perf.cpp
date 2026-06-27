@@ -6492,11 +6492,11 @@ void TestSVFComparison()
             cerr << "SVF Non-optimized Scanner and Const Iterator do not match" << endl;
             exit(1);
         }
-    }*/
+    }
     
     svf.optimize(tb);
     
-    /*{
+    {
         sparseVecFloat::bvector_type xorSVF;
         sparseVecFloat::bvector_type xorConst;
         sparseVecFloat::bvector_type bv_range;
