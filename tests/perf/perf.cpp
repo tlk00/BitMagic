@@ -6454,7 +6454,7 @@ void TestSVFComparison()
     
     sparseVecFloat svf(bm::use_null);
     svf.import(randData.data(), N);
-    /*{
+    {
         sparseVecFloat::bvector_type xorSVF;
         sparseVecFloat::bvector_type xorConst;
         sparseVecFloat::bvector_type bv_range;
@@ -6534,7 +6534,7 @@ void TestSVFComparison()
             cerr << "SVF Optimized Scanner and Const Iterator do not match" << endl;
             exit(1);
         }
-    }*/
+    }
     
     svf.freeze();
     {
