@@ -2261,7 +2261,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal(const SV&   sv,
                     and_eq_bv.bit_and(*bv_base_plane, gtz_bv);
             }
             else // unsigned
-                and_eq_bv = *bv_base_plane; // initial assignment
+                and_eq_bv.bit_or(*bv_base_plane); // initial assignment via OR (arg can be RO)
         }
         else
             and_eq_bv.bit_and(*bv_base_plane); // AND base to accumulator
