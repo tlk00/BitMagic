@@ -798,7 +798,8 @@ void sparse_vector_float<SV>::import(const value_type* arr,
     
             for (size_type i = 0; i < chunk; i++)
             {
-                if(arr[pos+i] != arr[pos+i]){
+                if (arr[pos+i] != arr[pos+i])
+                {
                     nullBits.set(i, true);
                     continue;
                 }
@@ -818,12 +819,10 @@ void sparse_vector_float<SV>::import(const value_type* arr,
                 tempMantSV.import(mant_buf, chunk, idx, set_not_null);
 
                 bm::bvector<>::enumerator first = nullBits.first();
-                bm::bvector<>::enumerator end = nullBits.end();
-                while(first != end)
+                for (; first.valid(); ++first)
                 {
                     tempExpSV.clear(*first + pos, true);
                     tempMantSV.clear(*first + pos, true);
-                    ++first;
                 }
             }
             
@@ -837,6 +836,9 @@ void sparse_vector_float<SV>::import(const value_type* arr,
     }
     else
     {
+        bm::bvector<> nullBits(CHUNK);
+        bvector_type* bv_null = mantissas_.get_null_bvect();
+        
         while (remaining > 0)
         {
             size_type chunk = std::min(remaining, CHUNK);
@@ -844,6 +846,11 @@ void sparse_vector_float<SV>::import(const value_type* arr,
     
             for (size_type i = 0; i < chunk; i++)
             {
+                if (arr[pos+i] != arr[pos+i] && bv_null)
+                {
+                    nullBits.set(i, true);
+                    continue;
+                }
                 unsigned int bits;
                 std::memcpy(&bits, &arr[pos + i], sizeof(float));
     
@@ -854,12 +861,22 @@ void sparse_vector_float<SV>::import(const value_type* arr,
                 signs_.set(idx + i, sign == 1);
             }
 
-            exponents_.import(exp_buf, chunk, idx, set_not_null);
-            mantissas_.import(mant_buf, chunk, idx, set_not_null);
+            if(nullBits.count() != CHUNK)
+            {
+                exponents_.import(exp_buf, chunk, idx, set_not_null);
+                mantissas_.import(mant_buf, chunk, idx, set_not_null);
+                
+                bm::bvector<>::enumerator first = nullBits.first();
+                for (; first.valid(); ++first)
+                {
+                    exponents_.clear(*first + pos, true);
+                    mantissas_.clear(*first + pos, true);
+                }
+            }
 
-    
             pos       += chunk;
             remaining -= chunk;
+            nullBits.clear();
         }
     }
 }

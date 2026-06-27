@@ -2803,33 +2803,47 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type
     if (sign == 1)
     {
         svfScanner.find_le(sv.exponents_, exponent, bv_out);
-        bvector_type pos = sv.signs_;
-        pos.invert();
-        pos.set_range(sv.size(), bm::id_max, false);
         
-        bvector_type boundsExp;
-        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+        {
+            bvector_type boundsExp;
+            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
 
-        bvector_type boundsMant;
-        svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
-        boundsExp &= boundsMant;
+            bvector_type boundsMant;
+            svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
+            boundsExp &= boundsMant;
 
-        bv_out -= boundsExp;
-        bv_out |= pos;
+            bv_out -= boundsExp;
+            
+            boundsMant.clear(true);
+            boundsExp.clear(true);
+        }
+        
+        {
+            bvector_type pos;
+            pos.set_range(0, sv.size() - 1, true);
+            pos -= sv.signs_;
+            bv_out |= pos;
+            pos.clear(true);
+        }
     }
     else
     {
         svfScanner.find_ge(sv.exponents_, exponent, bv_out);
         bv_out -= sv.signs_;
 
-        bvector_type boundsExp;
-        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+        {
+            bvector_type boundsExp;
+            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
 
-        bvector_type boundsMant;
-        svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
-        boundsExp &= boundsMant;
+            bvector_type boundsMant;
+            svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
+            boundsExp &= boundsMant;
 
-        bv_out -= boundsExp;
+            bv_out -= boundsExp;
+            
+            boundsMant.clear(true);
+            boundsExp.clear(true);
+        }
     }
     
     const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
@@ -2842,9 +2856,14 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type
 template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv, value_type  val, bvector_type&  bv_out)
 {
-    find_lt_float(sv, val, bv_out);
-    bv_out.invert();
-    bv_out.set_range(sv.size(), bm::id_max, false);
+    bv_out.clear();
+    bv_out.set_range(0, sv.size()-1, true);
+    
+    bvector_type inverse;
+    find_lt_float(sv, val, inverse);
+    
+    bv_out -= inverse;
+    
     const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
     if (non_null_mask)
         bv_out &= *non_null_mask;
@@ -2869,33 +2888,39 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type
     if (sign == 1)
     {
         svfScanner.find_ge(sv.exponents_, exponent, bv_out);
-        bvector_type pos = sv.signs_;
-        pos.invert();
-        pos.set_range(sv.size(), bm::id_max, false);
-        bv_out -= pos;
+        bv_out &= sv.signs_;
         
-        bvector_type boundsExp;
-        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
-
-        bvector_type boundsMant;
-        svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
-        boundsExp &= boundsMant;
-
-        bv_out -= boundsExp;
+        {
+            bvector_type boundsExp;
+            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+            
+            bvector_type boundsMant;
+            svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
+            boundsExp &= boundsMant;
+            
+            bv_out -= boundsExp;
+            boundsExp.clear(true);
+            boundsMant.clear(true);
+        }
     }
     else
     {
         svfScanner.find_le(sv.exponents_, exponent, bv_out);
 
-        bvector_type boundsExp;
-        svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
-
-        bvector_type boundsMant;
-        svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
-        boundsExp &= boundsMant;
-
-        bv_out -= boundsExp;
-        bv_out |= sv.signs_;
+        {
+            bvector_type boundsExp;
+            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+            
+            bvector_type boundsMant;
+            svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
+            boundsExp &= boundsMant;
+            
+            bv_out -= boundsExp;
+            bv_out |= sv.signs_;
+            
+            boundsExp.clear(true);
+            boundsMant.clear(true);
+        }
     }
     
     const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
@@ -2908,9 +2933,14 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type
 template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv, value_type  val, bvector_type&  bv_out)
 {
-    find_gt_float(sv, val, bv_out);
-    bv_out.invert();
-    bv_out.set_range(sv.size(), bm::id_max, false);
+    bv_out.clear();
+    bv_out.set_range(0, sv.size()-1, true);
+    
+    bvector_type inverse;
+    find_gt_float(sv, val, inverse);
+    
+    bv_out -= inverse;
+    
     const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
     if (non_null_mask)
         bv_out &= *non_null_mask;
