@@ -7110,7 +7110,7 @@ int main(void)
     try
     {
         cout << endl;
-/*
+
         MemCpyTest();
         cout << endl;
 
@@ -7231,7 +7231,7 @@ int main(void)
 
         TestSVFScannerRSC();
         cout << endl;
-        */
+        
         TestSVFComparison();
         cout << endl;
 
