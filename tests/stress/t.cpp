@@ -37312,6 +37312,7 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     unsigned size1 = 100;
     for (unsigned i = 0; i < size1; )
     {
+        if (size == 0) break;
         CheckCompressedDecode(csv, i, size);
         if (!is_silent)
             if (i % 128 ==0)
@@ -37325,6 +37326,7 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     unsigned size1 = 100000;
     for (unsigned i = 0; i < size1; )
     {
+        if (size1 == 0) break;
         CheckCompressedDecode(csv, i, size1);
         if (!is_silent)
             cout << "\r" << i << "/" << size1 << flush;
@@ -37338,6 +37340,7 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     unsigned size1 = size;
     for (unsigned i = size-size/2; i < size1; )
     {
+        if (size1 == 0) break;
         CheckCompressedDecode(csv, i, size1);
         if (!is_silent)
             cout << "\r" << i << "/" << size1 << flush;
@@ -37348,6 +37351,7 @@ void DetailedCheckCompressedDecode(const CSV& csv)
 
     for (unsigned i = size-size/2; i < size; )
     {
+        if (size == 0) break;
         CheckCompressedDecode(csv, i, size);
         if (!is_silent)
             cout << "\r" << i << "/" << size << flush;
