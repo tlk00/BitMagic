@@ -461,12 +461,14 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
     size_t exp_size_ = expLayTemp.size();
     size_t mant_size_ = mantLayTemp.size();
 
-    size_t header_size = sizeof(size_t) * 3;
+    size_t header_size = 3 + sizeof(size_t) * 3;
     size_t totalSize = header_size + signBufTemp.size() + expLayTemp.size() + mantLayTemp.size();
 
     sv_layout.resize(totalSize);
     unsigned char* dest = sv_layout.buf_;
 
+    std::memcpy(dest, "bf0", 3);
+    dest += 3;
 
     std::memcpy(dest, &sign_size_, sizeof(size_t));
     dest += sizeof(size_t);
@@ -525,7 +527,9 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
     if (clear_sv)
         sv.clear();
 
-   size_t sign_size, exp_size, mant_size;
+    size_t sign_size, exp_size, mant_size;
+    
+    buf+=3;
     
     std::memcpy(&sign_size, buf, sizeof(size_t)); buf += sizeof(size_t);
     std::memcpy(&exp_size,  buf, sizeof(size_t)); buf += sizeof(size_t);
@@ -551,6 +555,8 @@ void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsig
         sv.clear();
     
     const unsigned char* ptr = buf;
+    
+    ptr+=3;
 
     size_t sign_size, exp_size, mant_size;
     std::memcpy(&sign_size, ptr, sizeof(size_t)); 
@@ -577,6 +583,7 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
     sv.clear();
 
     const unsigned char* ptr = buf;
+    ptr+=3;
 
     size_t sign_size, exp_size, mant_size;
     std::memcpy(&sign_size, ptr, sizeof(size_t)); 

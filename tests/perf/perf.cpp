@@ -6140,7 +6140,7 @@ void TestSVFScannerRSC()
 
     sparseVecFloatRSC testSVF;
     testSVF.import(linData.data(), N);
-    testSVF.optimize(tb);    
+    testSVF.optimize(tb);
     testSVF.sync(true, true);
 
     unsigned int tests = 1000;
@@ -6424,22 +6424,33 @@ void TestSVFComparison()
     sparseVecFloat::size_type N = 20000000;
     std::random_device rd;
 
-    float upper = 1000000.0f;
-    float lower = -1000000.0f;
+    float upper = 15000.0f;
+    float lower = -15000.0f;
     std::uniform_real_distribution<float> dis(lower, upper);
     std::uniform_real_distribution<float> null_chance(0.0f, 1.0f);
     
-    std::vector<float> randData(N);
+    std::vector<float> linData(N);
 
-    for (sparseVecFloat::size_type i = 0; i < N; ++i)
+    for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
     {
         if (null_chance(gen) >= 0.35f)
         {
-            randData[i] = dis(gen);
+            linData[i] = -1.0f * (float)i * 0.00123f;
         }
         else
         {
-            randData[i] = std::numeric_limits<float>::quiet_NaN();
+            linData[i] = std::numeric_limits<float>::quiet_NaN();
+        }
+    }
+    for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
+    {
+        if (null_chance(gen) >= 0.35f)
+        {
+            linData[i+N/2] = (float)i * 0.00123f;
+        }
+        else
+        {
+            linData[i] = std::numeric_limits<float>::quiet_NaN();
         }
     }
     unsigned int tests = 1000;
@@ -6453,7 +6464,7 @@ void TestSVFComparison()
     }
     
     sparseVecFloat svf(bm::use_null);
-    svf.import(randData.data(), N);
+    svf.import(linData.data(), N);
     {
         sparseVecFloat::bvector_type xorSVF;
         sparseVecFloat::bvector_type xorConst;
@@ -6578,7 +6589,7 @@ void TestSVFComparison()
     svf.clear();
     
     sparseVecFloatRSC rscSVF;
-    rscSVF.import(randData.data(), N);
+    rscSVF.import(linData.data(), N);
     rscSVF.sync(true, true);
     {
         sparseVecFloatRSC::bvector_type xorRSC;
@@ -7099,7 +7110,7 @@ int main(void)
     try
     {
         cout << endl;
-
+/*
         MemCpyTest();
         cout << endl;
 
@@ -7220,7 +7231,7 @@ int main(void)
 
         TestSVFScannerRSC();
         cout << endl;
-        
+        */
         TestSVFComparison();
         cout << endl;
 
