@@ -524,6 +524,12 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
                                                         const unsigned char* buf,
                                                         bool clear_sv )
 {
+    if (buf[0] != 'b' || || buf[1] != 'f' || buf[2] != '0')
+    {
+        std::cerr << "Buf missing deserialization signature" << std::endl;
+        exit(1);
+    }
+    
     if (clear_sv)
         sv.clear();
 
@@ -551,10 +557,14 @@ void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsig
                                                             size_type from, size_type to,
                                                             bool clear_sv)
 {
+    const unsigned char* ptr = buf;
+    if (ptr[0] != 'b' || || ptr[1] != 'f' || ptr[2] != '0')
+    {
+        std::cerr << "Buf missing deserialization signature" << std::endl;
+        exit(1);
+    }
     if (clear_sv)
         sv.clear();
-    
-    const unsigned char* ptr = buf;
     
     ptr+=3;
 
@@ -580,10 +590,14 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
                                                         const unsigned char* buf,
                                                         const bvector_type& mask_bv)
 {
-    sv.clear();
-
     const unsigned char* ptr = buf;
+    if (ptr[0] != 'b' || || ptr[1] != 'f' || ptr[2] != '0')
+    {
+        std::cerr << "Buf missing deserialization signature" << std::endl;
+        exit(1);
+    }
     ptr+=3;
+    sv.clear();
 
     size_t sign_size, exp_size, mant_size;
     std::memcpy(&sign_size, ptr, sizeof(size_t)); 
