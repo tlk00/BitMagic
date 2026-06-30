@@ -524,7 +524,7 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
                                                         const unsigned char* buf,
                                                         bool clear_sv )
 {
-    if (buf[0] != 'b' || || buf[1] != 'f' || buf[2] != '0')
+    if (buf[0] != 'b' || buf[1] != 'f' || buf[2] != '0')
     {
         std::cerr << "Buf missing deserialization signature" << std::endl;
         exit(1);
@@ -558,7 +558,7 @@ void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsig
                                                             bool clear_sv)
 {
     const unsigned char* ptr = buf;
-    if (ptr[0] != 'b' || || ptr[1] != 'f' || ptr[2] != '0')
+    if (ptr[0] != 'b' || ptr[1] != 'f' || ptr[2] != '0')
     {
         std::cerr << "Buf missing deserialization signature" << std::endl;
         exit(1);
@@ -591,7 +591,7 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
                                                         const bvector_type& mask_bv)
 {
     const unsigned char* ptr = buf;
-    if (ptr[0] != 'b' || || ptr[1] != 'f' || ptr[2] != '0')
+    if (ptr[0] != 'b' || ptr[1] != 'f' || ptr[2] != '0')
     {
         std::cerr << "Buf missing deserialization signature" << std::endl;
         exit(1);
