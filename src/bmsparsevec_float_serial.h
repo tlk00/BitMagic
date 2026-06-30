@@ -25,6 +25,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <memory.h>
 #include <cstring>
+#include <stdexcept>
 
 #include "bm.h"
 
@@ -526,8 +527,11 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
 {
     if (buf[0] != 'b' || buf[1] != 'f' || buf[2] != '0')
     {
-        std::cerr << "Buf missing deserialization signature" << std::endl;
-        exit(1);
+#ifndef BM_NO_STL
+    throw std::logic_error("BitMagic: Invalid serialization signature header");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
     }
     
     if (clear_sv)
@@ -560,8 +564,11 @@ void sparse_vector_float_deserializer<SV>::deserialize_range(SV& sv, const unsig
     const unsigned char* ptr = buf;
     if (ptr[0] != 'b' || ptr[1] != 'f' || ptr[2] != '0')
     {
-        std::cerr << "Buf missing deserialization signature" << std::endl;
-        exit(1);
+#ifndef BM_NO_STL
+    throw std::logic_error("BitMagic: Invalid serialization signature header");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
     }
     if (clear_sv)
         sv.clear();
@@ -593,8 +600,11 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
     const unsigned char* ptr = buf;
     if (ptr[0] != 'b' || ptr[1] != 'f' || ptr[2] != '0')
     {
-        std::cerr << "Buf missing deserialization signature" << std::endl;
-        exit(1);
+#ifndef BM_NO_STL
+    throw std::logic_error("BitMagic: Invalid serialization signature header");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
     }
     ptr+=3;
     sv.clear();
