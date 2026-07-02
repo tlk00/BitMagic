@@ -899,11 +899,11 @@ void sparse_vector_float<SV>::calc_stat(struct sparse_vector_float<SV>::statisti
     BM_ASSERT(st);
 
     bm::bvector<>::statistics signStat;
-    signs_.calc_stat(signStat);
+    signs_.calc_stat(&signStat);
 
     typename sparse_vector_u::statistics expStat, mantStat;
-    exponents_.calc_stat(expStat);
-    mantissas_.calc_stat(mantStat);
+    exponents_.calc_stat(&expStat);
+    mantissas_.calc_stat(&mantStat);
 
     st->bit_blocks        = signStat.bit_blocks   + expStat.bit_blocks   + mantStat.bit_blocks;
     st->gap_blocks        = signStat.gap_blocks   + expStat.gap_blocks   + mantStat.gap_blocks;
