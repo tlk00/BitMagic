@@ -2798,24 +2798,21 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type
     unsigned int exponent = (bits >> 23) & 0xFF;
     unsigned int mantissa =  bits        & 0x7FFFFF;
 
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svfScanner;
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
 
     if (sign == 1)
     {
-        svfScanner.find_le(sv.exponents_, exponent, bv_out);
+        svf_scanner.find_le(sv.exponents_, exponent, bv_out);
         
         {
-            bvector_type boundsExp;
-            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+            bvector_type bounds_exp;
+            svf_scanner.find_eq(sv.exponents_, exponent, bounds_exp);
 
-            bvector_type boundsMant;
-            svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
-            boundsExp &= boundsMant;
+            bvector_type bounds_mant;
+            svf_scanner.find_ge(sv.mantissas_, mantissa, bounds_mant);
+            bounds_exp &= bounds_mant;
 
-            bv_out -= boundsExp;
-            
-            boundsMant.clear(true);
-            boundsExp.clear(true);
+            bv_out -= bounds_exp;
         }
         
         {
@@ -2823,26 +2820,22 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type
             pos.set_range(0, sv.size() - 1, true);
             pos -= sv.signs_;
             bv_out |= pos;
-            pos.clear(true);
         }
     }
     else
     {
-        svfScanner.find_ge(sv.exponents_, exponent, bv_out);
+        svf_scanner.find_ge(sv.exponents_, exponent, bv_out);
         bv_out -= sv.signs_;
 
         {
-            bvector_type boundsExp;
-            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+            bvector_type bounds_exp;
+            svf_scanner.find_eq(sv.exponents_, exponent, bounds_exp);
 
-            bvector_type boundsMant;
-            svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
-            boundsExp &= boundsMant;
+            bvector_type bounds_mant;
+            svf_scanner.find_le(sv.mantissas_, mantissa, bounds_mant);
+            bounds_exp &= bounds_mant;
 
-            bv_out -= boundsExp;
-            
-            boundsMant.clear(true);
-            boundsExp.clear(true);
+            bv_out -= bounds_exp;
         }
     }
     
@@ -2883,43 +2876,38 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type
     unsigned int exponent = (bits >> 23) & 0xFF;
     unsigned int mantissa =  bits        & 0x7FFFFF;
 
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svfScanner;
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
 
     if (sign == 1)
     {
-        svfScanner.find_ge(sv.exponents_, exponent, bv_out);
+        svf_scanner.find_ge(sv.exponents_, exponent, bv_out);
         bv_out &= sv.signs_;
         
         {
-            bvector_type boundsExp;
-            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+            bvector_type bounds_exp;
+            svf_scanner.find_eq(sv.exponents_, exponent, bounds_exp);
             
-            bvector_type boundsMant;
-            svfScanner.find_le(sv.mantissas_, mantissa, boundsMant);
-            boundsExp &= boundsMant;
+            bvector_type bounds_mant;
+            svf_scanner.find_le(sv.mantissas_, mantissa, bounds_mant);
+            bounds_exp &= bounds_mant;
             
-            bv_out -= boundsExp;
-            boundsExp.clear(true);
-            boundsMant.clear(true);
+            bv_out -= bounds_exp;
         }
     }
     else
     {
-        svfScanner.find_le(sv.exponents_, exponent, bv_out);
+        svf_scanner.find_le(sv.exponents_, exponent, bv_out);
 
         {
-            bvector_type boundsExp;
-            svfScanner.find_eq(sv.exponents_, exponent, boundsExp);
+            bvector_type bounds_exp;
+            svf_scanner.find_eq(sv.exponents_, exponent, bounds_exp);
             
-            bvector_type boundsMant;
-            svfScanner.find_ge(sv.mantissas_, mantissa, boundsMant);
-            boundsExp &= boundsMant;
+            bvector_type bounds_mant;
+            svf_scanner.find_ge(sv.mantissas_, mantissa, bounds_mant);
+            bounds_exp &= bounds_mant;
             
-            bv_out -= boundsExp;
+            bv_out -= bounds_exp;
             bv_out |= sv.signs_;
-            
-            boundsExp.clear(true);
-            boundsMant.clear(true);
         }
     }
     
