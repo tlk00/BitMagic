@@ -914,7 +914,7 @@ void sparse_vector_float<SV>::calc_stat(struct sparse_vector_float<SV>::statisti
     st->bv_count          = 1 + expStat.bv_count + mantStat.bv_count; // 1 for signs bvector
 
     // gap levels - take the max across all components
-    for (int i = 0; i < bm::gap_levels; i++)
+    for (unsigned int i = 0; i < bm::gap_levels; i++)
     {
         st->gap_levels[i] = std::max({signStat.gap_levels[i], 
                                       expStat.gap_levels[i], 
