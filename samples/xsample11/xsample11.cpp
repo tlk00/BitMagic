@@ -196,36 +196,52 @@ int main(void){
             }
         }
         
+        //cleared as it is identical to the eur_day vector so unnecessary in this instance
+        jpy_day.clear();
+        
         //Calculates the statistics of the stored variables
         {
-            std::cout << "Storing All of this data in std::vector<float>'s size: " << sizeof(float) * jpy_close.size() * 10 << " bytes" << std::endl;
-            
             sparseVecFloat::statistics stat_eur_open, stat_eur_high, stat_eur_low, stat_eur_pct, stat_eur_close;
             sparseVecFloat::statistics stat_jpy_open, stat_jpy_high, stat_jpy_low, stat_jpy_pct, stat_jpy_close;
+            sparseVecString::statistics stat_date;
+            sparseVecUint::statistics stat_eur_vol, stat_jpy_vol;
 
+            eur_day.calc_stat(&stat_date);
             eur_open.calc_stat(&stat_eur_open);
             eur_high.calc_stat(&stat_eur_high);
             eur_low.calc_stat(&stat_eur_low);
             eur_pct_change.calc_stat(&stat_eur_pct);
             eur_close.calc_stat(&stat_eur_close);
+            eur_volume.calc_stat(&stat_eur_vol);
 
             jpy_open.calc_stat(&stat_jpy_open);
             jpy_high.calc_stat(&stat_jpy_high);
             jpy_low.calc_stat(&stat_jpy_low);
             jpy_pct_change.calc_stat(&stat_jpy_pct);
             jpy_close.calc_stat(&stat_jpy_close);
+            jpy_volume.calc_stat(&stat_jpy_vol);
 
-            size_t total_eur_mem = stat_eur_open.memory_used + stat_eur_high.memory_used +
-                                   stat_eur_low.memory_used  + stat_eur_pct.memory_used +
-                                   stat_eur_close.memory_used;
+            size_t total_eur_mem =  stat_eur_open.memory_used + stat_eur_high.memory_used +
+                                    stat_eur_low.memory_used  + stat_eur_pct.memory_used +
+                                    stat_eur_close.memory_used + stat_eur_vol.memory_used;
 
-            size_t total_jpy_mem = stat_jpy_open.memory_used + stat_jpy_high.memory_used +
-                                   stat_jpy_low.memory_used  + stat_jpy_pct.memory_used +
-                                   stat_jpy_close.memory_used;
+            size_t total_jpy_mem =  stat_jpy_open.memory_used + stat_jpy_high.memory_used +
+                                    stat_jpy_low.memory_used  + stat_jpy_pct.memory_used +
+                                    stat_jpy_close.memory_used + stat_jpy_vol.memory_used;
 
-            const int w = 16;
+            const int w = 30;
             
-            std::cout << std::setw(w) << "Vector Name" << " | " << std::setw(w-1) << "Memory Used (B)" << std::endl;
+            std::cout << std::setw(w) << "Vector Name" << " | " << "Memory Used (B)" << std::endl;
+            std::cout << "--------------------------------------------------------" << std::endl;
+            
+            std::cout << std::setw(w) << "std::vector<float>" <<" | " << sizeof(float) * eur_day.size() << std::endl;
+            std::cout << std::setw(w) << "std::vector<unsigned int>" << " | " << sizeof(unsigned int) * eur_day.size() << std::endl;
+            std::cout << std::setw(w) << "std::vector<std::string>" << " | " << sizeof(std::string) * eur_day.size() << std::endl;
+            std::cout << "--------------------------------------------------------" << std::endl;
+            
+            //Dates
+            std::cout << std::setw(w) << "eur_day(dates)" << " | " << stat_date.memory_used << std::endl;
+            std::cout << "--------------------------------------------------------" << std::endl;
 
             // EUR
             std::cout << std::setw(w) << "eur_open" << " | " << stat_eur_open.memory_used << "\n";
@@ -233,6 +249,7 @@ int main(void){
             std::cout << std::setw(w) << "eur_low"  << " | " << stat_eur_low.memory_used  << "\n";
             std::cout << std::setw(w) << "eur_pct_change" << " | " << stat_eur_pct.memory_used << "\n";
             std::cout << std::setw(w) << "eur_close" << " | " << stat_eur_close.memory_used << "\n";
+            std::cout << std::setw(w) << "eur_volume" << " | " << stat_eur_vol.memory_used << "\n";
             std::cout << "--------------------------------------------------------" << std::endl;
             
             // JPY
@@ -241,11 +258,12 @@ int main(void){
             std::cout << std::setw(w) << "jpy_low"  << " | " << stat_jpy_low.memory_used  << "\n";
             std::cout << std::setw(w) << "jpy_pct_change" << " | " << stat_jpy_pct.memory_used << "\n";
             std::cout << std::setw(w) << "jpy_close" << " | " << stat_jpy_close.memory_used << "\n";
+            std::cout << std::setw(w) << "jpy_volume" << " | " << stat_jpy_vol.memory_used << "\n";
             std::cout << "--------------------------------------------------------" << std::endl;
             
-            std::cout << "Total EUR sparse_vector_float memory usage: " << total_eur_mem << " bytes\n";
-            std::cout << "Total JPY sparse_vector_float memory usage: " << total_jpy_mem << " bytes\n" << std::endl;
-            std::cout << "Total sparse_vector_float memory usage: " << total_jpy_mem + total_eur_mem << " bytes\n" << std::endl;
+            std::cout << "Total EUR sparse_vector memory usage: " << total_eur_mem << " bytes\n";
+            std::cout << "Total JPY sparse_vector memory usage: " << total_jpy_mem << " bytes\n" << std::endl;
+            std::cout << "Total memory usage: " << total_jpy_mem + total_eur_mem + stat_date.memory_used << " bytes\n" << std::endl;
             
         }
         
@@ -284,6 +302,16 @@ int main(void){
             //Create layouts
             bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_eur_open, layout_eur_high, layout_eur_low, layout_eur_pct, layout_eur_close;
             bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_jpy_open, layout_jpy_high, layout_jpy_low, layout_jpy_pct, layout_jpy_close;
+            
+            bm::sparse_vector_serial_layout<sparseVecString> layout_date;
+            bm::sparse_vector_serial_layout<sparseVecUint> layout_eur_vol, layout_jpy_vol;
+            
+            bm::sparse_vector_serializer<sparseVecString> sv_serializer;
+            sv_serializer.set_bookmarks(true, 128);
+
+
+            //Serializes the dates
+            sv_serializer.serialize(eur_day, layout_date);
 
             //Serializes the EUR data
             bm::sparse_vector_float_serialize(eur_open,       layout_eur_open);
@@ -291,6 +319,7 @@ int main(void){
             bm::sparse_vector_float_serialize(eur_low,        layout_eur_low);
             bm::sparse_vector_float_serialize(eur_pct_change, layout_eur_pct);
             bm::sparse_vector_float_serialize(eur_close,      layout_eur_close);
+            bm::sparse_vector_serialize(eur_volume,           layout_eur_vol);
 
             //Serializes the JPY data
             bm::sparse_vector_float_serialize(jpy_open,       layout_jpy_open);
@@ -298,35 +327,45 @@ int main(void){
             bm::sparse_vector_float_serialize(jpy_low,        layout_jpy_low);
             bm::sparse_vector_float_serialize(jpy_pct_change, layout_jpy_pct);
             bm::sparse_vector_float_serialize(jpy_close,      layout_jpy_close);
+            bm::sparse_vector_serialize(jpy_volume,           layout_jpy_vol);
 
+            size_t size_dates = layout_date.size();
+            
             size_t size_eur_open  = layout_eur_open.size();
             size_t size_eur_high  = layout_eur_high.size();
             size_t size_eur_low   = layout_eur_low.size();
             size_t size_eur_pct   = layout_eur_pct.size();
             size_t size_eur_close = layout_eur_close.size();
+            size_t size_eur_vol   = layout_eur_vol.size();
 
             size_t size_jpy_open  = layout_jpy_open.size();
             size_t size_jpy_high  = layout_jpy_high.size();
             size_t size_jpy_low   = layout_jpy_low.size();
             size_t size_jpy_pct   = layout_jpy_pct.size();
             size_t size_jpy_close = layout_jpy_close.size();
+            size_t size_jpy_vol   = layout_jpy_vol.size();
 
             size_t total_serialized_bytes = size_eur_open + size_eur_high + size_eur_low + size_eur_pct + size_eur_close +
-                                            size_jpy_open + size_jpy_high + size_jpy_low + size_jpy_pct + size_jpy_close;
+                                            size_jpy_open + size_jpy_high + size_jpy_low + size_jpy_pct + size_jpy_close +
+                                            size_dates    + size_eur_vol  + size_jpy_vol;
 
             //Prints the size in bytes of the serialized data
             std::cout << "\n\n         SERIALIZED DATA BLOB SIZES (ON-DISK)          " << std::endl << std::endl;
+            std::cout << "Dates Serialized Size:          " << size_dates     << " bytes\n";
+            std::cout << "--------------------------------------------------------" << std::endl;
             std::cout << "EUR Open Serialized Size:       " << size_eur_open  << " bytes\n";
             std::cout << "EUR High Serialized Size:       " << size_eur_high  << " bytes\n";
             std::cout << "EUR Low Serialized Size:        " << size_eur_low   << " bytes\n";
             std::cout << "EUR Pct Change Serialized Size: " << size_eur_pct   << " bytes\n";
             std::cout << "EUR Close Serialized Size:      " << size_eur_close << " bytes\n";
+            std::cout << "EUR Volume Serialized Size:     " << size_eur_vol   << " bytes\n";
             std::cout << "--------------------------------------------------------" << std::endl;
             std::cout << "JPY Open Serialized Size:       " << size_jpy_open  << " bytes\n";
             std::cout << "JPY High Serialized Size:       " << size_jpy_high  << " bytes\n";
             std::cout << "JPY Low Serialized Size:        " << size_jpy_low   << " bytes\n";
             std::cout << "JPY Pct Change Serialized Size: " << size_jpy_pct   << " bytes\n";
             std::cout << "JPY Close Serialized Size:      " << size_jpy_close << " bytes\n";
+            std::cout << "JPY Volume Serialized Size:     " << size_jpy_vol   << " bytes\n";
             std::cout << "--------------------------------------------------------" << std::endl;
             std::cout << "COMBINED TOTAL SERIALIZED SIZE: " << total_serialized_bytes << " bytes" << std::endl;
         }
