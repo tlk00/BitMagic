@@ -56,6 +56,7 @@ Size of data structures in memory in bytes
       std::vector<std::string> | 1899411 (Not including std::string overhead)
 --------------------------------------------------------
                 eur_day(dates) | 284350
+       jpy_day(dates remapped) | 238762
 --------------------------------------------------------
                       eur_open | 375760
                       eur_high | 375236
@@ -72,6 +73,7 @@ Size of data structures in memory in bytes
 Serialized size of the data in the sparse_vectors
 
 Dates Serialized Size:          82551 bytes
+Remapped Dates Serialized Size: 84990 bytes
 --------------------------------------------------------
 EUR Open Serialized Size:       229206 bytes
 EUR High Serialized Size:       228614 bytes
@@ -91,7 +93,4 @@ COMBINED TOTAL SERIALIZED SIZE: 3060725 bytes
 
 
 Time to run a single ge search with scanner:; 0.048292 ms
-
-TODO:
-Remap sparse vector instead of str_sparse_vector
 

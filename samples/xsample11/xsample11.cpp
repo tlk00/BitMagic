@@ -120,7 +120,6 @@ unsigned int fillSparseVecs(sparseVecString &sv_day,
     //Optimizes and freezes the data since we will not be gathering any more data
     BM_DECLARE_TEMP_BLOCK(tb)
     
-    sv_day.optimize(tb);
     sv_open.optimize(tb);
     sv_high.optimize(tb);
     sv_low.optimize(tb);
@@ -128,7 +127,6 @@ unsigned int fillSparseVecs(sparseVecString &sv_day,
     sv_pct_change.optimize(tb);
     sv_volume.optimize(tb);
     
-    sv_day.freeze();
     sv_open.freeze();
     sv_high.freeze();
     sv_low.freeze();
@@ -181,7 +179,6 @@ int main(void){
 
         unsigned int strSize = fillSparseVecs(eur_day, eur_open, eur_high, eur_low, eur_pct_change, eur_close, eur_volume, "EURUSD_H1.csv");
         
-        
         //Stores data from JPY dataset
         sparseVecString  jpy_day;
         sparseVecFloat   jpy_open;
@@ -208,17 +205,22 @@ int main(void){
             }
         }
         
-        //cleared as it is identical to the eur_day vector so unnecessary in this instance
-        jpy_day.clear();
+        //2 methods of optimizing a str_sparse_vector
+        eur_day.optimize();
+        eur_day.freeze();
+        
+        jpy_day.remap();
+        jpy_day.optimize();
+        jpy_day.freeze();
         
         //Calculates the statistics of the stored variables
         {
             sparseVecFloat::statistics stat_eur_open, stat_eur_high, stat_eur_low, stat_eur_pct, stat_eur_close;
             sparseVecFloat::statistics stat_jpy_open, stat_jpy_high, stat_jpy_low, stat_jpy_pct, stat_jpy_close;
-            sparseVecString::statistics stat_date;
+            sparseVecString::statistics stat_eur_date, stat_jpy_date;
             sparseVecUint::statistics stat_eur_vol, stat_jpy_vol;
 
-            eur_day.calc_stat(&stat_date);
+            eur_day.calc_stat(&stat_eur_date);
             eur_open.calc_stat(&stat_eur_open);
             eur_high.calc_stat(&stat_eur_high);
             eur_low.calc_stat(&stat_eur_low);
@@ -226,6 +228,7 @@ int main(void){
             eur_close.calc_stat(&stat_eur_close);
             eur_volume.calc_stat(&stat_eur_vol);
 
+            jpy_day.calc_stat(&stat_jpy_date);
             jpy_open.calc_stat(&stat_jpy_open);
             jpy_high.calc_stat(&stat_jpy_high);
             jpy_low.calc_stat(&stat_jpy_low);
@@ -252,7 +255,8 @@ int main(void){
             std::cout << "--------------------------------------------------------" << std::endl;
             
             //Dates
-            std::cout << std::setw(w) << "eur_day(dates)" << " | " << stat_date.memory_used << std::endl;
+            std::cout << std::setw(w) << "eur_day(dates)" << " | " << stat_eur_date.memory_used << std::endl;
+            std::cout << std::setw(w) << "jpy_day(dates remapped)" << " | " << stat_jpy_date.memory_used << std::endl;
             std::cout << "--------------------------------------------------------" << std::endl;
 
             // EUR
@@ -275,7 +279,7 @@ int main(void){
             
             std::cout << "Total EUR sparse_vector memory usage: " << total_eur_mem << " bytes\n";
             std::cout << "Total JPY sparse_vector memory usage: " << total_jpy_mem << " bytes\n" << std::endl;
-            std::cout << "Total memory usage: " << total_jpy_mem + total_eur_mem + stat_date.memory_used << " bytes" << std::endl;
+            std::cout << "Total memory usage: " << total_jpy_mem + total_eur_mem + stat_eur_date.memory_used << " bytes" << std::endl;
             std::cout << "--------------------------------------------------------\n\n\n\n" << std::endl;
             
         }
@@ -317,7 +321,7 @@ int main(void){
             bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_eur_open, layout_eur_high, layout_eur_low, layout_eur_pct, layout_eur_close;
             bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_jpy_open, layout_jpy_high, layout_jpy_low, layout_jpy_pct, layout_jpy_close;
             
-            bm::sparse_vector_serial_layout<sparseVecString> layout_date;
+            bm::sparse_vector_serial_layout<sparseVecString> layout_eur_date, layout_jpy_date;
             bm::sparse_vector_serial_layout<sparseVecUint> layout_eur_vol, layout_jpy_vol;
             
             bm::sparse_vector_serializer<sparseVecString> sv_serializer;
@@ -325,7 +329,8 @@ int main(void){
 
 
             //Serializes the dates
-            sv_serializer.serialize(eur_day, layout_date);
+            sv_serializer.serialize(eur_day, layout_eur_date);
+            sv_serializer.serialize(jpy_day, layout_jpy_date);
 
             //Serializes the EUR data
             bm::sparse_vector_float_serialize(eur_open,       layout_eur_open);
@@ -343,7 +348,8 @@ int main(void){
             bm::sparse_vector_float_serialize(jpy_close,      layout_jpy_close);
             bm::sparse_vector_serialize(jpy_volume,           layout_jpy_vol);
 
-            size_t size_dates = layout_date.size();
+            size_t size_eur_dates = layout_eur_date.size();
+            size_t size_jpy_dates = layout_jpy_date.size();
             
             size_t size_eur_open  = layout_eur_open.size();
             size_t size_eur_high  = layout_eur_high.size();
@@ -361,11 +367,12 @@ int main(void){
 
             size_t total_serialized_bytes = size_eur_open + size_eur_high + size_eur_low + size_eur_pct + size_eur_close +
                                             size_jpy_open + size_jpy_high + size_jpy_low + size_jpy_pct + size_jpy_close +
-                                            size_dates    + size_eur_vol  + size_jpy_vol;
+                                            size_eur_dates    + size_eur_vol  + size_jpy_vol;
 
             //Prints the size in bytes of the serialized data
             std::cout << "         SERIALIZED DATA BLOB SIZES (ON-DISK)          " << std::endl << std::endl;
-            std::cout << "Dates Serialized Size:          " << size_dates     << " bytes\n";
+            std::cout << "Dates Serialized Size:          " << size_eur_dates     << " bytes\n";
+            std::cout << "Remapped Dates Serialized Size: " << size_jpy_dates     << " bytes\n";
             std::cout << "--------------------------------------------------------" << std::endl;
             std::cout << "EUR Open Serialized Size:       " << size_eur_open  << " bytes\n";
             std::cout << "EUR High Serialized Size:       " << size_eur_high  << " bytes\n";
