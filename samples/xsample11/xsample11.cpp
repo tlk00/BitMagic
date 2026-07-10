@@ -27,7 +27,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 #include <bmsparsevec_algo.h>
-
+#include <bmtimer.h>
 
 typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparseVecUint;
 typedef bm::sparse_vector_float<sparseVecUint> sparseVecFloat;
@@ -35,7 +35,7 @@ typedef bm::str_sparse_vector<char, bm::bvector<>, 32> sparseVecString;
 typedef bm::sparse_vector_scanner<sparseVecFloat> sparseVecScanner;
 
 //Reads the given file, either EUR to USD or USD to JPY in this case and stores the data
-void fillSparseVecs(sparseVecString &sv_day,
+unsigned int fillSparseVecs(sparseVecString &sv_day,
                     sparseVecFloat &sv_open,
                     sparseVecFloat &sv_high,
                     sparseVecFloat &sv_low,
@@ -48,9 +48,10 @@ void fillSparseVecs(sparseVecString &sv_day,
     if (!file.is_open())
     {
         std::cerr << "Could not open file: " << filename << "\n";
-        return;
+        return 0;
     }
     
+    std::vector<std::string> d;
     std::vector<float> o;
     std::vector<float> h;
     std::vector<float> l;
@@ -85,6 +86,7 @@ void fillSparseVecs(sparseVecString &sv_day,
             std::string full_timestamp = date_str + " " + time_str;
             
             sv_day.push_back(full_timestamp.c_str());
+            d.push_back(full_timestamp);
             o.push_back(open_val);
             h.push_back(high_val);
             l.push_back(low_val);
@@ -133,6 +135,13 @@ void fillSparseVecs(sparseVecString &sv_day,
     sv_close.freeze();
     sv_pct_change.freeze();
     sv_volume.freeze();
+    
+    unsigned int size = 0;
+    for (unsigned int i = 0; i < d.size(); i++)
+    {
+        size += d[i].size();
+    }
+    return size;
 }
 
 //Finds when the USD price fluctuated by comparing JPY and EUR prices
@@ -146,7 +155,10 @@ sparseVecFloat::bvector_type find_inverse_pct_matches(const sparseVecFloat& eur_
      -target_pct for jpy since the data is stored in USD to JPY instead of EUR to USD, so it is an inverse
      */
     sparseVecScanner scanner;
-    scanner.find_ge_float(eur_pct, target_pct, eur_scan);
+    {
+        bm::chrono_taker<> tt(std::cout, "Time to run a single ge search with scanner:", 1);
+        scanner.find_ge_float(eur_pct, target_pct, eur_scan);
+    }
     scanner.find_le_float(jpy_pct, -1 * target_pct, jpy_scan);
     
     //and operation checks removes any fluctuations in EUR or JPY independely, so any percent change is likely due to USD price fluctuation
@@ -167,7 +179,7 @@ int main(void){
         sparseVecFloat   eur_close;
         sparseVecUint    eur_volume;
 
-        fillSparseVecs(eur_day, eur_open, eur_high, eur_low, eur_pct_change, eur_close, eur_volume, "EURUSD_H1.csv");
+        unsigned int strSize = fillSparseVecs(eur_day, eur_open, eur_high, eur_low, eur_pct_change, eur_close, eur_volume, "EURUSD_H1.csv");
         
         
         //Stores data from JPY dataset
@@ -236,7 +248,7 @@ int main(void){
             
             std::cout << std::setw(w) << "std::vector<float>" <<" | " << sizeof(float) * eur_day.size() << std::endl;
             std::cout << std::setw(w) << "std::vector<unsigned int>" << " | " << sizeof(unsigned int) * eur_day.size() << std::endl;
-            std::cout << std::setw(w) << "std::vector<std::string>" << " | " << sizeof(std::string) * eur_day.size() << std::endl;
+            std::cout << std::setw(w) << "std::vector<std::string>" << " | " << strSize << " (Not including std::string overhead)" << std::endl;
             std::cout << "--------------------------------------------------------" << std::endl;
             
             //Dates
@@ -263,7 +275,8 @@ int main(void){
             
             std::cout << "Total EUR sparse_vector memory usage: " << total_eur_mem << " bytes\n";
             std::cout << "Total JPY sparse_vector memory usage: " << total_jpy_mem << " bytes\n" << std::endl;
-            std::cout << "Total memory usage: " << total_jpy_mem + total_eur_mem + stat_date.memory_used << " bytes\n" << std::endl;
+            std::cout << "Total memory usage: " << total_jpy_mem + total_eur_mem + stat_date.memory_used << " bytes" << std::endl;
+            std::cout << "--------------------------------------------------------\n\n\n\n" << std::endl;
             
         }
         
@@ -299,6 +312,7 @@ int main(void){
         
         //Shows the serialized size of all the sparse_vector_floats
         {
+            std::cout << "\n\n--------------------------------------------------------" << std::endl;
             //Create layouts
             bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_eur_open, layout_eur_high, layout_eur_low, layout_eur_pct, layout_eur_close;
             bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_jpy_open, layout_jpy_high, layout_jpy_low, layout_jpy_pct, layout_jpy_close;
@@ -350,7 +364,7 @@ int main(void){
                                             size_dates    + size_eur_vol  + size_jpy_vol;
 
             //Prints the size in bytes of the serialized data
-            std::cout << "\n\n         SERIALIZED DATA BLOB SIZES (ON-DISK)          " << std::endl << std::endl;
+            std::cout << "         SERIALIZED DATA BLOB SIZES (ON-DISK)          " << std::endl << std::endl;
             std::cout << "Dates Serialized Size:          " << size_dates     << " bytes\n";
             std::cout << "--------------------------------------------------------" << std::endl;
             std::cout << "EUR Open Serialized Size:       " << size_eur_open  << " bytes\n";

@@ -53,7 +53,7 @@ Size of data structures in memory in bytes
 
 	    std::vector<float> | 399876
      std::vector<unsigned int> | 399876
-      std::vector<std::string> | 2399256
+      std::vector<std::string> | 1899411 (Not including std::string overhead)
 --------------------------------------------------------
                 eur_day(dates) | 284350
 --------------------------------------------------------
@@ -90,5 +90,8 @@ JPY Volume Serialized Size:     190561 bytes
 COMBINED TOTAL SERIALIZED SIZE: 3060725 bytes
 
 
+Time to run a single ge search with scanner:; 0.048292 ms
 
+TODO:
+Remap sparse vector instead of str_sparse_vector
 
