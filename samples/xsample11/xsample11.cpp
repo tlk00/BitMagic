@@ -30,16 +30,16 @@ For more information please visit:  http://bitmagic.io
 #include <bmtimer.h>
 
 typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparseVecUint;
+typedef bm::sparse_vector<int, bm::bvector<>> sparseVecInt;
 typedef bm::sparse_vector_float<sparseVecUint> sparseVecFloat;
 typedef bm::str_sparse_vector<char, bm::bvector<>, 32> sparseVecString;
-typedef bm::sparse_vector_scanner<sparseVecFloat> sparseVecScanner;
 
 //Reads the given file, either EUR to USD or USD to JPY in this case and stores the data
 unsigned int fillSparseVecs(sparseVecString &sv_day,
                     sparseVecFloat &sv_open,
                     sparseVecFloat &sv_high,
                     sparseVecFloat &sv_low,
-                    sparseVecFloat &sv_pct_change,
+                    sparseVecInt &sv_pct_change,
                     sparseVecFloat &sv_close,
                     sparseVecUint &sv_volume,
                     std::string filename)
@@ -99,7 +99,8 @@ unsigned int fillSparseVecs(sparseVecString &sv_day,
             }
             else
             {
-                float pct = ((close_val - prev_close) / prev_close) * 100.0f;
+                
+                int pct = (int)(((close_val - prev_close) / prev_close) * 100000.0f);
                 sv_pct_change.push_back(pct);
             }
             
@@ -143,26 +144,36 @@ unsigned int fillSparseVecs(sparseVecString &sv_day,
 }
 
 //Finds when the USD price fluctuated by comparing JPY and EUR prices
-sparseVecFloat::bvector_type find_inverse_pct_matches(const sparseVecFloat& eur_pct, const sparseVecFloat& jpy_pct,
-                                                      float target_pct)
+sparseVecInt::bvector_type find_inverse_pct_matches(const sparseVecInt& eur_pct, const sparseVecInt& jpy_pct,
+                                                      int target_pct)
 {
-    sparseVecFloat::bvector_type eur_scan;
-    sparseVecFloat::bvector_type jpy_scan;
+    sparseVecInt::bvector_type eur_scan;
+    sparseVecInt::bvector_type jpy_scan;
     
     /*Finds every percent greater than or equal to target_pct
      -target_pct for jpy since the data is stored in USD to JPY instead of EUR to USD, so it is an inverse
      */
-    sparseVecScanner scanner;
-    {
-        bm::chrono_taker<> tt(std::cout, "Time to run a single ge search with scanner:", 1);
-        scanner.find_ge_float(eur_pct, target_pct, eur_scan);
-    }
-    scanner.find_le_float(jpy_pct, -1 * target_pct, jpy_scan);
+    bm::sparse_vector_scanner<sparseVecInt> scanner;
+    scanner.find_ge(eur_pct, target_pct, eur_scan);
+    scanner.find_le(jpy_pct, -1 * target_pct, jpy_scan);
     
     //and operation checks removes any fluctuations in EUR or JPY independely, so any percent change is likely due to USD price fluctuation
     eur_scan &= jpy_scan;
     
     return eur_scan;
+}
+
+sparseVecFloat::bvector_type find_range(const sparseVecFloat& jpy_close, float from, float to)
+{
+    bm::sparse_vector_scanner<sparseVecFloat> scanner;
+    sparseVecFloat::bvector_type jpy_scan;
+    
+    {
+        bm::chrono_taker<> tt(std::cout, "Time to run a single find_range_float search with scanner", 1);
+        scanner.find_range_float(jpy_close, from, to, jpy_scan);
+    }
+    
+    return jpy_scan;
 }
 
 int main(void){
@@ -173,7 +184,7 @@ int main(void){
         sparseVecFloat   eur_open;
         sparseVecFloat   eur_high;
         sparseVecFloat   eur_low;
-        sparseVecFloat   eur_pct_change;
+        sparseVecInt   eur_pct_change;
         sparseVecFloat   eur_close;
         sparseVecUint    eur_volume;
 
@@ -184,7 +195,7 @@ int main(void){
         sparseVecFloat   jpy_open;
         sparseVecFloat   jpy_high;
         sparseVecFloat   jpy_low;
-        sparseVecFloat   jpy_pct_change;
+        sparseVecInt   jpy_pct_change;
         sparseVecFloat   jpy_close;
         sparseVecUint    jpy_volume;
 
@@ -215,10 +226,11 @@ int main(void){
         
         //Calculates the statistics of the stored variables
         {
-            sparseVecFloat::statistics stat_eur_open, stat_eur_high, stat_eur_low, stat_eur_pct, stat_eur_close;
-            sparseVecFloat::statistics stat_jpy_open, stat_jpy_high, stat_jpy_low, stat_jpy_pct, stat_jpy_close;
+            sparseVecFloat::statistics stat_eur_open, stat_eur_high, stat_eur_low, stat_eur_close;
+            sparseVecFloat::statistics stat_jpy_open, stat_jpy_high, stat_jpy_low, stat_jpy_close;
             sparseVecString::statistics stat_eur_date, stat_jpy_date;
             sparseVecUint::statistics stat_eur_vol, stat_jpy_vol;
+            sparseVecInt::statistics stat_eur_pct, stat_jpy_pct;
 
             eur_day.calc_stat(&stat_eur_date);
             eur_open.calc_stat(&stat_eur_open);
@@ -280,37 +292,53 @@ int main(void){
             std::cout << "Total EUR sparse_vector memory usage: " << total_eur_mem << " bytes\n";
             std::cout << "Total JPY sparse_vector memory usage: " << total_jpy_mem << " bytes\n" << std::endl;
             std::cout << "Total memory usage: " << total_jpy_mem + total_eur_mem + stat_eur_date.memory_used << " bytes" << std::endl;
+            unsigned int fVects = sizeof(float) * eur_day.size() * 8;
+            unsigned int iVects = sizeof(unsigned int) * eur_day.size() * 4;
+            std::cout << "Total memory usage using std::vector's: " << fVects + iVects + strSize << " bytes" << std::endl;
             std::cout << "--------------------------------------------------------\n\n\n\n" << std::endl;
             
         }
         
-        //Finds when the USD fluctuated by 1 percent down
-        sparseVecFloat::bvector_type sameChanges = find_inverse_pct_matches(eur_pct_change, jpy_pct_change, 1.0f);
-        
-        sparseVecFloat::bvector_type::enumerator parser = sameChanges.first();
-        
-        std::cout << "\n\n--- Found " << sameChanges.count() << " Same Percent Changes ---\n";
-        
-        int w = 18;
-        
-        //Prints the day and time the USD fluctuated
-        while (parser.valid())
+        //Scanner operations
         {
-            unsigned int idx = *parser;
-
-            std::string timestamp = eur_day[idx].get();
-            float eur_change     = eur_pct_change.get(idx);
-            float jpy_change     = jpy_pct_change.get(idx);
-
-            std::cout << "Row [" << idx << "] | Time: " << timestamp << "\n"
-                      << " ├─ EUR Pct: " << std::setw(w) << std::left << (std::to_string(eur_change) + "%")
-                      << " | Current Close: " << std::setw(w) << std::left << eur_close.get(idx)
-                      << " | Last Close: " << eur_close.get(idx-1) << "\n"
-                      << " └─ JPY Pct: " << std::setw(w) << std::left << (std::to_string(jpy_change) + "%")
-                      << " | Current Close: " << std::setw(w) << std::left << jpy_close.get(idx)
-                      << " | Last Close: " << jpy_close.get(idx-1) << std::endl << std::endl;
-
-            ++parser;
+            //Finds when the USD fluctuated by 1 percent down .01*100 = 1 .01 * 100,000 = 1000
+            sparseVecInt::bvector_type sameChanges = find_inverse_pct_matches(eur_pct_change, jpy_pct_change, 1000);
+            
+            sparseVecInt::bvector_type::enumerator parser = sameChanges.first();
+            
+            std::cout << "\n\n--- Found " << sameChanges.count() << " Same Percent Changes ---\n";
+            
+            int w = 18;
+            
+            //Prints the day and time the USD fluctuated
+            while (parser.valid())
+            {
+                unsigned int idx = *parser;
+                
+                std::string timestamp = eur_day[idx].get();
+                float eur_change     = eur_pct_change.get(idx)/1000.0f;
+                float jpy_change     = jpy_pct_change.get(idx)/1000.0f;
+                
+                std::cout << "Row [" << idx << "] | Time: " << timestamp << "\n"
+                << " ├─ EUR Pct: " << std::setw(w) << std::left << (std::to_string(eur_change) + "%")
+                << " | Current Close: " << std::setw(w) << std::left << eur_close.get(idx)
+                << " | Last Close: " << eur_close.get(idx-1) << "\n"
+                << " └─ JPY Pct: " << std::setw(w) << std::left << (std::to_string(jpy_change) + "%")
+                << " | Current Close: " << std::setw(w) << std::left << jpy_close.get(idx)
+                << " | Last Close: " << jpy_close.get(idx-1) << std::endl << std::endl;
+                
+                ++parser;
+            }
+            
+            std::cout << "\n\n\n\n" << std::endl;
+            
+            //Compares the ranges to see if there are more values near 100 than some other range, 103 in this case
+            //to see if there was some psychological impact being at 100 that made the value stabilize for longer
+            sparseVecFloat::bvector_type range1 = find_range(jpy_close, 99.90f, 100.10f);
+            std::cout << "--- Found " << range1.count() << " Values when USD to JPY was between 99.9 and 100.1 ---\n\n";
+            sparseVecFloat::bvector_type range2 = find_range(jpy_close, 102.90f, 103.10f);
+            std::cout << "--- Found " << range2.count() << " Values when USD to JPY was between 102.9 and 103.1 ---\n\n";
+            
         }
         
         
@@ -318,11 +346,12 @@ int main(void){
         {
             std::cout << "\n\n--------------------------------------------------------" << std::endl;
             //Create layouts
-            bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_eur_open, layout_eur_high, layout_eur_low, layout_eur_pct, layout_eur_close;
-            bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_jpy_open, layout_jpy_high, layout_jpy_low, layout_jpy_pct, layout_jpy_close;
+            bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_eur_open, layout_eur_high, layout_eur_low, layout_eur_close;
+            bm::sparse_vector_float_serial_layout<sparseVecFloat> layout_jpy_open, layout_jpy_high, layout_jpy_low, layout_jpy_close;
             
             bm::sparse_vector_serial_layout<sparseVecString> layout_eur_date, layout_jpy_date;
             bm::sparse_vector_serial_layout<sparseVecUint> layout_eur_vol, layout_jpy_vol;
+            bm::sparse_vector_serial_layout<sparseVecInt> layout_eur_pct, layout_jpy_pct;
             
             bm::sparse_vector_serializer<sparseVecString> sv_serializer;
             sv_serializer.set_bookmarks(true, 128);
@@ -336,7 +365,7 @@ int main(void){
             bm::sparse_vector_float_serialize(eur_open,       layout_eur_open);
             bm::sparse_vector_float_serialize(eur_high,       layout_eur_high);
             bm::sparse_vector_float_serialize(eur_low,        layout_eur_low);
-            bm::sparse_vector_float_serialize(eur_pct_change, layout_eur_pct);
+            bm::sparse_vector_serialize(eur_pct_change, layout_eur_pct);
             bm::sparse_vector_float_serialize(eur_close,      layout_eur_close);
             bm::sparse_vector_serialize(eur_volume,           layout_eur_vol);
 
@@ -344,7 +373,7 @@ int main(void){
             bm::sparse_vector_float_serialize(jpy_open,       layout_jpy_open);
             bm::sparse_vector_float_serialize(jpy_high,       layout_jpy_high);
             bm::sparse_vector_float_serialize(jpy_low,        layout_jpy_low);
-            bm::sparse_vector_float_serialize(jpy_pct_change, layout_jpy_pct);
+            bm::sparse_vector_serialize(jpy_pct_change, layout_jpy_pct);
             bm::sparse_vector_float_serialize(jpy_close,      layout_jpy_close);
             bm::sparse_vector_serialize(jpy_volume,           layout_jpy_vol);
 
