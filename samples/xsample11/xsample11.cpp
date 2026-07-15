@@ -29,6 +29,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmsparsevec_algo.h>
 #include <bmtimer.h>
 
+
 typedef bm::sparse_vector<unsigned int, bm::bvector<>> sparseVecUint;
 typedef bm::sparse_vector<int, bm::bvector<>> sparseVecInt;
 typedef bm::sparse_vector_float<sparseVecUint> sparseVecFloat;
@@ -176,9 +177,20 @@ sparseVecFloat::bvector_type find_range(const sparseVecFloat& jpy_close, float f
     return jpy_scan;
 }
 
-int main(void){
+int main(int argc, char *argv[]){
+    bool arb = false;
+    for (int i = 0; i < argc; i++)
+    {
+        std::string arg = argv[i];
+        if (arg == "-arb")
+        {
+            arb = true;
+        }
+    }
+    
     try
     {
+        
         //Stores data from EUR dataset
         sparseVecString  eur_day;
         sparseVecFloat   eur_open;
@@ -339,6 +351,59 @@ int main(void){
             sparseVecFloat::bvector_type range2 = find_range(jpy_close, 102.90f, 103.10f);
             std::cout << "--- Found " << range2.count() << " Values when USD to JPY was between 102.9 and 103.1 ---\n\n";
             
+        }
+        
+        //Finds arbitrage points
+        if(arb){
+            sparseVecString  ej_day;
+            sparseVecFloat   ej_open;
+            sparseVecFloat   ej_high;
+            sparseVecFloat   ej_low;
+            sparseVecInt   ej_pct_change;
+            sparseVecFloat   ej_close;
+            sparseVecUint    ej_volume;
+
+            //Stores EUR to JPY data
+            fillSparseVecs(ej_day, ej_open, ej_high, ej_low, ej_pct_change, ej_close, ej_volume, "EURJPY_H1.csv");
+            
+            
+            sparseVecFloat::const_iterator eur_iter = eur_open.begin();
+            sparseVecFloat::const_iterator jpy_iter = jpy_open.begin();
+            sparseVecFloat::const_iterator ej_iter = ej_open.begin();
+            int arbitrage_opportunities = 0;
+            
+            //Uses a const iterator to find arbitrage points
+            while(eur_iter.valid())
+            {
+                float eur_usd = *eur_iter;
+                float usd_jpy = *jpy_iter;
+                float eur_jpy = *ej_iter;
+                
+                if (eur_usd > 0.0f && usd_jpy > 0.0f && eur_jpy > 0.0f)
+                {
+                    float eur_usd_jpy = eur_usd * usd_jpy;
+                    
+                    //Arbitrage based on percent difference instead of solid value
+                    float ratio = eur_usd_jpy / eur_jpy;
+                    if (ratio > 1.0005 || ratio < 0.9995)
+                    {
+                        std::cout << "Arbitrage at " << eur_day[eur_iter.pos()].get() << "\n"
+                                  << "  EUR -> USD -> JPY yields: " << eur_usd_jpy << " JPY\n"
+                                  << "  EUR -> JPY yields: " << eur_jpy << std::endl;
+                        arbitrage_opportunities++;
+                        std::cout << "EUR_USD: " << eur_usd << std::endl;
+                        std::cout << "USD_JPY: " << usd_jpy << std::endl;
+                        std::cout << "EUR_JPY: " << eur_jpy << std::endl;
+                    }
+                    
+                }
+                
+                ++eur_iter;
+                ++jpy_iter;
+                ++ej_iter;
+            }
+            
+            std::cout << "Total arbitrage Opportunities: " << arbitrage_opportunities << std::endl;
         }
         
         
