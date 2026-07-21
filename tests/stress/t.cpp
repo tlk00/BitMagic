@@ -27870,17 +27870,208 @@ template<class SV>
 void CheckGTSearch(const SV& sv, typename SV::value_type v,
                    bm::sparse_vector_scanner<SV>& scanner)
 {
-    bvect bv_res, bv_gt, bv_control;
-    bvect bv_ge, bv_ge_control;
-    bvect bv_lt, bv_lt_control;
-    bvect bv_le, bv_le_control;
+    bvect bv_res, bv_gt, bv_gt_mask1, bv_gt_mask2, bv_control;
+    bvect bv_ge, bv_ge_mask1, bv_ge_mask2, bv_ge_control;
+    bvect bv_lt, bv_lt_mask1, bv_lt_mask2, bv_lt_control;
+    bvect bv_le, bv_le_mask1, bv_le_mask2, bv_le_control;
     bvect bv_r_0v, bv_r_0v_control;
 
     scanner.find_gt_horizontal(sv, v, bv_res);
+    
     scanner.find_gt(sv, v, bv_gt);
     scanner.find_ge(sv, v, bv_ge);
     scanner.find_lt(sv, v, bv_lt);
     scanner.find_le(sv, v, bv_le);
+    
+    // AND mask search
+    //
+    if (!bv_gt.empty() && !SV::is_compressed())
+    {
+        bvect bv_mask;
+        bvect::size_type pos;
+        bool b = bv_gt.find(0, pos);
+        assert(b);
+        bv_mask.set(pos);
+        bv_mask.set(bm::id_max-1);
+        
+        scanner.set_and_mask(&bv_mask);
+        scanner.find_gt(sv, v, bv_gt_mask1);
+        
+        bvect bv_r1 (bv_gt);
+        bv_r1 &= bv_mask;
+
+        bool eq = bv_r1.equal(bv_gt_mask1);
+        if (!eq)
+        {
+            print_bv(cout, bv_r1);
+            print_bv(cout, bv_gt_mask1);
+            bv_r1 ^= bv_gt_mask1;
+            cout << "diff=" << endl;
+            //print_bv(bv_r1);
+            assert(eq);exit(1);
+        }
+        
+        bv_mask.clear();
+        bm::random_subset<bvect> rsub;
+        
+        bvect::size_type sample_size = bv_gt.count();
+        sample_size = sample_size % 10;
+        bvect bv_subset;
+        rsub.sample(bv_subset, bv_gt, sample_size);
+        bv_subset.set(bm::id_max/2);
+        bvect::size_type lt_pos;
+        if (bv_lt.find(0, lt_pos))
+            bv_subset.set(lt_pos);
+        bvect::size_type le_pos;
+        if (bv_le.find(0, le_pos))
+            bv_subset.set(le_pos);
+
+        scanner.set_and_mask(&bv_subset);
+
+        // AND mask: GT
+        scanner.find_gt(sv, v, bv_gt_mask2);
+
+        bvect bv_r2 (bv_gt);
+        bv_r2 &= bv_subset;
+        
+        bool a = bv_r2.empty();
+
+        eq = bv_r2.equal(bv_gt_mask2);
+        if (!eq)
+        {
+            cout << "BV_GT.count()=" << bv_gt.count() << endl;
+            cout << "BV_SUBSET=\n";
+            print_bv(cout, bv_subset);
+            
+            cout << "BV_R2=\n";
+            print_bv(cout, bv_r2);
+            cout << "BV_GT_mask2=\n";
+            print_bv(cout, bv_gt_mask2);
+            bv_r2 ^= bv_gt_mask2;
+            cout << "diff=" << endl;
+            print_bv(cout, bv_r2);
+
+            auto mismatch_idx = *(bv_r2.first());
+            auto v0 = sv.get(mismatch_idx);
+            cout << "v[]=" << v0 << "  v="<< v << " GT test=" << (v0 > v) << endl;
+            cout << endl << endl;
+            
+            scanner.find_gt(sv, v, bv_gt_mask2);
+
+
+            assert(eq);exit(1);
+        }
+
+        // AND mask: GE
+        scanner.find_ge(sv, v, bv_ge_mask2);
+        bvect bv_r3(bv_ge);
+        bv_r3 &= bv_subset;
+
+        eq = bv_r3.equal(bv_ge_mask2);
+        if (!eq)
+        {
+            cout << "BV_GE.count()=" << bv_ge.count() << endl;
+            cout << "BV_SUBSET=\n";
+            print_bv(cout, bv_subset);
+
+            cout << "BV_R3=\n";
+            print_bv(cout, bv_r3);
+            cout << "BV_GE_mask2=\n";
+            print_bv(cout, bv_ge_mask2);
+            bv_r3 ^= bv_ge_mask2;
+            cout << "diff=" << endl;
+            print_bv(cout, bv_r3);
+
+            auto mismatch_idx = *(bv_r3.first());
+            auto v0 = sv.get(mismatch_idx);
+            cout << "v[]=" << v0 << "  v="<< v << " GE test=" << (v0 >= v) << endl;
+            cout << endl << endl;
+
+            scanner.find_ge(sv, v, bv_ge_mask2);
+
+            assert(eq);exit(1);
+        }
+
+        // AND mask: LT
+        scanner.find_lt(sv, v, bv_lt_mask2);
+        bvect bv_r4(bv_lt);
+        bv_r4 &= bv_subset;
+
+        eq = bv_r4.equal(bv_lt_mask2);
+        if (!eq)
+        {
+            cout << "BV_LT.count()=" << bv_lt.count() << endl;
+            cout << "BV_SUBSET=\n";
+            print_bv(cout, bv_subset);
+
+            cout << "BV_R4=\n";
+            print_bv(cout, bv_r4);
+            cout << "BV_LT_mask2=\n";
+            print_bv(cout, bv_lt_mask2);
+            bv_r4 ^= bv_lt_mask2;
+            cout << "diff=" << endl;
+            print_bv(cout, bv_r4);
+
+            auto mismatch_idx = *(bv_r4.first());
+            auto v0 = sv.get(mismatch_idx);
+            cout << "v[]=" << v0 << "  v="<< v << " LT test=" << (v0 < v) << endl;
+            cout << endl << endl;
+
+            scanner.find_lt(sv, v, bv_lt_mask2);
+
+            assert(eq);exit(1);
+        }
+
+        // AND mask: LE
+        scanner.find_le(sv, v, bv_le_mask2);
+        bvect bv_r5(bv_le);
+        bv_r5 &= bv_subset;
+
+        eq = bv_r5.equal(bv_le_mask2);
+        if (!eq)
+        {
+            cout << "BV_LE.count()=" << bv_le.count() << endl;
+            cout << "BV_SUBSET=\n";
+            print_bv(cout, bv_subset);
+
+            cout << "BV_R5=\n";
+            print_bv(cout, bv_r5);
+            cout << "BV_LE_mask2=\n";
+            print_bv(cout, bv_le_mask2);
+            bv_r5 ^= bv_le_mask2;
+            cout << "diff=" << endl;
+            print_bv(cout, bv_r5);
+
+            auto mismatch_idx = *(bv_r5.first());
+            auto v0 = sv.get(mismatch_idx);
+            cout << "v[]=" << v0 << "  v="<< v << " LE test=" << (v0 <= v) << endl;
+            cout << endl << endl;
+
+            scanner.find_le(sv, v, bv_le_mask2);
+
+            assert(eq);exit(1);
+        }
+    
+        // AND mask: empty mask for GT/GE/LT/LE
+
+        bv_mask.clear();
+        scanner.set_and_mask(&bv_mask);
+        scanner.find_gt(sv, v, bv_gt_mask1); // empty search
+        bool e = bv_gt_mask1.any();
+        assert(!e);
+        scanner.find_ge(sv, v, bv_ge_mask1); // empty search
+        e = bv_ge_mask1.any();
+        assert(!e);
+        scanner.find_lt(sv, v, bv_lt_mask1); // empty search
+        e = bv_lt_mask1.any();
+        assert(!e);
+        scanner.find_le(sv, v, bv_le_mask1); // empty search
+        e = bv_le_mask1.any();
+        assert(!e);
+
+        scanner.set_and_mask(0);
+    } // AND mask tests
+    
     scanner.find_range(sv, 0, v, bv_r_0v);
 
     {
@@ -28028,17 +28219,93 @@ void TestSparseVectorScan()
         scanner.find_eq(sv, 25, bv_control);
         found = bv_control.count();
         assert(found == 2);
+        
+        // AND mask tests
+        {
+            bvect bv_mask {bm::id_max/2, bm::id_max-1};
+            scanner.set_and_mask(&bv_mask);
+            scanner.find_eq(sv, 25, bv_control);
+            found = bv_control.count();
+            assert(found == 2);
+        }
+        {
+            bvect bv_mask {bm::id_max/2};
+            scanner.set_and_mask(&bv_mask);
+            scanner.find_eq(sv, 25, bv_control);
+            found = bv_control.count();
+            assert(found == 1);
+            bv_mask.clear(false);
+            scanner.find_eq(sv, 25, bv_control);
+            found = bv_control.count();
+            assert(found == 0);
+        }
+        scanner.set_and_mask(0);
 
+        // find 0 BI tests
+        {
+            std::vector<unsigned> v_control;
+            {
+                auto bi = std::back_inserter(v_control);
+                scanner.find_eq(sv, 0, bi);
+            }
+            auto sz = v_control.size();
+            assert(sz == 20);
+            for (unsigned i = 0; i < 20; ++i)
+            {
+                assert(v_control[i] == i);
+            }
+            
+            // AND masks tests
+            
+            bvect bv_mask {bm::id_max/2, bm::id_max-1};
+            scanner.set_and_mask(&bv_mask);
+            {
+                v_control.resize(0);
+                auto bi = std::back_inserter(v_control);
+                scanner.find_eq(sv, 0, bi);
+            }
+            sz = v_control.size();
+            assert(sz == 0);
+            
+            bv_mask.set(0);
+            {
+                v_control.resize(0);
+                auto bi = std::back_inserter(v_control);
+                scanner.find_eq(sv, 0, bi);
+            }
+            sz = v_control.size();
+            assert(sz == 1);
+            assert(v_control[0] == 0);
+        }
+        scanner.set_and_mask(0);
+
+
+        
         {
         std::vector<unsigned> v_control;
         {
-        auto bi = std::back_inserter(v_control);
-        scanner.find_eq(sv, 25, bi);
+            auto bi = std::back_inserter(v_control);
+            scanner.find_eq(sv, 25, bi);
         }
         auto sz = v_control.size();
         assert(sz == 2);
         assert(v_control[0] == bm::id_max/2);
         assert(v_control[1] == bm::id_max-1);
+
+        // AND masks tests
+            {
+                v_control.resize(0);
+                bvect bv_mask {0, bm::id_max/2 };
+                scanner.set_and_mask(&bv_mask);
+                {
+                    auto bi = std::back_inserter(v_control);
+                    scanner.find_eq(sv, 25, bi);
+                }
+                sz = v_control.size();
+                assert(sz == 1);
+                assert(v_control[0] == bm::id_max/2);
+            }
+            scanner.set_and_mask(0);
         }
 
     }
@@ -28063,6 +28330,23 @@ void TestSparseVectorScan()
         iscanner.find_eq(sv, -25, bv_control);
         found = bv_control.count();
         assert(found == 2);
+        
+        // AND mast test
+        {
+            bvect bv_mask {0, bm::id_max/2 };
+            iscanner.set_and_mask(&bv_mask);
+            iscanner.find_eq(sv, -25, bv_control);
+            found = bv_control.count();
+            assert(found == 1);
+            bv_control.clear();
+            bv_mask.set(bm::id_max-1);
+            bv_mask.set(bm::id_max/2);
+            iscanner.find_eq(sv, -25, bv_control);
+            found = bv_control.count();
+            assert(found == 2);
+        }
+        iscanner.set_and_mask(0);
+
 
         {
         std::vector<unsigned> v_control;
@@ -28074,7 +28358,20 @@ void TestSparseVectorScan()
         assert(sz == 2);
         assert(v_control[0] == bm::id_max/2);
         assert(v_control[1] == bm::id_max-1);
+        v_control.resize(0);
+        // AND mask
+            {
+                bvect bv_mask {0, bm::id_max/2 };
+                iscanner.set_and_mask(&bv_mask);
+                auto bi = std::back_inserter(v_control);
+                iscanner.find_eq(sv, -25, bi);
+                
+                sz = v_control.size();
+                assert(sz == 1);
+                assert(v_control[0] == bm::id_max/2);
+            }
         }
+        
 
     }
 
@@ -28087,10 +28384,10 @@ void TestSparseVectorScan()
         sv.optimize();
 
         std::vector<unsigned> v_control;
-        {
-        auto bi = std::back_inserter(v_control);
-        scanner.find_eq(sv, 3, bi);
-        }
+            {
+            auto bi = std::back_inserter(v_control);
+            scanner.find_eq(sv, 3, bi);
+            }
         auto sz = v_control.size();
         assert(sz == 65536);
         unsigned idx(0);
@@ -28190,6 +28487,23 @@ void TestSparseVectorScan()
                     cerr << "4. Unique search discrepancy at value=" << j
                          << " found = " << pos << endl;
                     exit(1);
+                }
+                // AND mask
+                {
+                    bvect bv_mask;
+                    bv_mask.set(pos);
+                    scanner.set_and_mask(&bv_mask);
+
+                    bm::id_t pos2;
+                    found = scanner.find_eq(sv, j, pos2);
+                    if (!found)
+                    {
+                        cerr << "3.1 Unique search failure at value=" << j
+                             << endl;
+                        exit(1);
+                    }
+                    assert(pos == pos2);
+                    scanner.set_and_mask(0);
                 }
                 
                 rsc_scanner.find_eq(csv, j, bv_control2);
@@ -28356,6 +28670,20 @@ void TestSparseVectorScanGT()
 
         sv.push_back(0);
 
+        // AND mask test
+        {
+            bv_res.clear();
+            bvect bv_mask { 0, 1, sv.size()-1};
+            scanner.set_and_mask(&bv_mask);
+            scanner.find_gt_horizontal(sv, 0, bv_res);
+            
+            auto c = bv_res.count();
+            assert(c==2);
+            
+            scanner.set_and_mask(0);
+        }
+
+
         for (int pass = 0; pass < 2; ++pass)
         {
             scanner.find_gt_horizontal(sv, 0, bv_res);
@@ -28454,6 +28782,7 @@ void TestSparseVectorScanGT()
                 bool b = bv_res.equal(bv_control);
                 assert(b);
             }
+
             if ((j % 16) == 0)
                 CheckGTSearch(sv, j, scanner);
 
@@ -28488,6 +28817,19 @@ void TestSignedSparseVectorScanGT()
         sv.push_back(16);     // 4
         sv.push_back(INT_MAX);
         sv.push_back(0);      // 6
+        
+        // AND mask test
+        {
+            bvect bv_res;
+            bvect bv_mask { 0, 1, 6};
+            scanner.set_and_mask(&bv_mask);
+            scanner.find_gt_horizontal(sv, 0, bv_res);
+            
+            auto c = bv_res.count();
+            assert(c==2);
+            scanner.set_and_mask(0);
+        }
+
 
         for (int pass = 0; pass < 2; ++pass)
         {
@@ -28523,6 +28865,51 @@ void TestSignedSparseVectorScanGT()
         sv.push_back(-17);      // 10
         sv.push_back(0);
         sv.push_back(INT_MAX);  // 12
+        
+        
+        {
+            // AND mask test
+            {
+                bvect bv_res;
+                bvect bv_mask { 0, 1};
+                scanner.set_and_mask(&bv_mask);
+                scanner.find_gt_horizontal(sv, 0, bv_res);
+                
+                auto c = bv_res.count();
+                assert(c==2);
+                scanner.set_and_mask(0);
+            }
+            {
+                bvect bv_res;
+                bvect bv_mask { 0, 6, 7, 11, 12 };
+                scanner.set_and_mask(&bv_mask);
+                scanner.find_gt_horizontal(sv, -1, bv_res);
+
+                auto c = bv_res.count();
+                assert(c == 3);
+                assert(bv_res.test(0));
+                assert(!bv_res.test(6));
+                assert(!bv_res.test(7));
+                assert(bv_res.test(11));
+                assert(bv_res.test(12));
+                scanner.set_and_mask(0);
+            }
+            {
+                bvect bv_res;
+                bvect bv_mask { 0, 6, 7, 11, 12 };
+                scanner.set_and_mask(&bv_mask);
+                scanner.find_gt_horizontal(sv, -2, bv_res);
+
+                auto c = bv_res.count();
+                assert(c == 4);
+                assert(bv_res.test(0));
+                assert(bv_res.test(6));
+                assert(!bv_res.test(7));
+                assert(bv_res.test(11));
+                assert(bv_res.test(12));
+                scanner.set_and_mask(0);
+            }
+        }
 
         for (int pass = 0; pass < 2; ++pass)
         {
