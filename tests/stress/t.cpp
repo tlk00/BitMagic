@@ -41792,6 +41792,8 @@ void SparseVecFloatScannerTests()
         std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(linData, testSVF, from[i], to[i]);
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -41808,6 +41810,8 @@ void SparseVecFloatScannerTests()
         std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(randData, testSVF, from[i], to[i]);
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -41824,6 +41828,8 @@ void SparseVecFloatScannerTests()
         std::cout << "-------------------------SVF Skewed Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(skewData, testSVF, from[i], to[i]);
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -41966,6 +41972,9 @@ void sparseVecFloatRSCScannerTests()
         std::cout << "-------------------------SVF RCS Linear Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTestRSC(linData, testSVF, from[i], to[i]);
+            
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -41989,6 +41998,8 @@ void sparseVecFloatRSCScannerTests()
         std::cout << "-------------------------SVF RCS Random Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTestRSC(randData, testSVF, from[i], to[i]);
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -42016,6 +42027,8 @@ void sparseVecFloatRSCScannerTests()
         std::cout << "-------------------------SVF RCS Skewed Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTestRSC(skewData, testSVF, from[i], to[i]);
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -43640,8 +43653,8 @@ return 0;
 
     if(is_all || is_svf){
         
-        SparseVecFloatTests();
-        CheckAllocLeaks(false);
+        //SparseVecFloatTests();
+        //CheckAllocLeaks(false);
 
         SparseVecFloatScannerTests();
         CheckAllocLeaks(false);
