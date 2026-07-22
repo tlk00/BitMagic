@@ -27874,7 +27874,7 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     bvect bv_ge, bv_ge_mask1, bv_ge_mask2, bv_ge_control;
     bvect bv_lt, bv_lt_mask1, bv_lt_mask2, bv_lt_control;
     bvect bv_le, bv_le_mask1, bv_le_mask2, bv_le_control;
-    bvect bv_r_0v, bv_r_0v_control;
+    bvect bv_r_0v, bv_r_0v_mask1, bv_r_0v_mask2, bv_r_0v_control;
 
     scanner.find_gt_horizontal(sv, v, bv_res);
     
@@ -27882,6 +27882,7 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     scanner.find_ge(sv, v, bv_ge);
     scanner.find_lt(sv, v, bv_lt);
     scanner.find_le(sv, v, bv_le);
+    scanner.find_range(sv, 0, v, bv_r_0v);
     
     // AND mask search
     //
@@ -27934,7 +27935,6 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         bvect bv_r2 (bv_gt);
         bv_r2 &= bv_subset;
         
-        bool a = bv_r2.empty();
 
         eq = bv_r2.equal(bv_gt_mask2);
         if (!eq)
@@ -28051,8 +28051,39 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
 
             assert(eq);exit(1);
         }
+
+        // AND mask: RANGE [0..v]
+        scanner.find_range(sv, 0, v, bv_r_0v_mask2);
+        bvect bv_r6(bv_r_0v);
+        bv_r6 &= bv_subset;
+
+        eq = bv_r6.equal(bv_r_0v_mask2);
+        if (!eq)
+        {
+            cout << "BV_RANGE.count()=" << bv_r_0v.count() << endl;
+            cout << "BV_SUBSET=\n";
+            print_bv(cout, bv_subset);
+
+            cout << "BV_R6=\n";
+            print_bv(cout, bv_r6);
+            cout << "BV_RANGE_mask2=\n";
+            print_bv(cout, bv_r_0v_mask2);
+            bv_r6 ^= bv_r_0v_mask2;
+            cout << "diff=" << endl;
+            print_bv(cout, bv_r6);
+
+            auto mismatch_idx = *(bv_r6.first());
+            auto v0 = sv.get(mismatch_idx);
+            cout << "v[]=" << v0 << "  range [0.." << v << "] test="
+                 << ((v < 0) ? (v0 <= 0 && v0 >= v) : (v0 >= 0 && v0 <= v)) << endl;
+            cout << endl << endl;
+
+            scanner.find_range(sv, 0, v, bv_r_0v_mask2);
+
+            assert(eq);exit(1);
+        }
     
-        // AND mask: empty mask for GT/GE/LT/LE
+        // AND mask: empty mask for GT/GE/LT/LE/RANGE
 
         bv_mask.clear();
         scanner.set_and_mask(&bv_mask);
@@ -28068,12 +28099,13 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         scanner.find_le(sv, v, bv_le_mask1); // empty search
         e = bv_le_mask1.any();
         assert(!e);
+        scanner.find_range(sv, 0, v, bv_r_0v_mask1); // empty search
+        e = bv_r_0v_mask1.any();
+        assert(!e);
 
         scanner.set_and_mask(0);
     } // AND mask tests
     
-    scanner.find_range(sv, 0, v, bv_r_0v);
-
     {
     bvect bv_r_vv, bv_r_vv_control;
     scanner.find_range(sv, v, v, bv_r_vv);
