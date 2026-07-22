@@ -800,11 +800,8 @@ public:
         \param sv - input sparse vector
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] >= value)
-        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
-               if false, return the internal address-space result without mask/finalization
     */
-    void find_ge(const SV& sv, value_type  val, bvector_type&  bv_out,
-                 bool apply_mask = true);
+    void find_ge(const SV& sv, value_type  val, bvector_type&  bv_out);
 
 
     /**
@@ -1095,15 +1092,16 @@ public:
         \param value - value to search for
         \param bv_out - search result bit-vector
         \param null_correct - if true, exclude NULL values during finalization
-        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
-               if false, return the internal address-space result without mask/finalization
+        \param apply_mask - if true, apply the current scanner AND mask in the search
+        \param finalize_result - if true, decompress and NULL-correct the result
         @internal
     */
     void find_gt_horizontal(const SV&      sv,
                             value_type     value,
                             bvector_type&  bv_out,
                             bool null_correct = true,
-                            bool apply_mask = true);
+                            bool apply_mask = true,
+                            bool finalize_result = true);
 
     /**
         \brief Internal unsigned greater-than search implementation.
@@ -1112,15 +1110,16 @@ public:
         \param value - value to search for
         \param bv_out - search result bit-vector
         \param null_correct - if true, exclude NULL values during finalization
-        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
-               if false, return the internal address-space result without mask/finalization
+        \param apply_mask - if true, apply the current scanner AND mask in the search
+        \param finalize_result - if true, decompress and NULL-correct the result
         @internal
     */
     void find_gt_horizontal_u(const SV&      sv,
                               value_type     value,
                               bvector_type&  bv_out,
                               bool null_correct = true,
-                              bool apply_mask = true);
+                              bool apply_mask = true,
+                              bool finalize_result = true);
 
     /**
         \brief Internal signed greater-than search implementation.
@@ -1129,15 +1128,16 @@ public:
         \param value - value to search for
         \param bv_out - search result bit-vector
         \param null_correct - if true, exclude NULL values during finalization
-        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
-               if false, return the internal address-space result without mask/finalization
+        \param apply_mask - if true, apply the current scanner AND mask in the search
+        \param finalize_result - if true, decompress and NULL-correct the result
         @internal
     */
     void find_gt_horizontal_s(const SV&      sv,
                               value_type     value,
                               bvector_type&  bv_out,
                               bool null_correct = true,
-                              bool apply_mask = true);
+                              bool apply_mask = true,
+                              bool finalize_result = true);
 
 
     /** Exclude possible NULL values from the result vector
@@ -1198,7 +1198,47 @@ protected:
                      bool prefix_sub);
 
     /// Prepare aggregator for AND-SUB (EQ) search
-    bool prepare_and_sub_aggregator(const SV& sv, value_type value);
+    bool prepare_and_sub_aggregator(const SV& sv, value_type value,
+                                    bool apply_mask = true);
+
+    /**
+        \brief Internal integer equality search without finalization.
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - internal address-space search result bit-vector
+        \param apply_mask - if true, apply the current scanner AND mask in the search
+        @internal
+    */
+    void find_eq_internal(const SV& sv, value_type value,
+                          bvector_type& bv_out,
+                          bool apply_mask);
+
+    /**
+        \brief Internal integer greater-than search without finalization.
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - internal address-space search result bit-vector
+        \param apply_mask - if true, apply the current scanner AND mask in the search
+        @internal
+    */
+    void find_gt_internal(const SV& sv, value_type value,
+                          bvector_type& bv_out,
+                          bool apply_mask);
+
+    /**
+        \brief Internal integer greater-or-equal search without finalization.
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - internal address-space search result bit-vector
+        \param apply_mask - if true, apply the current scanner AND mask in the search
+        @internal
+    */
+    void find_ge_internal(const SV& sv, value_type value,
+                          bvector_type& bv_out,
+                          bool apply_mask);
 
     /// Prepare aggregator for AND-SUB (EQ) search (string)
     bool prepare_and_sub_aggregator(const SV&  sv,
@@ -2090,7 +2130,8 @@ bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
 template<typename SV, unsigned S_FACTOR>
 bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
                                                         const SV&   sv,
-                                                        value_type   value)
+                                                        value_type   value,
+                                                        bool         apply_mask)
 {
     using unsigned_value_type = typename SV::unsigned_value_type;
     
@@ -2103,7 +2144,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::prepare_and_sub_aggregator(
     BM_ASSERT(bit_count_v);
     const unsigned_value_type mask1 = 1;
     
-    if (bv_and_mask_) // if external AND mask is set, add to the group
+    if (apply_mask && bv_and_mask_) // if external AND mask is set, add to the group
         agg_.add(bv_and_mask_);
     
     // prep the lists for combined AND-SUB aggregator
@@ -2189,14 +2230,40 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt(
                                         value_type     val,
                                         bvector_type&  bv_out)
 {
-    // this is not very optimal but should be good enough
-    find_gt_horizontal(sv, val, bv_out, true /*NULL correction */);
+    find_gt_internal(sv, val, bv_out, true /* apply_mask */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_gt_internal(
+                                        const SV&      sv,
+                                        value_type     val,
+                                        bvector_type&  bv_out,
+                                        bool           apply_mask)
+{
+    find_gt_horizontal(sv, val, bv_out,
+                       false /* null_correct */, apply_mask,
+                       false /* finalize_result */);
 }
 
 //----------------------------------------------------------------------------
 
 template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_ge(
+                                        const SV&      sv,
+                                        value_type     val,
+                                        bvector_type&  bv_out)
+{
+    find_ge_internal(sv, val, bv_out, true /* apply_mask */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_ge_internal(
                                         const SV&      sv,
                                         value_type     val,
                                         bvector_type&  bv_out,
@@ -2208,27 +2275,27 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge(
         return;
     }
 
+    const size_type internal_size =
+        SV::is_compressed() ? sv.effective_size() : sv.size();
+
     if constexpr (std::is_signed<value_type>::value)
     {
         if (val == std::numeric_limits<value_type>::min())
         {
-            if (!apply_mask)
+            if (apply_mask && bv_and_mask_)
             {
-                if constexpr (SV::is_compressed())
-                    bv_out.set_range(0, sv.effective_size() - 1);
-                else
-                    bv_out.set_range(0, sv.size() - 1);
-                return;
+                bv_out.bit_or(*bv_and_mask_);
+                bv_out.set_range(internal_size, bm::id_max - 1, false);
             }
-            bvector_type bv_min;
-            find_eq(sv, val, bv_min);
-            find_gt_horizontal(sv, val, bv_out, true /*NULL correction */, apply_mask);
-            bv_out.merge(bv_min);
+            else
+            {
+                bv_out.set_range(0, internal_size - 1);
+            }
         }
         else
         {
             --val;
-            find_gt_horizontal(sv, val, bv_out, true /*NULL correction */, apply_mask);
+            find_gt_internal(sv, val, bv_out, apply_mask);
         }
     }
     else // unsigned
@@ -2236,38 +2303,19 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge(
         if (val)
         {
             --val;
-            find_gt_horizontal(sv, val, bv_out, true /*NULL correction */, apply_mask);
+            find_gt_internal(sv, val, bv_out, apply_mask);
         }
         else // val == 0
         {
-            if constexpr (SV::is_compressed())
+            if (apply_mask && bv_and_mask_)
             {
-                if (apply_mask && bv_and_mask_)
-                {
-                    bv_out.bit_or(*bv_and_mask_);
-                    bv_out.set_range(sv.effective_size(), bm::id_max - 1, false);
-                }
-                else // no AND mask
-                {
-                    bv_out.set_range(0, sv.effective_size() - 1);
-                }
-                if (apply_mask)
-                    decompress(sv, bv_out);
+                bv_out.bit_or(*bv_and_mask_);
+                bv_out.set_range(internal_size, bm::id_max - 1, false);
             }
-            else // non-RSC
+            else
             {
-                if (apply_mask && bv_and_mask_)
-                {
-                    bv_out.bit_or(*bv_and_mask_);
-                    bv_out.set_range(sv.size(), bm::id_max - 1, false);
-                }
-                else // no AND mask
-                {
-                    bv_out.set_range(0, sv.size() - 1);
-                }
+                bv_out.set_range(0, internal_size - 1);
             }
-            if (apply_mask)
-                correct_nulls(sv, bv_out);
         }
     }
 }
@@ -2280,9 +2328,29 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt(
                                         value_type     val,
                                         bvector_type&  bv_out)
 {
-    find_ge(sv, val, bv_out, false /* apply_mask */);
-    invert_internal(sv, bv_out);
-    finalize_search_result(sv, bv_out, true /* apply_mask */, true /* null_correct */);
+    if (sv.empty())
+    {
+        bv_out.clear();
+        return;
+    }
+
+    const size_type internal_size =
+        SV::is_compressed() ? sv.effective_size() : sv.size();
+
+    bvector_type bv_ge;
+    find_ge_internal(sv, val, bv_ge, bv_and_mask_ != 0 /* apply_mask */);
+
+    if (bv_and_mask_)
+    {
+        bv_out.bit_or(*bv_and_mask_);
+        bv_out.set_range(internal_size, bm::id_max - 1, false);
+    }
+    else
+    {
+        bv_out.set_range(0, internal_size - 1);
+    }
+    bv_out.bit_sub(bv_ge);
+    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
 }
 
 //----------------------------------------------------------------------------
@@ -2292,9 +2360,29 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le(const SV& sv,
                                                   value_type val,
                                                   bvector_type&  bv_out)
 {
-    find_gt_horizontal(sv, val, bv_out, true /* null_correct */, false /* apply_mask */);
-    invert_internal(sv, bv_out);
-    finalize_search_result(sv, bv_out, true /* apply_mask */, true /* null_correct */);
+    if (sv.empty())
+    {
+        bv_out.clear();
+        return;
+    }
+
+    const size_type internal_size =
+        SV::is_compressed() ? sv.effective_size() : sv.size();
+
+    bvector_type bv_gt;
+    find_gt_internal(sv, val, bv_gt, bv_and_mask_ != 0 /* apply_mask */);
+
+    if (bv_and_mask_)
+    {
+        bv_out.bit_or(*bv_and_mask_);
+        bv_out.set_range(internal_size, bm::id_max - 1, false);
+    }
+    else
+    {
+        bv_out.set_range(0, internal_size - 1);
+    }
+    bv_out.bit_sub(bv_gt);
+    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
 }
 
 //----------------------------------------------------------------------------
@@ -2327,15 +2415,18 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal(const SV&   sv,
                                                    value_type     value,
                                                    bvector_type&  bv_out,
                                                    bool null_correct,
-                                                   bool apply_mask)
+                                                   bool apply_mask,
+                                                   bool finalize_result)
 {
     if constexpr (std::is_signed<value_type>::value)
     {
-        this->find_gt_horizontal_s(sv, value, bv_out, null_correct, apply_mask);
+        this->find_gt_horizontal_s(sv, value, bv_out, null_correct,
+                                   apply_mask, finalize_result);
     }
     else // unsigned
     {
-        this->find_gt_horizontal_u(sv, value, bv_out, null_correct, apply_mask);
+        this->find_gt_horizontal_u(sv, value, bv_out, null_correct,
+                                   apply_mask, finalize_result);
     }
 
 /*
@@ -2522,7 +2613,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
                                                    value_type     value,
                                                    bvector_type&  bv_out,
                                                    bool /*null_correct*/,
-                                                   bool apply_mask)
+                                                   bool apply_mask,
+                                                   bool finalize_result)
 {
     if constexpr (std::is_signed<value_type>::value)
     {
@@ -2542,7 +2634,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
             find_nonzero(sv, bv_out);
         else
             find_nonzero_no_mask(sv, bv_out);
-        if (apply_mask)
+        if (finalize_result)
             decompress(sv, bv_out);
         return;
     }
@@ -2621,7 +2713,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
         bv_out.bit_and(*bv_and_mask_, bvector_type::optmode::opt_free_0);
     }
     
-    if (apply_mask)
+    if (finalize_result)
         decompress(sv, bv_out);
 }
 
@@ -2636,7 +2728,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
                                                    value_type     value,
                                                    bvector_type&  bv_out,
                                                    bool null_correct,
-                                                   bool apply_mask)
+                                                   bool apply_mask,
+                                                   bool finalize_result)
 {
     static_assert(std::is_signed<value_type>::value,
                   "find_gt_horizontal_s requires signed value_type");
@@ -2658,7 +2751,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
             find_nonzero_no_mask(sv, bv_out);
         if (const bvector_type* bv_sign = sv.get_slice(0)) // sign bvector
             bv_out.bit_sub(*bv_sign);  // all but negatives
-        if (apply_mask)
+        if (finalize_result)
         {
             decompress(sv, bv_out);
             if (null_correct)
@@ -2675,7 +2768,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     {
         if (apply_mask && bv_and_mask_)
             bv_out.bit_and(*bv_and_mask_, bvector_type::optmode::opt_free_0);
-        if (apply_mask)
+        if (finalize_result)
         {
             decompress(sv, bv_out);
             if (do_null_correct && null_correct)
@@ -2779,17 +2872,23 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
         } // for j
     } // for i
 
+    size_type internal_size;
+    if constexpr (SV::is_compressed())
+        internal_size = sv.effective_size();
+    else
+        internal_size = sv.size();
+
     if (value < 0)
     {
         // now we have negatives greter by abs value
-        top_or_bv.set_range(0, sv.size()-1);
+        top_or_bv.set_range(0, internal_size - 1);
         top_or_bv.bit_sub(bv_out);
         bv_out.swap(top_or_bv);
         finalize(true);
     }
     else // value > 0
     {
-        gtz_bv.resize(sv.size());
+        gtz_bv.resize(internal_size);
         gtz_bv.invert(); // now it is all < 0
         bv_out.bit_sub(gtz_bv); // exclude all negatives
         finalize(false);
@@ -3777,6 +3876,19 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_eq(
                                         typename SV::value_type    value,
                                         typename SV::bvector_type& bv_out)
 {
+    find_eq_internal(sv, value, bv_out, true /* apply_mask */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_eq_internal(
+                                        const SV&                  sv,
+                                        typename SV::value_type    value,
+                                        typename SV::bvector_type& bv_out,
+                                        bool                       apply_mask)
+{
     if (sv.empty())
     {
         bv_out.clear();
@@ -3784,14 +3896,19 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_eq(
     }
     if (!value)
     {
-        find_zero(sv, bv_out);
+        find_nonzero_no_mask(sv, bv_out);
+        invert_internal(sv, bv_out);
+        if (apply_mask && bv_and_mask_)
+            bv_out.bit_and(*bv_and_mask_, bvector_type::optmode::opt_free_0);
         return;
     }
 
-    find_eq_with_nulls(sv, value, bv_out, 0);
-    
-    decompress(sv, bv_out);
-    correct_nulls(sv, bv_out);
+    bool found = prepare_and_sub_aggregator(sv, value, apply_mask);
+    if (found)
+        agg_.combine_and_sub(bv_out);
+    else
+        bv_out.clear();
+    agg_.reset();
 }
 
 //----------------------------------------------------------------------------
@@ -3909,7 +4026,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_nonnegative_no_mask(
                                      typename SV::bvector_type& bv_out)
 {
     BM_ASSERT(sv.size());
-    bv_out.set_range(0, sv.size()-1); // select all elements
+    const size_type internal_size =
+        SV::is_compressed() ? sv.effective_size() : sv.size();
+    bv_out.set_range(0, internal_size - 1); // select all internal elements
     if constexpr (std::is_signed<value_type>::value)
     {
         if (const bvector_type* bv_sign = sv.get_slice(0)) // sign bvector
