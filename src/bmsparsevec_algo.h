@@ -800,6 +800,8 @@ public:
         \param sv - input sparse vector
         \param value - value to search for
         \param bv_out - search result bit-vector (search result  is a vector of 1s when sv[i] >= value)
+        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
+               if false, return the internal address-space result without mask/finalization
     */
     void find_ge(const SV& sv, value_type  val, bvector_type&  bv_out,
                  bool apply_mask = true);
@@ -1086,29 +1088,51 @@ public:
     void find_eq_with_nulls_horizontal(const SV& sv, value_type value,
                                        bvector_type&  bv_out);
 
-    /// For testing purposes only
-    ///
-    /// @internal
+    /**
+        \brief Internal/testing greater-than search implementation.
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector
+        \param null_correct - if true, exclude NULL values during finalization
+        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
+               if false, return the internal address-space result without mask/finalization
+        @internal
+    */
     void find_gt_horizontal(const SV&      sv,
                             value_type     value,
                             bvector_type&  bv_out,
                             bool null_correct = true,
                             bool apply_mask = true);
 
-    /// For internal  purposes only (GT unsigned)
-    ///
-    /// @internal
-    ///
+    /**
+        \brief Internal unsigned greater-than search implementation.
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector
+        \param null_correct - if true, exclude NULL values during finalization
+        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
+               if false, return the internal address-space result without mask/finalization
+        @internal
+    */
     void find_gt_horizontal_u(const SV&      sv,
                               value_type     value,
                               bvector_type&  bv_out,
                               bool null_correct = true,
                               bool apply_mask = true);
 
-    /// For internal  purposes only (GT signed)
-    ///
-    /// @internal
-    ///
+    /**
+        \brief Internal signed greater-than search implementation.
+
+        \param sv - input sparse vector
+        \param value - value to search for
+        \param bv_out - search result bit-vector
+        \param null_correct - if true, exclude NULL values during finalization
+        \param apply_mask - if true, apply the current scanner AND mask and return finalized result;
+               if false, return the internal address-space result without mask/finalization
+        @internal
+    */
     void find_gt_horizontal_s(const SV&      sv,
                               value_type     value,
                               bvector_type&  bv_out,
@@ -1185,10 +1209,24 @@ protected:
     /// Rank-Select decompression for RSC vectors
     void decompress(const SV&   sv, bvector_type& bv_out);
 
-    /// Invert search result in the sparse vector internal address space.
+    /**
+        \brief Invert search result in the sparse vector internal address space.
+
+        \param sv - input sparse vector
+        \param bv_out - bit-vector to invert
+        @internal
+    */
     void invert_internal(const SV& sv, bvector_type& bv_out);
 
-    /// Finalize internal search result with optional mask, decompression and NULL correction.
+    /**
+        \brief Finalize internal search result with optional mask, decompression and NULL correction.
+
+        \param sv - input sparse vector
+        \param bv_out - internal search result bit-vector to finalize
+        \param apply_mask - if true, apply the current scanner AND mask before decompression
+        \param null_correct - if true, exclude NULL values after decompression
+        @internal
+    */
     void finalize_search_result(const SV& sv,
                                 bvector_type& bv_out,
                                 bool apply_mask,
