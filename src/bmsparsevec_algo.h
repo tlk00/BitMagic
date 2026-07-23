@@ -3481,6 +3481,99 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type
 //----------------------------------------------------------------------------
 
 template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    find_ge_float_internal(sv, val, bv_out);
+    
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out.bit_and(*non_null_mask);
+    
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    bv_out.clear();
+    bv_out.set_range(0, sv.size()-1, true);
+    
+    bvector_type inverse;
+    find_lt_float_internal(sv, val, inverse);
+    
+    bv_out.bit_sub(inverse);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    find_lt_float_internal(sv, val, bv_out);
+    
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out.bit_and(*non_null_mask);
+    
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    find_le_float_internal(sv, val, bv_out);
+    
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out.bit_and(*non_null_mask);
+    
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+}
+
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_le_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
+{
+    bv_out.clear();
+    bv_out.set_range(0, sv.size()-1, true);
+    
+    bvector_type inverse;
+    find_gt_float_internal(sv, val, inverse);
+    
+    bv_out.bit_sub(inverse);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
+void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
+                                                            value_type from, value_type to,
+                                                            bvector_type&  bv_out)
+{
+    if (from > to) std::swap(from, to);
+    find_le_float_internal(sv, to, bv_out);
+    bvector_type  ge;
+    find_ge_float_internal(sv, from, ge);
+    bv_out.bit_and(ge);
+    
+    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
+    if (non_null_mask)
+        bv_out.bit_and(*non_null_mask);
+    
+    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+}
+
+//----------------------------------------------------------------------------
+
+template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
 {
     bv_out.clear();
@@ -3533,51 +3626,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv, v
     }
 }
 
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_ge_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    bv_out.clear();
-    bv_out.set_range(0, sv.size()-1, true);
-    
-    bvector_type inverse;
-    find_lt_float_internal(sv, val, inverse);
-    
-    bv_out.bit_sub(inverse);
-}
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_lt_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-//----------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------
 
 template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
@@ -3625,57 +3674,6 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv, v
         }
     }
 }
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_le_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_le_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    bv_out.clear();
-    bv_out.set_range(0, sv.size()-1, true);
-    
-    bvector_type inverse;
-    find_gt_float_internal(sv, val, inverse);
-    
-    bv_out.bit_sub(inverse);
-}
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
-                                                            value_type from, value_type to,
-                                                            bvector_type&  bv_out)
-{
-    if (from > to) std::swap(from, to);
-    find_le_float_internal(sv, to, bv_out);
-    bvector_type  ge;
-    find_ge_float_internal(sv, from, ge);
-    bv_out.bit_and(ge);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-
 
 
 
@@ -3683,20 +3681,6 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
 
 
 /*
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_gt_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-//----------------------------------------------------------------------------
 
 template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
@@ -3754,53 +3738,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv, v
         }
     }
 }
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_ge_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    bv_out.clear();
-    bv_out.set_range(0, sv.size()-1, true);
-    
-    bvector_type inverse;
-    find_lt_float_internal(sv, val, inverse);
-    
-    bv_out.bit_sub(inverse);
-}
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_lt_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-//----------------------------------------------------------------------------
-
+ 
 template<typename SV, unsigned S_FACTOR>
 void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
 {
@@ -3852,54 +3790,6 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv, v
     }
 }
 
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    find_le_float_internal(sv, val, bv_out);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
-
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_le_float_internal(const SV& sv, value_type  val, bvector_type&  bv_out)
-{
-    bv_out.clear();
-    bv_out.set_range(0, sv.size()-1, true);
-    
-    bvector_type inverse;
-    find_gt_float_internal(sv, val, inverse);
-    
-    bv_out.bit_sub(inverse);
-}
-
-//----------------------------------------------------------------------------
-
-template<typename SV, unsigned S_FACTOR>
-void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
-                                                            value_type from, value_type to,
-                                                            bvector_type&  bv_out)
-{
-    if (from > to) std::swap(from, to);
-    find_le_float_internal(sv, to, bv_out);
-    bvector_type  ge;
-    find_ge_float_internal(sv, from, ge);
-    bv_out.bit_and(ge);
-    
-    const bvector_type* non_null_mask = sv.mantissas_.get_null_bvector();
-    if (non_null_mask)
-        bv_out.bit_and(*non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
-}
 */
 
 //----------------------------------------------------------------------------
