@@ -135,6 +135,13 @@ add_executable(bmtest ${PROJECT_SOURCE_DIR}/tests/stress/t.cpp ${BM_HEADERS})
 add_executable(bmptest ${PROJECT_SOURCE_DIR}/tests/test_threads/ptest.cpp ${BM_HEADERS})
 add_executable(bmtest64 ${PROJECT_SOURCE_DIR}/tests/stress64/t64.cpp ${BM_HEADERS})
 add_executable(bmperf ${PROJECT_SOURCE_DIR}/tests/perf/perf.cpp ${BM_HEADERS})
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(bmperf PRIVATE
+        -fno-omit-frame-pointer
+        -mno-omit-leaf-frame-pointer
+        -fno-optimize-sibling-calls
+    )
+endif()
 add_executable(bmperf64 ${PROJECT_SOURCE_DIR}/tests/perf64/perf64.cpp ${BM_HEADERS})
 add_executable(bmlnkutil ${PROJECT_SOURCE_DIR}/utils/lnkutil/lnkutil.cpp ${BM_HEADERS})
 add_executable(bminv ${PROJECT_SOURCE_DIR}/utils/inv_list/inv_list.cpp ${BM_HEADERS})
@@ -223,3 +230,11 @@ add_executable(strsvsample09 ${PROJECT_SOURCE_DIR}/samples/strsvsample09/strsvsa
 
 
 add_executable(bmbsample01 ${PROJECT_SOURCE_DIR}/samples/bmbsample01/bmbsample01.cpp ${BM_HEADERS})
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(bmperf PRIVATE
+        -fno-omit-frame-pointer
+        -mno-omit-leaf-frame-pointer
+        -fno-optimize-sibling-calls
+    )
+endif()
