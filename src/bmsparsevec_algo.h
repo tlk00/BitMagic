@@ -1272,6 +1272,41 @@ protected:
                                 bool apply_mask,
                                 bool null_correct);
 
+    /// Return true if EQ predicate may include zero-coded NULL elements.
+    static bool needs_null_correct_eq(value_type value) BMNOEXCEPT
+        { return value == value_type(0); }
+
+    /// Return true if GT predicate may include zero-coded NULL elements.
+    static bool needs_null_correct_gt(value_type value) BMNOEXCEPT
+    {
+        if constexpr (std::is_signed<value_type>::value)
+            return value < value_type(0);
+        else
+            return false;
+    }
+
+    /// Return true if GE predicate may include zero-coded NULL elements.
+    static bool needs_null_correct_ge(value_type value) BMNOEXCEPT
+    {
+        if constexpr (std::is_signed<value_type>::value)
+            return value <= value_type(0);
+        else
+            return value == value_type(0);
+    }
+
+    /// Return true if LT predicate may include zero-coded NULL elements.
+    static bool needs_null_correct_lt(value_type value) BMNOEXCEPT
+        { return value > value_type(0); }
+
+    /// Return true if LE predicate may include zero-coded NULL elements.
+    static bool needs_null_correct_le(value_type value) BMNOEXCEPT
+    {
+        if constexpr (std::is_signed<value_type>::value)
+            return value >= value_type(0);
+        else
+            return true;
+    }
+
     /// compare sv[idx] with input str
     template <bool BOUND>
     int compare_str(const SV& sv, size_type idx,
@@ -2231,7 +2266,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt(
                                         bvector_type&  bv_out)
 {
     find_gt_internal(sv, val, bv_out, true /* apply_mask */);
-    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */,
+                           needs_null_correct_gt(val));
 }
 
 //----------------------------------------------------------------------------
@@ -2257,7 +2293,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge(
                                         bvector_type&  bv_out)
 {
     find_ge_internal(sv, val, bv_out, true /* apply_mask */);
-    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */,
+                           needs_null_correct_ge(val));
 }
 
 //----------------------------------------------------------------------------
@@ -2350,7 +2387,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt(
         bv_out.set_range(0, internal_size - 1);
     }
     bv_out.bit_sub(bv_ge);
-    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */,
+                           needs_null_correct_lt(val));
 }
 
 //----------------------------------------------------------------------------
@@ -2382,7 +2420,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le(const SV& sv,
         bv_out.set_range(0, internal_size - 1);
     }
     bv_out.bit_sub(bv_gt);
-    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */,
+                           needs_null_correct_le(val));
 }
 
 //----------------------------------------------------------------------------
@@ -3877,7 +3916,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_eq(
                                         typename SV::bvector_type& bv_out)
 {
     find_eq_internal(sv, value, bv_out, true /* apply_mask */);
-    finalize_search_result(sv, bv_out, false /* apply_mask */, true /* null_correct */);
+    finalize_search_result(sv, bv_out, false /* apply_mask */,
+                           needs_null_correct_eq(value));
 }
 
 //----------------------------------------------------------------------------
