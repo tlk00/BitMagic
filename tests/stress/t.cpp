@@ -41923,7 +41923,9 @@ void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, fl
             // print first few differing positions
             auto en = diff.first();
             for (sparseVecFloatRSC::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
-                std::cout << "  position: " << *en << "\n";
+            {
+                std::cout << "  position: " << *en << " - " << testSVF.get(*en) << "\n";
+            }
         }
         if (!range_eq_const)
         {
@@ -41992,7 +41994,7 @@ void sparseVecFloatRSCScannerTests()
         }
         else
         {
-            linData[i] = std::numeric_limits<float>::quiet_NaN();
+            linData[i+N/2] = std::numeric_limits<float>::quiet_NaN();
         }
     }
 
@@ -43685,8 +43687,8 @@ return 0;
 
     if(is_all || is_svf){
         
-        //SparseVecFloatTests();
-        //CheckAllocLeaks(false);
+        SparseVecFloatTests();
+        CheckAllocLeaks(false);
 
         SparseVecFloatScannerTests();
         CheckAllocLeaks(false);

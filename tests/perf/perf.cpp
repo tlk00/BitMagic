@@ -6134,7 +6134,7 @@ void TestSVFScannerRSC()
         }
         else
         {
-            linData[i] = std::numeric_limits<float>::quiet_NaN();
+            linData[i+N/2] = std::numeric_limits<float>::quiet_NaN();
         }
     }
 
@@ -6306,11 +6306,11 @@ void TestSVFScannerRSC()
 
         if (!range_eq_vector)
         {
-            cerr << "LinearRSC: MISMATCH Vect" << endl;
+            cerr << "RandomRSC: MISMATCH Vect" << endl;
         }
         if (!range_eq_const)
         {
-            cerr << "LinearRSC: MISMATCH Const" << endl;
+            cerr << "RandomRSC: MISMATCH Const" << endl;
         }
         if (!range_eq_vector || !range_eq_const)
         {
@@ -6717,6 +6717,80 @@ void TestSVFComparison()
         }
     }
 }
+
+
+void TestSVFScannerSpike()
+{
+    unsigned int N = 200000000;
+    
+    sparseVecFloat testSVF;
+    
+    float upper = 15.0f;
+    float lower = 5.0f;
+    std::uniform_real_distribution<float> flatDis(lower, upper);
+    
+    unsigned int u = 500000;
+    unsigned int l = 100000;
+    std::uniform_int_distribution<unsigned int> distDis(l, u);
+    unsigned int distance = distDis(gen);
+    unsigned int spikeDist = 1000;
+    
+    upper=1050.0f;
+    lower=950.0f;
+    std::uniform_real_distribution<float> spikeDis(lower, upper);
+    
+    sparseVecFloat::bvector_type correct;
+    std::vector<float> testVect;
+    
+    for (sparseVecFloat::size_type i = 0; i < N; ++i)
+    {
+        if (spikeDist > 0) {
+            float toAdd = spikeDis(gen);
+            testSVF.push_back(toAdd);
+            testVect.push_back(toAdd);
+            
+            spikeDist--;
+            
+            correct.set(i);
+            
+            if (spikeDist == 0) {
+                distance = distDis(gen);
+                testSVF.optimize();
+            }
+        }
+        else if (distance > 0) {
+            float toAdd = flatDis(gen);
+            testSVF.push_back(toAdd);
+            testVect.push_back(toAdd);
+            distance--;
+            
+            if (distance == 0) {
+                spikeDist = 1000;
+            }
+        }
+    }
+    testSVF.optimize();
+    
+    sparseVecFloat::bvector_type scanResult;
+    bm::sparse_vector_scanner<sparseVecFloat> scan;
+    
+    int numTests = 1000;
+    
+    {
+        bm::chrono_taker<> tt(cout, "Scanner time to find spikes", numTests);
+        for(int i = 0; i < numTests; i++)
+        {
+            scan.find_gt_float(testSVF, 900.0f, scanResult);
+        }
+    }
+    
+    if(scanResult != correct)
+    {
+        std::cerr << "Incorrect vector" << std::endl;
+        exit(0);
+    }
+}
+
 
 
 /// Random numbers test
@@ -7233,6 +7307,9 @@ int main(void)
         cout << endl;
         
         TestSVFComparison();
+        cout << endl;
+        
+        TestSVFScannerSpike();
         cout << endl;
 
         if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code

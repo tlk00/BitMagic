@@ -3474,10 +3474,15 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv,
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if (bv_non_null_mask)
+    {
         bv_out.bit_and(*bv_non_null_mask);
+    }
+    else
+    {
+        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
     
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
 }
 
 //----------------------------------------------------------------------------
@@ -3490,11 +3495,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv,
     find_ge_float_internal(sv, val, bv_out);
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
-    if (bv_non_null_mask)
-        bv_out.bit_and(*bv_non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    if(!bv_non_null_mask)
+    {
+        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -3504,8 +3509,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float_internal(const SV& sv,
                                                                  value_type  val,
                                                                  bvector_type&  bv_out)
 {
-    bv_out.clear();
-    bv_out.set_range(0, sv.size()-1, true);
+    const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
+    if (bv_non_null_mask)
+        bv_out = *bv_non_null_mask;
+    else
+        bv_out.set_range(0, sv.size()-1, true);
     
     bvector_type bv_inverse;
     find_lt_float_internal(sv, val, bv_inverse);
@@ -3524,10 +3532,14 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv,
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if (bv_non_null_mask)
+    {
         bv_out.bit_and(*bv_non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
+    else
+    {
+        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -3540,11 +3552,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv,
     find_le_float_internal(sv, val, bv_out);
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
-    if (bv_non_null_mask)
-        bv_out.bit_and(*bv_non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    if(!bv_non_null_mask)
+    {
+        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
 }
 
 
@@ -3554,7 +3566,12 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le_float_internal(const SV& sv,
                                                                  bvector_type&  bv_out)
 {
     bv_out.clear();
-    bv_out.set_range(0, sv.size()-1, true);
+    
+    const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
+    if (bv_non_null_mask)
+        bv_out = *bv_non_null_mask;
+    else
+        bv_out.set_range(0, sv.size()-1, true);
     
     bvector_type inverse;
     find_gt_float_internal(sv, val, inverse);
@@ -3578,10 +3595,14 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if (bv_non_null_mask)
+    {
         bv_out.bit_and(*bv_non_null_mask);
-    
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
-    svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
+    else
+    {
+        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -3611,6 +3632,15 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
 
             bvector_type bv_bounds_mant;
             svf_scanner.find_ge_internal(sv.mantissas_, mantissa, bv_bounds_mant, false);
+            
+            const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
+            if (bv_non_null_mask)
+            {
+                svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_mant, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_exp, false, true);
+            }
+            
             bv_bounds_exp.bit_and(bv_bounds_mant);
 
             bv_out.bit_sub(bv_bounds_exp);
@@ -3626,7 +3656,6 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
     else
     {
         svf_scanner.find_ge_internal(sv.exponents_, exponent, bv_out, false);
-        bv_out.bit_sub(sv.signs_);
 
         {
             bvector_type bv_bounds_exp;
@@ -3634,8 +3663,17 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
 
             bvector_type bv_bounds_mant;
             svf_scanner.find_le_internal(sv.mantissas_, mantissa, bv_bounds_mant);
+            
+            const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
+            if (bv_non_null_mask)
+            {
+                svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_mant, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_exp, false, true);
+            }
+            
+            bv_out.bit_sub(sv.signs_);
             bv_bounds_exp.bit_and(bv_bounds_mant);
-
             bv_out.bit_sub(bv_bounds_exp);
         }
     }
@@ -3661,17 +3699,24 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv,
     if (sign == 1)
     {
         svf_scanner.find_ge_internal(sv.exponents_, exponent, bv_out, false);
-        bv_out.bit_and(sv.signs_);
         
         {
-            bvector_type bounds_exp;
-            svf_scanner.find_eq_internal(sv.exponents_, exponent, bounds_exp, false);
+            bvector_type bv_bounds_exp;
+            svf_scanner.find_eq_internal(sv.exponents_, exponent, bv_bounds_exp, false);
             
-            bvector_type bounds_mant;
-            svf_scanner.find_le_internal(sv.mantissas_, mantissa, bounds_mant);
-            bounds_exp &= bounds_mant;
+            bvector_type bv_bounds_mant;
+            svf_scanner.find_le_internal(sv.mantissas_, mantissa, bv_bounds_mant);
             
-            bv_out.bit_sub(bounds_exp);
+            const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
+            if (bv_non_null_mask)
+            {
+                svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_mant, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_exp, false, true);
+            }
+            bv_out.bit_and(sv.signs_);
+            bv_bounds_exp.bit_and(bv_bounds_mant);
+            bv_out.bit_sub(bv_bounds_exp);
         }
     }
     else
@@ -3679,14 +3724,23 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv,
         svf_scanner.find_le_internal(sv.exponents_, exponent, bv_out);
 
         {
-            bvector_type bounds_exp;
-            svf_scanner.find_eq_internal(sv.exponents_, exponent, bounds_exp, false);
+            bvector_type bv_bounds_exp;
+            svf_scanner.find_eq_internal(sv.exponents_, exponent, bv_bounds_exp, false);
             
-            bvector_type bounds_mant;
-            svf_scanner.find_ge_internal(sv.mantissas_, mantissa, bounds_mant, false);
-            bounds_exp.bit_and(bounds_mant);
+            bvector_type bv_bounds_mant;
+            svf_scanner.find_ge_internal(sv.mantissas_, mantissa, bv_bounds_mant, false);
             
-            bv_out.bit_sub(bounds_exp);
+            const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
+            if (bv_non_null_mask)
+            {
+                svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_mant, false, true);
+                svf_scanner.finalize_search_result(sv.exponents_, bv_bounds_exp, false, true);
+            }
+            
+            bv_bounds_exp.bit_and(bv_bounds_mant);
+            
+            bv_out.bit_sub(bv_bounds_exp);
             bv_out.bit_or(sv.signs_);
         }
     }
