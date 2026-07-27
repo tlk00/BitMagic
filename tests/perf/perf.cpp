@@ -7184,7 +7184,7 @@ int main(void)
     try
     {
         cout << endl;
-/*
+
         MemCpyTest();
         cout << endl;
 
@@ -7299,7 +7299,7 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
-*/
+
         TestSVFScanner();
         cout << endl;
 
