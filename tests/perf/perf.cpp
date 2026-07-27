@@ -6774,11 +6774,11 @@ void TestSVFScannerSpike()
     sparseVecFloat::bvector_type scanResult;
     bm::sparse_vector_scanner<sparseVecFloat> scan;
     
-    int numTests = 1000;
+    unsigned int numTests = 1000;
     
     {
         bm::chrono_taker<> tt(cout, "Scanner time to find spikes", numTests);
-        for(int i = 0; i < numTests; i++)
+        for(unsigned int i = 0; i < numTests; i++)
         {
             scan.find_gt_float(testSVF, 900.0f, scanResult);
         }
