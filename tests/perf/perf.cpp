@@ -6450,7 +6450,7 @@ void TestSVFComparison()
         }
         else
         {
-            linData[i] = std::numeric_limits<float>::quiet_NaN();
+            linData[i+N/2] = std::numeric_limits<float>::quiet_NaN();
         }
     }
     unsigned int tests = 1000;
@@ -7184,7 +7184,7 @@ int main(void)
     try
     {
         cout << endl;
-
+/*
         MemCpyTest();
         cout << endl;
 
@@ -7299,7 +7299,7 @@ int main(void)
 
         StrSparseVectorTest();
         cout << endl;
-
+*/
         TestSVFScanner();
         cout << endl;
 

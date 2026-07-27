@@ -3511,7 +3511,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float_internal(const SV& sv,
 {
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if (bv_non_null_mask)
-        bv_out = *bv_non_null_mask;
+        bv_out.bit_or(*bv_non_null_mask);
     else
         bv_out.set_range(0, sv.size()-1, true);
     
@@ -3569,7 +3569,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le_float_internal(const SV& sv,
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if (bv_non_null_mask)
-        bv_out = *bv_non_null_mask;
+        bv_out.bit_or(*bv_non_null_mask);
     else
         bv_out.set_range(0, sv.size()-1, true);
     
