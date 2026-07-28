@@ -27866,6 +27866,151 @@ void TestSparseVectorTransform()
     cout << " --------------- Test set transformation with sparse vector OK" << endl;
 }
 
+enum class search_debug_op
+{
+    gt,
+    ge,
+    lt,
+    le,
+    range_0v,
+    eq
+};
+
+inline const char* SearchDebugName(search_debug_op op)
+{
+    switch (op)
+    {
+    case search_debug_op::gt:       return "GT";
+    case search_debug_op::ge:       return "GE";
+    case search_debug_op::lt:       return "LT";
+    case search_debug_op::le:       return "LE";
+    case search_debug_op::range_0v: return "RANGE_0V";
+    case search_debug_op::eq:       return "EQ";
+    default:                        return "UNKNOWN";
+    }
+}
+
+template<class SV>
+bool SearchDebugPredicate(search_debug_op op,
+                          typename SV::value_type sv_value,
+                          typename SV::value_type v)
+{
+    switch (op)
+    {
+    case search_debug_op::gt:       return sv_value > v;
+    case search_debug_op::ge:       return sv_value >= v;
+    case search_debug_op::lt:       return sv_value < v;
+    case search_debug_op::le:       return sv_value <= v;
+    case search_debug_op::range_0v:
+        return (v < 0) ? (sv_value <= 0 && sv_value >= v)
+                       : (sv_value >= 0 && sv_value <= v);
+    case search_debug_op::eq:       return sv_value == v;
+    default:                        return false;
+    }
+}
+
+template<class SV>
+void ReportSearchMismatch(search_debug_op op,
+                          const SV& sv,
+                          typename SV::value_type v,
+                          const bvect& bv_unfiltered,
+                          const bvect* bv_mask,
+                          const bvect& bv_expected,
+                          const bvect& bv_actual)
+{
+    bvect bv_diff(bv_expected);
+    bv_diff ^= bv_actual;
+
+    auto mismatch_idx = *(bv_diff.first());
+    auto sv_value = sv.get(mismatch_idx);
+    const bool has_mask = bv_mask != 0;
+    const bool mask_bit = has_mask ? bv_mask->test(mismatch_idx) : false;
+    const bool unfiltered_bit = bv_unfiltered.test(mismatch_idx);
+    const bool expected_bit = bv_expected.test(mismatch_idx);
+    const bool actual_bit = bv_actual.test(mismatch_idx);
+    const bool predicate_match = SearchDebugPredicate<SV>(op, sv_value, v);
+
+    const char* mismatch_kind = "inconsistent mismatch";
+    if (expected_bit && !actual_bit)
+        mismatch_kind = "lost valid search hit";
+    else if (!expected_bit && actual_bit)
+        mismatch_kind = "false positive search hit";
+
+    cout << "Search mismatch: " << SearchDebugName(op) << endl;
+    cout << "BV_UNFILTERED.count()=" << bv_unfiltered.count() << endl;
+    if (has_mask)
+        cout << "BV_MASK.count()=" << bv_mask->count() << endl;
+    cout << "BV_EXPECTED.count()=" << bv_expected.count() << endl;
+    cout << "BV_ACTUAL.count()=" << bv_actual.count() << endl;
+    cout << "BV_DIFF.count()=" << bv_diff.count() << endl;
+    cout << "mismatch_idx=" << mismatch_idx << endl;
+    if (has_mask)
+        cout << "mask bit=" << mask_bit << ' ';
+    cout << "unfiltered bit=" << unfiltered_bit
+         << " expected bit=" << expected_bit
+         << " actual bit=" << actual_bit << endl;
+    cout << "v[]=" << sv_value << "  v=" << v
+         << " predicate test=" << predicate_match << endl;
+    cout << "mismatch kind: " << mismatch_kind << endl;
+
+    if (has_mask)
+    {
+        cout << "BV_MASK=\n";
+        print_bv(cout, *bv_mask);
+    }
+    cout << "BV_EXPECTED=\n";
+    print_bv(cout, bv_expected);
+    cout << "BV_ACTUAL=\n";
+    print_bv(cout, bv_actual);
+    cout << "diff=\n";
+    print_bv(cout, bv_diff);
+
+    const string sv_fname = "search_debug.sv";
+    const string mask_fname = "search_debug_mask.bv";
+    const string meta_fname = "search_debug.txt";
+
+    size_t sv_blob_size = 0;
+    int sv_save_res = bm::file_save_svector(sv, sv_fname, &sv_blob_size, false);
+    if (has_mask)
+        bm::SaveBVector(mask_fname.c_str(), *bv_mask, true);
+
+    ofstream meta(meta_fname.c_str());
+    if (meta.good())
+    {
+        meta << "test=" << SearchDebugName(op) << " search" << endl;
+        meta << "has_mask=" << has_mask << endl;
+        meta << "sparse_vector_file=" << sv_fname << endl;
+        if (has_mask)
+            meta << "mask_file=" << mask_fname << endl;
+        meta << "sparse_vector_save_result=" << sv_save_res << endl;
+        meta << "sparse_vector_blob_size=" << sv_blob_size << endl;
+        meta << "sv_size=" << sv.size() << endl;
+        if constexpr (SV::is_compressed())
+            meta << "sv_effective_size=" << sv.effective_size() << endl;
+        meta << "query_value=" << v << endl;
+        meta << "mismatch_idx=" << mismatch_idx << endl;
+        meta << "mismatch_value=" << sv_value << endl;
+        if (has_mask)
+            meta << "mask_bit=" << mask_bit << endl;
+        meta << "unfiltered_bit=" << unfiltered_bit << endl;
+        meta << "expected_bit=" << expected_bit << endl;
+        meta << "actual_bit=" << actual_bit << endl;
+        meta << "predicate_match=" << predicate_match << endl;
+        meta << "mismatch_kind=" << mismatch_kind << endl;
+        meta << "bv_unfiltered_count=" << bv_unfiltered.count() << endl;
+        if (has_mask)
+            meta << "bv_mask_count=" << bv_mask->count() << endl;
+        meta << "bv_expected_count=" << bv_expected.count() << endl;
+        meta << "bv_actual_count=" << bv_actual.count() << endl;
+        meta << "bv_diff_count=" << bv_diff.count() << endl;
+    }
+    cout << "Debug dump saved: " << sv_fname;
+    if (has_mask)
+        cout << ", " << mask_fname;
+    cout << ", " << meta_fname << endl;
+    cout << endl << endl;
+}
+
 template<class SV>
 void CheckGTSearch(const SV& sv, typename SV::value_type v,
                    bm::sparse_vector_scanner<SV>& scanner)
@@ -27904,12 +28049,9 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         bool eq = bv_r1.equal(bv_gt_mask1);
         if (!eq)
         {
-            print_bv(cout, bv_r1);
-            print_bv(cout, bv_gt_mask1);
-            bv_r1 ^= bv_gt_mask1;
-            cout << "diff=" << endl;
-            //print_bv(bv_r1);
-            assert(eq);exit(1);
+            ReportSearchMismatch(search_debug_op::gt, sv, v, bv_gt,
+                                 &bv_mask, bv_r1, bv_gt_mask1);
+            assert(eq); exit(1);
         }
         
         bv_mask.clear();
@@ -27939,27 +28081,10 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         eq = bv_r2.equal(bv_gt_mask2);
         if (!eq)
         {
-            cout << "BV_GT.count()=" << bv_gt.count() << endl;
-            cout << "BV_SUBSET=\n";
-            print_bv(cout, bv_subset);
-            
-            cout << "BV_R2=\n";
-            print_bv(cout, bv_r2);
-            cout << "BV_GT_mask2=\n";
-            print_bv(cout, bv_gt_mask2);
-            bv_r2 ^= bv_gt_mask2;
-            cout << "diff=" << endl;
-            print_bv(cout, bv_r2);
-
-            auto mismatch_idx = *(bv_r2.first());
-            auto v0 = sv.get(mismatch_idx);
-            cout << "v[]=" << v0 << "  v="<< v << " GT test=" << (v0 > v) << endl;
-            cout << endl << endl;
-            
+            ReportSearchMismatch(search_debug_op::gt, sv, v, bv_gt,
+                                 &bv_subset, bv_r2, bv_gt_mask2);
             scanner.find_gt(sv, v, bv_gt_mask2);
-
-
-            assert(eq);exit(1);
+            assert(eq); exit(1);
         }
 
         // AND mask: GE
@@ -27970,26 +28095,10 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         eq = bv_r3.equal(bv_ge_mask2);
         if (!eq)
         {
-            cout << "BV_GE.count()=" << bv_ge.count() << endl;
-            cout << "BV_SUBSET=\n";
-            print_bv(cout, bv_subset);
-
-            cout << "BV_R3=\n";
-            print_bv(cout, bv_r3);
-            cout << "BV_GE_mask2=\n";
-            print_bv(cout, bv_ge_mask2);
-            bv_r3 ^= bv_ge_mask2;
-            cout << "diff=" << endl;
-            print_bv(cout, bv_r3);
-
-            auto mismatch_idx = *(bv_r3.first());
-            auto v0 = sv.get(mismatch_idx);
-            cout << "v[]=" << v0 << "  v="<< v << " GE test=" << (v0 >= v) << endl;
-            cout << endl << endl;
-
+            ReportSearchMismatch(search_debug_op::ge, sv, v, bv_ge,
+                                 &bv_subset, bv_r3, bv_ge_mask2);
             scanner.find_ge(sv, v, bv_ge_mask2);
-
-            assert(eq);exit(1);
+            assert(eq); exit(1);
         }
 
         // AND mask: LT
@@ -28000,26 +28109,10 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         eq = bv_r4.equal(bv_lt_mask2);
         if (!eq)
         {
-            cout << "BV_LT.count()=" << bv_lt.count() << endl;
-            cout << "BV_SUBSET=\n";
-            print_bv(cout, bv_subset);
-
-            cout << "BV_R4=\n";
-            print_bv(cout, bv_r4);
-            cout << "BV_LT_mask2=\n";
-            print_bv(cout, bv_lt_mask2);
-            bv_r4 ^= bv_lt_mask2;
-            cout << "diff=" << endl;
-            print_bv(cout, bv_r4);
-
-            auto mismatch_idx = *(bv_r4.first());
-            auto v0 = sv.get(mismatch_idx);
-            cout << "v[]=" << v0 << "  v="<< v << " LT test=" << (v0 < v) << endl;
-            cout << endl << endl;
-
+            ReportSearchMismatch(search_debug_op::lt, sv, v, bv_lt,
+                                 &bv_subset, bv_r4, bv_lt_mask2);
             scanner.find_lt(sv, v, bv_lt_mask2);
-
-            assert(eq);exit(1);
+            assert(eq); exit(1);
         }
 
         // AND mask: LE
@@ -28030,26 +28123,10 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         eq = bv_r5.equal(bv_le_mask2);
         if (!eq)
         {
-            cout << "BV_LE.count()=" << bv_le.count() << endl;
-            cout << "BV_SUBSET=\n";
-            print_bv(cout, bv_subset);
-
-            cout << "BV_R5=\n";
-            print_bv(cout, bv_r5);
-            cout << "BV_LE_mask2=\n";
-            print_bv(cout, bv_le_mask2);
-            bv_r5 ^= bv_le_mask2;
-            cout << "diff=" << endl;
-            print_bv(cout, bv_r5);
-
-            auto mismatch_idx = *(bv_r5.first());
-            auto v0 = sv.get(mismatch_idx);
-            cout << "v[]=" << v0 << "  v="<< v << " LE test=" << (v0 <= v) << endl;
-            cout << endl << endl;
-
+            ReportSearchMismatch(search_debug_op::le, sv, v, bv_le,
+                                 &bv_subset, bv_r5, bv_le_mask2);
             scanner.find_le(sv, v, bv_le_mask2);
-
-            assert(eq);exit(1);
+            assert(eq); exit(1);
         }
 
         // AND mask: RANGE [0..v]
@@ -28060,27 +28137,10 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
         eq = bv_r6.equal(bv_r_0v_mask2);
         if (!eq)
         {
-            cout << "BV_RANGE.count()=" << bv_r_0v.count() << endl;
-            cout << "BV_SUBSET=\n";
-            print_bv(cout, bv_subset);
-
-            cout << "BV_R6=\n";
-            print_bv(cout, bv_r6);
-            cout << "BV_RANGE_mask2=\n";
-            print_bv(cout, bv_r_0v_mask2);
-            bv_r6 ^= bv_r_0v_mask2;
-            cout << "diff=" << endl;
-            print_bv(cout, bv_r6);
-
-            auto mismatch_idx = *(bv_r6.first());
-            auto v0 = sv.get(mismatch_idx);
-            cout << "v[]=" << v0 << "  range [0.." << v << "] test="
-                 << ((v < 0) ? (v0 <= 0 && v0 >= v) : (v0 >= 0 && v0 <= v)) << endl;
-            cout << endl << endl;
-
+            ReportSearchMismatch(search_debug_op::range_0v, sv, v, bv_r_0v,
+                                 &bv_subset, bv_r6, bv_r_0v_mask2);
             scanner.find_range(sv, 0, v, bv_r_0v_mask2);
-
-            assert(eq);exit(1);
+            assert(eq); exit(1);
         }
     
         // AND mask: empty mask for GT/GE/LT/LE/RANGE
@@ -28113,12 +28173,9 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     bool eq = bv_r_vv.equal(bv_r_vv_control);
     if (!eq)
     {
-        print_bv(cout, bv_r_vv);
-        print_bv(cout, bv_r_vv_control);
-        bv_r_vv ^= bv_r_vv_control;
-        cout << "diff=" << endl;
-        //print_bv(bv_r_vv);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::eq, sv, v, bv_r_vv,
+                             0, bv_r_vv_control, bv_r_vv);
+        assert(eq); exit(1);
     }
     }
 
@@ -28152,62 +28209,44 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     bool eq = bv_res.equal(bv_control);
     if (!eq)
     {
-        cout << "1. result for v >=" << v << " :" << endl;
-        print_bv(cout, bv_res);
-        bv_res ^= bv_control;
-        cout << "diff=" << endl;
-        print_bv(cout, bv_res);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::gt, sv, v, bv_res,
+                             0, bv_control, bv_res);
+        assert(eq); exit(1);
     }
     eq = bv_res.equal(bv_gt);
     if (!eq)
     {
-        cout << "2. result for v >=" << v << " :" << endl;
-        print_bv(std::cout, bv_gt);
-        bv_gt ^= bv_control;
-        cout << "diff=" << endl;
-        print_bv(std::cout, bv_gt);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::gt, sv, v, bv_gt,
+                             0, bv_control, bv_gt);
+        assert(eq); exit(1);
     }
     eq = bv_ge.equal(bv_ge_control);
     if (!eq)
     {
-        cout << "3. result for v >=" << v << " :" << endl;
-        print_bv(std::cout, bv_ge);
-        bv_ge ^= bv_ge_control;
-        cout << "diff=" << endl;
-        print_bv(std::cout, bv_ge);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::ge, sv, v, bv_ge,
+                             0, bv_ge_control, bv_ge);
+        assert(eq); exit(1);
     }
     eq = bv_lt.equal(bv_lt_control);
     if (!eq)
     {
-        cout << "4. result for v <" << v << " :" << endl;
-        print_bv(std::cout,bv_lt);
-        bv_lt ^= bv_lt_control;
-        cout << "diff=" << endl;
-        print_bv(std::cout,bv_lt);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::lt, sv, v, bv_lt,
+                             0, bv_lt_control, bv_lt);
+        assert(eq); exit(1);
     }
     eq = bv_le.equal(bv_le_control);
     if (!eq)
     {
-        cout << "5. result for v <=" << v << " :" << endl;
-        print_bv(std::cout,bv_le);
-        bv_le ^= bv_le_control;
-        cout << "diff=" << endl;
-        print_bv(std::cout,bv_le);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::le, sv, v, bv_le,
+                             0, bv_le_control, bv_le);
+        assert(eq); exit(1);
     }
     eq = bv_r_0v.equal(bv_r_0v_control);
     if (!eq)
     {
-        cout << "6. result for [0, v] " << v << " :" << endl;
-        print_bv(std::cout,bv_r_0v);
-        bv_r_0v ^= bv_r_0v_control;
-        cout << "diff=" << endl;
-        print_bv(std::cout,bv_r_0v);
-        assert(eq);exit(1);
+        ReportSearchMismatch(search_debug_op::range_0v, sv, v, bv_r_0v,
+                             0, bv_r_0v_control, bv_r_0v);
+        assert(eq); exit(1);
     }
 }
 
@@ -29818,7 +29857,7 @@ void TestCompressedSparseVectorScan()
 static
 void TestCompressedSparseVectorScanGT()
 {
-    cout << " --------------- Test rsc_sparse_vector<> TestSparseVectorScanGT()" << endl;
+    cout << " --------------- Test rsc_sparse_vector<> TestCompressedSparseVectorScanGT()" << endl;
 
     bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner_csv;
     bm::sparse_vector_scanner<sparse_vector_u32> scanner_sv;
@@ -29921,7 +29960,7 @@ void TestCompressedSparseVectorScanGT()
 
     }
 
-    cout << " --------------- Test rsc_sparse_vector<> TestSparseVectorScanGT() OK " << endl;
+    cout << " --------------- Test rsc_sparse_vector<> TestCompressedSparseVectorScanGT() OK " << endl;
 }
 
 
