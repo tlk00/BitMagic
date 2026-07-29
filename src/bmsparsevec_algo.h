@@ -2630,26 +2630,26 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
         unsigned total_planes = sv.effective_slices();
         const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
         agg_.reset();
-        bvector_type top_or_bv;
-        typename bvector_type::mem_pool_guard mp_guard_top(pool_, top_or_bv);
+        bvector_type bv_top_or;
+        typename bvector_type::mem_pool_guard mp_guard_top(pool_, bv_top_or);
         {
             if (total_planes < unsigned(blist[bit_count_v-1]+1))
                 return; // number is greater than anything in this vector (empty set)
             if (apply_mask && bv_and_mask_)
-                aggregate_AND_OR_slices(top_or_bv, *bv_and_mask_, sv, blist[bit_count_v-1]+1, total_planes);
+                aggregate_AND_OR_slices(bv_top_or, *bv_and_mask_, sv, blist[bit_count_v-1]+1, total_planes);
             else
-                aggregate_OR_slices(top_or_bv, sv, blist[bit_count_v-1]+1, total_planes);
+                aggregate_OR_slices(bv_top_or, sv, blist[bit_count_v-1]+1, total_planes);
         }
         agg_.reset();
         
-        bv_out.merge(top_or_bv);
+        bv_out.merge(bv_top_or);
     }
 
-    bvector_type and_eq_bv; // AND accum
+    bvector_type bv_and_eq; // AND accum
     bool first = true; // flag for initial assignment
-    bvector_type and_eq_masked_bv;
-    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, and_eq_bv);
-    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, and_eq_masked_bv);
+    bvector_type bv_and_eq_masked;
+    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, bv_and_eq);
+    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, bv_and_eq_masked);
 
     // GT search
     for (int i = int(bit_count_v)-1; i >= 0; --i)
@@ -2663,11 +2663,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
         if (first)
         {
             first = false;
-            and_eq_bv.bit_or(*bv_base_plane); // initial assignment via OR (arg can be RO)
+            bv_and_eq.bit_or(*bv_base_plane); // initial assignment via OR (arg can be RO)
         }
         else
         {
-            and_eq_bv.bit_and(*bv_base_plane, bvector_type::optmode::opt_free_0);
+            bv_and_eq.bit_and(*bv_base_plane, bvector_type::optmode::opt_free_0);
         }
 
         int next_slice_idx = 0;
@@ -2681,12 +2681,12 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
 
         // AND-OR the mid-planes
         //
-        const bvector_type* bv_and_eq_arg = &and_eq_bv;
+        const bvector_type* bv_and_eq_arg = &bv_and_eq;
         if (apply_mask && bv_and_mask_)
         {
-            and_eq_masked_bv.clear(true);
-            and_eq_masked_bv.bit_or_and(and_eq_bv, *bv_and_mask_);
-            bv_and_eq_arg = &and_eq_masked_bv;
+            bv_and_eq_masked.clear(true);
+            bv_and_eq_masked.bit_or_and(bv_and_eq, *bv_and_mask_);
+            bv_and_eq_arg = &bv_and_eq_masked;
         }
         for (int j = slice_idx-1; j >= next_slice_idx; --j)
         {
@@ -2748,10 +2748,10 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     }
     bv_out.clear();
 
-    bvector_type gtz_bv; // all >= 0
-    typename bvector_type::mem_pool_guard mp_guard_gtz(pool_, gtz_bv);
+    bvector_type bv_gtz; // all >= 0
+    typename bvector_type::mem_pool_guard mp_guard_gtz(pool_, bv_gtz);
 
-    find_nonnegative_no_mask(sv, gtz_bv); // all non-negatives are greater than all negs
+    find_nonnegative_no_mask(sv, bv_gtz); // all non-negatives are greater than all negs
     auto finalize = [&](bool do_null_correct)
     {
         if (apply_mask && bv_and_mask_)
@@ -2766,7 +2766,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
 
     if (value == -1)
     {
-        bv_out.swap(gtz_bv);
+        bv_out.swap(bv_gtz);
         finalize(true);
         return;
     }
@@ -2777,7 +2777,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
             bv_and_mask_ = 0;
         find_eq_with_nulls(sv, -1, bv_out, 0);
         bv_and_mask_ = bv_and_mask_save;
-        bv_out.bit_or(gtz_bv);
+        bv_out.bit_or(bv_gtz);
         finalize(true);
         return;
     }
@@ -2791,8 +2791,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
 
     // aggregate all top bit-slices (surely greater)
     // TODO: use aggregator function
-    bvector_type top_or_bv;
-    typename bvector_type::mem_pool_guard mp_guard_top(pool_, top_or_bv);
+    bvector_type bv_top_or;
+    typename bvector_type::mem_pool_guard mp_guard_top(pool_, bv_top_or);
 
     unsigned total_planes = sv.effective_slices();
     const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
@@ -2802,32 +2802,32 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     {
         if (!bv_sign) // no negatives at all
         {
-            bv_out.swap(gtz_bv); // return all >= 0
+            bv_out.swap(bv_gtz); // return all >= 0
             finalize(true);
             return;
         }
-        aggregate_AND_OR_slices(top_or_bv, *bv_sign, sv, blist[bit_count_v-1]+1, total_planes);
+        aggregate_AND_OR_slices(bv_top_or, *bv_sign, sv, blist[bit_count_v-1]+1, total_planes);
     }
     else // value > 0
     {
         if (apply_mask && bv_and_mask_)
-            aggregate_AND_OR_slices(top_or_bv, *bv_and_mask_, sv,
+            aggregate_AND_OR_slices(bv_top_or, *bv_and_mask_, sv,
                                     blist[bit_count_v-1]+1, total_planes);
         else
-            aggregate_OR_slices(top_or_bv, sv,
+            aggregate_OR_slices(bv_top_or, sv,
                                 blist[bit_count_v-1]+1, total_planes);
     }
     agg_.reset();
     
-    bv_out.merge(top_or_bv);
+    bv_out.merge(bv_top_or);
 
     // TODO: optimize FULL blocks
 
-    bvector_type and_eq_bv; // AND accum
+    bvector_type bv_and_eq; // AND accum
     bool first = true; // flag for initial assignment
-    bvector_type and_eq_masked_bv;
-    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, and_eq_bv);
-    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, and_eq_masked_bv);
+    bvector_type bv_and_eq_masked;
+    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, bv_and_eq);
+    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, bv_and_eq_masked);
 
     // GT search
     for (int i = int(bit_count_v)-1; i >= 0; --i)
@@ -2842,12 +2842,12 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
         {
             first = false;
             if (value < 0)
-                and_eq_bv.bit_and(*bv_base_plane, *bv_sign); // use negatives for AND mask
+                bv_and_eq.bit_and(*bv_base_plane, *bv_sign); // use negatives for AND mask
             else // value > 0
-                and_eq_bv.bit_and(*bv_base_plane, gtz_bv);
+                bv_and_eq.bit_and(*bv_base_plane, bv_gtz);
         }
         else
-            and_eq_bv.bit_and(*bv_base_plane); // AND base to accumulator
+            bv_and_eq.bit_and(*bv_base_plane); // AND base to accumulator
 
         int next_slice_idx = 0;
         if (i)
@@ -2860,12 +2860,12 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
 
         // AND-OR the mid-planes
         //
-        const bvector_type* bv_and_eq_arg = &and_eq_bv;
+        const bvector_type* bv_and_eq_arg = &bv_and_eq;
         if (apply_mask && bv_and_mask_)
         {
-            and_eq_masked_bv.clear(true);
-            and_eq_masked_bv.bit_or_and(and_eq_bv, *bv_and_mask_);
-            bv_and_eq_arg = &and_eq_masked_bv;
+            bv_and_eq_masked.clear(true);
+            bv_and_eq_masked.bit_or_and(bv_and_eq, *bv_and_mask_);
+            bv_and_eq_arg = &bv_and_eq_masked;
         }
         for (int j = slice_idx-1; j >= next_slice_idx; --j)
         {
@@ -2885,16 +2885,16 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     if (value < 0)
     {
         // now we have negatives greter by abs value
-        top_or_bv.set_range(0, internal_size - 1);
-        top_or_bv.bit_sub(bv_out);
-        bv_out.swap(top_or_bv);
+        bv_top_or.set_range(0, internal_size - 1);
+        bv_top_or.bit_sub(bv_out);
+        bv_out.swap(bv_top_or);
         finalize(true);
     }
     else // value > 0
     {
-        gtz_bv.resize(internal_size);
-        gtz_bv.invert(); // now it is all < 0
-        bv_out.bit_sub(gtz_bv); // exclude all negatives
+        bv_gtz.resize(internal_size);
+        bv_gtz.invert(); // now it is all < 0
+        bv_out.bit_sub(bv_gtz); // exclude all negatives
         finalize(false);
     }
 }
@@ -3482,10 +3482,10 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le_float_internal(const SV& sv,
     else
         bv_out.set_range(0, sv.size()-1, true);
     
-    bvector_type inverse;
-    find_gt_float_internal(sv, val, inverse);
+    bvector_type bv_inverse;
+    find_gt_float_internal(sv, val, bv_inverse);
     
-    bv_out.bit_sub(inverse);
+    bv_out.bit_sub(bv_inverse);
 }
 
 //----------------------------------------------------------------------------
@@ -3498,9 +3498,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
 {
     if (from > to) std::swap(from, to);
     find_le_float_internal(sv, to, bv_out);
-    bvector_type  ge;
-    find_ge_float_internal(sv, from, ge);
-    bv_out.bit_and(ge);
+    bvector_type bv_ge;
+    find_ge_float_internal(sv, from, bv_ge);
+    bv_out.bit_and(bv_ge);
     
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if (bv_non_null_mask)
@@ -3698,10 +3698,10 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
         }
         
         {
-            bvector_type pos;
-            pos.set_range(0, sv.size() - 1, true);
-            pos.bit_sub(sv.signs_);
-            bv_out.bit_or(pos);
+            bvector_type bv_pos;
+            bv_pos.set_range(0, sv.size() - 1, true);
+            bv_pos.bit_sub(sv.signs_);
+            bv_out.bit_or(bv_pos);
         }
     }
     else
