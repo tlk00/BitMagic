@@ -30,6 +30,7 @@ For more information please visit:  http://bitmagic.io
 #include <limits>
 #include <string.h>
 #include <cstring>
+#include <type_traits>
 
 #include "bmdef.h"
 #include "bmsparsevec.h"
@@ -559,6 +560,35 @@ private:
 };
 
 
+template<typename SV, unsigned S_FACTOR>
+class sparse_vector_scanner;
+
+template<typename... T>
+struct sparse_vector_scanner_void_type
+{
+    typedef void type;
+};
+
+template<typename SV, unsigned S_FACTOR, typename = void>
+class sparse_vector_scanner_float_storage
+{};
+
+template<typename SV, unsigned S_FACTOR>
+class sparse_vector_scanner_float_storage<SV, S_FACTOR,
+    typename sparse_vector_scanner_void_type<typename SV::sparse_vector_u>::type>
+{
+protected:
+    typedef bm::sparse_vector_scanner<typename SV::sparse_vector_u, S_FACTOR>
+                                                svf_scanner_type;
+
+    svf_scanner_type& get_svf_scanner() BMNOEXCEPT
+        { return svf_scanner_; }
+
+private:
+    svf_scanner_type svf_scanner_;
+};
+
+
 /**
     \brief algorithms for sparse_vector scan/search
  
@@ -579,7 +609,7 @@ private:
     @ingroup setalgo
 */
 template<typename SV, unsigned S_FACTOR>
-class sparse_vector_scanner
+class sparse_vector_scanner : private sparse_vector_scanner_float_storage<SV, S_FACTOR>
 {
 public:
     typedef typename SV::bvector_type       bvector_type;
@@ -1151,6 +1181,33 @@ public:
     allocator_pool_type& get_bvector_alloc_pool() BMNOEXCEPT { return pool_; }
     
 protected:
+
+    template<class Scanner>
+    class and_mask_guard
+    {
+    public:
+        typedef typename std::remove_reference<Scanner>::type scanner_type;
+        typedef typename scanner_type::bvector_type scanner_bvector_type;
+
+        and_mask_guard(Scanner& scanner, const scanner_bvector_type* bv_mask) BMNOEXCEPT
+            : scanner_(scanner), bv_mask_save_(scanner.bv_and_mask_)
+        {
+            scanner_.set_and_mask(bv_mask);
+        }
+
+        ~and_mask_guard() BMNOEXCEPT
+        {
+            scanner_.set_and_mask(bv_mask_save_);
+        }
+
+    private:
+        and_mask_guard(const and_mask_guard&) = delete;
+        and_mask_guard& operator=(const and_mask_guard&) = delete;
+
+    private:
+        Scanner& scanner_;
+        const scanner_bvector_type* bv_mask_save_;
+    };
 
     template<bool BOUND>
     bool bfind_eq_str_impl(const SV& sv,
@@ -3327,7 +3384,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float(const SV& sv,
     }
     else
     {
-        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        auto& svf_scanner = this->get_svf_scanner();
+        svf_scanner.set_and_mask(0);
         svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
     }
     
@@ -3345,7 +3403,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_ge_float(const SV& sv,
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if(!bv_non_null_mask)
     {
-        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        auto& svf_scanner = this->get_svf_scanner();
+        svf_scanner.set_and_mask(0);
         svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
     }
 }
@@ -3385,7 +3444,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float(const SV& sv,
     }
     else
     {
-        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        auto& svf_scanner = this->get_svf_scanner();
+        svf_scanner.set_and_mask(0);
         svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
     }
 }
@@ -3402,7 +3462,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_le_float(const SV& sv,
     const bvector_type* bv_non_null_mask = sv.mantissas_.get_null_bvector();
     if(!bv_non_null_mask)
     {
-        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        auto& svf_scanner = this->get_svf_scanner();
+        svf_scanner.set_and_mask(0);
         svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
     }
 }
@@ -3448,7 +3509,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_range_float(const SV&  sv,
     }
     else
     {
-        bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+        auto& svf_scanner = this->get_svf_scanner();
+        svf_scanner.set_and_mask(0);
         svf_scanner.finalize_search_result(sv.exponents_, bv_out, false, true);
     }
 }
@@ -3468,7 +3530,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
     unsigned int exponent = (bits >> 23) & 0xFF;
     unsigned int mantissa =  bits        & 0x7FFFFF;
 
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    auto& svf_scanner = this->get_svf_scanner();
+    svf_scanner.set_and_mask(0);
 
     if (sign == 1)
     {
@@ -3537,7 +3600,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv,
     unsigned int exponent = (bits >> 23) & 0xFF;
     unsigned int mantissa =  bits        & 0x7FFFFF;
 
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    auto& svf_scanner = this->get_svf_scanner();
+    svf_scanner.set_and_mask(0);
 
     if (sign == 1)
     {
@@ -3607,14 +3671,15 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
     unsigned int exponent = (bits >> 23) & 0xFF;
     unsigned int mantissa =  bits        & 0x7FFFFF;
 
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    auto& svf_scanner = this->get_svf_scanner();
+    svf_scanner.set_and_mask(0);
 
     if (sign == 1)
     {
         svf_scanner.find_le_internal(sv.exponents_, exponent, bv_out);
         
         {
-            svf_scanner.set_and_mask(&bv_out);
+            and_mask_guard<decltype(svf_scanner)> mask_guard(svf_scanner, &bv_out);
             
             bvector_type bv_bounds_exp;
             svf_scanner.find_eq_internal(sv.exponents_, exponent, bv_bounds_exp, true);
@@ -3644,7 +3709,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_float_internal(const SV& sv,
         svf_scanner.find_ge_internal(sv.exponents_, exponent, bv_out, false);
 
         {
-            svf_scanner.set_and_mask(&bv_out);
+            and_mask_guard<decltype(svf_scanner)> mask_guard(svf_scanner, &bv_out);
             
             bvector_type bv_bounds_exp;
             svf_scanner.find_eq_internal(sv.exponents_, exponent, bv_bounds_exp, true);
@@ -3681,14 +3746,15 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv,
     unsigned int exponent = (bits >> 23) & 0xFF;
     unsigned int mantissa =  bits        & 0x7FFFFF;
 
-    bm::sparse_vector_scanner<typename SV::sparse_vector_u> svf_scanner;
+    auto& svf_scanner = this->get_svf_scanner();
+    svf_scanner.set_and_mask(0);
 
     if (sign == 1)
     {
         svf_scanner.find_ge_internal(sv.exponents_, exponent, bv_out, false);
         
         {
-            svf_scanner.set_and_mask(&bv_out);
+            and_mask_guard<decltype(svf_scanner)> mask_guard(svf_scanner, &bv_out);
             
             bvector_type bv_bounds_exp;
             svf_scanner.find_eq_internal(sv.exponents_, exponent, bv_bounds_exp, true);
@@ -3713,7 +3779,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_lt_float_internal(const SV& sv,
         svf_scanner.find_le_internal(sv.exponents_, exponent, bv_out);
 
         {
-            svf_scanner.set_and_mask(&bv_out);
+            and_mask_guard<decltype(svf_scanner)> mask_guard(svf_scanner, &bv_out);
             
             bvector_type bv_bounds_exp;
             svf_scanner.find_eq_internal(sv.exponents_, exponent, bv_bounds_exp, true);
