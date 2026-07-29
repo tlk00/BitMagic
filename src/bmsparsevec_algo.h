@@ -1113,7 +1113,6 @@ public:
         \param value - value to search for
         \param bv_out - search result bit-vector
         \param null_correct - if true, exclude NULL values during finalization
-        \param apply_mask - if true, apply the current scanner AND mask in the search
         \param finalize_result - if true, decompress and NULL-correct the result
         @internal
     */
@@ -1121,7 +1120,6 @@ public:
                               value_type     value,
                               bvector_type&  bv_out,
                               bool null_correct = true,
-                              bool apply_mask = true,
                               bool finalize_result = true);
 
     /**
@@ -1131,7 +1129,6 @@ public:
         \param value - value to search for
         \param bv_out - search result bit-vector
         \param null_correct - if true, exclude NULL values during finalization
-        \param apply_mask - if true, apply the current scanner AND mask in the search
         \param finalize_result - if true, decompress and NULL-correct the result
         @internal
     */
@@ -1139,7 +1136,6 @@ public:
                               value_type     value,
                               bvector_type&  bv_out,
                               bool null_correct = true,
-                              bool apply_mask = true,
                               bool finalize_result = true);
 
 
@@ -2517,16 +2513,22 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal(const SV&   sv,
                                                    bool apply_mask,
                                                    bool finalize_result)
 {
+    const bvector_type* bv_and_mask_save = bv_and_mask_;
+    if (!apply_mask)
+        bv_and_mask_ = 0;
+
     if constexpr (std::is_signed<value_type>::value)
     {
         this->find_gt_horizontal_s(sv, value, bv_out, null_correct,
-                                   apply_mask, finalize_result);
+                                   finalize_result);
     }
     else // unsigned
     {
         this->find_gt_horizontal_u(sv, value, bv_out, null_correct,
-                                   apply_mask, finalize_result);
+                                   finalize_result);
     }
+
+    bv_and_mask_ = bv_and_mask_save;
 
 /*
     unsigned char blist[64];
@@ -2716,11 +2718,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
                                                    value_type     value,
                                                    bvector_type&  bv_out,
                                                    bool /*null_correct*/,
-                                                   bool apply_mask,
                                                    bool finalize_result)
 {
     static_assert(!std::is_signed<value_type>::value,
                   "find_gt_horizontal_u requires unsigned value_type");
+    const bool apply_mask = bv_and_mask_ != 0;
     bv_out.clear(true);
     if (sv.size() == 0)
         return;
@@ -2835,11 +2837,11 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
                                                    value_type     value,
                                                    bvector_type&  bv_out,
                                                    bool null_correct,
-                                                   bool apply_mask,
                                                    bool finalize_result)
 {
     static_assert(std::is_signed<value_type>::value,
                   "find_gt_horizontal_s requires signed value_type");
+    const bool apply_mask = bv_and_mask_ != 0;
 
     unsigned char blist[64];
     unsigned bit_count_v;
