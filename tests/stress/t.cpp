@@ -7112,6 +7112,14 @@ void AndOrOperationsTest(bool detailed)
         bvtarget.calc_stat(&st);
         assert(st.gap_blocks==0 && st.bit_blocks==0);
     }
+    {
+        bvect bvtarget { 1248135 };
+        bvect bv1 { 0, bm::id_max };
+        bvect bv2 { 1, bm::id_max - 1 };
+        bvtarget.bit_or_and(bv1, bv2, bvect::opt_compress);
+        assert(bvtarget.test(1248135));
+        assert(bvtarget.count() == 1);
+    }
 
     // check automatic optimization to FULL and empty blocks
     bvect::statistics st;
@@ -27909,6 +27917,16 @@ bool SearchDebugPredicate(search_debug_op op,
     }
 }
 
+inline string SearchDebugFileName(const string& dir, const char* file_name)
+{
+    if (dir.empty() || dir == ".")
+        return file_name;
+    char last_ch = dir[dir.size() - 1];
+    if (last_ch == '/' || last_ch == '\\')
+        return dir + file_name;
+    return dir + "/" + file_name;
+}
+
 template<class SV>
 void ReportSearchMismatch(search_debug_op op,
                           const SV& sv,
@@ -27916,7 +27934,9 @@ void ReportSearchMismatch(search_debug_op op,
                           const bvect& bv_unfiltered,
                           const bvect* bv_mask,
                           const bvect& bv_expected,
-                          const bvect& bv_actual)
+                          const bvect& bv_actual,
+                          bool save_dump = true,
+                          const string& dump_dir = ".")
 {
     bvect bv_diff(bv_expected);
     bv_diff ^= bv_actual;
@@ -27965,50 +27985,142 @@ void ReportSearchMismatch(search_debug_op op,
     cout << "diff=\n";
     print_bv(cout, bv_diff);
 
-    const string sv_fname = "search_debug.sv";
-    const string mask_fname = "search_debug_mask.bv";
-    const string meta_fname = "search_debug.txt";
-
-    size_t sv_blob_size = 0;
-    int sv_save_res = bm::file_save_svector(sv, sv_fname, &sv_blob_size, false);
-    if (has_mask)
-        bm::SaveBVector(mask_fname.c_str(), *bv_mask, true);
-
-    ofstream meta(meta_fname.c_str());
-    if (meta.good())
+    if (save_dump)
     {
-        meta << "test=" << SearchDebugName(op) << " search" << endl;
-        meta << "has_mask=" << has_mask << endl;
-        meta << "sparse_vector_file=" << sv_fname << endl;
+        const string sv_fname = SearchDebugFileName(dump_dir, "search_debug.sv");
+        const string mask_fname = SearchDebugFileName(dump_dir, "search_debug_mask.bv");
+        const string meta_fname = SearchDebugFileName(dump_dir, "search_debug.txt");
+
+        size_t sv_blob_size = 0;
+        int sv_save_res = bm::file_save_svector(sv, sv_fname, &sv_blob_size, false);
         if (has_mask)
-            meta << "mask_file=" << mask_fname << endl;
-        meta << "sparse_vector_save_result=" << sv_save_res << endl;
-        meta << "sparse_vector_blob_size=" << sv_blob_size << endl;
-        meta << "sv_size=" << sv.size() << endl;
-        if constexpr (SV::is_compressed())
-            meta << "sv_effective_size=" << sv.effective_size() << endl;
-        meta << "query_value=" << v << endl;
-        meta << "mismatch_idx=" << mismatch_idx << endl;
-        meta << "mismatch_value=" << sv_value << endl;
+            bm::SaveBVector(mask_fname.c_str(), *bv_mask, true);
+
+        ofstream meta(meta_fname.c_str());
+        if (meta.good())
+        {
+            meta << "test=" << SearchDebugName(op) << " search" << endl;
+            meta << "has_mask=" << has_mask << endl;
+            meta << "sparse_vector_file=" << sv_fname << endl;
+            if (has_mask)
+                meta << "mask_file=" << mask_fname << endl;
+            meta << "sparse_vector_save_result=" << sv_save_res << endl;
+            meta << "sparse_vector_blob_size=" << sv_blob_size << endl;
+            meta << "sv_size=" << sv.size() << endl;
+            if constexpr (SV::is_compressed())
+                meta << "sv_effective_size=" << sv.effective_size() << endl;
+            meta << "query_value=" << v << endl;
+            meta << "mismatch_idx=" << mismatch_idx << endl;
+            meta << "mismatch_value=" << sv_value << endl;
+            if (has_mask)
+                meta << "mask_bit=" << mask_bit << endl;
+            meta << "unfiltered_bit=" << unfiltered_bit << endl;
+            meta << "expected_bit=" << expected_bit << endl;
+            meta << "actual_bit=" << actual_bit << endl;
+            meta << "predicate_match=" << predicate_match << endl;
+            meta << "mismatch_kind=" << mismatch_kind << endl;
+            meta << "bv_unfiltered_count=" << bv_unfiltered.count() << endl;
+            if (has_mask)
+                meta << "bv_mask_count=" << bv_mask->count() << endl;
+            meta << "bv_expected_count=" << bv_expected.count() << endl;
+            meta << "bv_actual_count=" << bv_actual.count() << endl;
+            meta << "bv_diff_count=" << bv_diff.count() << endl;
+        }
+        cout << "Debug dump saved: " << sv_fname;
         if (has_mask)
-            meta << "mask_bit=" << mask_bit << endl;
-        meta << "unfiltered_bit=" << unfiltered_bit << endl;
-        meta << "expected_bit=" << expected_bit << endl;
-        meta << "actual_bit=" << actual_bit << endl;
-        meta << "predicate_match=" << predicate_match << endl;
-        meta << "mismatch_kind=" << mismatch_kind << endl;
-        meta << "bv_unfiltered_count=" << bv_unfiltered.count() << endl;
-        if (has_mask)
-            meta << "bv_mask_count=" << bv_mask->count() << endl;
-        meta << "bv_expected_count=" << bv_expected.count() << endl;
-        meta << "bv_actual_count=" << bv_actual.count() << endl;
-        meta << "bv_diff_count=" << bv_diff.count() << endl;
+            cout << ", " << mask_fname;
+        cout << ", " << meta_fname << endl;
     }
-    cout << "Debug dump saved: " << sv_fname;
-    if (has_mask)
-        cout << ", " << mask_fname;
-    cout << ", " << meta_fname << endl;
     cout << endl << endl;
+}
+
+template<class SV>
+void RunSearchDebugOp(bm::sparse_vector_scanner<SV>& scanner,
+                      const SV& sv,
+                      search_debug_op op,
+                      typename SV::value_type v,
+                      bvect& bv_out)
+{
+    switch (op)
+    {
+    case search_debug_op::gt:
+        scanner.find_gt(sv, v, bv_out);
+        break;
+    case search_debug_op::ge:
+        scanner.find_ge(sv, v, bv_out);
+        break;
+    case search_debug_op::lt:
+        scanner.find_lt(sv, v, bv_out);
+        break;
+    case search_debug_op::le:
+        scanner.find_le(sv, v, bv_out);
+        break;
+    case search_debug_op::range_0v:
+        scanner.find_range(sv, 0, v, bv_out);
+        break;
+    case search_debug_op::eq:
+        scanner.find_eq(sv, v, bv_out);
+        break;
+    default:
+        bv_out.clear();
+        break;
+    }
+}
+
+template<class SV>
+void ReplaySearchDebugDump(search_debug_op op,
+                           typename SV::value_type v,
+                           const string& dump_dir = ".")
+{
+    const string sv_fname = SearchDebugFileName(dump_dir, "search_debug.sv");
+    const string mask_fname = SearchDebugFileName(dump_dir, "search_debug_mask.bv");
+    SV sv(bm::use_null);
+    int load_res = bm::file_load_svector(sv, sv_fname);
+    if (load_res != 0)
+    {
+        cout << "Cannot load sparse vector dump: " << sv_fname
+             << " error=" << load_res << endl;
+        assert(load_res == 0); exit(1);
+    }
+
+    bvect bv_mask;
+    bm::LoadBVector(mask_fname.c_str(), bv_mask);
+
+    bm::sparse_vector_scanner<SV> scanner;
+    bvect bv_unfiltered, bv_expected, bv_actual;
+
+    RunSearchDebugOp(scanner, sv, op, v, bv_unfiltered);
+    bv_expected = bv_unfiltered;
+    bv_expected &= bv_mask;
+
+    scanner.set_and_mask(&bv_mask);
+    RunSearchDebugOp(scanner, sv, op, v, bv_actual);
+    scanner.set_and_mask(0);
+
+    bool eq = bv_expected.equal(bv_actual);
+    cout << "Replay search debug dump: " << SearchDebugName(op) << endl;
+    cout << "  sv_file=" << sv_fname << endl;
+    cout << "  mask_file=" << mask_fname << endl;
+    cout << "  query_value=" << v << endl;
+    cout << "  unfiltered_count=" << bv_unfiltered.count() << endl;
+    cout << "  mask_count=" << bv_mask.count() << endl;
+    cout << "  expected_count=" << bv_expected.count() << endl;
+    cout << "  actual_count=" << bv_actual.count() << endl;
+    cout << "  equal=" << eq << endl;
+
+    if (!eq)
+    {
+        ReportSearchMismatch(op, sv, v, bv_unfiltered, &bv_mask,
+                             bv_expected, bv_actual, false /* save_dump */);
+        assert(eq); exit(1);
+    }
+}
+
+inline
+void ReplayGTSearchDebugDumpU32(sparse_vector_u32::value_type v,
+                                const string& dump_dir = ".")
+{
+    ReplaySearchDebugDump<sparse_vector_u32>(search_debug_op::gt, v, dump_dir);
 }
 
 template<class SV>
@@ -43142,6 +43254,11 @@ return 0;
     TestCapture();
     return 0;
 */
+    /*
+    ReplayGTSearchDebugDumpU32(36688, "/Users/anatoliykuznetsov/dev/BitMagic/tests/stress");
+    return 0;
+     */
+    
     if (is_all || is_low_level)
     {
 
@@ -43588,7 +43705,6 @@ return 0;
 
         if (is_all || is_sv || is_sv1)
         {
-
             TestSparseVectorRange();
              CheckAllocLeaks(false);
 
