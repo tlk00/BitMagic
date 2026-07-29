@@ -6187,7 +6187,10 @@ bvector<Alloc>::bit_and(const bm::bvector<Alloc>& bv1,
             arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
 
             if ((arg_blk1 == arg_blk2) && !arg_blk1)
-                continue; // 0 & 0 == 0
+            {
+                any_blocks |= bool(blk_blk[j]);
+                continue; // 0 & 0 contributes nothing, preserve target
+            }
 
             bool need_opt = combine_operation_block_and(i, j, arg_blk1, arg_blk2);
             if (need_opt && opt_mode == opt_compress)
@@ -6290,7 +6293,10 @@ bvector<Alloc>::bit_or_and(const bm::bvector<Alloc>& bv1,
             arg_blk2 = blk_blk_arg2 ? blk_blk_arg2[j] : 0;
 
             if ((arg_blk1 == arg_blk2) && !arg_blk1)
-                continue; // 0 & 0 == 0
+            {
+                any_blocks |= bool(blk_blk[j]);
+                continue; // 0 & 0 contributes nothing, preserve target
+            }
 
             bool need_opt;
             if (!blk_blk[j]) // nothing to OR
