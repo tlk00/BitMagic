@@ -2587,6 +2587,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal(const SV&   sv,
     // aggregate all top bit-slices (surely greater)
     // TODO: use aggregator function
     bvector_type top_or_bv;
+    typename bvector_type::mem_pool_guard mp_guard_top(pool_, top_or_bv);
 
     unsigned total_planes = sv.effective_slices();
     const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
@@ -2624,6 +2625,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal(const SV&   sv,
 
     bvector_type and_eq_bv; // AND accum
     bool first = true; // flag for initial assignment
+    bvector_type and_eq_masked_bv;
+    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, and_eq_bv);
+    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, and_eq_masked_bv);
 
     // GT search
     for (int i = int(bit_count_v)-1; i >= 0; --i)
@@ -2715,12 +2719,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
                                                    bool apply_mask,
                                                    bool finalize_result)
 {
-    if constexpr (std::is_signed<value_type>::value)
-    {
-        BM_ASSERT(0);
-    }
+    static_assert(!std::is_signed<value_type>::value,
+                  "find_gt_horizontal_u requires unsigned value_type");
     bv_out.clear(true);
-    
     if (sv.size() == 0)
         return;
 
@@ -2739,7 +2740,6 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
     }
 
     bit_count_v = bm::bitscan(value, blist);
-
     BM_ASSERT(bit_count_v);
 
 
@@ -2751,6 +2751,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
         const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
         agg_.reset();
         bvector_type top_or_bv;
+        typename bvector_type::mem_pool_guard mp_guard_top(pool_, top_or_bv);
         {
             if (total_planes < unsigned(blist[bit_count_v-1]+1))
                 return; // number is greater than anything in this vector (empty set)
@@ -2766,6 +2767,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
 
     bvector_type and_eq_bv; // AND accum
     bool first = true; // flag for initial assignment
+    bvector_type and_eq_masked_bv;
+    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, and_eq_bv);
+    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, and_eq_masked_bv);
 
     // GT search
     for (int i = int(bit_count_v)-1; i >= 0; --i)
@@ -2797,20 +2801,24 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_u(const SV&   sv,
 
         // AND-OR the mid-planes
         //
+        const bvector_type* bv_and_eq_arg = &and_eq_bv;
+        if (apply_mask && bv_and_mask_)
+        {
+            and_eq_masked_bv.clear(true);
+            and_eq_masked_bv.bit_or_and(and_eq_bv, *bv_and_mask_);
+            bv_and_eq_arg = &and_eq_masked_bv;
+        }
         for (int j = slice_idx-1; j >= next_slice_idx; --j)
         {
             if (const bvector_type* bv_sub_plane = sv.get_slice(unsigned(j)))
-                bv_out.bit_or_and(and_eq_bv, *bv_sub_plane);
+                bv_out.bit_or_and(*bv_and_eq_arg, *bv_sub_plane);
         } // for j
 
     } // for i
     
-    // TODO: find if we really need to do the final masking here...
-
-    if (apply_mask && bv_and_mask_)
-    {
-        bv_out.bit_and(*bv_and_mask_, bvector_type::optmode::opt_free_0);
-    }
+    // Mask is already applied by the top-plane and mid-plane search stages.
+    // if (apply_mask && bv_and_mask_)
+    //     bv_out.bit_and(*bv_and_mask_, bvector_type::optmode::opt_free_0);
     
     if (finalize_result)
         decompress(sv, bv_out);
@@ -2861,6 +2869,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     bv_out.clear();
 
     bvector_type gtz_bv; // all >= 0
+    typename bvector_type::mem_pool_guard mp_guard_gtz(pool_, gtz_bv);
 
     find_nonnegative_no_mask(sv, gtz_bv); // all non-negatives are greater than all negs
     auto finalize = [&](bool do_null_correct)
@@ -2903,6 +2912,7 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     // aggregate all top bit-slices (surely greater)
     // TODO: use aggregator function
     bvector_type top_or_bv;
+    typename bvector_type::mem_pool_guard mp_guard_top(pool_, top_or_bv);
 
     unsigned total_planes = sv.effective_slices();
     const bvector_type* bv_sign = sv.get_slice(0); (void)bv_sign;
@@ -2920,7 +2930,12 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
     }
     else // value > 0
     {
-        aggregate_OR_slices(top_or_bv, sv, blist[bit_count_v-1]+1, total_planes);
+        if (apply_mask && bv_and_mask_)
+            aggregate_AND_OR_slices(top_or_bv, *bv_and_mask_, sv,
+                                    blist[bit_count_v-1]+1, total_planes);
+        else
+            aggregate_OR_slices(top_or_bv, sv,
+                                blist[bit_count_v-1]+1, total_planes);
     }
     agg_.reset();
     
@@ -2930,6 +2945,9 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
 
     bvector_type and_eq_bv; // AND accum
     bool first = true; // flag for initial assignment
+    bvector_type and_eq_masked_bv;
+    typename bvector_type::mem_pool_guard mp_guard_eq(pool_, and_eq_bv);
+    typename bvector_type::mem_pool_guard mp_guard_eq_masked(pool_, and_eq_masked_bv);
 
     // GT search
     for (int i = int(bit_count_v)-1; i >= 0; --i)
@@ -2962,12 +2980,19 @@ void sparse_vector_scanner<SV, S_FACTOR>::find_gt_horizontal_s(const SV&   sv,
 
         // AND-OR the mid-planes
         //
+        const bvector_type* bv_and_eq_arg = &and_eq_bv;
+        if (apply_mask && bv_and_mask_)
+        {
+            and_eq_masked_bv.clear(true);
+            and_eq_masked_bv.bit_or_and(and_eq_bv, *bv_and_mask_);
+            bv_and_eq_arg = &and_eq_masked_bv;
+        }
         for (int j = slice_idx-1; j >= next_slice_idx; --j)
         {
             if (j == 0) // sign plane
                 break; // do not process the sign plane at all
             if (const bvector_type* bv_sub_plane = sv.get_slice(unsigned(j)))
-                bv_out.bit_or_and(and_eq_bv, *bv_sub_plane);
+                bv_out.bit_or_and(*bv_and_eq_arg, *bv_sub_plane);
         } // for j
     } // for i
 
