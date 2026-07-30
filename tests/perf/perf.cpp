@@ -6824,6 +6824,128 @@ void TestSVFScannerSpike()
     }
 }
 
+//Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
+inline
+void in_range_vect_unbounded(const std::vector<float>& fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    if(from > to) std::swap(from, to);
+    for (sparseVecFloat::size_type i = 0; i < fv.size(); i++)
+    {
+        if (fv[i] > from && fv[i] < to)
+            bv_out.set(i);
+    } // for
+}
+
+//Finds all values in range [from, to] in a given sparse_vector_float using a const_iterator and flips the corresponding bits in bv_out
+inline
+void in_range_const_unbounded(const sparseVecFloat& sv, float from, float to, sparseVecFloat::bvector_type& bv_out)
+{
+    sparseVecFloat::const_iterator ci = sv.begin();
+    if (from > to) std::swap(from, to);
+    for (; ci.valid(); ++ci)
+    {
+        if (auto v = ci.value(); (v > from && v < to))
+            bv_out.set(ci.pos());
+    }
+}
+
+void TestSVFScannerUnbounded()
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    sparseVecFloat::size_type N = 20000000;
+    std::random_device rd;
+    //std::mt19937 gen(rd());
+
+    float upper = 12300.0f;
+    float lower = -12300.0f;
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    std::vector<float> linData(N);
+
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        linData[i] = -1.0f * (float)i * 0.00123f;
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        linData[i+N/2] = (float)i * 0.00123f;
+
+    sparseVecFloat testSVF;
+    testSVF.import(linData.data(), N);
+    testSVF.optimize(tb);
+
+    unsigned int tests = 1000;
+
+    {
+        sparseVecFloat::bvector_type xorSV;
+        sparseVecFloat::bvector_type xorVect;
+        sparseVecFloat::bvector_type xorConst;
+
+        sparseVecFloat::bvector_type bv_range;
+
+        std::vector<pair<float, float>> testRangesVector(tests);
+        for (unsigned int i = 0; i < tests; i++)
+        {
+            float f1 = dis(gen);
+            float f2 = dis(gen);
+            pair<float, float> toAdd(f1, f2);
+            testRangesVector[i] = toAdd;
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF with Linear Data find values in range unbounded with scanner", tests);
+            bm::sparse_vector_scanner<sparseVecFloat> scan;
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                scan.find_range_float_unbounded(testSVF, from, to, bv_range);
+
+                xorSV ^= bv_range;
+                bv_range.clear();
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "std::vector<float> with Linear Data find values in range unbounded", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                in_range_vect_unbounded(linData, from, to, bv_range);
+                xorVect ^= bv_range;
+                bv_range.clear();
+            }
+        }
+
+        {
+            bm::chrono_taker<> tt(cout, "SVF with Linear Data find values in range unbounded with Const Iterator", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                pair<float, float> t = testRangesVector[i];
+                float from = t.first;
+                float to   = t.second;
+
+                in_range_const_unbounded(testSVF, from, to, bv_range);
+                xorConst ^= bv_range;
+                bv_range.clear();
+            }
+        }
+
+        bool range_eq_vector = (xorSV == xorVect);
+        bool range_eq_const  = (xorSV == xorConst);
+
+        if (!range_eq_vector || !range_eq_const)
+        {
+            cerr << "Linear: MISMATCH" << endl;
+            exit(1);
+        }
+    }
+}
+
+
 
 
 /// Random numbers test
@@ -7343,6 +7465,9 @@ int main(void)
         cout << endl;
         
         TestSVFScannerSpike();
+        cout << endl;
+        
+        TestSVFScannerUnbounded();
         cout << endl;
 
         if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code
