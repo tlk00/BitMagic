@@ -5816,6 +5816,10 @@ void TestSVFScanner()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
+    typedef sparseVecFloat::bvector_type bvect_type;
+    typedef bvect_type::allocator_type::allocator_pool_type bvect_pool_type;
+    bvect_pool_type bv_pool;
+
     sparseVecFloat::size_type N = 20000000;
     std::random_device rd;
     //std::mt19937 gen(rd());
@@ -5843,6 +5847,7 @@ void TestSVFScanner()
         sparseVecFloat::bvector_type xorConst;
 
         sparseVecFloat::bvector_type bv_range;
+        sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
 
         std::vector<pair<float, float>> testRangesVector(tests);
         for (unsigned int i = 0; i < tests; i++)
@@ -5865,7 +5870,7 @@ void TestSVFScanner()
                 scan.find_range_float(testSVF, from, to, bv_range);
 
                 xorSV ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -5879,7 +5884,7 @@ void TestSVFScanner()
 
                 in_range_vect(linData, from, to, bv_range);
                 xorVect ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -5893,7 +5898,7 @@ void TestSVFScanner()
 
                 in_range_const(testSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -5924,6 +5929,7 @@ void TestSVFScanner()
         sparseVecFloat::bvector_type xorConst;
 
         sparseVecFloat::bvector_type bv_range;
+        sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
 
         std::vector<pair<float, float>> testRangesVector(tests);
         for (unsigned int i = 0; i < tests; i++)
@@ -5946,7 +5952,7 @@ void TestSVFScanner()
 
                 scan.find_range_float(testSVF, from, to, bv_range);
                 xorSV ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -5960,7 +5966,7 @@ void TestSVFScanner()
 
                 in_range_vect(randData, from, to, bv_range);
                 xorVect ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -5974,7 +5980,7 @@ void TestSVFScanner()
 
                 in_range_const(testSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6005,6 +6011,7 @@ void TestSVFScanner()
         sparseVecFloat::bvector_type xorConst;
 
         sparseVecFloat::bvector_type bv_range;
+        sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
 
         std::vector<pair<float, float>> testRangesVector(tests);
         for (unsigned int i = 0; i < tests; i++)
@@ -6026,7 +6033,7 @@ void TestSVFScanner()
 
                 scan.find_range_float(testSVF, from, to, bv_range);
                 xorSV ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6040,7 +6047,7 @@ void TestSVFScanner()
 
                 in_range_vect(skewData, from, to, bv_range);
                 xorVect ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6054,7 +6061,7 @@ void TestSVFScanner()
 
                 in_range_const(testSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6105,6 +6112,10 @@ void TestSVFScannerRSC()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
+    typedef sparseVecFloatRSC::bvector_type bvect_type;
+    typedef bvect_type::allocator_type::allocator_pool_type bvect_pool_type;
+    bvect_pool_type bv_rsc_pool;
+
     sparseVecFloatRSC::size_type N = 20000000;
     std::random_device rd;
 
@@ -6151,6 +6162,7 @@ void TestSVFScannerRSC()
         sparseVecFloatRSC::bvector_type xorConst;
 
         sparseVecFloatRSC::bvector_type bv_range;
+        sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
 
         std::vector<pair<float, float>> testRangesVector(tests);
         for (unsigned int i = 0; i < tests; i++)
@@ -6172,7 +6184,7 @@ void TestSVFScannerRSC()
 
                 scan.find_range_float(testSVF, from, to, bv_range);
                 xorRSC ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6186,7 +6198,7 @@ void TestSVFScannerRSC()
 
                 in_range_vect_rsc(linData, from, to, bv_range);
                 xorVect ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6200,7 +6212,7 @@ void TestSVFScannerRSC()
 
                 in_range_const_rsc(testSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6248,6 +6260,7 @@ void TestSVFScannerRSC()
         sparseVecFloatRSC::bvector_type xorConst;
 
         sparseVecFloatRSC::bvector_type bv_range;
+        sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
 
         std::vector<pair<float, float>> testRangesVector(tests);
         for (unsigned int i = 0; i < tests; i++)
@@ -6269,7 +6282,7 @@ void TestSVFScannerRSC()
 
                 scan.find_range_float(testSVF, from, to, bv_range);
                 xorRSC ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6283,7 +6296,7 @@ void TestSVFScannerRSC()
 
                 in_range_vect_rsc(randData, from, to, bv_range);
                 xorVect ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6297,7 +6310,7 @@ void TestSVFScannerRSC()
 
                 in_range_const_rsc(testSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6346,6 +6359,7 @@ void TestSVFScannerRSC()
         sparseVecFloatRSC::bvector_type xorConst;
 
         sparseVecFloatRSC::bvector_type bv_range;
+        sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
 
         std::vector<pair<float, float>> testRangesVector(tests);
         for (unsigned int i = 0; i < tests; i++)
@@ -6367,7 +6381,7 @@ void TestSVFScannerRSC()
 
                 scan.find_range_float(testSVF, from, to, bv_range);
                 xorRSC ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6381,7 +6395,7 @@ void TestSVFScannerRSC()
 
                 in_range_vect_rsc(skewData, from, to, bv_range);
                 xorVect ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6395,7 +6409,7 @@ void TestSVFScannerRSC()
 
                 in_range_const_rsc(testSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
 
@@ -6420,6 +6434,14 @@ void TestSVFScannerRSC()
 void TestSVFComparison()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef sparseVecFloat::bvector_type bvect_type;
+    typedef bvect_type::allocator_type::allocator_pool_type bvect_pool_type;
+    bvect_pool_type bv_pool;
+
+    typedef sparseVecFloatRSC::bvector_type bvect_rsc_type;
+    typedef bvect_rsc_type::allocator_type::allocator_pool_type bvect_rsc_pool_type;
+    bvect_rsc_pool_type bv_rsc_pool;
     
     sparseVecFloat::size_type N = 20000000;
     std::random_device rd;
@@ -6469,6 +6491,7 @@ void TestSVFComparison()
         sparseVecFloat::bvector_type xorSVF;
         sparseVecFloat::bvector_type xorConst;
         sparseVecFloat::bvector_type bv_range;
+        sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
         
         {
             bm::chrono_taker<> tt(cout, "Unoptimized SVF with random data in range with Scanner", tests);
@@ -6481,7 +6504,7 @@ void TestSVFComparison()
                 
                 scan.find_range_float(svf, from, to, bv_range);
                 xorSVF ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6495,7 +6518,7 @@ void TestSVFComparison()
                 
                 in_range_const(svf, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6511,6 +6534,7 @@ void TestSVFComparison()
         sparseVecFloat::bvector_type xorSVF;
         sparseVecFloat::bvector_type xorConst;
         sparseVecFloat::bvector_type bv_range;
+        sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
         
         {
             bm::chrono_taker<> tt(cout, "Optimized SVF with random data in range with Scanner", tests);
@@ -6523,7 +6547,7 @@ void TestSVFComparison()
                 
                 scan.find_range_float(svf, from, to, bv_range);
                 xorSVF ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6537,7 +6561,7 @@ void TestSVFComparison()
                 
                 in_range_const(svf, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6552,6 +6576,7 @@ void TestSVFComparison()
         sparseVecFloat::bvector_type xorSVF;
         sparseVecFloat::bvector_type xorConst;
         sparseVecFloat::bvector_type bv_range;
+        sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
         {
             bm::chrono_taker<> tt(cout, "Optimized and Frozen SVF with random data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloat> scan;
@@ -6563,7 +6588,7 @@ void TestSVFComparison()
                 
                 scan.find_range_float(svf, from, to, bv_range);
                 xorSVF ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6577,7 +6602,7 @@ void TestSVFComparison()
                 
                 in_range_const(svf, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6595,6 +6620,7 @@ void TestSVFComparison()
         sparseVecFloatRSC::bvector_type xorRSC;
         sparseVecFloatRSC::bvector_type xorConst;
         sparseVecFloatRSC::bvector_type bv_range;
+        sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
         
         {
             bm::chrono_taker<> tt(cout, "Unoptimized RSC SVF with random data in range with Scanner", tests);
@@ -6607,7 +6633,7 @@ void TestSVFComparison()
                 
                 scan.find_range_float(rscSVF, from, to, bv_range);
                 xorRSC ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6621,7 +6647,7 @@ void TestSVFComparison()
                 
                 in_range_const_rsc(rscSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6638,6 +6664,7 @@ void TestSVFComparison()
         sparseVecFloatRSC::bvector_type xorRSC;
         sparseVecFloatRSC::bvector_type xorConst;
         sparseVecFloatRSC::bvector_type bv_range;
+        sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
         
         {
             bm::chrono_taker<> tt(cout, "Optimized RSC SVF with random data in range with Scanner", tests);
@@ -6650,7 +6677,7 @@ void TestSVFComparison()
                 
                 scan.find_range_float(rscSVF, from, to, bv_range);
                 xorRSC ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6664,7 +6691,7 @@ void TestSVFComparison()
                 
                 in_range_const_rsc(rscSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6681,6 +6708,7 @@ void TestSVFComparison()
         sparseVecFloatRSC::bvector_type xorRSC;
         sparseVecFloatRSC::bvector_type xorConst;
         sparseVecFloatRSC::bvector_type bv_range;
+        sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
         
         {
             bm::chrono_taker<> tt(cout, "Optimized and Frozen RSC SVF with random data in range with Scanner", tests);
@@ -6693,7 +6721,7 @@ void TestSVFComparison()
                 
                 scan.find_range_float(rscSVF, from, to, bv_range);
                 xorRSC ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6707,7 +6735,7 @@ void TestSVFComparison()
                 
                 in_range_const_rsc(rscSVF, from, to, bv_range);
                 xorConst ^= bv_range;
-                bv_range.clear();
+                bv_range.clear(true);
             }
         }
         
@@ -6771,7 +6799,12 @@ void TestSVFScannerSpike()
     }
     testSVF.optimize();
     
+    typedef sparseVecFloat::bvector_type bvect_type;
+    typedef bvect_type::allocator_type::allocator_pool_type bvect_pool_type;
+    bvect_pool_type bv_pool;
+
     sparseVecFloat::bvector_type scanResult;
+    sparseVecFloat::bvector_type::mem_pool_guard scan_result_guard(bv_pool, scanResult);
     bm::sparse_vector_scanner<sparseVecFloat> scan;
     
     unsigned int numTests = 1000;
