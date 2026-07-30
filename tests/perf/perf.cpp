@@ -6494,7 +6494,7 @@ void TestSVFComparison()
         sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
         
         {
-            bm::chrono_taker<> tt(cout, "Unoptimized SVF with random data in range with Scanner", tests);
+            bm::chrono_taker<> tt(cout, "Unoptimized SVF with linear data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloat> scan;
             for (unsigned int i = 0; i < tests; i++)
             {
@@ -6509,7 +6509,7 @@ void TestSVFComparison()
         }
         
         {
-            bm::chrono_taker<> tt(cout, "Unoptimized SVF with random data in range with Const Iterator", tests);
+            bm::chrono_taker<> tt(cout, "Unoptimized SVF with linear data in range with Const Iterator", tests);
             for (unsigned int i = 0; i < tests; i++)
             {
                 pair<float, float> t = testRangesVector[i];
@@ -6537,7 +6537,7 @@ void TestSVFComparison()
         sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized SVF with random data in range with Scanner", tests);
+            bm::chrono_taker<> tt(cout, "Optimized SVF with linear data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloat> scan;
             for (unsigned int i = 0; i < tests; i++)
             {
@@ -6552,7 +6552,7 @@ void TestSVFComparison()
         }
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized SVF with random data in range with Const Iterator", tests);
+            bm::chrono_taker<> tt(cout, "Optimized SVF with linear data in range with Const Iterator", tests);
             for (unsigned int i = 0; i < tests; i++)
             {
                 pair<float, float> t = testRangesVector[i];
@@ -6578,7 +6578,7 @@ void TestSVFComparison()
         sparseVecFloat::bvector_type bv_range;
         sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
         {
-            bm::chrono_taker<> tt(cout, "Optimized and Frozen SVF with random data in range with Scanner", tests);
+            bm::chrono_taker<> tt(cout, "Optimized and Frozen SVF with linear data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloat> scan;
             for (unsigned int i = 0; i < tests; i++)
             {
@@ -6593,7 +6593,7 @@ void TestSVFComparison()
         }
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized and Frozen SVF with random data in range with Const Iterator", tests);
+            bm::chrono_taker<> tt(cout, "Optimized and Frozen SVF with linear data in range with Const Iterator", tests);
             for (unsigned int i = 0; i < tests; i++)
             {
                 pair<float, float> t = testRangesVector[i];
@@ -6623,7 +6623,7 @@ void TestSVFComparison()
         sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
         
         {
-            bm::chrono_taker<> tt(cout, "Unoptimized RSC SVF with random data in range with Scanner", tests);
+            bm::chrono_taker<> tt(cout, "Unoptimized RSC SVF with linear data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
             for (unsigned int i = 0; i < tests; i++)
             {
@@ -6638,7 +6638,7 @@ void TestSVFComparison()
         }
         
         {
-            bm::chrono_taker<> tt(cout, "Unoptimized RSC SVF with random data in range with Const Iterator", tests);
+            bm::chrono_taker<> tt(cout, "Unoptimized RSC SVF with linear data in range with Const Iterator", tests);
             for (unsigned int i = 0; i < tests; i++)
             {
                 pair<float, float> t = testRangesVector[i];
@@ -6667,7 +6667,7 @@ void TestSVFComparison()
         sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized RSC SVF with random data in range with Scanner", tests);
+            bm::chrono_taker<> tt(cout, "Optimized RSC SVF with linear data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
             for (unsigned int i = 0; i < tests; i++)
             {
@@ -6682,7 +6682,7 @@ void TestSVFComparison()
         }
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized RSC SVF with random data in range with Const Iterator", tests);
+            bm::chrono_taker<> tt(cout, "Optimized RSC SVF with linear data in range with Const Iterator", tests);
             for (unsigned int i = 0; i < tests; i++)
             {
                 pair<float, float> t = testRangesVector[i];
@@ -6711,7 +6711,7 @@ void TestSVFComparison()
         sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized and Frozen RSC SVF with random data in range with Scanner", tests);
+            bm::chrono_taker<> tt(cout, "Optimized and Frozen RSC SVF with linear data in range with Scanner", tests);
             bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
             for (unsigned int i = 0; i < tests; i++)
             {
@@ -6726,7 +6726,7 @@ void TestSVFComparison()
         }
         
         {
-            bm::chrono_taker<> tt(cout, "Optimized and Frozen RSC SVF with random data in range with Const Iterator", tests);
+            bm::chrono_taker<> tt(cout, "Optimized and Frozen RSC SVF with linear data in range with Const Iterator", tests);
             for (unsigned int i = 0; i < tests; i++)
             {
                 pair<float, float> t = testRangesVector[i];
