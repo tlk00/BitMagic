@@ -46261,6 +46261,122 @@ void sparseVecFloatRSCScannerTests()
 }
 
 
+void in_range_unbounded(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    bm::sparse_vector_scanner<sparseVecFloat> scan;
+    scan.find_range_float_unbounded(sv, from, to, bv_out);
+}
+
+void in_range_vect_unbounded(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    if(from > to) std::swap(from, to);
+    for(sparseVecFloat::size_type i = 0; i < fv.size(); i++){
+        if(fv[i] > from && fv[i] < to)
+        {
+            bv_out.set(i);
+        }
+    }
+}
+
+void in_range_const_unbounded(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+{
+    sparseVecFloat::const_iterator ci = sv.begin();
+    if (from > to) std::swap(from, to);
+    for (; ci.valid(); ++ci)
+    {
+        if (auto v = ci.value(); (v > from && v < to))
+            bv_out.set(ci.pos());
+    }
+}
+
+void runSVFScannerUnboundedTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to)
+{
+    sparseVecFloat::bvector_type bv_range;
+    sparseVecFloat::bvector_type bv_vector;
+    sparseVecFloat::bvector_type bv_const;
+
+    in_range_unbounded(testSVF, from, to, bv_range);
+    in_range_vect_unbounded(temp, from, to, bv_vector);
+    in_range_const_unbounded(testSVF, from, to, bv_const);
+
+    bool range_eq_vector = (bv_range == bv_vector);
+    bool range_eq_const  = (bv_range == bv_const);
+
+    if (!range_eq_vector || !range_eq_const)
+    {
+        std::cout << "Test[" << std::fixed << std::setprecision(6) << from << ", " << to << "] MISMATCH\n";
+        if (!range_eq_vector)
+        {
+            sparseVecFloat::bvector_type diff;
+            diff = bv_range ^ bv_vector;   // XOR shows differing bits
+            std::cout << "  range vs vector differs at " << diff.count() << " positions\n";
+            // print first few differing positions
+            auto en = diff.first();
+            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if (!range_eq_const)
+        {
+            sparseVecFloat::bvector_type diff;
+            diff = bv_range ^ bv_const;
+            std::cout << "  range vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        std::cout << std::endl << std::endl;
+        exit(1);
+    }
+}
+
+void SparseVecFloatScannerUnboundedTests()
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+    
+    sparseVecFloat::size_type N = 20000000;
+    
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    
+    float upper = 12300.0f;
+    float lower = -12300.0f;
+    std::uniform_real_distribution<float> dis(lower, upper);
+    
+    unsigned int tests = 10000;
+    std::vector<float> from(tests);
+    std::vector<float> to(tests);
+    for (unsigned int i = 0; i < tests; i++)
+    {
+        from[i] = dis(gen);
+        to[i] = dis(gen);
+    }
+    
+    std::vector<float> linData(N);
+    
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        linData[i] = -1.0f * (float)i * 0.00123f;
+    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+        linData[i+N/2] = (float)i * 0.00123f;
+    
+    sparseVecFloat testSVF;
+    testSVF.import(linData.data(), N);
+    testSVF.optimize(tb);
+    
+    {
+        std::cout << "-------------------------SVF Linear Values Unbounded Scanner" << std::endl;
+        for(unsigned int i = 0; i < tests; i++){
+            runSVFScannerUnboundedTest(linData, testSVF, from[i], to[i]);
+            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+        }
+    }
+    
+    std::cout << "-------------------------SVF Scanner Unbounded Testing OK" << std::endl;
+}
+
+
+
+
 // Test contributed by Andrea Asztalos
 //
 void NULL_serial_search_test()
@@ -47932,6 +48048,9 @@ return 0;
         CheckAllocLeaks(false);
         
         sparseVecFloatRSCScannerTests();
+        CheckAllocLeaks(false);
+        
+        SparseVecFloatScannerUnboundedTests();
         CheckAllocLeaks(false);
 
         ReportTestBlockDone("-svf");
