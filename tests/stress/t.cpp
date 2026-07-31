@@ -46016,7 +46016,8 @@ void SparseVecFloatScannerTests()
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(linData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -46034,7 +46035,8 @@ void SparseVecFloatScannerTests()
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(randData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -46052,7 +46054,8 @@ void SparseVecFloatScannerTests()
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(skewData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -46199,7 +46202,8 @@ void sparseVecFloatRSCScannerTests()
             runSVFScannerTestRSC(linData, testSVF, from[i], to[i]);
             
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -46224,7 +46228,8 @@ void sparseVecFloatRSCScannerTests()
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTestRSC(randData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -46253,7 +46258,8 @@ void sparseVecFloatRSCScannerTests()
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTestRSC(skewData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
 
@@ -46367,7 +46373,8 @@ void SparseVecFloatScannerUnboundedTests()
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerUnboundedTest(linData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
-            std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
     

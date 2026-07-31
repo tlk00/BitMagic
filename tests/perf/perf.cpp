@@ -5869,7 +5869,8 @@ void TestSVFScanner()
 
                 scan.find_range_float(testSVF, from, to, bv_range);
 
-                xorSV ^= bv_range;
+                if(i < 1)
+                    xorSV ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -5883,7 +5884,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 in_range_vect(linData, from, to, bv_range);
-                xorVect ^= bv_range;
+                if(i < 1)
+                    xorVect ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -5897,7 +5899,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 in_range_const(testSVF, from, to, bv_range);
-                xorConst ^= bv_range;
+                if(i < 1)
+                    xorConst ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -5951,7 +5954,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 scan.find_range_float(testSVF, from, to, bv_range);
-                xorSV ^= bv_range;
+                if(i < 1)
+                    xorSV ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -5965,7 +5969,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 in_range_vect(randData, from, to, bv_range);
-                xorVect ^= bv_range;
+                if(i < 1)
+                    xorVect ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -5979,7 +5984,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 in_range_const(testSVF, from, to, bv_range);
-                xorConst ^= bv_range;
+                if(i < 1)
+                    xorConst ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -6032,7 +6038,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 scan.find_range_float(testSVF, from, to, bv_range);
-                xorSV ^= bv_range;
+                if(i < 1)
+                    xorSV ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -6046,7 +6053,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 in_range_vect(skewData, from, to, bv_range);
-                xorVect ^= bv_range;
+                if(i < 1)
+                    xorVect ^= bv_range;
                 bv_range.clear(true);
             }
         }
@@ -6060,7 +6068,8 @@ void TestSVFScanner()
                 float to   = t.second;
 
                 in_range_const(testSVF, from, to, bv_range);
-                xorConst ^= bv_range;
+                if(i < 1)
+                    xorConst ^= bv_range;
                 bv_range.clear(true);
             }
         }
