@@ -44387,6 +44387,8 @@ bool         is_ser = false;
 bool         is_allsvser = false;
 bool         is_sv_sort = false;
 bool         is_svf = false;
+bool         is_svf0 = false;
+bool         is_svf1 = false;
 
 static
 void ReportTestBlockDone(const char* name)
@@ -44562,6 +44564,18 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_svf = true;
+            continue;
+        }
+        if (arg == "-svf0")
+        {
+            is_all = false;
+            is_svf0 = true;
+            continue;
+        }
+        if (arg == "-svf1")
+        {
+            is_all = false;
+            is_svf1 = true;
             continue;
         }
 
@@ -46019,6 +46033,8 @@ void SparseVecFloatScannerTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
     testSVF.clear();
@@ -46038,6 +46054,8 @@ void SparseVecFloatScannerTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
     testSVF.clear();
@@ -46057,6 +46075,8 @@ void SparseVecFloatScannerTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
     std::cout << "-------------------------SVF Scanner Testing OK" << std::endl;
@@ -46205,6 +46225,8 @@ void sparseVecFloatRSCScannerTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
     testSVF.clear();
@@ -46231,6 +46253,8 @@ void sparseVecFloatRSCScannerTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
     testSVF.clear();
@@ -46261,6 +46285,8 @@ void sparseVecFloatRSCScannerTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
     std::cout << "-------------------------SVF RCS Scanner Testing OK" << std::endl;
@@ -46376,6 +46402,8 @@ void SparseVecFloatScannerUnboundedTests()
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
+        if (!is_silent)
+            std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
     
     std::cout << "-------------------------SVF Scanner Unbounded Testing OK" << std::endl;
@@ -48046,21 +48074,32 @@ return 0;
             ReportTestBlockDone("-allsvser");
     }
 
-    if(is_all || is_svf){
+    if (is_all || is_svf){
         
-        SparseVecFloatTests();
-        CheckAllocLeaks(false);
+        if (is_all || is_svf0 || is_svf)
+        {
+            SparseVecFloatTests();
+            CheckAllocLeaks(false);
+            
+            SparseVecFloatScannerTests();
+            CheckAllocLeaks(false);
+            
+            SparseVecFloatScannerUnboundedTests();
+            CheckAllocLeaks(false);
+            
+            ReportTestBlockDone("-svf0");
+        }
+        
+        if (is_all || is_svf1 || is_svf)
+        {
+            sparseVecFloatRSCScannerTests();
+            CheckAllocLeaks(false);
+            
+            ReportTestBlockDone("-svf1");
+        }
 
-        SparseVecFloatScannerTests();
-        CheckAllocLeaks(false);
-        
-        sparseVecFloatRSCScannerTests();
-        CheckAllocLeaks(false);
-        
-        SparseVecFloatScannerUnboundedTests();
-        CheckAllocLeaks(false);
-
-        ReportTestBlockDone("-svf");
+        if(is_all || is_svf)
+            ReportTestBlockDone("-svf");
     }
 
 

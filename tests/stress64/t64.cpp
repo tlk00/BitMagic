@@ -22787,6 +22787,8 @@ bool         is_c_coll = false;
 bool         is_only_stress = false;
 bool         is_nostress = false;
 bool         is_svf = false;
+bool         is_svf0 = false;
+bool         is_svf1 = false;
 
 static
 void ReportTestBlockDone(const char* name)
@@ -22892,6 +22894,18 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_svf = true;
+            continue;
+        }
+        if (arg == "-svf0")
+        {
+            is_all = false;
+            is_svf0 = true;
+            continue;
+        }
+        if (arg == "-svf1")
+        {
+            is_all = false;
+            is_svf1 = true;
             continue;
         }
 
@@ -23414,19 +23428,30 @@ int main(int argc, char *argv[])
     
     if(is_all || is_svf){
         
-        SparseVecFloatTests();
-        CheckAllocLeaks(false);
-
-        SparseVecFloatScannerTests();
-        CheckAllocLeaks(false);
+        if (is_all || is_svf0 || is_svf)
+        {
+            SparseVecFloatTests();
+            CheckAllocLeaks(false);
+            
+            SparseVecFloatScannerTests();
+            CheckAllocLeaks(false);
+            
+            SparseVecFloatScannerUnboundedTests();
+            CheckAllocLeaks(false);
+            
+            ReportTestBlockDone("-svf0");
+        }
         
-        sparseVecFloatRSCScannerTests();
-        CheckAllocLeaks(false);
-        
-        SparseVecFloatScannerUnboundedTests();
-        CheckAllocLeaks(false);
+        if (is_all || is_svf1 || is_svf)
+        {
+            sparseVecFloatRSCScannerTests();
+            CheckAllocLeaks(false);
+            
+            ReportTestBlockDone("-svf1");
+        }
 
-        ReportTestBlockDone("-svf");
+        if(is_all || is_svf)
+            ReportTestBlockDone("-svf");
     }
 
 

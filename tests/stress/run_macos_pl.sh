@@ -51,7 +51,8 @@ Test selectors from t.cpp:
   -strsv, -svstr        String sparse-vector tests
   -cc                   Compressed-collection tests
   -ser                  All serialization tests
-  -svf                  Floating-point sparse-vector tests
+  -svf0                 Floating-point sparse-vector tests, part 0
+  -svf1                 Floating-point sparse-vector tests, part 1
 
 The broader overlapping selectors -bvb/-bvbasic, -bvo/-bvops/-bvl, -sv,
 -csv/-rsc, and -allsvser are accepted for targeted runs but are not included
@@ -73,7 +74,7 @@ is_valid_test()
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
         -sv|-sv0|-sv1|-sort|--sort|-csv|-rsc|-csv0|-csv1|\
-        -strsv|-svstr|-cc|-ser|-allsvser|-svf)
+        -strsv|-svstr|-cc|-ser|-allsvser|-svf0|-svf1)
             return 0
             ;;
         *)
@@ -185,7 +186,8 @@ if [ "${#TESTS[@]}" -eq 0 ]; then
         -bvs -rc -agg
         -sv0 -sv1 -sort
         -csv0 -csv1
-        -strsv -cc -ser -svf
+        -strsv -cc -ser
+        -svf0 -svf1
     )
 fi
 
