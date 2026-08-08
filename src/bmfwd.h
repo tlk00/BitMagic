@@ -1,7 +1,7 @@
 #ifndef BMFWD__H__INCLUDED__
 #define BMFWD__H__INCLUDED__
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,10 +57,14 @@ template<typename BV, typename DEC> class deserializer;
 
 template<class Val, class BV> class sparse_vector;
 template<class Val, class SV> class rsc_sparse_vector;
+template<class SV> class sparse_vector_float;
 
 template<class SVect, unsigned S_FACTOR = 16> class sparse_vector_scanner;
 template<class SVect> class sparse_vector_serializer;
 template<class SVect> class sparse_vector_deserializer;
+template<class SVect> class sparse_vector_float_serial_layout;
+template<class SVect> class sparse_vector_float_serializer;
+template<class SVect> class sparse_vector_float_deserializer;
 
 struct block_waves_xor_descr;
 

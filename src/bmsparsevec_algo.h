@@ -54,8 +54,6 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-template<class SV> class sparse_vector_float;
-
 /*!
     \brief Visit sparse vector values using chunked decode() instead of iterators.
 

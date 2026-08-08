@@ -42,8 +42,6 @@ namespace bm
 {
 
 
-template<class SV> class sparse_vector_float;
-
 /*!
    \brief Rank-Select compressed sparse vector
  
