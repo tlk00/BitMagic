@@ -250,6 +250,38 @@ void in_range_const(const sparseVecFloat& sv, float from, float to, sparseVecFlo
     }
 }
 
+struct svf_range_for_each_sparse_func
+{
+    typedef sparseVecFloat::size_type size_type;
+
+    svf_range_for_each_sparse_func(float from, float to,
+                                   sparseVecFloat::bvector_type& bv_out)
+        : from_(from),
+          to_(to),
+          bv_out_(bv_out)
+    {}
+
+    int operator()(float v, bool is_null, size_type idx)
+    {
+        if (!is_null && v >= from_ && v <= to_)
+            bv_out_.set(idx);
+        return 0;
+    }
+
+    float from_;
+    float to_;
+    sparseVecFloat::bvector_type& bv_out_;
+};
+
+inline
+void in_range_for_each_sparse(const sparseVecFloat& sv, float from, float to,
+                              sparseVecFloat::bvector_type& bv_out)
+{
+    if (from > to) std::swap(from, to);
+    svf_range_for_each_sparse_func func(from, to, bv_out);
+    bm::for_each_sparse(sv, func);
+}
+
 void TestSVFScanner()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
@@ -283,6 +315,7 @@ void TestSVFScanner()
         sparseVecFloat::bvector_type xorSV;
         sparseVecFloat::bvector_type xorVect;
         sparseVecFloat::bvector_type xorConst;
+        sparseVecFloat::bvector_type xorForEachSparse;
 
         sparseVecFloat::bvector_type bv_range;
         sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
@@ -336,10 +369,24 @@ void TestSVFScanner()
             }
         }
 
+        {
+            bm::chrono_taker<> tt(cout, "SVF with Linear Data find values in range with bm::for_each_sparse", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                float from = fromVect[i];
+                float to   = toVect[i];
+
+                in_range_for_each_sparse(testSVF, from, to, bv_range);
+                xorForEachSparse ^= bv_range;
+                bv_range.clear(true);
+            }
+        }
+
         bool range_eq_vector = (xorSV == xorVect);
         bool range_eq_const  = (xorSV == xorConst);
+        bool range_eq_for_each_sparse = (xorSV == xorForEachSparse);
 
-        if (!range_eq_vector || !range_eq_const)
+        if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
         {
             cerr << "Linear: MISMATCH" << endl;
             exit(1);
@@ -361,6 +408,7 @@ void TestSVFScanner()
         sparseVecFloat::bvector_type xorSV;
         sparseVecFloat::bvector_type xorVect;
         sparseVecFloat::bvector_type xorConst;
+        sparseVecFloat::bvector_type xorForEachSparse;
 
         sparseVecFloat::bvector_type bv_range;
         sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
@@ -414,10 +462,24 @@ void TestSVFScanner()
             }
         }
 
+        {
+            bm::chrono_taker<> tt(cout, "SVF with Random Data find values in range with bm::for_each_sparse", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                float from = fromVect[i];
+                float to   = toVect[i];
+
+                in_range_for_each_sparse(testSVF, from, to, bv_range);
+                xorForEachSparse ^= bv_range;
+                bv_range.clear(true);
+            }
+        }
+
         bool range_eq_vector = (xorSV == xorVect);
         bool range_eq_const  = (xorSV == xorConst);
+        bool range_eq_for_each_sparse = (xorSV == xorForEachSparse);
 
-        if (!range_eq_vector || !range_eq_const)
+        if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
         {
             cerr << "Random: MISMATCH" << endl;
             exit(1);
@@ -439,6 +501,7 @@ void TestSVFScanner()
         sparseVecFloat::bvector_type xorSV;
         sparseVecFloat::bvector_type xorVect;
         sparseVecFloat::bvector_type xorConst;
+        sparseVecFloat::bvector_type xorForEachSparse;
 
         sparseVecFloat::bvector_type bv_range;
         sparseVecFloat::bvector_type::mem_pool_guard bv_range_guard(bv_pool, bv_range);
@@ -491,10 +554,24 @@ void TestSVFScanner()
             }
         }
 
+        {
+            bm::chrono_taker<> tt(cout, "SVF with Skewed Data find values in range with bm::for_each_sparse", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                float from = fromVect[i];
+                float to   = toVect[i];
+
+                in_range_for_each_sparse(testSVF, from, to, bv_range);
+                xorForEachSparse ^= bv_range;
+                bv_range.clear(true);
+            }
+        }
+
         bool range_eq_vector = (xorSV == xorVect);
         bool range_eq_const  = (xorSV == xorConst);
+        bool range_eq_for_each_sparse = (xorSV == xorForEachSparse);
 
-        if (!range_eq_vector || !range_eq_const)
+        if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
         {
             cerr << "Skewed: MISMATCH" << endl;
             exit(1);
@@ -530,6 +607,38 @@ void in_range_const_rsc(const sparseVecFloatRSC& sv, float from, float to, spars
         if (auto v = ci.value(); v >= from && v <= to)
             bv_out.set(ci.pos());
     }
+}
+
+struct svf_rsc_range_for_each_sparse_func
+{
+    typedef sparseVecFloatRSC::size_type size_type;
+
+    svf_rsc_range_for_each_sparse_func(float from, float to,
+                                       sparseVecFloatRSC::bvector_type& bv_out)
+        : from_(from),
+          to_(to),
+          bv_out_(bv_out)
+    {}
+
+    int operator()(float v, bool is_null, size_type idx)
+    {
+        if (!is_null && v >= from_ && v <= to_)
+            bv_out_.set(idx);
+        return 0;
+    }
+
+    float from_;
+    float to_;
+    sparseVecFloatRSC::bvector_type& bv_out_;
+};
+
+inline
+void in_range_for_each_sparse_rsc(const sparseVecFloatRSC& sv, float from, float to,
+                                  sparseVecFloatRSC::bvector_type& bv_out)
+{
+    if (from > to) std::swap(from, to);
+    svf_rsc_range_for_each_sparse_func func(from, to, bv_out);
+    bm::for_each_sparse(sv, func);
 }
 
 // -------------------------------------------------------------------
@@ -586,6 +695,7 @@ void TestSVFScannerRSC()
         sparseVecFloatRSC::bvector_type xorRSC;
         sparseVecFloatRSC::bvector_type xorVect;
         sparseVecFloatRSC::bvector_type xorConst;
+        sparseVecFloatRSC::bvector_type xorForEachSparse;
 
         sparseVecFloatRSC::bvector_type bv_range;
         sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
@@ -638,8 +748,22 @@ void TestSVFScannerRSC()
             }
         }
 
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC with Linear Data find values in range with bm::for_each_sparse", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                float from = fromVect[i];
+                float to   = toVect[i];
+
+                in_range_for_each_sparse_rsc(testSVF, from, to, bv_range);
+                xorForEachSparse ^= bv_range;
+                bv_range.clear(true);
+            }
+        }
+
         bool range_eq_vector = (xorRSC == xorVect);
         bool range_eq_const  = (xorRSC == xorConst);
+        bool range_eq_for_each_sparse = (xorRSC == xorForEachSparse);
 
         if (!range_eq_vector)
         {
@@ -649,7 +773,11 @@ void TestSVFScannerRSC()
         {
             cerr << "LinearRSC: MISMATCH Const" << endl;
         }
-        if (!range_eq_vector || !range_eq_const)
+        if (!range_eq_for_each_sparse)
+        {
+            cerr << "LinearRSC: MISMATCH for_each_sparse" << endl;
+        }
+        if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
         {
             exit(1);
         }
@@ -680,6 +808,7 @@ void TestSVFScannerRSC()
         sparseVecFloatRSC::bvector_type xorRSC;
         sparseVecFloatRSC::bvector_type xorVect;
         sparseVecFloatRSC::bvector_type xorConst;
+        sparseVecFloatRSC::bvector_type xorForEachSparse;
 
         sparseVecFloatRSC::bvector_type bv_range;
         sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
@@ -732,18 +861,36 @@ void TestSVFScannerRSC()
             }
         }
 
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC with Random Data find values in range with bm::for_each_sparse", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                float from = fromVect[i];
+                float to   = toVect[i];
+
+                in_range_for_each_sparse_rsc(testSVF, from, to, bv_range);
+                xorForEachSparse ^= bv_range;
+                bv_range.clear(true);
+            }
+        }
+
         bool range_eq_vector = (xorRSC == xorVect);
         bool range_eq_const  = (xorRSC == xorConst);
+        bool range_eq_for_each_sparse = (xorRSC == xorForEachSparse);
 
         if (!range_eq_vector)
         {
-            cerr << "LinearRSC: MISMATCH Vect" << endl;
+            cerr << "RandomRSC: MISMATCH Vect" << endl;
         }
         if (!range_eq_const)
         {
-            cerr << "LinearRSC: MISMATCH Const" << endl;
+            cerr << "RandomRSC: MISMATCH Const" << endl;
         }
-        if (!range_eq_vector || !range_eq_const)
+        if (!range_eq_for_each_sparse)
+        {
+            cerr << "RandomRSC: MISMATCH for_each_sparse" << endl;
+        }
+        if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
         {
             exit(1);
         }
@@ -775,6 +922,7 @@ void TestSVFScannerRSC()
         sparseVecFloatRSC::bvector_type xorRSC;
         sparseVecFloatRSC::bvector_type xorVect;
         sparseVecFloatRSC::bvector_type xorConst;
+        sparseVecFloatRSC::bvector_type xorForEachSparse;
 
         sparseVecFloatRSC::bvector_type bv_range;
         sparseVecFloatRSC::bvector_type::mem_pool_guard bv_range_guard(bv_rsc_pool, bv_range);
@@ -827,8 +975,22 @@ void TestSVFScannerRSC()
             }
         }
 
+        {
+            bm::chrono_taker<> tt(cout, "SVF RSC with Skewed Data find values in range with bm::for_each_sparse", tests);
+            for (unsigned int i = 0; i < tests; i++)
+            {
+                float from = fromVect[i];
+                float to   = toVect[i];
+
+                in_range_for_each_sparse_rsc(testSVF, from, to, bv_range);
+                xorForEachSparse ^= bv_range;
+                bv_range.clear(true);
+            }
+        }
+
         bool range_eq_vector = (xorRSC == xorVect);
         bool range_eq_const  = (xorRSC == xorConst);
+        bool range_eq_for_each_sparse = (xorRSC == xorForEachSparse);
 
         if (!range_eq_vector)
         {
@@ -838,7 +1000,11 @@ void TestSVFScannerRSC()
         {
             cerr << "SkewedRSC: MISMATCH Const" << endl;
         }
-        if (!range_eq_vector || !range_eq_const)
+        if (!range_eq_for_each_sparse)
+        {
+            cerr << "SkewedRSC: MISMATCH for_each_sparse" << endl;
+        }
+        if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
         {
             exit(1);
         }
