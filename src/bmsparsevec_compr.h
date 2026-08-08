@@ -42,6 +42,8 @@ namespace bm
 {
 
 
+template<class SV> class sparse_vector_float;
+
 /*!
    \brief Rank-Select compressed sparse vector
  
@@ -57,6 +59,7 @@ namespace bm
 template<class Val, class SV>
 class rsc_sparse_vector
 {
+    template<class SVect> friend class sparse_vector_float;
 public:
     enum bit_slices
     {

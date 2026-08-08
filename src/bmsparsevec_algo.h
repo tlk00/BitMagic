@@ -54,6 +54,138 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
+template<class SV> class sparse_vector_float;
+
+/*!
+    \brief Visit sparse vector values using chunked decode() instead of iterators.
+
+    The visitor functor receives (value, is_null, idx). It can return a negative
+    value to interrupt traversal, following the bit-vector visitor convention.
+    This API is expected to be a fast traversal path compared to the traditional
+    const_iterator approach, because it decodes values in reusable chunks.
+
+    \ingroup svalgo
+*/
+template<class SV, class Func>
+int for_each_sparse(const SV& sv, Func& func,
+                    typename SV::size_type buf_size = 8 * 1024)
+{
+    typedef typename SV::value_type value_type;
+    typedef typename SV::size_type size_type;
+    typedef typename SV::allocator_type allocator_type;
+    typedef bm::heap_vector<value_type, allocator_type, true> buffer_type;
+
+    const size_type sv_size = sv.size();
+    if (!sv_size || !buf_size)
+        return 0;
+
+    buffer_type buf;
+    value_type* buf_ptr = buf.resize_no_copy(buf_size);
+    const typename SV::bvector_type* bv_null = sv.get_null_bvector();
+
+    auto invoke_visitor = [&func](const value_type& value,
+                              bool is_null, size_type idx) -> int
+    {
+        if constexpr (std::is_void<decltype(func(value, is_null, idx))>::value)
+        {
+            func(value, is_null, idx);
+            return 0;
+        }
+        else
+        {
+            return func(value, is_null, idx);
+        }
+    };
+
+    size_type pos = 0;
+    while (pos < sv_size)
+    {
+        const size_type tail = sv_size - pos;
+        const size_type dec_size = (tail < buf_size) ? tail : buf_size;
+
+        sv.decode(buf_ptr, pos, dec_size, true);
+        for (size_type i = 0; i < dec_size; ++i)
+        {
+            const size_type idx = pos + i;
+            const bool is_null = bv_null && !bv_null->test(idx);
+            int ret = invoke_visitor(buf_ptr[i], is_null, idx);
+            if (ret < 0)
+                return ret;
+        } // for i
+        pos += dec_size;
+    } // while
+    return 0;
+}
+
+/*!
+    \brief Visit sparse float vector values using chunked decode_buf().
+
+    The float specialization keeps scratch buffers for exponent and mantissa
+    planes. For RSC sparse floats this lets decode_buf() run one rank/count pass
+    and scatter both planes together. This API is expected to be a fast traversal
+    path compared to the traditional const_iterator approach.
+
+    \ingroup svalgo
+*/
+template<class SV, class Func>
+int for_each_sparse(const sparse_vector_float<SV>& sv, Func& func,
+                    typename sparse_vector_float<SV>::size_type buf_size =
+                                                        8 * 1024)
+{
+    typedef sparse_vector_float<SV> svf_type;
+    typedef typename svf_type::value_type value_type;
+    typedef typename svf_type::size_type size_type;
+    typedef typename svf_type::unsigned_value_type unsigned_value_type;
+    typedef typename svf_type::allocator_type allocator_type;
+    typedef bm::heap_vector<value_type, allocator_type, true> buffer_type;
+    typedef bm::heap_vector<unsigned_value_type, allocator_type, true>
+                                                        unsigned_buffer_type;
+
+    const size_type sv_size = sv.size();
+    if (!sv_size || !buf_size)
+        return 0;
+
+    buffer_type buf;
+    unsigned_buffer_type exp_buf;
+    unsigned_buffer_type mant_buf;
+    value_type* buf_ptr = buf.resize_no_copy(buf_size);
+    unsigned_value_type* exp_buf_ptr = exp_buf.resize_no_copy(buf_size);
+    unsigned_value_type* mant_buf_ptr = mant_buf.resize_no_copy(buf_size);
+    const typename svf_type::bvector_type* bv_null = sv.get_null_bvector();
+
+    auto invoke_visitor = [&func](const value_type& value,
+                              bool is_null, size_type idx) -> int
+    {
+        if constexpr (std::is_void<decltype(func(value, is_null, idx))>::value)
+        {
+            func(value, is_null, idx);
+            return 0;
+        }
+        else
+        {
+            return func(value, is_null, idx);
+        }
+    };
+
+    size_type pos = 0;
+    while (pos < sv_size)
+    {
+        const size_type tail = sv_size - pos;
+        const size_type dec_size = (tail < buf_size) ? tail : buf_size;
+
+        sv.decode_buf(buf_ptr, exp_buf_ptr, mant_buf_ptr, pos, dec_size, true);
+        for (size_type i = 0; i < dec_size; ++i)
+        {
+            const size_type idx = pos + i;
+            const bool is_null = bv_null && !bv_null->test(idx);
+            int ret = invoke_visitor(buf_ptr[i], is_null, idx);
+            if (ret < 0)
+                return ret;
+        } // for i
+        pos += dec_size;
+    } // while
+    return 0;
+}
 
 /*!
     \brief Clip dynamic range for signal higher than specified

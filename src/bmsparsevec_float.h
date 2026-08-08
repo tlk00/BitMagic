@@ -67,6 +67,7 @@ public:
     typedef typename SV::bvector_type               bvector_type;
     typedef typename bvector_type::size_type        size_type;
     typedef SV                                      sparse_vector_u;
+    typedef typename sparse_vector_u::value_type    unsigned_value_type;
     typedef typename bvector_type::allocator_type   allocator_type;
     typedef typename bvector_type::allocation_policy allocation_policy_type;
 
@@ -125,6 +126,8 @@ public:
         typedef sparse_vector_float                        sparse_vector_type;
         typedef typename sparse_vector_type::value_type    value_type;
         typedef typename sparse_vector_type::size_type     size_type;
+        typedef typename sparse_vector_type::allocator_type allocator_type;
+        typedef bm::byte_buffer<allocator_type>            buffer_type;
 
     public:
         const_iterator() BMNOEXCEPT;
@@ -167,7 +170,7 @@ public:
         bool valid() const BMNOEXCEPT { return pos_ != bm::id_max; }
         
         /// Invalidate current iterator
-        void invalidate() BMNOEXCEPT { pos_ = bm::id_max; }
+        void invalidate() BMNOEXCEPT { pos_ = bm::id_max; buf_ptr_ = 0; }
         
         /// Current position (index) in the vector
         size_type pos() const BMNOEXCEPT{ return pos_; }
@@ -182,8 +185,10 @@ public:
     private:
         const sparse_vector_type*         sv_;                ///!< ptr to parent
         size_type                         pos_;               ///!< Position
-        typename sparse_vector_u::const_iterator   exp_it_;   ///!< exponent iterator
-        typename sparse_vector_u::const_iterator   mant_it_;  ///!< mantissa iterator
+        mutable buffer_type               buffer_;            ///!< value buffer
+        mutable value_type*               buf_ptr_;           ///!< position in the buffer
+        typename sparse_vector_u::const_iterator   exp_it_;   ///!< exponent iterator (RSC path)
+        typename sparse_vector_u::const_iterator   mant_it_;  ///!< mantissa iterator (RSC path)
     };
 
 
@@ -300,6 +305,10 @@ public:
 
     /*! \brief resize to zero, free memory */
     void clear() BMNOEXCEPT;
+
+    /*! \brief return NULL bit-vector (if enabled) */
+    const bvector_type* get_null_bvector() const BMNOEXCEPT
+        { return mantissas_.get_null_bvector(); }
 
     /*!
         \brief clear range (assign bit 0 for all planes)
@@ -459,6 +468,31 @@ public:
                      size_type   idx_from,
                      size_type   dec_size,
                      bool        zero_mem = true) const;
+
+    /*!
+        \brief Bulk export list of elements using caller-owned plane buffers.
+
+        This variant is intended for chunked visitors. For RSC float vectors it
+        avoids recalculating rank/scatter independently for exponent and mantissa
+        planes: one NULL/rank pass drives both compressed plane decodes.
+
+        \param arr      - destination float array
+        \param exp_buf  - temporary unsigned buffer for decoded exponent plane
+        \param mant_buf - temporary unsigned buffer for decoded mantissa plane
+        \param idx_from - index in the sparse vector to export from
+        \param dec_size - decoding size
+        \param zero_mem - set to false if target array is already initialized
+
+        \return number of requested logical elements decoded
+
+        \sa decode
+    */
+    size_type decode_buf(value_type*          arr,
+                         unsigned_value_type* exp_buf,
+                         unsigned_value_type* mant_buf,
+                         size_type            idx_from,
+                         size_type            dec_size,
+                         bool                 zero_mem = true) const;
 
     /*!
         \brief Gather elements to a C-style array
@@ -1070,6 +1104,82 @@ sparse_vector_float<SV>::decode(value_type* arr,
 //---------------------------------------------------------------------
 
 template<class SV>
+typename sparse_vector_float<SV>::size_type
+sparse_vector_float<SV>::decode_buf(value_type*          arr,
+                                    unsigned_value_type* exp_buf,
+                                    unsigned_value_type* mant_buf,
+                                    size_type            idx_from,
+                                    size_type            dec_size,
+                                    bool                 zero_mem) const
+{
+    if (!dec_size || (idx_from >= this->size()))
+        return 0;
+    BM_ASSERT(arr && exp_buf && mant_buf);
+
+    if ((bm::id_max - dec_size) <= idx_from)
+        dec_size = bm::id_max - idx_from;
+    if ((idx_from + dec_size) > this->size())
+        dec_size = this->size() - idx_from;
+
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        return decode(arr, idx_from, dec_size, zero_mem);
+    }
+    else
+    {
+        if (zero_mem)
+            ::memset(arr, 0, sizeof(value_type) * dec_size);
+
+        BM_ASSERT(mantissas_.in_sync_);
+        BM_ASSERT(mantissas_.rs_idx_);
+        const bvector_type* bv_null = mantissas_.get_null_bvector();
+        BM_ASSERT(bv_null);
+        if (!bv_null)
+            return dec_size;
+
+        const size_type idx_to = idx_from + dec_size - 1;
+        typename bvector_type::enumerator en_i =
+                                    bv_null->get_enumerator(idx_from);
+        if (!en_i.valid())
+            return dec_size;
+        if (idx_from + dec_size <= *en_i)
+            return dec_size;
+
+        const size_type rank =
+            bv_null->rank_corrected(idx_from, *mantissas_.rs_idx_);
+        BM_ASSERT(rank == bv_null->count_range(0, idx_from) -
+                          bv_null->test(idx_from));
+
+        const size_type extract_cnt =
+            bv_null->count_range_no_check(idx_from, idx_to,
+                                          *mantissas_.rs_idx_);
+        BM_ASSERT(extract_cnt <= dec_size);
+
+        auto exp_sz = exponents_.sv_.decode(exp_buf, rank, extract_cnt, true);
+        auto mant_sz = mantissas_.sv_.decode(mant_buf, rank, extract_cnt, true);
+        BM_ASSERT(exp_sz == extract_cnt); (void) exp_sz;
+        BM_ASSERT(mant_sz == extract_cnt); (void) mant_sz;
+
+        for (size_type i = 0; i < extract_cnt; ++i)
+        {
+            BM_ASSERT(en_i.valid());
+            const size_type en_idx = *en_i;
+            BM_ASSERT(en_idx >= idx_from && en_idx <= idx_to);
+
+            const unsigned int sign = signs_.test(en_idx) ? 1 : 0;
+            const unsigned int exponent = exp_buf[i];
+            const unsigned int mantissa = mant_buf[i];
+            const unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+            std::memcpy(&arr[en_idx - idx_from], &bits, sizeof(value_type));
+            en_i.advance();
+        } // for i
+        return dec_size;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
 typename sparse_vector_float<SV>::size_type 
 sparse_vector_float<SV>::gather(value_type* arr,
                                 const size_type* idx,
@@ -1142,14 +1252,14 @@ bool sparse_vector_float<SV>::is_ro() const BMNOEXCEPT
 
 template<class SV>
 sparse_vector_float<SV>::const_iterator::const_iterator() BMNOEXCEPT
-: sv_(0), pos_(bm::id_max), exp_it_(), mant_it_() 
+: sv_(0), pos_(bm::id_max), buf_ptr_(0), exp_it_(), mant_it_()
 {}
 
 //---------------------------------------------------------------------
 
 template<class SV>
 sparse_vector_float<SV>::const_iterator::const_iterator(const sparse_vector_type* sv) BMNOEXCEPT
-: sv_(sv), exp_it_(sv->exponents_.begin()), mant_it_(sv->mantissas_.begin())
+: sv_(sv), buf_ptr_(0), exp_it_(sv->exponents_.begin()), mant_it_(sv->mantissas_.begin())
 {
     BM_ASSERT(sv_);
     pos_ = sv_->empty() ? bm::id_max : 0u;
@@ -1159,7 +1269,7 @@ sparse_vector_float<SV>::const_iterator::const_iterator(const sparse_vector_type
 
 template<class SV>
 sparse_vector_float<SV>::const_iterator::const_iterator(const sparse_vector_type* sv, size_type pos) BMNOEXCEPT
-: sv_(sv), exp_it_(sv->exponents_.begin()), mant_it_(sv->mantissas_.begin()) 
+: sv_(sv), buf_ptr_(0), exp_it_(sv->exponents_.begin()), mant_it_(sv->mantissas_.begin())
 {
     BM_ASSERT(sv_);
     this->go_to(pos);
@@ -1169,7 +1279,7 @@ sparse_vector_float<SV>::const_iterator::const_iterator(const sparse_vector_type
 
 template<class SV>
 sparse_vector_float<SV>::const_iterator::const_iterator(const const_iterator& it) BMNOEXCEPT
-: sv_(it.sv_), pos_(it.pos_), exp_it_(it.exp_it_), mant_it_(it.mant_it_) 
+: sv_(it.sv_), pos_(it.pos_), buf_ptr_(0), exp_it_(it.exp_it_), mant_it_(it.mant_it_)
 {}
 
 //---------------------------------------------------------------------
@@ -1178,20 +1288,37 @@ template<class SV>
 typename sparse_vector_float<SV>::const_iterator::value_type
 sparse_vector_float<SV>::const_iterator::value() const
 {
+    BM_ASSERT(this->valid());
+
     if (is_null())
     {
         return std::numeric_limits<float>::quiet_NaN();
     }
-    unsigned int sign = sv_->signs_.test(pos_) ? 1 : 0;
-    unsigned int exponent = exp_it_.value();
-    unsigned int mantissa = mant_it_.value();
-    
-    unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
 
-    float toReturn;
-    std::memcpy(&toReturn, &bits, sizeof(float));
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        if (!buf_ptr_)
+        {
+            buffer_.reserve(n_buf_size * sizeof(value_type));
+            buf_ptr_ = (value_type*)(buffer_.data());
+            size_type dec_size = bm::min_value<size_type>(n_buf_size, sv_->size() - pos_);
+            sv_->decode(buf_ptr_, pos_, dec_size, true);
+        }
+        return *buf_ptr_;
+    }
+    else
+    {
+        unsigned int sign = sv_->signs_.test(pos_) ? 1 : 0;
+        unsigned int exponent = exp_it_.value();
+        unsigned int mantissa = mant_it_.value();
 
-    return toReturn;
+        unsigned int bits = (sign << 31) | (exponent << 23) | mantissa;
+
+        float toReturn;
+        std::memcpy(&toReturn, &bits, sizeof(float));
+
+        return toReturn;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1199,7 +1326,15 @@ sparse_vector_float<SV>::const_iterator::value() const
 template<class SV>
 bool sparse_vector_float<SV>::const_iterator::is_null() const BMNOEXCEPT
 {
-    return mant_it_.is_null();
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        const bvector_type* bv_null = sv_->mantissas_.get_null_bvector();
+        return bv_null && !bv_null->test(pos_);
+    }
+    else
+    {
+        return mant_it_.is_null();
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1207,9 +1342,43 @@ bool sparse_vector_float<SV>::const_iterator::is_null() const BMNOEXCEPT
 template<class SV>
 void sparse_vector_float<SV>::const_iterator::go_to(size_type pos) BMNOEXCEPT
 {
-    pos_ = (!sv_ || pos >= sv_->size()) ? bm::id_max : pos;
-    exp_it_.go_to(pos_);
-    mant_it_.go_to(pos_);
+    if (!sv_ || pos >= sv_->size())
+    {
+        pos_ = bm::id_max;
+        buf_ptr_ = 0;
+        if constexpr (is_rsc_sparse_vector<SV>::value)
+        {
+            exp_it_.go_to(pos_);
+            mant_it_.go_to(pos_);
+        }
+        return;
+    }
+
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        if (buf_ptr_ && pos_ != bm::id_max)
+        {
+            value_type* buf_begin = (value_type*)buffer_.data();
+            size_type buf_pos = size_type(buf_ptr_ - buf_begin);
+            size_type buf_from = pos_ - buf_pos;
+            size_type buf_to = buf_from + n_buf_size;
+
+            if (pos >= buf_from && pos < buf_to)
+            {
+                pos_ = pos;
+                buf_ptr_ = buf_begin + (pos - buf_from);
+                return;
+            }
+        }
+        pos_ = pos;
+        buf_ptr_ = 0;
+    }
+    else
+    {
+        pos_ = pos;
+        exp_it_.go_to(pos_);
+        mant_it_.go_to(pos_);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -1219,7 +1388,7 @@ bool sparse_vector_float<SV>::const_iterator::advance() BMNOEXCEPT
 {
     if (pos_ == bm::id_max) // nothing to do, we are at the end
         return false;
-    
+
     ++pos_;
     if (pos_ >= sv_->size())
     {
@@ -1227,8 +1396,20 @@ bool sparse_vector_float<SV>::const_iterator::advance() BMNOEXCEPT
         return false;
     }
 
-    ++exp_it_;
-    ++mant_it_;
+    if constexpr (!is_rsc_sparse_vector<SV>::value)
+    {
+        if (buf_ptr_)
+        {
+            ++buf_ptr_;
+            if (buf_ptr_ - ((value_type*)buffer_.data()) >= n_buf_size)
+                buf_ptr_ = 0;
+        }
+    }
+    else
+    {
+        ++exp_it_;
+        ++mant_it_;
+    }
 
     return true;
 }
