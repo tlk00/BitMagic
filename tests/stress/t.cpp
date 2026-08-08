@@ -45246,9 +45246,15 @@ void SparseVecFloatConstIteratorTests()
     // --- operator* and value() ---
     assert(floatEq(*itBegin, toAdd[0]));
     assert(floatEq(itBegin.value(), toAdd[0]));
+    assert(floatEq(*itFromSV, toAdd[0]));
     assert(floatEq(*itFromSVPos, toAdd[1]));
+    assert(floatEq(*itCopy, toAdd[0]));
 
     // --- valid() ---
+    assert(!defaultit.valid());
+    assert(defaultit.pos() == bm::id_max);
+    assert(!defaultit.advance());
+    assert(itFromSV.valid());
     assert(itBegin.valid());
     assert(!itEnd.valid());
     
@@ -45256,10 +45262,16 @@ void SparseVecFloatConstIteratorTests()
     sparseVecFloat::const_iterator itInvalid = testSVF.begin();
     itInvalid.invalidate();
     assert(!itInvalid.valid());
+    itInvalid.go_to(1);
+    assert(itInvalid.valid());
+    assert(itInvalid.pos() == 1);
+    assert(floatEq(itInvalid.value(), toAdd[1]));
 
     // --- pos() ---
     assert(itBegin.pos() == 0);
+    assert(itFromSV.pos() == 0);
     assert(itFromSVPos.pos() == 1);
+    assert(itCopy.pos() == 0);
 
     // --- operator== and operator!= ---
     sparseVecFloat::const_iterator itA = testSVF.begin();
@@ -45322,10 +45334,50 @@ void SparseVecFloatConstIteratorTests()
     itGoto.go_to(1);
     assert(itGoto.pos() == 1);
     assert(floatEq(itGoto.value(), toAdd[1]));
+    itGoto.go_to(testSVF.size());
+    assert(!itGoto.valid());
+    assert(itGoto.pos() == bm::id_max);
+    itGoto.go_to(bm::id_max);
+    assert(!itGoto.valid());
+    itGoto.go_to(2);
+    assert(itGoto.valid());
+    assert(itGoto.pos() == 2);
+    assert(floatEq(itGoto.value(), toAdd[2]));
+
+    // --- empty vector iterator ---
+    sparseVecFloat emptySVF;
+    sparseVecFloat::const_iterator itEmpty(&emptySVF);
+    assert(!itEmpty.valid());
+    assert(itEmpty.pos() == bm::id_max);
+    assert(!itEmpty.advance());
 
     // --- is_null() ---
     sparseVecFloat::const_iterator itNull = testSVF.begin();
     assert(!itNull.is_null());
+
+    sparseVecFloat nullableSVF(bm::use_null);
+    nullableSVF.import(toAdd, 3);
+    nullableSVF.clear_range(1, 1, true);
+    sparseVecFloat::const_iterator itNullPos(&nullableSVF, 1);
+    assert(itNullPos.valid());
+    assert(itNullPos.pos() == 1);
+    assert(itNullPos.is_null());
+    float nullValue = itNullPos.value();
+    assert(nullValue != nullValue);
+    itNullPos.go_to(2);
+    assert(itNullPos.valid());
+    assert(!itNullPos.is_null());
+    assert(floatEq(itNullPos.value(), toAdd[2]));
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    nullableSVF.optimize(tb);
+    itNullPos.go_to(1);
+    assert(itNullPos.valid());
+    assert(itNullPos.is_null());
+    nullValue = itNullPos.value();
+    assert(nullValue != nullValue);
+    itNullPos.go_to(0);
+    assert(floatEq(itNullPos.value(), toAdd[0]));
 
     // --- full iteration ---
     int idx = 0;
