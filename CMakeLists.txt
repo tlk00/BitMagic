@@ -48,6 +48,8 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_algo.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_compr.h
+               ${PROJECT_SOURCE_DIR}/src/bmsparsevec_float.h
+               ${PROJECT_SOURCE_DIR}/src/bmsparsevec_float_serial.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_parallel.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_serial.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_util.h
