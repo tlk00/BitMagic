@@ -34,7 +34,6 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <vector>
 #include <assert.h>
-
 #include "bm.h"
 #include "bmbmatrix.h"
 
@@ -183,7 +182,6 @@ int main(void)
         std::cerr << ex.what() << std::endl;
         return 1;
     }
-
     return 0;
 }
 
