@@ -22,6 +22,7 @@ For more information please visit:  http://bitmagic.io
   \sa bm::rsc_sparse_vector
   \sa bm::rsc_sparse_vector::const_iterator
   \sa bm::rsc_sparse_vector::const_iterator::go_to
+  \sa bm::for_each_sparse
 
 */
 
@@ -36,6 +37,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmsparsevec.h"
+#include "bmsparsevec_algo.h"
 #include "bmsparsevec_compr.h"
 #include "bmundef.h" /* clear the pre-proc defines from BM */
 
@@ -116,6 +118,22 @@ int main(void)
                 cout << it.value() << endl; // 13
             }
         }
+
+        // bm::for_each_sparse() is an alternative traversal interface.
+        // It avoids explicit iterator management and uses decode buffers
+        // internally, which can be faster for full scans.
+        //
+        auto print_value = [](unsigned v, bool is_null, bm::id_t)
+        {
+            if (is_null)
+                cout << "NULL";
+            else
+                cout << v;
+            cout << ", ";
+            return 0;
+        };
+        bm::for_each_sparse(csv1, print_value);
+        cout << endl;
 
     }
     catch(std::exception& ex)

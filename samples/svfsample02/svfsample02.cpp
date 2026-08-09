@@ -54,6 +54,7 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector_float::const_iterator::pos
   \sa bm::sparse_vector_float::const_iterator::valid
   \sa bm::sparse_vector_float::const_iterator::invalidate
+  \sa bm::for_each_sparse
 */
 
 /*! \file svfsample02.cpp
@@ -66,6 +67,7 @@ For more information please visit:  http://bitmagic.io
 #include <cmath>
 
 #include <bm.h>
+#include <bmsparsevec_algo.h>
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
 
@@ -75,7 +77,7 @@ void Demo1(){
 
 
     //Creating and optimizing a sparse_vector_float
-    float toAdd[] = {1.0123, -2.468, 340000.56};
+    float toAdd[] = {1.0123f, -2.468f, 340000.56f};
     sparseVecFloat svf1;
     svf1.import(toAdd, 3);
     BM_DECLARE_TEMP_BLOCK(tb)
@@ -115,7 +117,7 @@ void Demo1(){
     
     //Deserializing an svf layout returns the values into the svf
     std::cout << svf1.size() << std::endl;
-    for(int i = 0; i < 3; i++){
+    for (sparseVecFloat::size_type i = 0; i < 3; i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
         std::cout << "toAdd[" << i << "] = " << toAdd[i] << std::endl;
     }
@@ -128,7 +130,7 @@ void Demo1(){
     sparseVecFloat svf2;
     int N = 10000;
     for(int i = 0; i < N; i++){
-        float f = i * 0.000123;
+        float f = static_cast<float>(i) * 0.000123f;
         svf2.push_back(f);
     }
 
@@ -152,8 +154,8 @@ void Demo1(){
     
     //it will deserialize into the given indeces of the new SVF, not at the start or end of it
     int errorCount = 0;
-    for (int i = 300; i < 400; i++) {
-        float f = i * 0.000123;
+    for (sparseVecFloat::size_type i = 300; i < 400; i++) {
+        float f = static_cast<float>(i) * 0.000123f;
         if (std::fabs(svf2_restored.get(i) - f) > 0.001f){
             errorCount++;
         }
@@ -164,9 +166,9 @@ void Demo1(){
 
 
     bm::bvector<> mask_bv;
-    int maskIndices[] = {0, 1, 50, 100, 500, 999, 5000, 9999};
-    int maskSize = sizeof(maskIndices) / sizeof(maskIndices[0]);
-    for (int i = 0; i < maskSize; i++)
+    bm::id_t maskIndices[] = {0, 1, 50, 100, 500, 999, 5000, 9999};
+    unsigned maskSize = sizeof(maskIndices) / sizeof(maskIndices[0]);
+    for (unsigned i = 0; i < maskSize; i++)
         mask_bv.set(maskIndices[i]);
     
     //You can also deserialize a mask of indeces
@@ -174,9 +176,9 @@ void Demo1(){
     svfD.deserialize(svf2_masked, buf, mask_bv);
 
     //The given indeces in the mask will be deserialized into the given svf, and those not in it will be set to 0
-    for (int i = 0; i < maskSize; i++) {
-        int idx   = maskIndices[i];
-        float f   = idx * 0.000123f;
+    for (unsigned i = 0; i < maskSize; i++) {
+        bm::id_t idx = maskIndices[i];
+        float f = static_cast<float>(idx) * 0.000123f;
         std::cout << "svf2_masked.get(" << idx << ") = " << svf2_masked.get(idx) << std::endl;
         std::cout << idx << " * " << 0.000123f << " = " << f << std::endl;
     }
@@ -187,8 +189,8 @@ void Demo2(){
     
     sparseVecFloat svf1;
     sparseVecFloat svf2;
-    float toAdd1[] = {1.0123, 2.468, 340000.56};
-    float toAdd2[] = {7.000, 89000.01, 324.5006};
+    float toAdd1[] = {1.0123f, 2.468f, 340000.56f};
+    float toAdd2[] = {7.000f, 89000.01f, 324.5006f};
 
     //you can import entire arrays into svfs
     svf1.import(toAdd1, 3);
@@ -248,6 +250,22 @@ void Demo2(){
 
     itBegin.go_to(0);
     std::cout << "itBegin.pos() = " << itBegin.pos() << std::endl;
+
+    // bm::for_each_sparse() provides a visitor interface for full scans.
+    // For sparse_vector_float<> it decodes values into an internal buffer
+    // and calls the visitor with value, NULL flag and index.
+    //
+    auto print_value = [](float v, bool is_null, bm::id_t idx)
+    {
+        std::cout << "svf1[" << idx << "] = ";
+        if (is_null)
+            std::cout << "NULL";
+        else
+            std::cout << v;
+        std::cout << std::endl;
+        return 0;
+    };
+    bm::for_each_sparse(svf1, print_value);
 
 }
 

@@ -26,6 +26,7 @@ For more information please visit:  http://bitmagic.io
   \sa bm::sparse_vector::decode
   \sa bm::sparse_vector::resize
   \sa bm::sparse_vector::join
+  \sa bm::for_each_sparse
   \sa bm::bvector::enumerator
 
 */
@@ -39,6 +40,7 @@ For more information please visit:  http://bitmagic.io
 
 #include "bm.h"
 #include "bmsparsevec.h"
+#include "bmsparsevec_algo.h"
 #include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
@@ -181,6 +183,22 @@ int main(void)
                 }
                 std::cout << endl;
             }
+        }
+
+        // Another way to traverse a sparse vector is bm::for_each_sparse().
+        // It passes value, NULL flag and index into a user visitor and uses
+        // block decode internally instead of random element access.
+        //
+        {
+            auto print_non_null = [](unsigned v, bool is_null, bm::id_t idx)
+            {
+                if (is_null)
+                    return 0;
+                std::cout << "[" << idx << "] = " << v << ", ";
+                return 0;
+            };
+            bm::for_each_sparse(sv1, print_non_null);
+            std::cout << endl;
         }
 
 
