@@ -49,12 +49,6 @@ namespace bm
    @ingroup sv
 */
 
-template<class T>
-struct is_rsc_sparse_vector : std::false_type {};
-
-template<class Val, class SV>
-struct is_rsc_sparse_vector<bm::rsc_sparse_vector<Val, SV>> : std::true_type {};
-
 template<class SV>
 class sparse_vector_float
 {
@@ -66,6 +60,7 @@ public:
     typedef float                                   value_type;
     typedef typename SV::bvector_type               bvector_type;
     typedef typename bvector_type::size_type        size_type;
+    typedef typename bvector_type::rs_index_type    rs_index_type;
     typedef SV                                      sparse_vector_u;
     typedef typename sparse_vector_u::value_type    unsigned_value_type;
     typedef typename bvector_type::allocator_type   allocator_type;
@@ -310,6 +305,15 @@ public:
     const bvector_type* get_null_bvector() const BMNOEXCEPT
         { return mantissas_.get_null_bvector(); }
 
+    /*! \brief return Rank-Select index pointer for RSC vectors */
+    const rs_index_type* get_RS() const BMNOEXCEPT
+    {
+        if constexpr (is_rsc_sparse_vector<SV>::value)
+            return mantissas_.get_RS();
+        else
+            return 0;
+    }
+
     /*!
         \brief clear range (assign bit 0 for all planes)
         \param left  - interval start
@@ -413,7 +417,7 @@ public:
 
     /*! \brief syncronize internal structures, build fast access index
     */
-    void sync(bool /*force*/, bool /*sync_size*/);
+    void sync(bool force, bool sync_size);
 
     /*!
         \brief Bulk export list of elements to a C-style array
@@ -962,10 +966,10 @@ void sparse_vector_float<SV>::calc_stat(struct sparse_vector_float<SV>::statisti
 //---------------------------------------------------------------------
 
 template<class SV>
-void sparse_vector_float<SV>::sync(bool /*force*/, bool /*sync_size*/)
+void sparse_vector_float<SV>::sync(bool force, bool sync_size)
 {
-    exponents_.sync();
-    mantissas_.sync();
+    exponents_.sync(force, sync_size);
+    mantissas_.sync(force, sync_size);
 }
 
 //---------------------------------------------------------------------

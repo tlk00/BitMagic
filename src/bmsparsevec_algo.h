@@ -62,6 +62,10 @@ namespace bm
     This API is expected to be a fast traversal path compared to the traditional
     const_iterator approach, because it decodes values in reusable chunks.
 
+    @param sv Sparse vector to traverse.
+    @param func Visitor functor called as func(value, is_null, idx).
+    @param buf_size Decode buffer size used for chunked traversal.
+
     \ingroup svalgo
 */
 template<class SV, class Func>
@@ -116,12 +120,104 @@ int for_each_sparse(const SV& sv, Func& func,
 }
 
 /*!
+    \brief Visit sparse vector values selected by a bit-vector filter.
+
+    The visitor functor receives (value, is_null, idx). It can return a negative
+    value to interrupt traversal, following the bit-vector visitor convention.
+    This overload enumerates the filter bit-vector into sorted index chunks and
+    uses gather() to decode only selected sparse vector values.
+
+    @param sv Sparse vector to traverse.
+    @param filter_bv Bit-vector filter selecting vector indexes to visit.
+    @param func Visitor functor called as func(value, is_null, idx).
+    @param buf_size Gather buffer size used for filtered chunk traversal.
+
+    \ingroup svalgo
+*/
+template<class SV, class Func>
+int for_each_sparse(const SV& sv,
+                    const typename SV::bvector_type& filter_bv,
+                    Func& func,
+                    typename SV::size_type buf_size = 1024)
+{
+    typedef typename SV::value_type value_type;
+    typedef typename SV::size_type size_type;
+    typedef typename SV::allocator_type allocator_type;
+    typedef bm::heap_vector<value_type, allocator_type, true> buffer_type;
+    typedef bm::heap_vector<size_type, allocator_type, true> index_buffer_type;
+
+    const size_type sv_size = sv.size();
+    if (!sv_size || !buf_size)
+        return 0;
+
+    buffer_type buf;
+    index_buffer_type idx_buf;
+    value_type* buf_ptr = buf.resize_no_copy(buf_size);
+    size_type* idx_ptr = idx_buf.resize_no_copy(buf_size);
+    const typename SV::bvector_type* bv_null = sv.get_null_bvector();
+
+    auto invoke_visitor = [&func](const value_type& value,
+                              bool is_null, size_type idx) -> int
+    {
+        if constexpr (std::is_void<decltype(func(value, is_null, idx))>::value)
+        {
+            func(value, is_null, idx);
+            return 0;
+        }
+        else
+        {
+            return func(value, is_null, idx);
+        }
+    };
+
+    index_buffer_type idx_tmp_buf;
+    size_type* idx_tmp_ptr = 0;
+    if constexpr (bm::is_rsc_sparse_vector<SV>::value)
+        idx_tmp_ptr = idx_tmp_buf.resize_no_copy(buf_size);
+
+    typename SV::bvector_type::enumerator en = filter_bv.first();
+    while (en.valid())
+    {
+        size_type idx_cnt = 0;
+        for (; en.valid() && idx_cnt < buf_size; ++en)
+        {
+            const size_type idx = *en;
+            if (idx >= sv_size)
+                break;
+            idx_ptr[idx_cnt++] = idx;
+        } // for en
+
+        if (!idx_cnt)
+            break;
+
+        if constexpr (bm::is_rsc_sparse_vector<SV>::value)
+            sv.gather(buf_ptr, idx_ptr, idx_tmp_ptr, idx_cnt, bm::BM_SORTED);
+        else
+            sv.gather(buf_ptr, idx_ptr, idx_cnt, bm::BM_SORTED);
+
+        for (size_type i = 0; i < idx_cnt; ++i)
+        {
+            const size_type idx = idx_ptr[i];
+            const bool is_null = bv_null && !bv_null->test(idx);
+            int ret = invoke_visitor(buf_ptr[i], is_null, idx);
+            if (ret < 0)
+                return ret;
+        } // for i
+    } // while
+    return 0;
+}
+
+/*!
     \brief Visit sparse float vector values using chunked decode_buf().
 
     The float specialization keeps scratch buffers for exponent and mantissa
     planes. For RSC sparse floats this lets decode_buf() run one rank/count pass
     and scatter both planes together. This API is expected to be a fast traversal
     path compared to the traditional const_iterator approach.
+
+    @param sv Sparse float vector to traverse.
+    @param func Visitor functor called as func(value, is_null, idx).
+    @param buf_size Decode buffer size used for chunked traversal.
 
     \ingroup svalgo
 */
@@ -181,6 +277,87 @@ int for_each_sparse(const sparse_vector_float<SV>& sv, Func& func,
                 return ret;
         } // for i
         pos += dec_size;
+    } // while
+    return 0;
+}
+
+/*!
+    \brief Visit sparse float vector values selected by a bit-vector filter.
+
+    The visitor functor receives (value, is_null, idx). It can return a negative
+    value to interrupt traversal, following the bit-vector visitor convention.
+    This overload enumerates the filter bit-vector into sorted index chunks and
+    uses gather() to decode only selected sparse float vector values.
+
+    @param sv Sparse float vector to traverse.
+    @param filter_bv Bit-vector filter selecting vector indexes to visit.
+    @param func Visitor functor called as func(value, is_null, idx).
+    @param buf_size Gather buffer size used for filtered chunk traversal.
+
+    \ingroup svalgo
+*/
+template<class SV, class Func>
+int for_each_sparse(const sparse_vector_float<SV>& sv,
+                    const typename sparse_vector_float<SV>::bvector_type& filter_bv,
+                    Func& func,
+                    typename sparse_vector_float<SV>::size_type buf_size = 1024)
+{
+    typedef sparse_vector_float<SV> svf_type;
+    typedef typename svf_type::value_type value_type;
+    typedef typename svf_type::size_type size_type;
+    typedef typename svf_type::allocator_type allocator_type;
+    typedef bm::heap_vector<value_type, allocator_type, true> buffer_type;
+    typedef bm::heap_vector<size_type, allocator_type, true> index_buffer_type;
+
+    const size_type sv_size = sv.size();
+    if (!sv_size || !buf_size)
+        return 0;
+
+    buffer_type buf;
+    index_buffer_type idx_buf;
+    value_type* buf_ptr = buf.resize_no_copy(buf_size);
+    size_type* idx_ptr = idx_buf.resize_no_copy(buf_size);
+    const typename svf_type::bvector_type* bv_null = sv.get_null_bvector();
+
+    auto invoke_visitor = [&func](const value_type& value,
+                              bool is_null, size_type idx) -> int
+    {
+        if constexpr (std::is_void<decltype(func(value, is_null, idx))>::value)
+        {
+            func(value, is_null, idx);
+            return 0;
+        }
+        else
+        {
+            return func(value, is_null, idx);
+        }
+    };
+
+    typename svf_type::bvector_type::enumerator en = filter_bv.first();
+    while (en.valid())
+    {
+        size_type idx_cnt = 0;
+        for (; en.valid() && idx_cnt < buf_size; ++en)
+        {
+            const size_type idx = *en;
+            if (idx >= sv_size)
+                break;
+            idx_ptr[idx_cnt++] = idx;
+        } // for en
+
+        if (!idx_cnt)
+            break;
+
+        sv.gather(buf_ptr, idx_ptr, idx_cnt, bm::BM_SORTED);
+
+        for (size_type i = 0; i < idx_cnt; ++i)
+        {
+            const size_type idx = idx_ptr[i];
+            const bool is_null = bv_null && !bv_null->test(idx);
+            int ret = invoke_visitor(buf_ptr[i], is_null, idx);
+            if (ret < 0)
+                return ret;
+        } // for i
     } // while
     return 0;
 }
@@ -4354,8 +4531,8 @@ void sparse_vector_scanner<SV, S_FACTOR>::decompress(
         const bvector_type* bv_non_null = sv.get_null_bvector();
         BM_ASSERT(bv_non_null);
 
-        // TODO: implement faster decompressor for small result-sets
-        rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out);
+        const typename bvector_type::rs_index_type* rs_idx = sv.get_RS();
+        rank_compr_.decompress(bv_tmp_, *bv_non_null, bv_out, rs_idx);
         bv_out.swap(bv_tmp_);
     }
     else
