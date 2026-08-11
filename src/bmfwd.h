@@ -23,6 +23,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 #include <stddef.h>
+#include <type_traits>
 #include "bmconst.h"
 
 namespace bm
@@ -58,6 +59,12 @@ template<typename BV, typename DEC> class deserializer;
 template<class Val, class BV> class sparse_vector;
 template<class Val, class SV> class rsc_sparse_vector;
 template<class SV> class sparse_vector_float;
+
+template<class T>
+struct is_rsc_sparse_vector : std::false_type {};
+
+template<class Val, class SV>
+struct is_rsc_sparse_vector<bm::rsc_sparse_vector<Val, SV> > : std::true_type {};
 
 template<class SVect, unsigned S_FACTOR = 16> class sparse_vector_scanner;
 template<class SVect> class sparse_vector_serializer;
