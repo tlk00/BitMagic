@@ -1685,6 +1685,11 @@ public:
     */
     bool find_rank(size_type rank, size_type from, size_type& pos,
                    const rs_index_type&  rs_idx) const BMNOEXCEPT;
+
+    bool find_rank(size_type rank, size_type from, size_type& pos,
+                   const rs_index_type* rs_idx) const BMNOEXCEPT
+        { return rs_idx ? find_rank(rank, from, pos, *rs_idx) :
+                          find_rank(rank, from, pos); }
     
     /*!
         \brief select bit-vector position for the specified rank(bitcount)

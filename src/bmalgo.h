@@ -464,7 +464,8 @@ public:
     /**
     Rank decompression
     */
-    void decompress(BV& bv_target, const BV& bv_idx, const BV& bv_src);
+    void decompress(BV& bv_target, const BV& bv_idx, const BV& bv_src,
+                    const rs_index_type* rs_idx = 0);
 
     /**
     Rank compression algorithm based on two palallel iterators/enumerators
@@ -569,7 +570,8 @@ void rank_compressor<BV>::compress(BV& bv_target,
 template<class BV>
 void rank_compressor<BV>::decompress(BV& bv_target,
                                      const BV& bv_idx,
-                                     const BV& bv_src)
+                                     const BV& bv_src,
+                                     const rs_index_type* rs_idx)
 {
     bv_target.clear();
     bv_target.init();
@@ -618,7 +620,7 @@ void rank_compressor<BV>::decompress(BV& bv_target,
         }
         else
         {
-            bv_idx.find_rank(rank, i, new_pos);
+            bv_idx.find_rank(rank, i, new_pos, rs_idx);
             BM_ASSERT(new_pos);
             en_i.go_to(new_pos);
             BM_ASSERT(en_i.valid());
