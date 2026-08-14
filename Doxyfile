@@ -135,6 +135,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/rscsample04/rscsample04.cpp \
 ./samples/rscsample05/rscsample05.cpp \
 ./samples/rscsample06/rscsample06.cpp \
+./samples/rscsample07/rscsample07.cpp \
 ./utils/inv_list/inv_list.cpp
 
 FILE_PATTERNS          = *.cpp \

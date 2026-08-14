@@ -94,6 +94,7 @@ TARGETS_BLD =  \
               samples/rscsample04 \
               samples/rscsample05 \
               samples/rscsample06 \
+              samples/rscsample07 \
               utils/svutil \
               tests/stress tests/perf tests/stress64 tests/perf64 tests/test_threads
         

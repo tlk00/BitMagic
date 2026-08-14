@@ -85,6 +85,8 @@ RSC sparse vector (Succinct vector based on Rank-Select methods) for scalar inte
 ./rscsample05 - How to serialize a group of sparse vectors (data frame) using XOR compression
                 See also: http://bitmagic.io/bm-xor.html
 ./rscsample06 - rsc_sparse_vector<>::gather() - random or sorted order extraction
+./rscsample07 - shared NULL plane for RSC/sparse-vector data-frame groups;
+                serialization with skipped external NULL planes
                 
 
 String sparse vector (bit-transposed vector) for ASCII(z) strings
@@ -153,4 +155,3 @@ More complex examples to illustrate mixed techniques and use cases:
 ./xsample10 - Example-benchmark on how to implement compressive scrolling of a data set for (Model View Controller).
               Show cases bm::sparse_vector_serializer<>::set_bookmarks( ) and use of range deserialization of sparse vectors.
 	      http://bitmagic.io/bm-mvc.html
-
