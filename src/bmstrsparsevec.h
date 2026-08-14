@@ -828,6 +828,13 @@ public:
     */
     void clear_all(bool free_mem, unsigned remap=0) BMNOEXCEPT;
 
+    /*! \brief resize to zero, preserve current NULL plane content
+        @param free_mem - true - frees value plane memory
+        @param remap - 0 - reset remap matrix, 1 - keep remap matrix
+        @internal
+    */
+    void clear_all_preserve_null(bool free_mem, unsigned remap=0) BMNOEXCEPT;
+
     /*! \brief resize to zero, free memory, reset remapping */
     void clear() BMNOEXCEPT { clear_all(true, 0); }
 
@@ -2602,6 +2609,21 @@ void str_sparse_vector<CharType, BV, STR_SIZE>::clear_all(
                                         bool free_mem, unsigned remap) BMNOEXCEPT
 {
     parent_type::clear_all(free_mem);
+    if (remap_flags_ && (remap == 0))
+    {
+        remap_flags_ = 0;
+        remap_matrix1_.free();
+        remap_matrix2_.free();
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class CharType, class BV, unsigned STR_SIZE>
+void str_sparse_vector<CharType, BV, STR_SIZE>::clear_all_preserve_null(
+                                        bool free_mem, unsigned remap) BMNOEXCEPT
+{
+    parent_type::clear_all_preserve_null(free_mem);
     if (remap_flags_ && (remap == 0))
     {
         remap_flags_ = 0;

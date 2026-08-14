@@ -703,6 +703,12 @@ public:
     */
     void clear_all(bool free_mem, unsigned ) BMNOEXCEPT;
 
+    /*! \brief resize to zero, preserve current NULL plane content
+        @param free_mem - true - frees value plane memory
+        @internal
+    */
+    void clear_all_preserve_null(bool free_mem, unsigned) BMNOEXCEPT;
+
     /*! \brief resize to zero, free memory */
     void clear() BMNOEXCEPT { clear_all(true, 0); }
 
@@ -760,6 +766,38 @@ public:
     */
     bool equal(const sparse_vector<Val, BV>& sv,
                bm::null_support null_able = bm::use_null) const BMNOEXCEPT;
+
+    /**
+        \brief Attach an externally owned NULL plane.
+
+        The sparse vector must be constructed as NULL-able. The attached
+        bit-vector becomes the active NOT NULL plane and remains owned by the
+        caller. All NULL mutations performed through this vector update the
+        external bit-vector. Destruction, reassignment, clear of owned planes
+        and memory release do not delete the external bit-vector.
+
+        This method is intended for post-construction assembly of coordinated
+        sparse-vector groups. Call it before creating iterators, back-inserters
+        or other helper objects because some helpers cache the NULL-plane
+        pointer. Serialization is unchanged: the active NULL plane is still
+        serialized with this vector.
+
+        \param bv_null - externally owned NOT NULL bit-vector
+    */
+    void attach_null_bvector(bvector_type& bv_null)
+        { parent_type::attach_null_bvector(bv_null); }
+
+    /**
+        \brief Share NULL plane with another NULL-able sparse vector.
+        \param sv - vector which owns or already references the master NULL plane
+        @sa attach_null_bvector
+    */
+    void attach_null_bvector(sparse_vector<Val, BV>& sv)
+        { parent_type::attach_null_bvector(sv); }
+
+    /** return true if NULL plane is externally owned */
+    bool is_null_external() const BMNOEXCEPT
+        { return parent_type::is_null_external(); }
 
     ///@}
 
@@ -2102,6 +2140,15 @@ template<class Val, class BV>
 void sparse_vector<Val, BV>::clear_all(bool free_mem, unsigned) BMNOEXCEPT
 {
     parent_type::clear_all(free_mem);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV>
+void sparse_vector<Val, BV>::clear_all_preserve_null(
+                                        bool free_mem, unsigned) BMNOEXCEPT
+{
+    parent_type::clear_all_preserve_null(free_mem);
 }
 
 //---------------------------------------------------------------------

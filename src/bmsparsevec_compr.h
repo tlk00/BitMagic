@@ -339,10 +339,11 @@ public:
         {
             sv_ = csv.sv_;
             size_ = csv.size_; max_id_ = csv.max_id_;
-            in_sync_ = csv.in_sync_;
-            if (in_sync_)
+            in_sync_ = csv.in_sync_; is_dense_ = csv.is_dense_;
+            rs_idx_external_ = csv.rs_idx_external_;
+            if (in_sync_ && !rs_idx_external_)
             {
-                rs_idx_->copy_from(*(csv.rs_idx_));
+                rs_idx_->copy_from(*(csv.get_effective_rs_index()));
             }
         }
         return *this;
@@ -360,8 +361,9 @@ public:
             clear_all(true, 0);
             sv_.swap(csv.sv_);
             size_ = csv.size_; max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
-            if (in_sync_)
-                rs_idx_->copy_from(*(csv.rs_idx_));
+            is_dense_ = csv.is_dense_; rs_idx_external_ = csv.rs_idx_external_;
+            if (in_sync_ && !rs_idx_external_)
+                rs_idx_->copy_from(*(csv.get_effective_rs_index()));
         }
         return *this;
     }
@@ -555,9 +557,87 @@ public:
     bool is_null(size_type idx) const BMNOEXCEPT;
     
     /**
+        \brief Get mutable bit-vector of assigned values (or NULL).
+
+        Use this owner-side accessor to assemble vector groups which share one
+        NOT NULL plane. Mutating the returned vector changes NULL state for all
+        containers attached to it.
+    */
+    bvector_type* get_null_bvector() BMNOEXCEPT;
+
+    /**
         \brief Get bit-vector of assigned values (or NULL)
     */
     const bvector_type* get_null_bvector() const BMNOEXCEPT;
+
+    /**
+        \brief Attach externally owned NOT NULL vector.
+
+        RSC vector keeps values in rank-compressed form, where this NOT NULL
+        vector defines logical to compressed address translation. The attached
+        bit-vector remains owned by the caller and is not destroyed by this
+        container. Construction, destruction, clear and optimize follow the
+        embedded sparse vector ownership rules.
+
+        The compressed value plane must already match the external NOT NULL
+        population count. This API is intended for post-construction assembly
+        of vectors with identical NULL shape, usually before loading values or
+        after all participants were built with the same shape. Shape-changing
+        random updates after attachment are unsafe unless the caller updates all
+        compressed value planes consistently and invalidates/rebuilds RS state.
+
+        Serialization is unchanged: the active NOT NULL vector is still saved.
+
+        \param bv_null - externally owned NOT NULL vector
+        @sa invalidate_rs_index, sync
+    */
+    void attach_null_bvector(bvector_type& bv_null);
+
+    /**
+        \brief Attach NOT NULL vector from another RSC vector.
+
+        If the master vector is in sync mode, this call also attaches its
+        Rank-Select index as an optional external accelerator. The RS index is
+        caller-owned through the master RSC vector and must stay valid for the
+        lifetime of this attachment. If the master changes its NULL plane, all
+        attached users must call invalidate_rs_index() or attach again before
+        synced access.
+
+        \param csv - master RSC vector with compatible NULL/value shape
+        @sa attach_null_bvector, invalidate_rs_index, sync
+    */
+    void attach_null_bvector(rsc_sparse_vector<Val, SV>& csv);
+
+    /**
+        \brief Attach NOT NULL vector from a plain sparse-vector owner.
+
+        Plain sparse vectors do not own an RSC Rank-Select index. After this
+        attachment sync() builds this RSC vector's private RS index from the
+        shared NOT NULL vector. If the master sparse vector mutates the shared
+        NULL shape externally, call invalidate_rs_index() before synced access.
+
+        \param sv - sparse-vector master with compatible NULL/value shape
+        @sa attach_null_bvector, invalidate_rs_index, sync
+    */
+    void attach_null_bvector(sparse_vector_type& sv);
+
+    /** return true if the NOT NULL vector is externally owned */
+    bool is_null_external() const BMNOEXCEPT
+        { return sv_.is_null_external(); }
+
+    /** return true if synced access uses an externally owned RS index */
+    bool is_rs_index_external() const BMNOEXCEPT
+        { return bool(rs_idx_external_); }
+
+    /**
+        \brief Invalidate local or externally attached RS index use.
+
+        Call this after an externally shared NOT NULL vector changes outside of
+        this RSC vector. The next sync() will rebuild a private RS index unless
+        a synced RSC master is attached again.
+    */
+    void invalidate_rs_index() BMNOEXCEPT
+        { in_sync_ = is_dense_ = false; rs_idx_external_ = 0; }
 
     /**
         \brief find position of compressed element by its rank
@@ -739,6 +819,12 @@ public:
     */
     void clear_all(bool free_mem, unsigned) BMNOEXCEPT;
 
+    /*! \brief resize to zero, preserve current NULL plane content
+        @param free_mem - true - frees compressed value plane memory
+        @internal
+    */
+    void clear_all_preserve_null(bool free_mem, unsigned) BMNOEXCEPT;
+
     /*! \brief resize to zero, free memory
         @param free_mem - free bit vector slices if true
     */
@@ -830,7 +916,7 @@ public:
     /*!
         \brief Unsync the prefix sum table
     */
-    void unsync() BMNOEXCEPT { in_sync_ = is_dense_ = false; }
+    void unsync() BMNOEXCEPT { invalidate_rs_index(); }
     ///@}
 
     // ------------------------------------------------------------
@@ -899,7 +985,7 @@ public:
         @sa sync()
     */
     const rs_index_type* get_RS() const BMNOEXCEPT
-        { return in_sync_ ? rs_idx_ : 0; }
+        { return in_sync_ ? get_effective_rs_index() : 0; }
 
     void mark_null_idx(unsigned null_idx) BMNOEXCEPT
         { sv_.mark_null_idx(null_idx); }
@@ -929,9 +1015,11 @@ protected:
     bool resolve_range(size_type from, size_type to, 
                        size_type* idx_from, size_type* idx_to) const BMNOEXCEPT;
     
-    void resize_internal(size_type sz) 
-    { 
-        sv_.resize_internal(sz); 
+    void resize_internal(size_type sz)
+    {
+        size_ = sz;
+        max_id_ = sz ? sz - 1 : 0;
+        sv_.resize_internal(sz);
     }
     size_type size_internal() const BMNOEXCEPT { return sv_.size(); }
 
@@ -970,6 +1058,10 @@ private:
     /// Free rs-index
     void free_rs_index();
 
+    /// Get active RS index: attached external one or local owned one.
+    const rs_index_type* get_effective_rs_index() const BMNOEXCEPT
+        { return rs_idx_external_ ? rs_idx_external_ : rs_idx_; }
+
     /**
         \brief throw error that RSC index not constructed (call sync())
         \internal
@@ -990,6 +1082,7 @@ private:
     size_type                     max_id_;   ///< control variable for sorted load
     bool                          in_sync_;  ///< flag if prefix sum is in-sync with vector
     rs_index_type*                rs_idx_ = 0; ///< prefix sum for rank-select translation
+    const rs_index_type*          rs_idx_external_ = 0; ///< externally owned RS index
     bool                          is_dense_ = false; ///< flag if vector is dense
 };
 
@@ -1054,8 +1147,10 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
     BM_ASSERT(int(sv_value_slices) == int(SV::sv_value_slices));
     
     construct_rs_index();
-    if (in_sync_)
-        rs_idx_->copy_from(*(csv.rs_idx_));
+    is_dense_ = csv.is_dense_;
+    rs_idx_external_ = csv.rs_idx_external_;
+    if (in_sync_ && !rs_idx_external_)
+        rs_idx_->copy_from(*(csv.get_effective_rs_index()));
 }
 
 //---------------------------------------------------------------------
@@ -1071,7 +1166,9 @@ rsc_sparse_vector<Val, SV>::rsc_sparse_vector(
     {
         sv_.swap(csv.sv_);
         size_ = csv.size_; max_id_ = csv.max_id_; in_sync_ = csv.in_sync_;
+        is_dense_ = csv.is_dense_; rs_idx_external_ = csv.rs_idx_external_;
         rs_idx_ = csv.rs_idx_; csv.rs_idx_ = 0;
+        csv.rs_idx_external_ = 0;
     }
 }
 
@@ -1094,7 +1191,7 @@ void rsc_sparse_vector<Val, SV>::resize(size_type new_size)
     {
         sv_.resize(0);
         BM_ASSERT(sv_.get_null_bvect()->none());
-        in_sync_ = false;
+        invalidate_rs_index();
         size_ = max_id_ = 0;
         return;
     }
@@ -1128,7 +1225,7 @@ void rsc_sparse_vector<Val, SV>::resize(size_type new_size)
 
     BM_ASSERT(!bv_null->any_range(size_, bm::id_max-1));
 
-    in_sync_ = false;
+    invalidate_rs_index();
 }
 
 //---------------------------------------------------------------------
@@ -1169,7 +1266,7 @@ void rsc_sparse_vector<Val, SV>::push_back_no_check(size_type idx, value_type v)
     
     max_id_ = idx;
     size_ = idx + 1;
-    in_sync_ = false;
+    invalidate_rs_index();
 }
 
 //---------------------------------------------------------------------
@@ -1187,7 +1284,7 @@ void rsc_sparse_vector<Val, SV>::set_null(size_type idx)
         size_type sv_idx = bv_null->count_range(0, idx);
         bv_null->clear_bit_no_check(idx);
         sv_.erase(--sv_idx, false/*not delete NULL vector*/);
-        in_sync_ = false;
+        invalidate_rs_index();
     }
     else
     {
@@ -1215,7 +1312,7 @@ void rsc_sparse_vector<Val, SV>::set_null(const bvector_type& bv_idx)
         sv_.clear(bv_sub_rsc);
     }
 
-    in_sync_ = false;
+    invalidate_rs_index();
     typename bvector_type::enumerator en(&bv_sub, 0);
     for (size_type cnt = 0; en.valid(); ++en, ++cnt)
     {
@@ -1256,7 +1353,7 @@ void rsc_sparse_vector<Val, SV>::inc(size_type idx)
     size_type sv_idx;
     bool found = bv_null->test(idx);
 
-    sv_idx = in_sync_ ? bv_null->count_to(idx, *rs_idx_)
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *get_effective_rs_index())
                       : bv_null->count_range(0, idx); // TODO: make test'n'count
 
     if (found)
@@ -1273,7 +1370,7 @@ void rsc_sparse_vector<Val, SV>::inc(size_type idx)
             max_id_ = idx;
             size_ = max_id_ + 1;
         }
-        in_sync_ = false;
+        invalidate_rs_index();
     }
 }
 
@@ -1288,7 +1385,7 @@ void rsc_sparse_vector<Val, SV>::inc(size_type idx, value_type v)
     size_type sv_idx;
     bool found = bv_null->test(idx);
 
-    sv_idx = in_sync_ ? bv_null->count_to(idx, *rs_idx_)
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *get_effective_rs_index())
                       : bv_null->count_range(0, idx); // TODO: make test'n'count
 
     if (found)
@@ -1305,7 +1402,7 @@ void rsc_sparse_vector<Val, SV>::inc(size_type idx, value_type v)
             max_id_ = idx;
             size_ = max_id_ + 1;
         }
-        in_sync_ = false;
+        invalidate_rs_index();
     }
 }
 
@@ -1318,7 +1415,7 @@ void rsc_sparse_vector<Val, SV>::inc_not_null(size_type idx, value_type v)
     BM_ASSERT(bv_null->test(idx)); // idx must be NOT NULL
 
     size_type sv_idx;
-    sv_idx = in_sync_ ? bv_null->count_to(idx, *rs_idx_)
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *get_effective_rs_index())
                       : bv_null->count_range(0, idx); // TODO: make test'n'count
     --sv_idx;
     if (v == 1)
@@ -1339,7 +1436,7 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
     size_type sv_idx;
     bool found = bv_null->test(idx);
 
-    sv_idx = in_sync_ ? bv_null->count_to(idx, *rs_idx_)
+    sv_idx = in_sync_ ? bv_null->count_to(idx, *get_effective_rs_index())
                       : bv_null->count_range(0, idx); // TODO: make test'n'count
 
     if (found)
@@ -1356,7 +1453,7 @@ void rsc_sparse_vector<Val, SV>::set(size_type idx, value_type v)
             max_id_ = idx;
             size_ = max_id_ + 1;
         }
-        in_sync_ = false;
+        invalidate_rs_index();
     }
 }
 
@@ -1455,14 +1552,19 @@ void rsc_sparse_vector<Val, SV>::sync(bool force, bool sync_size)
         return;  // nothing to do
     const bvector_type* bv_null = sv_.get_null_bvector();
     BM_ASSERT(bv_null);
-    bv_null->build_rs_index(rs_idx_); // compute popcount prefix list
+    if (!rs_idx_external_)
+        bv_null->build_rs_index(rs_idx_); // compute popcount prefix list
+    const rs_index_type* rs_idx = get_effective_rs_index();
+    BM_ASSERT(rs_idx);
     sv_.bmatr_.is_ro_ = bv_null->is_ro();
 
     if (sync_size)
         this->sync_size();
 
-    size_type cnt = size_ ? bv_null->count_range(0, size_-1, *rs_idx_)
+    size_type cnt = size_ ? bv_null->count_range(0, size_-1, *rs_idx)
                           : 0;
+    if (sv_.size() != cnt)
+        sv_.resize_internal(cnt, false);
     is_dense_ = (cnt == size_); // dense vector?
     BM_ASSERT(size_ >= bv_null->count());
 
@@ -1529,7 +1631,7 @@ bool rsc_sparse_vector<Val, SV>::resolve_sync(
         BM_ASSERT(bv_null->get_bit(idx) == false);
         return false;
     }
-    *idx_to = bv_null->count_to_test(idx, *rs_idx_);
+    *idx_to = bv_null->count_to_test(idx, *get_effective_rs_index());
     return bool(*idx_to);
 }
 
@@ -1544,14 +1646,14 @@ bool rsc_sparse_vector<Val, SV>::resolve_range(
     const bvector_type* bv_null = sv_.get_null_bvector();
     size_type copy_sz, sv_left;
     if (in_sync_)
-        copy_sz = bv_null->count_range(from, to, *rs_idx_);
+        copy_sz = bv_null->count_range(from, to, *get_effective_rs_index());
     else  // slow access
         copy_sz = bv_null->count_range(from, to);
     if (!copy_sz)
         return false;
 
     if (in_sync_)
-        sv_left = bv_null->rank_corrected(from, *rs_idx_);
+        sv_left = bv_null->rank_corrected(from, *get_effective_rs_index());
     else
     {
         sv_left = bv_null->count_range(0, from);
@@ -1673,7 +1775,17 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::clear_all(bool free_mem, unsigned) BMNOEXCEPT
 {
     sv_.clear_all(free_mem, 0);
-    in_sync_ = false;  max_id_ = size_ = 0;
+    invalidate_rs_index();  max_id_ = size_ = 0;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::clear_all_preserve_null(
+                                        bool free_mem, unsigned) BMNOEXCEPT
+{
+    sv_.clear_all_preserve_null(free_mem, 0);
+    invalidate_rs_index();  max_id_ = size_ = 0;
 }
 
 //---------------------------------------------------------------------
@@ -1696,6 +1808,56 @@ void rsc_sparse_vector<Val, SV>::calc_stat(
 //---------------------------------------------------------------------
 
 template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::attach_null_bvector(bvector_type& bv_null)
+{
+    BM_ASSERT(sv_.size() == bv_null.count());
+    sv_.attach_null_bvector(bv_null);
+    invalidate_rs_index();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::attach_null_bvector(
+                                                rsc_sparse_vector<Val, SV>& csv)
+{
+    BM_ASSERT(sv_.size() == csv.sv_.size());
+    sv_.attach_null_bvector(csv.sv_);
+    invalidate_rs_index();
+    const rs_index_type* rs_idx = csv.get_RS();
+    if (rs_idx)
+    {
+        rs_idx_external_ = rs_idx;
+        in_sync_ = csv.in_sync_;
+        is_dense_ = csv.is_dense_;
+    }
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+void rsc_sparse_vector<Val, SV>::attach_null_bvector(sparse_vector_type& sv)
+{
+    const bvector_type* bv_null = sv.get_null_bvector();
+    (void)bv_null;
+    BM_ASSERT(bv_null);
+    BM_ASSERT(sv_.size() == bv_null->count());
+    sv_.attach_null_bvector(sv);
+    invalidate_rs_index();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
+typename rsc_sparse_vector<Val, SV>::bvector_type*
+rsc_sparse_vector<Val, SV>::get_null_bvector() BMNOEXCEPT
+{
+    return sv_.get_null_bvector();
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class SV>
 const typename rsc_sparse_vector<Val, SV>::bvector_type*
 rsc_sparse_vector<Val, SV>::get_null_bvector() const BMNOEXCEPT
 {
@@ -1713,7 +1875,7 @@ rsc_sparse_vector<Val, SV>::find_rank(size_type rank,
     bool b;
     const bvector_type* bv_null = get_null_bvector();
     if (in_sync())
-        b = bv_null->select(rank, idx, *rs_idx_);
+        b = bv_null->select(rank, idx, *get_effective_rs_index());
     else
         b = bv_null->find_rank(rank, 0, idx);
     return b;
@@ -1758,7 +1920,7 @@ rsc_sparse_vector<Val, SV>::decode(value_type* arr,
         size = this->size() - idx_from;
 
     const bvector_type* bv_null = sv_.get_null_bvector();
-    size_type rank = bv_null->rank_corrected(idx_from, *rs_idx_);
+    size_type rank = bv_null->rank_corrected(idx_from, *get_effective_rs_index());
 
     BM_ASSERT(rank == bv_null->count_range(0, idx_from) - bv_null->test(idx_from));
 
@@ -1819,7 +1981,7 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
         ::memset(arr, 0, sizeof(value_type)*size);
 
     const bvector_type* bv_null = sv_.get_null_bvector();
-    size_type rank = bv_null->rank_corrected(idx_from, *rs_idx_);
+    size_type rank = bv_null->rank_corrected(idx_from, *get_effective_rs_index());
 
     BM_ASSERT(rank == bv_null->count_range(0, idx_from) - bv_null->test(idx_from));
 
@@ -1832,7 +1994,7 @@ rsc_sparse_vector<Val, SV>::decode_buf(value_type*     arr,
         return size;
 
     size_type extract_cnt =
-        bv_null->count_range_no_check(idx_from, idx_from + size - 1, *rs_idx_);
+        bv_null->count_range_no_check(idx_from, idx_from + size - 1, *get_effective_rs_index());
 
     BM_ASSERT(extract_cnt <= this->size());
     auto ex_sz = sv_.decode(arr_buf_tmp, rank, extract_cnt, true);
@@ -1950,7 +2112,7 @@ void rsc_sparse_vector<Val, SV>::copy_range(
         return;
 
     size_ = csv.size_; max_id_ = csv.max_id_;
-    in_sync_ = false;
+    invalidate_rs_index();
 
     const bvector_type* arg_bv_null = csv.sv_.get_null_bvector();
     size_type sv_left, sv_right;
@@ -1996,7 +2158,7 @@ rsc_sparse_vector<Val, SV>::count_range_notnull(
     {
         return bv_null->count_range_no_check(left, right);
     }
-    return bv_null->count_range_no_check(left, right, *rs_idx_);
+    return bv_null->count_range_no_check(left, right, *get_effective_rs_index());
 }
 
 //---------------------------------------------------------------------
@@ -2031,7 +2193,7 @@ rsc_sparse_vector<Val, SV>::back_insert_iterator::back_insert_iterator(
 {
     // reset the flags for fast access (due to modification)
     csv_->is_dense_ = false;
-    csv_->in_sync_ = false;
+    csv_->invalidate_rs_index();
 }
 
 
@@ -2057,8 +2219,8 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add(
     BM_ASSERT(bv_null);
     bv_null->set_bit_no_check(csv_->size_);
     
-    csv_->max_id_++;
     csv_->size_++;
+    csv_->max_id_ = csv_->size_ - 1;
 }
 
 //---------------------------------------------------------------------
@@ -2069,7 +2231,8 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null() BMNOEXCEPT
     BM_ASSERT(csv_);
     BM_ASSERT(bm::id64_t(csv_->size_) + 1 < bm::id64_t(bm::id_max));
 
-    csv_->max_id_++; csv_->size_++;
+    csv_->size_++;
+    csv_->max_id_ = csv_->size_ - 1;
 }
 
 //---------------------------------------------------------------------
@@ -2079,10 +2242,12 @@ void rsc_sparse_vector<Val, SV>::back_insert_iterator::add_null(
     rsc_sparse_vector<Val, SV>::back_insert_iterator::size_type count) BMNOEXCEPT
 {
     BM_ASSERT(csv_);
+    if (!count)
+        return;
     BM_ASSERT(bm::id64_t(csv_->size_) + count < bm::id64_t(bm::id_max));
 
-    csv_->max_id_+=count;
-    csv_->size_+=count;
+    csv_->size_ += count;
+    csv_->max_id_ = csv_->size_ - 1;
 }
 
 //---------------------------------------------------------------------
@@ -2091,7 +2256,7 @@ template<class Val, class SV>
 void rsc_sparse_vector<Val, SV>::back_insert_iterator::flush()
 {
     if (sv_bi_.flush())
-        csv_->in_sync_ = false;
+        csv_->invalidate_rs_index();
 }
 
 //---------------------------------------------------------------------

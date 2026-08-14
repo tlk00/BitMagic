@@ -189,6 +189,33 @@ public:
     /** set index of the NULL vector */
     void set_null_idx(size_type null_idx) BMNOEXCEPT;
 
+    /**
+        \brief Attach an externally owned NULL vector row.
+
+        The supplied bit-vector becomes the active NULL row at null_idx but
+        remains owned by the caller. If this matrix already owns a NULL row, it
+        is destroyed before attachment. If this matrix already references an
+        external NULL row, the old reference is dropped without destruction.
+
+        Normal row operations continue to use the attached row, so NULL-plane
+        mutations update the external bit-vector. Resource-management operations
+        such as destruction, reassignment and free_rows() do not delete it.
+        optimize() and freeze() skip the attached NULL row because it is not an
+        owned resource. Statistics count it for serialization prediction only.
+
+        \param null_idx - row index to use as the NULL row
+        \param bv_null  - externally owned NOT NULL bit-vector
+    */
+    void attach_null_bvector(size_type null_idx, bvector_type& bv_null);
+
+    /** return true if NULL vector is externally owned */
+    bool is_null_external() const BMNOEXCEPT
+        { return null_ownership_ == null_external; }
+
+    /** return true if NULL vector is owned by this matrix */
+    bool is_null_owned() const BMNOEXCEPT
+        { return null_ownership_ == null_owned; }
+
     /** allocate matrix rows of bit-vectors (new rows are NULLs) */
     void allocate_rows(size_type rsize);
 
@@ -258,6 +285,12 @@ public:
         @param free_mem - true - indicates the need to free underlying memory in bit-vectors
     */
     void clear_all(bool free_mem, unsigned ) BMNOEXCEPT;
+
+    /*! \brief resize to zero, preserve current NULL plane content
+        @param free_mem - true - indicates the need to free value rows
+        @internal
+    */
+    void clear_all_preserve_null(bool free_mem, unsigned) BMNOEXCEPT;
 
     /*! \brief resize to zero, free memory */
     void clear() BMNOEXCEPT { clear_all(true, 0); }
@@ -406,6 +439,13 @@ public:
     ///@}
 
 protected:
+    enum null_ownership : unsigned char
+    {
+        null_none,
+        null_owned,
+        null_external
+    };
+
     enum vector_cap : unsigned long long
     {
         max_vector_size = bm::id_max,
@@ -414,6 +454,8 @@ protected:
 
     bvector_type* construct_bvector(const bvector_type* bv) const;
     void destruct_bvector(bvector_type* bv) const;
+    bool is_external_null_row(size_type row) const BMNOEXCEPT
+        { return row && (row == null_idx_) && (null_ownership_ == null_external); }
     
     static
     void throw_bad_alloc() { BV::throw_bad_alloc(); }
@@ -447,7 +489,11 @@ protected:
     bvector_type* get_null_bvector() BMNOEXCEPT
         { return null_idx_ ? get_row(null_idx_) : 0; }
 
-    void mark_null_idx(unsigned null_idx) BMNOEXCEPT { null_idx_ = null_idx; }
+    void mark_null_idx(unsigned null_idx) BMNOEXCEPT
+    {
+        null_idx_ = null_idx;
+        null_ownership_ = null_idx ? null_owned : null_none;
+    }
 
     static unsigned stored_slices() BMNOEXCEPT { return 0; }
 
@@ -471,6 +517,7 @@ protected:
     size_type                rsize_ = 0;
     bool                     is_dynamic_ = true; ///< if rsize is dynamic (variable length)
     size_type                null_idx_ = 0; ///< Index of the NULL row
+    null_ownership           null_ownership_ = null_none; ///< NULL row ownership
     bool                     is_ro_=false; ///< read-only
 };
 
@@ -546,6 +593,19 @@ public:
         @param free_mem - fully destroys the plane vectors if true
     */
     void clear_all(bool free_mem = true) BMNOEXCEPT;
+
+    /*! \brief resize to zero, preserve NULL plane content
+
+        Clears all value planes, resets the logical vector size, and keeps the
+        current NULL plane object and its bit content intact. This is intended
+        for deserialization into an already assembled group of sparse vectors
+        sharing one externally owned NULL plane. Normal clear_all() deliberately
+        clears the NULL plane as part of vector state reset.
+
+        @param free_mem - fully destroys value plane vectors if true
+        @internal
+    */
+    void clear_all_preserve_null(bool free_mem = true) BMNOEXCEPT;
     
     /*! return true if empty */
     bool empty() const BMNOEXCEPT { return size() == 0; }
@@ -579,6 +639,24 @@ public:
         { return is_nullable() ? bm::use_null : bm::no_null; }
 
     /**
+        \brief Get mutable bit-vector of assigned values or NULL.
+
+        This accessor is intended for post-construction assembly of several
+        NULL-able vectors sharing one caller-owned NOT NULL plane. Mutating the
+        returned bit-vector changes NULL state for this vector and every vector
+        attached to the same plane.
+
+        \return pointer to the active NOT NULL bit-vector or NULL if this vector
+        is not configured with NULL support
+    */
+    bvector_type* get_null_bvector() BMNOEXCEPT
+    {
+        if (size_type null_idx = bmatr_.get_null_idx())
+            return bmatr_.get_row(null_idx);
+        return 0;
+    }
+
+    /**
         \brief Get bit-vector of assigned values or NULL
         (if not constructed that way)
     */
@@ -595,6 +673,36 @@ public:
         is not configured to support assignment flags
     */
     bool is_null(size_type idx) const BMNOEXCEPT;
+
+    /**
+        \brief Attach an externally owned NULL plane.
+
+        The vector must already be constructed as NULL-able. The supplied
+        bit-vector becomes the active NOT NULL plane for this vector and remains
+        owned by the caller. All subsequent NULL-plane mutations through this
+        vector update the external bit-vector. Destruction, reassignment and
+        memory release of this vector do not delete the external bit-vector.
+
+        This is a post-construction assembly operation. It must be completed
+        before creating iterators, back-inserters or other helpers which may
+        cache NULL-plane pointers. Serialization format is unchanged: attached
+        vectors still serialize the active NULL plane as part of their data.
+
+        \param bv_null - externally owned NOT NULL bit-vector
+        @internal
+     */
+    void attach_null_bvector(bvector_type& bv_null);
+
+    /**
+        \brief Attach this vector to another sparse vector's NULL plane.
+        \param sv - NULL-able sparse vector which owns the master NULL plane
+        @internal
+     */
+    void attach_null_bvector(base_sparse_vector<Val, BV, MAX_SIZE>& sv);
+
+    /** return true if NULL vector is externally owned */
+    bool is_null_external() const BMNOEXCEPT
+        { return bmatr_.is_null_external(); }
 
     /**
         Set allocation pool
@@ -934,7 +1042,47 @@ void basic_bmatrix<BV>::set_null_idx(size_type null_idx) BMNOEXCEPT
 {
     BM_ASSERT(null_idx);
     BM_ASSERT(get_row(null_idx));
+    BM_ASSERT(!is_external_null_row(null_idx));
+    if (is_external_null_row(null_idx))
+        return;
     null_idx_ = null_idx;
+    null_ownership_ = null_owned;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
+void basic_bmatrix<BV>::attach_null_bvector(size_type null_idx,
+                                            bvector_type& bv_null)
+{
+    BM_ASSERT(null_idx);
+    if (is_dynamic())
+    {
+        if (null_idx >= rsize_)
+            allocate_rows(null_idx + 1);
+    }
+    BM_ASSERT(null_idx < rsize_);
+
+    if (null_idx_ == null_idx && bv_rows_[null_idx] == &bv_null)
+    {
+        null_ownership_ = null_external;
+        return;
+    }
+
+    if (null_idx_ && null_ownership_ == null_owned)
+        destruct_row(null_idx_);
+    else
+    if (null_idx_ && null_ownership_ == null_external)
+        bv_rows_[null_idx_] = 0;
+
+    if (bvector_type_ptr bv = bv_rows_[null_idx])
+    {
+        if (bv != &bv_null)
+            destruct_bvector(bv);
+    }
+    bv_rows_[null_idx] = &bv_null;
+    null_idx_ = null_idx;
+    null_ownership_ = null_external;
 }
 
 //---------------------------------------------------------------------
@@ -951,6 +1099,7 @@ void basic_bmatrix<BV>::copy_from(const basic_bmatrix<BV>& bbm)
     ap_ = bbm.ap_;
 
     null_idx_ = bbm.null_idx_;
+    null_ownership_ = bbm.null_ownership_;
 
     size_type rsize = bbm.rsize_;
     if (rsize)
@@ -962,7 +1111,8 @@ void basic_bmatrix<BV>::copy_from(const basic_bmatrix<BV>& bbm)
         for (size_type i = 0; i < rsize_; ++i)
         {
             const bvector_type_ptr bv = bbm.bv_rows_[i];
-            bv_rows_[i] = bv ?  construct_bvector(bv) : 0;
+            bv_rows_[i] = (bv && !bbm.is_external_null_row(i)) ?
+                            construct_bvector(bv) : bv;
         }
     }
 }
@@ -1058,6 +1208,21 @@ void basic_bmatrix<BV>::clear_all(bool free_mem, unsigned) BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<typename BV>
+void basic_bmatrix<BV>::clear_all_preserve_null(
+                                        bool free_mem, unsigned) BMNOEXCEPT
+{
+    auto slices = rows();
+    bvector_type* bv_null = this->get_null_bvector();
+    for (size_type i = 0; i < slices; ++i)
+        if (bvector_type* bv = get_row(i))
+            if (bv != bv_null)
+                clear_row(i, free_mem);
+//    is_ro_ = false;
+}
+
+//---------------------------------------------------------------------
+
+template<typename BV>
 bool basic_bmatrix<BV>::equal(const basic_bmatrix<BV>& bbm) const BMNOEXCEPT
 {
     unsigned slices = (unsigned) this->rows();
@@ -1109,17 +1274,23 @@ basic_bmatrix<BV>::octet_size() const BMNOEXCEPT
 template<typename BV>
 void basic_bmatrix<BV>::free_rows() BMNOEXCEPT
 {
-    for (size_type i = 0; i < rsize_; ++i)
-    {
-        if (bvector_type_ptr bv = bv_rows_[i])
-        {
-            destruct_bvector(bv);
-            bv_rows_[i] = 0;
-        }
-    } // for i
     if (bv_rows_)
+    {
+        for (size_type i = 0; i < rsize_; ++i)
+        {
+            if (bvector_type_ptr bv = bv_rows_[i])
+            {
+                if (!is_external_null_row(i))
+                    destruct_bvector(bv);
+                bv_rows_[i] = 0;
+            }
+        } // for i
         alloc_.free_ptr(bv_rows_, unsigned(rsize_));
+    }
     bv_rows_ = 0;
+    rsize_ = 0;
+    null_idx_ = 0;
+    null_ownership_ = null_none;
 }
 
 //---------------------------------------------------------------------
@@ -1155,7 +1326,8 @@ void basic_bmatrix<BV>::set_allocator_pool(allocator_pool_type* pool_ptr) BMNOEX
     {
         for (size_type i = 0; i < rsize_; ++i)
             if (bvector_type_ptr bv = bv_rows_[i])
-                bv->set_allocator_pool(pool_ptr);
+                if (!is_external_null_row(i))
+                    bv->set_allocator_pool(pool_ptr);
     }
     pool_ = pool_ptr;
 }
@@ -1229,6 +1401,9 @@ void basic_bmatrix<BV>::swap(basic_bmatrix<BV>& bbm) BMNOEXCEPT
 
     bm::xor_swap(rsize_, bbm.rsize_);
     bm::xor_swap(null_idx_, bbm.null_idx_);
+    null_ownership null_ownership_tmp = null_ownership_;
+    null_ownership_ = bbm.null_ownership_;
+    bbm.null_ownership_ = null_ownership_tmp;
     
     bvector_type_ptr* rtmp = bv_rows_;
     bv_rows_ = bbm.bv_rows_;
@@ -1284,8 +1459,14 @@ void basic_bmatrix<BV>::destruct_row(size_type row)
     BM_ASSERT(row < rsize_);
     if (bvector_type_ptr bv = bv_rows_[row])
     {
-        destruct_bvector(bv);
+        if (!is_external_null_row(row))
+            destruct_bvector(bv);
         bv_rows_[row] = 0;
+        if (row == null_idx_ && null_ownership_ == null_external)
+        {
+            null_idx_ = 0;
+            null_ownership_ = null_none;
+        }
     }
 }
 
@@ -1299,8 +1480,13 @@ void basic_bmatrix<BV>::clear_row(size_type row, bool free_mem)
     {
         if (free_mem)
         {
-            destruct_bvector(bv);
-            bv_rows_[row] = 0;
+            if (is_external_null_row(row))
+                bv->clear(true);
+            else
+            {
+                destruct_bvector(bv);
+                bv_rows_[row] = 0;
+            }
         }
         else
             bv->clear(true);
@@ -1753,6 +1939,16 @@ void basic_bmatrix<BV>::optimize(bm::word_t* temp_block,
         {
             typename bvector_type::statistics stbv;
             stbv.reset();
+            if (is_external_null_row(k))
+            {
+                if (st)
+                {
+                    bv->calc_stat(&stbv);
+                    stbv.keep_serialize_stat_only();
+                    st->add(stbv);
+                }
+                continue;
+            }
             bv->optimize(temp_block, opt_mode, st ? &stbv : 0);
             if (st)
                 st->add(stbv);
@@ -1767,7 +1963,8 @@ void basic_bmatrix<BV>::freeze()
 {
     for (unsigned k = 0; k < rsize_; ++k)
         if (bvector_type* bv = get_row(k))
-            bv->freeze();
+            if (!is_external_null_row(k))
+                bv->freeze();
     is_ro_ = true;
 }
 
@@ -1782,6 +1979,8 @@ void basic_bmatrix<BV>::calc_stat(typename bvector_type::statistics& st,
         {
             typename bvector_type::statistics stbv;
             bv->calc_stat(&stbv);
+            if (is_external_null_row(i))
+                stbv.keep_serialize_stat_only();
             st.add(stbv);
         }
         else
@@ -1798,6 +1997,8 @@ void basic_bmatrix<BV>::optimize_block(block_idx_type nb,
     {
         if (bvector_type* bv = get_row(k))
         {
+            if (is_external_null_row(k))
+                continue;
             unsigned i, j;
             bm::get_block_coord(nb, i, j);
             typename bvector_type::blocks_manager_type& bman =
@@ -1981,6 +2182,22 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all(bool free_mem) BMNOEXCEPT
 //---------------------------------------------------------------------
 
 template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::clear_all_preserve_null(
+                                                    bool free_mem) BMNOEXCEPT
+{
+    auto slices = bmatr_.rows();
+    bvector_type* bv_null = this->get_null_bvect();
+    for (size_type i = 0; i < slices; ++i)
+        if (bvector_type* bv = this->bmatr_.get_row(i))
+            if (bv != bv_null)
+                bmatr_.clear_row(i, free_mem);
+    slice_mask_ = 0; size_ = 0;
+    this->bmatr_.is_ro_ = false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
 void base_sparse_vector<Val, BV, MAX_SIZE>::clear_range(
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type left,
         typename base_sparse_vector<Val, BV, MAX_SIZE>::size_type right,
@@ -2040,6 +2257,31 @@ bool base_sparse_vector<Val, BV, MAX_SIZE>::is_null(
 {
     const bvector_type* bv_null = get_null_bvector();
     return (bv_null) ? (!bv_null->test(idx)) : false;
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::attach_null_bvector(
+                                                bvector_type& bv_null)
+{
+    BM_ASSERT(is_nullable());
+    size_type null_idx = bmatr_.get_null_idx();
+    BM_ASSERT(null_idx);
+    bmatr_.attach_null_bvector(null_idx, bv_null);
+}
+
+//---------------------------------------------------------------------
+
+template<class Val, class BV, unsigned MAX_SIZE>
+void base_sparse_vector<Val, BV, MAX_SIZE>::attach_null_bvector(
+                                base_sparse_vector<Val, BV, MAX_SIZE>& sv)
+{
+    BM_ASSERT(is_nullable());
+    BM_ASSERT(sv.is_nullable());
+    bvector_type* bv_null = sv.get_null_bvect();
+    BM_ASSERT(bv_null);
+    attach_null_bvector(*bv_null);
 }
 
 //---------------------------------------------------------------------

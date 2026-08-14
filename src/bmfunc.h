@@ -112,6 +112,15 @@ struct bv_statistics
         gap_cap_overhead += st.gap_cap_overhead;
     }
 
+    /// Keep serialization prediction and clear memory ownership counters
+    void keep_serialize_stat_only() BMNOEXCEPT
+    {
+        bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
+        memory_used = gap_cap_overhead = 0;
+        for (unsigned i = 0; i < bm::gap_levels; ++i)
+            gaps_by_level[i] = 0;
+    }
+
     /// add serialization correction (sandbox for override)
     void add_scorrection() BMNOEXCEPT
     {

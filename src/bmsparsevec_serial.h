@@ -274,6 +274,24 @@ public:
     */
     bool is_xor_ref() const BMNOEXCEPT { return is_xor_ref_; }
 
+    /**
+        Configure serialization of externally attached NULL planes.
+
+        By default attached NULL planes are omitted from the serialized BLOB.
+        This keeps the wire format unchanged but requires the target vector to
+        be attached to its master NULL plane before deserialization. Enable this
+        option for legacy/self-contained BLOBs where an attached vector must
+        carry a copy of the NULL plane.
+
+        \param enable - TRUE saves external NULL plane, FALSE omits it
+    */
+    void set_serialize_external_null(bool enable) BMNOEXCEPT
+        { serialize_external_null_ = enable; }
+
+    /** return TRUE if externally attached NULL planes are serialized */
+    bool is_serialize_external_null() const BMNOEXCEPT
+        { return serialize_external_null_; }
+
     ///@}
 
     /*! @name Serialization                                     */
@@ -300,7 +318,7 @@ public:
 
 
 protected:
-    void build_xor_ref_vector(const SV& sv);
+    void build_xor_ref_vector(const SV& sv, bool skip_external_null);
 /*
     static
     void build_plane_digest(bvector_type& digest_bv, const SV& sv);
@@ -327,6 +345,7 @@ protected:
     u32_vector_type                  remap_rlen_vect_;
     // XOR compression member vars
     bool                             is_xor_ref_;
+    bool                             serialize_external_null_ = false;
     bv_ref_vector_type               bv_ref_;
     xor_sim_model_type               sim_model_;
     const bv_ref_vector_type*        bv_ref_ptr_;
@@ -508,6 +527,8 @@ protected:
     bm::rank_compressor<bvector_type>           rsc_compressor_;
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
+    ///< Scratch decode target for serialized NULL discarded by attached vectors.
+    bvector_type                                null_decode_scratch_bv_;
     bm::heap_vector<size_t, alloc_type, true>   off_vect_;
     bm::heap_vector<unsigned, alloc_type, true>  off32_vect_;
     rlen_vector_type                            remap_rlen_vect_;
@@ -845,10 +866,20 @@ void sparse_vector_serializer<SV>::set_sim_model(
 // -------------------------------------------------------------------------
 
 template<typename SV>
-void sparse_vector_serializer<SV>::build_xor_ref_vector(const SV& sv)
+void sparse_vector_serializer<SV>::build_xor_ref_vector(
+                                        const SV& sv, bool skip_external_null)
 {
-    //bv_ref_.reset();
-    bv_ref_.build(sv.get_bmatrix());
+    bv_ref_.reset();
+    const auto& bmatr = sv.get_bmatrix();
+    unsigned rows = (unsigned)bmatr.rows();
+    unsigned null_idx = unsigned(bmatr.get_null_idx());
+    for (unsigned r = 0; r < rows; ++r)
+    {
+        if (skip_external_null && r == null_idx)
+            continue;
+        if (bvector_type_const_ptr bv = bmatr.get_row(r))
+            bv_ref_.add(bv, r);
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -951,8 +982,14 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     }
 
     const auto& bmatr = sv.get_bmatrix();
+    unsigned planes = (unsigned)bmatr.rows();
+    const unsigned null_idx = unsigned(bmatr.get_null_idx());
+    const bool skip_external_null = sv.is_null_external() &&
+                                    !serialize_external_null_ && null_idx;
 
     bmatr.build_plane_digest(plane_digest_bv_);
+    if (skip_external_null)
+        plane_digest_bv_.clear_bit_no_check(null_idx);
     plane_digest_bv_.optimize();
 
 //bm::_print_bv(std::cout, plane_digest_bv_);
@@ -960,7 +997,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     bvs_.set_ref_vectors(0); // disable possible XOR compression for offs.bv
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
 
-    unsigned planes = (unsigned)bmatr.rows();
     sv_layout.resize_slices(planes);
 
     // ----------------------------------------------------
@@ -1003,7 +1039,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         else
         {
             bm::xor_sim_params xs_params;
-            build_xor_ref_vector(sv);
+            build_xor_ref_vector(sv, skip_external_null);
             bvs_.set_ref_vectors(&bv_ref_);
             if (bvs_.compute_sim_model(sim_model_, bv_ref_, xs_params))
                 bvs_.set_sim_model(&sim_model_);
@@ -1020,6 +1056,12 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     for (unsigned i = 0; i < planes; ++i)
     {
         typename SV::bvector_type_const_ptr bv = bmatr.row(i);
+        if (skip_external_null && i == null_idx)
+        {
+            BM_ASSERT(!plane_digest_bv_.test(i));
+            sv_layout.set_plane(i, 0, 0);
+            continue;
+        }
         if (!bv)  // empty plane
         {
             BM_ASSERT(!plane_digest_bv_.test(i));
@@ -1168,6 +1210,8 @@ sparse_vector_deserializer<SV>::sparse_vector_deserializer()
     temp_block_ = alloc_.alloc_bit_block();
     not_null_mask_bv_.set_allocator_pool(&pool_);
     rsc_mask_bv_.set_allocator_pool(&pool_);
+    // The scratch NULL decode target uses the deserializer pool, not master NULL ownership.
+    null_decode_scratch_bv_.set_allocator_pool(&pool_);
 }
 
 // -------------------------------------------------------------------------
@@ -1275,7 +1319,12 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
                                                  bool clear_sv)
 {
     if (clear_sv)
-        sv.clear_all(true, 1);
+    {
+        if (sv.is_null_external())
+            sv.clear_all_preserve_null(true, 1);
+        else
+            sv.clear_all(true, 1);
+    }
 
     idx_range_set_ = true; idx_range_from_ = from; idx_range_to_ = to;
 
@@ -1346,7 +1395,12 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
                                                  bool clear_sv)
 {
     if (clear_sv)
-        sv.clear_all(true, 1); // free memory, keep remap matrix
+    {
+        if (sv.is_null_external())
+            sv.clear_all_preserve_null(true, 1); // keep shared NULL intact
+        else
+            sv.clear_all(true, 1); // free memory, keep remap matrix
+    }
 
     remap_buf_ptr_ = 0;
     bm::decoder dec(buf); // TODO: implement correct processing of byte-order
@@ -1395,7 +1449,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
 #pragma warning( push )
 #pragma warning( disable : 4127)
 #endif
-    if (sv.max_vector_size == 1)
+    if (sv.max_vector_size == 1 && !sv.is_null_external())
     {
         // NULL vector at: (sv.max_vector_size * sizeof(value_type) * 8 + 1)
         const bvector_type* bv_null =
@@ -1586,13 +1640,26 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
         return planes;
     int i = planes - 1;
     size_t offset = off_vect_[unsigned(i)];
+    if (!offset)
+    {
+        if (!sv.is_null_external())
+            raise_invalid_format();
+        return planes-1;
+    }
     if (offset)
     {
         // TODO: improve serialization format to avoid non-range decode of
         // the NULL vector just to get to the offset of remap table
 
         const unsigned char* bv_buf_ptr = buf + offset; // seek to position
-        bvector_type*  bv = sv.get_bmatrix().get_row(unsigned(i));
+        bvector_type* bv = sv.get_bmatrix().get_row(unsigned(i));
+        const bool is_external_null = sv.is_null_external();
+        if (is_external_null)
+        {
+            // Decode legacy serialized NULL into scratch; keep master NULL untouched.
+            null_decode_scratch_bv_.clear(true);
+            bv = &null_decode_scratch_bv_;
+        }
 
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));
@@ -1632,13 +1699,16 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
                 bv->bit_and(*mask_bv, bvector_type::opt_compress);
         }
 
-        switch (is_final_)
+        if (!is_external_null)
         {
-        case bm::finalization::READONLY:
-            bv->freeze();
-            break;
-        default:
-            break;
+            switch (is_final_)
+            {
+            case bm::finalization::READONLY:
+                bv->freeze();
+                break;
+            default:
+                break;
+            }
         }
 
     }
