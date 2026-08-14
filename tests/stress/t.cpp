@@ -27514,6 +27514,160 @@ void TestBasicMatrix()
         b = bv->test(210);
         assert(b);
     }
+
+    // owned NULL row lifecycle
+    {
+        bm::basic_bmatrix<bvect> bmtr(10);
+        bvect* bv_null = bmtr.construct_row(9);
+        bv_null->set(10);
+        bmtr.set_null_idx(9);
+        assert(bmtr.is_nullable());
+        assert(bmtr.is_null_owned());
+        assert(!bmtr.is_null_external());
+
+        bm::basic_bmatrix<bvect> bmtr2(bmtr);
+        assert(bmtr2.is_nullable());
+        assert(bmtr2.is_null_owned());
+        assert(!bmtr2.is_null_external());
+        assert(bmtr2.get_row(9));
+        assert(bmtr2.get_row(9) != bmtr.get_row(9));
+        assert(bmtr2.get_row(9)->test(10));
+
+        bmtr2.get_row(9)->set(20);
+        assert(!bmtr.get_row(9)->test(20));
+        assert(bmtr2.get_row(9)->test(20));
+    }
+
+    // externally owned NULL row: attach, share, mutate and clear
+    {
+        bvect bv_null_master;
+        bv_null_master.set(10);
+
+        bm::basic_bmatrix<bvect> bmtr(10);
+        bmtr.construct_row(9)->set(77);
+        bmtr.set_null_idx(9);
+        bmtr.attach_null_bvector(9, bv_null_master);
+        assert(bmtr.is_nullable());
+        assert(bmtr.is_null_external());
+        assert(!bmtr.is_null_owned());
+        assert(bmtr.get_row(9) == &bv_null_master);
+        assert(!bv_null_master.test(77));
+
+        bmtr.get_row(9)->set(20);
+        assert(bv_null_master.test(20));
+
+        bm::basic_bmatrix<bvect> bmtr2(bmtr);
+        assert(bmtr2.is_null_external());
+        assert(bmtr2.get_row(9) == &bv_null_master);
+        bmtr2.get_row(9)->set(30);
+        assert(bv_null_master.test(30));
+        assert(bmtr.get_row(9)->test(30));
+
+        bm::basic_bmatrix<bvect> bmtr3(10);
+        bmtr3 = bmtr;
+        assert(bmtr3.is_null_external());
+        assert(bmtr3.get_row(9) == &bv_null_master);
+        bmtr3.clear_column(20, 9);
+        assert(!bv_null_master.test(20));
+
+        bmtr.clear_all(true, 0);
+        assert(bv_null_master.none());
+        assert(bmtr.get_row(9) == &bv_null_master);
+    }
+
+    // external NULL row is counted for serialization but not owned memory
+    {
+        bvect bv_null_master;
+        bv_null_master.set(10);
+        bv_null_master.set(100000);
+        bv_null_master.optimize();
+
+        bm::basic_bmatrix<bvect> bmtr_owned(10);
+        bmtr_owned.construct_row(1)->set(1);
+        bmtr_owned.construct_row(9, bv_null_master);
+        bmtr_owned.set_null_idx(9);
+
+        bm::basic_bmatrix<bvect> bmtr_ext(10);
+        bmtr_ext.construct_row(1)->set(1);
+        bmtr_ext.attach_null_bvector(9, bv_null_master);
+
+        bvect::statistics st_owned, st_ext, st_owned_post_opt;
+        bvect::statistics st_ext_post_opt, st_opt_ext, st_null_ser;
+        bmtr_owned.calc_stat(&st_owned);
+        bmtr_ext.calc_stat(&st_ext);
+        bv_null_master.calc_stat(&st_null_ser);
+        st_null_ser.keep_serialize_stat_only();
+
+        assert(st_ext.memory_used < st_owned.memory_used);
+        assert(st_ext.bv_count + 1 == st_owned.bv_count);
+        assert(st_ext.max_serialize_mem == st_owned.max_serialize_mem);
+
+        bmtr_owned.optimize();
+        bmtr_owned.calc_stat(&st_owned_post_opt);
+        bmtr_ext.optimize(0, bvect::opt_compress, &st_opt_ext);
+        bmtr_ext.calc_stat(&st_ext_post_opt);
+        assert(st_ext_post_opt.memory_used < st_owned_post_opt.memory_used);
+        assert(st_ext_post_opt.bv_count + 1 == st_owned_post_opt.bv_count);
+        assert(st_ext_post_opt.max_serialize_mem == st_owned_post_opt.max_serialize_mem);
+        assert(st_opt_ext.max_serialize_mem >= st_null_ser.max_serialize_mem);
+    }
+
+    // external NULL row survives matrix destruction and can be detached
+    {
+        bvect bv_null_master;
+        bv_null_master.set(100);
+        {
+            bm::basic_bmatrix<bvect> bmtr(10);
+            bmtr.attach_null_bvector(9, bv_null_master);
+            bmtr.destruct_row(9);
+            assert(!bmtr.is_nullable());
+            assert(!bmtr.is_null_external());
+            assert(bv_null_master.test(100));
+        }
+        assert(bv_null_master.test(100));
+        bv_null_master.set(101);
+        assert(bv_null_master.test(101));
+    }
+
+    // dynamic growth keeps an attached NULL row as the last row
+    {
+        bvect bv_null_master;
+        bv_null_master.set(1);
+        bm::basic_bmatrix<bvect> bmtr(9);
+        bmtr.attach_null_bvector(8, bv_null_master);
+        bmtr.construct_row(20)->set(2);
+        assert(bmtr.is_null_external());
+        assert(bmtr.get_null_idx() == bmtr.rows() - 1);
+        assert(bmtr.get_row(bmtr.get_null_idx()) == &bv_null_master);
+        assert(bv_null_master.test(1));
+    }
+
+    // swap and move preserve external NULL ownership
+    {
+        bvect bv_null_master;
+        bv_null_master.set(5);
+        bm::basic_bmatrix<bvect> bmtr_ext(10);
+        bmtr_ext.attach_null_bvector(9, bv_null_master);
+
+        bm::basic_bmatrix<bvect> bmtr_owned(10);
+        bmtr_owned.construct_row(9)->set(6);
+        bmtr_owned.set_null_idx(9);
+
+        bmtr_ext.swap(bmtr_owned);
+        assert(bmtr_owned.is_null_external());
+        assert(bmtr_owned.get_row(9) == &bv_null_master);
+        assert(bmtr_ext.is_null_owned());
+        assert(bmtr_ext.get_row(9) != &bv_null_master);
+        assert(bmtr_ext.get_row(9)->test(6));
+
+#ifndef BM_NO_CXX11
+        bm::basic_bmatrix<bvect> bmtr_move(std::move(bmtr_owned));
+        assert(bmtr_move.is_null_external());
+        assert(bmtr_move.get_row(9) == &bv_null_master);
+        bmtr_move.get_row(9)->set(7);
+        assert(bv_null_master.test(7));
+#endif
+    }
     
     
     // octet assignment logic
@@ -27571,6 +27725,780 @@ void TestBasicMatrix()
 
 
 static
+void TestSparseVectorForEachSparseFilter()
+{
+    cout << "--------------------------- TestSparseVectorForEachSparseFilter()" << endl;
+
+    // filtered for_each_sparse() unsigned visitor traversal
+    {
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back(10);
+        sv.push_back(20);
+        sv.push_back(30);
+        sv.push_back(40);
+        sv.set_null(1);
+
+        bm::bvector<> filter_bv { 0, 1, 3, 100 };
+        unsigned visited = 0;
+        unsigned value_sum = 0;
+        bm::bvector<> null_bv;
+        bm::bvector<> visited_bv;
+        auto filter_func = [&](unsigned v, bool is_null, unsigned idx) -> int
+        {
+            ++visited;
+            visited_bv.set(idx);
+            if (is_null)
+                null_bv.set(idx);
+            else
+                value_sum += v;
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, filter_bv, filter_func, 2);
+        assert(ret == 0);
+        assert(visited == 3);
+        assert(value_sum == 50);
+        assert(visited_bv.count() == 3);
+        assert(visited_bv.test(0));
+        assert(visited_bv.test(1));
+        assert(visited_bv.test(3));
+        assert(null_bv.count() == 1);
+        assert(null_bv.test(1));
+
+        visited = 0;
+        auto filter_stop_func = [&](unsigned, bool, unsigned) -> int
+        {
+            return (++visited == 2) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(sv, filter_bv, filter_stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 2);
+    }
+
+    // filtered for_each_sparse() signed visitor traversal
+    {
+        bm::sparse_vector<int, bvect> sv(bm::use_null);
+        sv.push_back(-10);
+        sv.push_back(20);
+        sv.push_back(-30);
+        sv.push_back(40);
+        sv.set_null(1);
+
+        bm::bvector<> filter_bv { 0, 1, 2, 100 };
+        unsigned visited = 0;
+        int value_sum = 0;
+        unsigned negative_count = 0;
+        bm::bvector<> null_bv;
+        bm::bvector<> visited_bv;
+        auto filter_func = [&](int v, bool is_null, unsigned idx) -> int
+        {
+            ++visited;
+            visited_bv.set(idx);
+            if (is_null)
+                null_bv.set(idx);
+            else
+            {
+                value_sum += v;
+                negative_count += (v < 0);
+            }
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, filter_bv, filter_func, 2);
+        assert(ret == 0);
+        assert(visited == 3);
+        assert(value_sum == -40);
+        assert(negative_count == 2);
+        assert(visited_bv.count() == 3);
+        assert(visited_bv.test(0));
+        assert(visited_bv.test(1));
+        assert(visited_bv.test(2));
+        assert(null_bv.count() == 1);
+        assert(null_bv.test(1));
+    }
+}
+
+static
+void TestSparseVectorSharedNullPlane()
+{
+    cout << "---------------------------- Sparse vector shared NULL plane test" << endl;
+
+    typedef bm::sparse_vector<unsigned, bvect> svector;
+    const unsigned sv_size = 65536 + 128;
+
+    auto is_not_null = [](unsigned i) -> bool { return (i & 1u) == 0; };
+    auto value0 = [](unsigned i) -> unsigned { return i + 11; };
+    auto value1 = [](unsigned i) -> unsigned { return i + 1011; };
+    auto value2 = [](unsigned i) -> unsigned { return i + 2011; };
+
+    svector sv0(bm::use_null), sv1(bm::use_null), sv2(bm::use_null);
+    sv1.attach_null_bvector(sv0);
+    sv2.attach_null_bvector(sv0);
+
+    // Verify post-construction attachment and shared NULL pointer identity.
+    assert(sv0.is_nullable());
+    assert(sv1.is_nullable());
+    assert(sv2.is_nullable());
+    assert(!sv0.is_null_external());
+    assert(sv1.is_null_external());
+    assert(sv2.is_null_external());
+    assert(sv0.get_null_bvector() == sv1.get_null_bvector());
+    assert(sv0.get_null_bvector() == sv2.get_null_bvector());
+
+    // Load 64K+ aligned test data with an even/odd NOT NULL pattern.
+    for (unsigned i = 0; i < sv_size; ++i)
+    {
+        if (is_not_null(i))
+        {
+            sv0.push_back(value0(i));
+            sv1.push_back(value1(i));
+            sv2.push_back(value2(i));
+        }
+        else
+        {
+            sv0.push_back_null();
+            sv1.push_back_null();
+            sv2.push_back_null();
+        }
+    }
+
+    // Check vector sizes and the expected number of NOT NULL elements.
+    assert(sv0.size() == sv_size);
+    assert(sv1.size() == sv_size);
+    assert(sv2.size() == sv_size);
+    assert(sv0.get_null_bvector()->count() == sv_size / 2);
+
+    // Validate NULL status through direct API, iterator API and try_get().
+    auto validate_nulls = [&](const svector& sv)
+    {
+        assert(sv.get_null_bvector() == sv0.get_null_bvector());
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            bool is_null = !is_not_null(i);
+            assert(sv.is_null(i) == is_null);
+            typename svector::const_iterator it = sv.get_const_iterator(i);
+            assert(it.valid());
+            assert(it.is_null() == is_null);
+            unsigned v = 0;
+            bool found = sv.try_get(i, v);
+            assert(found == !is_null);
+        }
+    };
+    validate_nulls(sv0);
+    validate_nulls(sv1);
+    validate_nulls(sv2);
+
+    // Value planes stay independent even when NULL plane is shared.
+    for (unsigned i = 0; i < sv_size; i += 2)
+    {
+        assert(sv0.get(i) == value0(i));
+        assert(sv1.get(i) == value1(i));
+        assert(sv2.get(i) == value2(i));
+    }
+
+    // Secondary writes must update the master NULL plane.
+    sv1.set(1, 7001);
+    assert(!sv0.is_null(1));
+    assert(!sv1.is_null(1));
+    assert(!sv2.is_null(1));
+    assert(sv1.get(1) == 7001);
+
+    // NULL assignment through another secondary also reaches the master.
+    sv2.set_null(2);
+    assert(sv0.is_null(2));
+    assert(sv1.is_null(2));
+    assert(sv2.is_null(2));
+
+    // Stats exclude externally owned NULL memory but keep serialization estimate.
+    {
+        svector st_owned(bm::use_null), st_ext(bm::use_null);
+        st_ext.attach_null_bvector(st_owned);
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            if (is_not_null(i))
+            {
+                st_owned.push_back(value0(i));
+                st_ext.push_back(value0(i));
+            }
+            else
+            {
+                st_owned.push_back_null();
+                st_ext.push_back_null();
+            }
+        }
+        svector::statistics stat_owned, stat_ext;
+        st_owned.calc_stat(&stat_owned);
+        st_ext.calc_stat(&stat_ext);
+        assert(stat_ext.memory_used < stat_owned.memory_used);
+        assert(stat_ext.bv_count + 1 == stat_owned.bv_count);
+        assert(stat_ext.max_serialize_mem == stat_owned.max_serialize_mem);
+    }
+
+    // Round-trip each vector; legacy mode still stores the active NULL plane.
+    auto serialize_round_trip = [](const svector& sv, svector& sv_out)
+    {
+        bm::sparse_vector_serializer<svector> sv_ser;
+        sv_ser.set_serialize_external_null(true);
+        bm::sparse_vector_serial_layout<svector> sv_lay;
+        sv_ser.serialize(sv, sv_lay);
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize(sv_out, sv_lay.buf());
+    };
+    auto serialize_to_layout = [](const svector& sv,
+                                  bm::sparse_vector_serial_layout<svector>& sv_lay,
+                                  bool save_external_null,
+                                  bool disable_xor = false)
+    {
+        bm::sparse_vector_serializer<svector> sv_ser;
+        sv_ser.set_serialize_external_null(save_external_null);
+        if (disable_xor)
+            sv_ser.disable_xor_compression();
+        sv_ser.serialize(sv, sv_lay);
+    };
+    auto deserialize_layout = [](svector& sv_out,
+                                 const bm::sparse_vector_serial_layout<svector>& sv_lay)
+    {
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize(sv_out, sv_lay.buf());
+    };
+
+    svector sv0_d(bm::use_null), sv1_d(bm::use_null), sv2_d(bm::use_null);
+    serialize_round_trip(sv0, sv0_d);
+    serialize_round_trip(sv1, sv1_d);
+    serialize_round_trip(sv2, sv2_d);
+
+    // Deserialized vectors are value-equal but own independent NULL planes.
+    assert(sv0.equal(sv0_d));
+    assert(sv1.equal(sv1_d));
+    assert(sv2.equal(sv2_d));
+    assert(!sv0_d.is_null_external());
+    assert(!sv1_d.is_null_external());
+    assert(!sv2_d.is_null_external());
+    assert(sv0_d.get_null_bvector() != sv1_d.get_null_bvector());
+
+    // Deserialize into a pre-attached group; followers must not clear master NULL.
+    {
+        bm::sparse_vector_serial_layout<svector> sv1_lay_keep, sv1_lay_skip;
+        serialize_to_layout(sv1, sv1_lay_keep, true, true);
+        serialize_to_layout(sv1, sv1_lay_skip, false, true);
+        unsigned null_idx = unsigned(sv1.get_bmatrix().get_null_idx());
+        assert(sv1_lay_keep.get_plane(null_idx));
+        assert(!sv1_lay_skip.get_plane(null_idx));
+        assert(sv1_lay_skip.size() < sv1_lay_keep.size());
+
+        bm::sparse_vector_serial_layout<svector> sv1_lay_skip_xor;
+        serialize_to_layout(sv1, sv1_lay_skip_xor, false);
+        {
+            bool ex_flag = false;
+            try
+            {
+                svector sv_bad(bm::use_null);
+                deserialize_layout(sv_bad, sv1_lay_skip_xor);
+            }
+            catch (std::logic_error&)
+            {
+                ex_flag = true;
+            }
+            assert(ex_flag);
+        }
+
+        svector sv0_c(bm::use_null), sv1_c(bm::use_null), sv2_c(bm::use_null);
+        sv1_c.attach_null_bvector(sv0_c);
+        sv2_c.attach_null_bvector(sv0_c);
+        const bvect* bv_null_c = sv0_c.get_null_bvector();
+        assert(bv_null_c == sv1_c.get_null_bvector());
+        serialize_round_trip(sv0, sv0_c);
+        assert(bv_null_c == sv0_c.get_null_bvector());
+        assert(bv_null_c == sv1_c.get_null_bvector());
+        deserialize_layout(sv1_c, sv1_lay_skip_xor);
+        assert(bv_null_c == sv0_c.get_null_bvector());
+        assert(bv_null_c == sv1_c.get_null_bvector());
+        bm::sparse_vector_serial_layout<svector> sv2_lay_skip;
+        serialize_to_layout(sv2, sv2_lay_skip, false);
+        deserialize_layout(sv2_c, sv2_lay_skip);
+        assert(bv_null_c == sv0_c.get_null_bvector());
+        assert(bv_null_c == sv2_c.get_null_bvector());
+        assert(sv0.equal(sv0_c));
+        assert(sv1.equal(sv1_c));
+        assert(sv2.equal(sv2_c));
+        assert(sv1_c.is_null_external());
+        assert(sv2_c.is_null_external());
+    }
+
+    // Reattach deserialized vectors and recheck value/NULL equivalence.
+    sv1_d.attach_null_bvector(sv0_d);
+    sv2_d.attach_null_bvector(sv0_d);
+    assert(sv0_d.get_null_bvector() == sv1_d.get_null_bvector());
+    assert(sv0_d.get_null_bvector() == sv2_d.get_null_bvector());
+    assert(sv0.equal(sv0_d));
+    assert(sv1.equal(sv1_d));
+    assert(sv2.equal(sv2_d));
+
+    // Destroying an attached secondary must not destroy the master NULL plane.
+    {
+        svector sv_tmp(bm::use_null);
+        sv_tmp.attach_null_bvector(sv0);
+        assert(sv_tmp.get_null_bvector() == sv0.get_null_bvector());
+    }
+    assert(!sv0.is_null(1));
+    assert(sv0.is_null(2));
+
+    // Clearing an attached secondary clears the shared master NULL plane.
+    sv1.clear();
+    assert(sv0.get_null_bvector()->none());
+    assert(sv0.is_null(0));
+    assert(sv2.is_null(0));
+
+    cout << "---------------------------- Sparse vector shared NULL plane test OK" << endl;
+}
+
+static
+void TestRSCSparseVectorSharedNullPlane()
+{
+    cout << "---------------------------- RSC sparse vector shared NULL plane test" << endl;
+
+    typedef rsc_sparse_vector_u32 csvector;
+    const unsigned sv_size = 65536 + 129;
+    const unsigned not_null_count = (sv_size + 1) / 2;
+
+    auto is_not_null = [](unsigned i) -> bool { return (i & 1u) == 0; };
+    auto value0 = [](unsigned i) -> unsigned { return i + 13; };
+    auto value1 = [](unsigned i) -> unsigned { return i + 1013; };
+    auto value2 = [](unsigned i) -> unsigned { return i + 2013; };
+
+    csvector csv0, csv1, csv2;
+    csv1.attach_null_bvector(csv0);
+    csv2.attach_null_bvector(csv0);
+
+    // Empty post-construction attachment shares the NOT NULL plane only.
+    assert(!csv0.is_null_external());
+    assert(csv1.is_null_external());
+    assert(csv2.is_null_external());
+    assert(!csv1.is_rs_index_external());
+    assert(!csv2.is_rs_index_external());
+    assert(csv0.get_null_bvector() == csv1.get_null_bvector());
+    assert(csv0.get_null_bvector() == csv2.get_null_bvector());
+
+    // Build all compressed value planes against the same NOT NULL shape.
+    {
+        csvector::back_insert_iterator bi0 = csv0.get_back_inserter();
+        csvector::back_insert_iterator bi1 = csv1.get_back_inserter();
+        csvector::back_insert_iterator bi2 = csv2.get_back_inserter();
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            if (is_not_null(i))
+            {
+                bi0.add(value0(i));
+                bi1.add(value1(i));
+                bi2.add(value2(i));
+            }
+            else
+            {
+                bi0.add_null();
+                bi1.add_null();
+                bi2.add_null();
+            }
+        }
+        bi0.flush(); bi1.flush(); bi2.flush();
+    }
+
+    assert(csv0.size() == sv_size);
+    assert(csv1.size() == sv_size);
+    assert(csv2.size() == sv_size);
+    assert(csv0.get_null_bvector()->count() == not_null_count);
+    assert(csv1.effective_size() == csv0.effective_size());
+    assert(csv2.effective_size() == csv0.effective_size());
+
+    // Master sync builds owned RS index; RSC follower may attach it explicitly.
+    csv0.sync();
+    assert(csv0.in_sync());
+    assert(!csv0.is_rs_index_external());
+    csv1.attach_null_bvector(csv0);
+    assert(csv1.in_sync());
+    assert(csv1.is_rs_index_external());
+    assert(csv1.get_RS() == csv0.get_RS());
+
+    // Non-RSC-owner path: follower uses shared NULL but builds private RS index.
+    csv2.sync();
+    assert(csv2.in_sync());
+    assert(!csv2.is_rs_index_external());
+    assert(csv2.get_RS() != csv0.get_RS());
+
+    // Plain sparse-vector master shares NULL only; RSC builds private RS.
+    {
+        sparse_vector_u32 sv_master(bm::use_null);
+        csvector csv_plain;
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            if (is_not_null(i))
+            {
+                sv_master.push_back(value0(i));
+                csv_plain.push_back(value1(i));
+            }
+            else
+            {
+                sv_master.push_back_null();
+                csv_plain.push_back_null();
+            }
+        }
+        csv_plain.attach_null_bvector(sv_master);
+        assert(csv_plain.is_null_external());
+        assert(!csv_plain.is_rs_index_external());
+        assert(csv_plain.get_null_bvector() == sv_master.get_null_bvector());
+        csv_plain.sync();
+        assert(csv_plain.in_sync());
+        assert(!csv_plain.is_rs_index_external());
+        assert(csv_plain.get(0) == value1(0));
+        assert(csv_plain.is_null(1));
+    }
+
+    // Validate NULL status, try_get, values and synced iterators.
+    auto validate = [&](const csvector& csv, unsigned base)
+    {
+        typename csvector::const_iterator it = csv.begin();
+        for (unsigned i = 0; i < sv_size; ++i, ++it)
+        {
+            bool is_null = !is_not_null(i);
+            assert(csv.is_null(i) == is_null);
+            assert(it.valid());
+            assert(it.pos() == i);
+            assert(it.is_null() == is_null);
+            unsigned v = 0;
+            bool found = csv.try_get(i, v);
+            assert(found == !is_null);
+            if (!is_null)
+            {
+                assert(v == i + base);
+                assert(csv.get(i) == i + base);
+                assert(*it == i + base);
+            }
+        }
+    };
+    validate(csv0, 13);
+    validate(csv1, 1013);
+    validate(csv2, 2013);
+
+    // Value-only update on an existing NOT NULL rank preserves shared RS use.
+    csv1.set(0, 7001);
+    assert(csv1.get(0) == 7001);
+    assert(csv1.is_rs_index_external());
+    assert(csv1.get_RS() == csv0.get_RS());
+
+    // Explicit invalidation drops attached RS; sync rebuilds a private index.
+    csv1.invalidate_rs_index();
+    assert(!csv1.in_sync());
+    assert(!csv1.is_rs_index_external());
+    csv1.sync();
+    assert(csv1.in_sync());
+    assert(!csv1.is_rs_index_external());
+    assert(csv1.get_RS() != csv0.get_RS());
+    assert(csv1.get(0) == 7001);
+
+    // Legacy mode stores the active NOT NULL plane; load owns its copy.
+    auto serialize_round_trip = [](const csvector& csv, csvector& csv_out)
+    {
+        bm::sparse_vector_serializer<csvector> sv_ser;
+        sv_ser.set_serialize_external_null(true);
+        bm::sparse_vector_serial_layout<csvector> sv_lay;
+        sv_ser.serialize(csv, sv_lay);
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize(csv_out, sv_lay.buf());
+    };
+    auto serialize_to_layout = [](const csvector& csv,
+                                  bm::sparse_vector_serial_layout<csvector>& sv_lay,
+                                  bool save_external_null,
+                                  bool disable_xor = false)
+    {
+        bm::sparse_vector_serializer<csvector> sv_ser;
+        sv_ser.set_serialize_external_null(save_external_null);
+        if (disable_xor)
+            sv_ser.disable_xor_compression();
+        sv_ser.serialize(csv, sv_lay);
+    };
+    auto deserialize_layout = [](csvector& csv_out,
+                                 const bm::sparse_vector_serial_layout<csvector>& sv_lay)
+    {
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize(csv_out, sv_lay.buf());
+    };
+
+    csvector csv0_d, csv1_d, csv2_d;
+    serialize_round_trip(csv0, csv0_d);
+    serialize_round_trip(csv1, csv1_d);
+    serialize_round_trip(csv2, csv2_d);
+    assert(csv0.equal(csv0_d));
+    assert(csv1.equal(csv1_d));
+    assert(csv2.equal(csv2_d));
+    assert(!csv0_d.is_null_external());
+    assert(!csv1_d.is_null_external());
+    assert(!csv2_d.is_null_external());
+
+    // Deserialize into a pre-attached RSC group; followers discard serialized NULL.
+    {
+        bm::sparse_vector_serial_layout<csvector> csv1_lay_keep, csv1_lay_skip;
+        serialize_to_layout(csv1, csv1_lay_keep, true, true);
+        serialize_to_layout(csv1, csv1_lay_skip, false, true);
+        unsigned null_idx = unsigned(csv1.get_bmatrix().get_null_idx());
+        assert(csv1_lay_keep.get_plane(null_idx));
+        assert(!csv1_lay_skip.get_plane(null_idx));
+        assert(csv1_lay_skip.size() < csv1_lay_keep.size());
+
+        bm::sparse_vector_serial_layout<csvector> csv1_lay_skip_xor;
+        serialize_to_layout(csv1, csv1_lay_skip_xor, false);
+        {
+            bool ex_flag = false;
+            try
+            {
+                csvector csv_bad;
+                deserialize_layout(csv_bad, csv1_lay_skip_xor);
+            }
+            catch (std::logic_error&)
+            {
+                ex_flag = true;
+            }
+            assert(ex_flag);
+        }
+
+        csvector csv0_c, csv1_c, csv2_c;
+        csv1_c.attach_null_bvector(csv0_c);
+        csv2_c.attach_null_bvector(csv0_c);
+        const bvect* bv_null_c = csv0_c.get_null_bvector();
+        assert(bv_null_c == csv1_c.get_null_bvector());
+        serialize_round_trip(csv0, csv0_c);
+        assert(bv_null_c == csv0_c.get_null_bvector());
+        assert(bv_null_c == csv1_c.get_null_bvector());
+        deserialize_layout(csv1_c, csv1_lay_skip_xor);
+        assert(bv_null_c == csv0_c.get_null_bvector());
+        assert(bv_null_c == csv1_c.get_null_bvector());
+        bm::sparse_vector_serial_layout<csvector> csv2_lay_skip;
+        serialize_to_layout(csv2, csv2_lay_skip, false);
+        deserialize_layout(csv2_c, csv2_lay_skip);
+        assert(bv_null_c == csv0_c.get_null_bvector());
+        assert(bv_null_c == csv2_c.get_null_bvector());
+        csv0_c.sync();
+        csv1_c.attach_null_bvector(csv0_c);
+        csv2_c.attach_null_bvector(csv0_c);
+        assert(csv0.equal(csv0_c));
+        assert(csv1.equal(csv1_c));
+        assert(csv2.equal(csv2_c));
+        assert(csv1_c.is_null_external());
+        assert(csv2_c.is_null_external());
+        assert(csv1_c.is_rs_index_external());
+        assert(csv2_c.is_rs_index_external());
+
+        // Stats after pre-attached deserialization exclude shared NULL memory.
+        csvector::statistics stat_owned, stat_shared;
+        csv1_d.calc_stat(&stat_owned);
+        csv1_c.calc_stat(&stat_shared);
+        assert(stat_shared.memory_used < stat_owned.memory_used);
+        assert(stat_shared.bv_count + 1 == stat_owned.bv_count);
+        assert(stat_shared.max_serialize_mem == stat_owned.max_serialize_mem);
+    }
+
+    // Reattach deserialized RSC vectors and share the master's RS index.
+    csv0_d.sync();
+    csv1_d.attach_null_bvector(csv0_d);
+    csv2_d.attach_null_bvector(csv0_d);
+    assert(csv1_d.is_rs_index_external());
+    assert(csv2_d.is_rs_index_external());
+    assert(csv1_d.get_RS() == csv0_d.get_RS());
+    assert(csv2_d.get_RS() == csv0_d.get_RS());
+    assert(csv0.equal(csv0_d));
+    assert(csv1.equal(csv1_d));
+    assert(csv2.equal(csv2_d));
+
+    // Destroying an attached RSC secondary must not destroy the master NULL plane.
+    {
+        csvector csv_tmp;
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            if (is_not_null(i))
+                csv_tmp.push_back(value0(i));
+            else
+                csv_tmp.push_back_null();
+        }
+        csv_tmp.attach_null_bvector(csv0);
+        assert(csv_tmp.get_null_bvector() == csv0.get_null_bvector());
+    }
+    assert(!csv0.is_null(0));
+    assert(csv0.is_null(1));
+
+    cout << "---------------------------- RSC sparse vector shared NULL plane test OK" << endl;
+}
+
+static
+void TestMixedSparseVectorSharedNullPlane()
+{
+    cout << "---------------------------- Mixed sparse/RSC shared NULL plane test" << endl;
+
+    typedef rsc_sparse_vector_u32 csvector;
+    typedef sparse_vector_u32 svector;
+    const unsigned sv_size = 65536 + 131;
+
+    auto is_not_null = [](unsigned i) -> bool { return (i % 3u) != 1u; };
+    auto value0 = [](unsigned i) -> unsigned { return i + 17; };
+    auto value1 = [](unsigned i) -> unsigned { return i + 3017; };
+    auto value2 = [](unsigned i) -> unsigned { return i + 6017; };
+
+    csvector csv0;
+    svector sv1(bm::use_null), sv2(bm::use_null);
+
+    // Build the RSC owner first; sparse followers attach to its mutable NULL bvector.
+    {
+        csvector::back_insert_iterator bi0 = csv0.get_back_inserter();
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            if (is_not_null(i))
+            {
+                bi0.add(value0(i));
+                sv1.push_back(value1(i));
+                sv2.push_back(value2(i));
+            }
+            else
+            {
+                bi0.add_null();
+                sv1.push_back_null();
+                sv2.push_back_null();
+            }
+        }
+        bi0.flush();
+    }
+    bvect* bv_null = csv0.get_null_bvector();
+    assert(bv_null);
+    sv1.attach_null_bvector(*bv_null);
+    sv2.attach_null_bvector(*bv_null);
+    csv0.sync();
+
+    assert(!csv0.is_null_external());
+    assert(sv1.is_null_external());
+    assert(sv2.is_null_external());
+    assert(csv0.get_null_bvector() == sv1.get_null_bvector());
+    assert(csv0.get_null_bvector() == sv2.get_null_bvector());
+
+    // Check NULL answers and values through both RSC and sparse iterator APIs.
+    typename csvector::const_iterator csv_it = csv0.begin();
+    for (unsigned i = 0; i < sv_size; ++i, ++csv_it)
+    {
+        bool is_null = !is_not_null(i);
+        assert(csv0.is_null(i) == is_null);
+        assert(sv1.is_null(i) == is_null);
+        assert(sv2.is_null(i) == is_null);
+        assert(csv_it.valid());
+        assert(csv_it.pos() == i);
+        assert(csv_it.is_null() == is_null);
+        typename svector::const_iterator sv_it = sv1.get_const_iterator(i);
+        assert(sv_it.valid());
+        assert(sv_it.is_null() == is_null);
+        if (!is_null)
+        {
+            assert(csv0.get(i) == value0(i));
+            assert(sv1.get(i) == value1(i));
+            assert(sv2.get(i) == value2(i));
+        }
+    }
+
+    // Sparse follower edits mutate the RSC-owned NULL plane; resync owner RS index.
+    sv1.set(1, 9001);
+    assert(!csv0.is_null(1));
+    assert(!sv1.is_null(1));
+    assert(!sv2.is_null(1));
+    csv0.invalidate_rs_index();
+    csv0.sync();
+    sv2.set_null(2);
+    assert(csv0.is_null(2));
+    assert(sv1.is_null(2));
+    assert(sv2.is_null(2));
+    csv0.invalidate_rs_index();
+    csv0.sync();
+
+    auto serialize_rsc_round_trip = [](const csvector& csv, csvector& csv_out)
+    {
+        bm::sparse_vector_serializer<csvector> sv_ser;
+        sv_ser.set_serialize_external_null(true);
+        bm::sparse_vector_serial_layout<csvector> sv_lay;
+        sv_ser.serialize(csv, sv_lay);
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize(csv_out, sv_lay.buf());
+    };
+    auto serialize_sparse_to_layout = [](const svector& sv,
+                                         bm::sparse_vector_serial_layout<svector>& sv_lay,
+                                         bool save_external_null,
+                                         bool disable_xor = false)
+    {
+        bm::sparse_vector_serializer<svector> sv_ser;
+        sv_ser.set_serialize_external_null(save_external_null);
+        if (disable_xor)
+            sv_ser.disable_xor_compression();
+        sv_ser.serialize(sv, sv_lay);
+    };
+    auto deserialize_sparse_layout = [](svector& sv_out,
+                                        const bm::sparse_vector_serial_layout<svector>& sv_lay)
+    {
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize(sv_out, sv_lay.buf());
+    };
+
+    // Skipping sparse follower NULL saves bytes and requires pre-attached load target.
+    bm::sparse_vector_serial_layout<svector> sv1_lay_keep, sv1_lay_skip;
+    serialize_sparse_to_layout(sv1, sv1_lay_keep, true, true);
+    serialize_sparse_to_layout(sv1, sv1_lay_skip, false, true);
+    unsigned null_idx = unsigned(sv1.get_bmatrix().get_null_idx());
+    assert(sv1_lay_keep.get_plane(null_idx));
+    assert(!sv1_lay_skip.get_plane(null_idx));
+    assert(sv1_lay_skip.size() < sv1_lay_keep.size());
+
+    bm::sparse_vector_serial_layout<svector> sv1_lay_skip_xor;
+    serialize_sparse_to_layout(sv1, sv1_lay_skip_xor, false);
+    {
+        bool ex_flag = false;
+        try
+        {
+            svector sv_bad(bm::use_null);
+            deserialize_sparse_layout(sv_bad, sv1_lay_skip_xor);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+    }
+
+    // Restore master first, then attach sparse followers before skipped-NULL load.
+    csvector csv0_d;
+    svector sv1_d(bm::use_null), sv2_d(bm::use_null);
+    serialize_rsc_round_trip(csv0, csv0_d);
+    bvect* bv_null_d = csv0_d.get_null_bvector();
+    assert(bv_null_d);
+    sv1_d.attach_null_bvector(*bv_null_d);
+    sv2_d.attach_null_bvector(*bv_null_d);
+    const bvect* bv_null_d_const = csv0_d.get_null_bvector();
+    deserialize_sparse_layout(sv1_d, sv1_lay_skip_xor);
+    assert(bv_null_d_const == csv0_d.get_null_bvector());
+    assert(bv_null_d_const == sv1_d.get_null_bvector());
+    bm::sparse_vector_serial_layout<svector> sv2_lay_skip;
+    serialize_sparse_to_layout(sv2, sv2_lay_skip, false);
+    deserialize_sparse_layout(sv2_d, sv2_lay_skip);
+    assert(bv_null_d_const == sv2_d.get_null_bvector());
+
+    assert(csv0.equal(csv0_d));
+    assert(sv1.equal(sv1_d));
+    assert(sv2.equal(sv2_d));
+    assert(sv1_d.is_null_external());
+    assert(sv2_d.is_null_external());
+
+    // Sparse follower stats exclude the RSC-owned NULL plane after mixed restore.
+    svector sv1_owned(bm::use_null);
+    bm::sparse_vector_serial_layout<svector> sv1_lay_keep_full;
+    serialize_sparse_to_layout(sv1, sv1_lay_keep_full, true);
+    deserialize_sparse_layout(sv1_owned, sv1_lay_keep_full);
+    svector::statistics stat_owned, stat_shared;
+    sv1_owned.calc_stat(&stat_owned);
+    sv1_d.calc_stat(&stat_shared);
+    assert(stat_shared.memory_used < stat_owned.memory_used);
+    assert(stat_shared.bv_count + 1 == stat_owned.bv_count);
+    assert(stat_shared.max_serialize_mem == stat_owned.max_serialize_mem);
+
+    cout << "---------------------------- Mixed sparse/RSC shared NULL plane test OK" << endl;
+}
+
 void TestSparseVector()
 {
     cout << "---------------------------- Bit-plane sparse vector test" << endl;
@@ -27900,6 +28828,90 @@ void TestSparseVector()
         it.advance();
         b = it.is_null();
         assert(!b);
+    }}
+
+    // for_each_sparse() visitor traversal
+    {{
+        bm::sparse_vector<unsigned, bvect> sv(bm::use_null);
+        sv.push_back(10);
+        sv.push_back(20);
+        sv.push_back(30);
+        sv.push_back(40);
+        sv.set_null(1);
+
+        unsigned visited = 0;
+        unsigned value_sum = 0;
+        bm::bvector<> null_bv;
+        auto func = [&](unsigned v, bool is_null, unsigned idx) -> int
+        {
+            ++visited;
+            value_sum += v;
+            if (is_null)
+                null_bv.set(idx);
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, func, 2);
+        assert(ret == 0);
+        assert(visited == sv.size());
+        assert(value_sum == 80);
+        assert(null_bv.count() == 1);
+        assert(null_bv.test(1));
+
+        visited = 0;
+        auto stop_func = [&](unsigned, bool, unsigned) -> int
+        {
+            return (++visited == 3) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(sv, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 3);
+
+    }}
+
+    // for_each_sparse() signed visitor traversal
+    {{
+        bm::sparse_vector<int, bvect> sv(bm::use_null);
+        sv.push_back(-10);
+        sv.push_back(20);
+        sv.push_back(-30);
+        sv.push_back(40);
+        sv.set_null(1);
+
+        unsigned visited = 0;
+        int value_sum = 0;
+        unsigned negative_count = 0;
+        bm::bvector<> null_bv;
+        auto func = [&](int v, bool is_null, unsigned idx) -> int
+        {
+            ++visited;
+            if (is_null)
+            {
+                null_bv.set(idx);
+            }
+            else
+            {
+                value_sum += v;
+                negative_count += (v < 0);
+            }
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, func, 2);
+        assert(ret == 0);
+        assert(visited == sv.size());
+        assert(value_sum == 0);
+        assert(negative_count == 2);
+        assert(null_bv.count() == 1);
+        assert(null_bv.test(1));
+
+        visited = 0;
+        auto stop_func = [&](int, bool, unsigned) -> int
+        {
+            return (++visited == 3) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(sv, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 3);
+
     }}
 
     // XOR scanner EQ test
@@ -32174,6 +33186,46 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     scanner.find_lt(sv, v, bv_lt);
     scanner.find_le(sv, v, bv_le);
     scanner.find_range(sv, 0, v, bv_r_0v);
+
+    // Validate scanner GT result set using filtered for_each_sparse().
+    // Every visited hit must be NOT NULL and must satisfy value > v.
+    //
+    {
+        bvect bv_gt_for_each;
+        bool predicate_ok = true;
+        typename SV::size_type bad_idx = 0;
+        typename SV::value_type bad_value = typename SV::value_type();
+        bool bad_is_null = false;
+        auto gt_func = [&](typename SV::value_type v1, bool is_null,
+                           typename SV::size_type idx) -> int
+        {
+            if (is_null || !(v1 > v))
+            {
+                predicate_ok = false;
+                bad_idx = idx;
+                bad_value = v1;
+                bad_is_null = is_null;
+                return -1;
+            }
+            bv_gt_for_each.set(idx);
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, bv_gt, gt_func);
+        bool eq = (ret == 0) && predicate_ok && bv_gt_for_each.equal(bv_gt);
+        if (!eq)
+        {
+            cout << "GT for_each_sparse result-set validation failed" << endl;
+            cout << "query_value=" << v << endl;
+            cout << "bad_idx=" << bad_idx
+                 << " bad_value=" << bad_value
+                 << " bad_is_null=" << bad_is_null << endl;
+            cout << "scanner_gt_count=" << bv_gt.count() << endl;
+            cout << "for_each_verified_count=" << bv_gt_for_each.count() << endl;
+            ReportSearchMismatch(search_debug_op::gt, sv, v, bv_gt,
+                                 &bv_gt, bv_gt, bv_gt_for_each);
+            assert(eq); exit(1);
+        }
+    }
     
     // AND mask search
     //
@@ -42049,6 +43101,94 @@ void TestArraysAndBuffers()
 }
 
 static
+void TestRSCForEachSparseFilter()
+{
+    cout << "--------------------------- TestRSCForEachSparseFilter()" << endl;
+
+    // filtered for_each_sparse() unsigned RSC visitor traversal
+    {
+        rsc_sparse_vector_u32 csv1;
+        csv1.push_back(0, 10);
+        csv1.push_back(2, 30);
+        csv1.push_back(5, 50);
+        csv1.sync();
+
+        rsc_sparse_vector_u32::bvector_type filter_bv { 0, 1, 2, 4, 5, 100 };
+        unsigned visited = 0;
+        unsigned value_sum = 0;
+        rsc_sparse_vector_u32::bvector_type null_bv;
+        rsc_sparse_vector_u32::bvector_type visited_bv;
+        auto filter_func = [&](unsigned v, bool is_null,
+                               rsc_sparse_vector_u32::size_type idx) -> int
+        {
+            ++visited;
+            visited_bv.set(idx);
+            if (is_null)
+                null_bv.set(idx);
+            else
+                value_sum += v;
+            return 0;
+        };
+        int ret = bm::for_each_sparse(csv1, filter_bv, filter_func, 2);
+        assert(ret == 0);
+        assert(visited == 5);
+        assert(value_sum == 90);
+        assert(visited_bv.count() == 5);
+        assert(visited_bv.test(0));
+        assert(visited_bv.test(1));
+        assert(visited_bv.test(2));
+        assert(visited_bv.test(4));
+        assert(visited_bv.test(5));
+        assert(null_bv.count() == 2);
+        assert(null_bv.test(1));
+        assert(null_bv.test(4));
+    }
+
+    // filtered for_each_sparse() signed RSC visitor traversal
+    {
+        rsc_sparse_vector_i32 csv1;
+        csv1.push_back(0, -10);
+        csv1.push_back(2, 30);
+        csv1.push_back(5, -50);
+        csv1.sync();
+
+        rsc_sparse_vector_i32::bvector_type filter_bv { 0, 1, 2, 4, 5, 100 };
+        unsigned visited = 0;
+        int value_sum = 0;
+        unsigned negative_count = 0;
+        rsc_sparse_vector_i32::bvector_type null_bv;
+        rsc_sparse_vector_i32::bvector_type visited_bv;
+        auto filter_func = [&](int v, bool is_null,
+                               rsc_sparse_vector_i32::size_type idx) -> int
+        {
+            ++visited;
+            visited_bv.set(idx);
+            if (is_null)
+                null_bv.set(idx);
+            else
+            {
+                value_sum += v;
+                negative_count += (v < 0);
+            }
+            return 0;
+        };
+        int ret = bm::for_each_sparse(csv1, filter_bv, filter_func, 2);
+        assert(ret == 0);
+        assert(visited == 5);
+        assert(value_sum == -30);
+        assert(negative_count == 2);
+        assert(visited_bv.count() == 5);
+        assert(visited_bv.test(0));
+        assert(visited_bv.test(1));
+        assert(visited_bv.test(2));
+        assert(visited_bv.test(4));
+        assert(visited_bv.test(5));
+        assert(null_bv.count() == 2);
+        assert(null_bv.test(1));
+        assert(null_bv.test(4));
+    }
+}
+
 void TestCompressSparseVector()
 {
     cout << " ------------------------------ Test Compressed Sparse Vector " << endl;
@@ -42544,6 +43684,94 @@ void TestCompressSparseVector()
         }
     }
 
+
+    cout << "   rsc_sparse_vector<>::for_each_sparse tests.." << endl;
+    {
+        rsc_sparse_vector_u32 csv1;
+        csv1.push_back(0, 10);
+        csv1.push_back(2, 30);
+        csv1.push_back(5, 50);
+        csv1.sync();
+
+        unsigned visited = 0;
+        unsigned value_sum = 0;
+        rsc_sparse_vector_u32::bvector_type null_bv;
+        auto func = [&](unsigned v, bool is_null,
+                        rsc_sparse_vector_u32::size_type idx) -> int
+        {
+            ++visited;
+            value_sum += v;
+            if (is_null)
+                null_bv.set(idx);
+            return 0;
+        };
+        int ret = bm::for_each_sparse(csv1, func, 2);
+        assert(ret == 0);
+        assert(visited == csv1.size());
+        assert(value_sum == 90);
+        assert(null_bv.count() == 3);
+        assert(null_bv.test(1));
+        assert(null_bv.test(3));
+        assert(null_bv.test(4));
+
+        visited = 0;
+        auto stop_func = [&](unsigned, bool,
+                             rsc_sparse_vector_u32::size_type) -> int
+        {
+            return (++visited == 4) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(csv1, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 4);
+
+    }
+    {
+        rsc_sparse_vector_i32 csv1;
+        csv1.push_back(0, -10);
+        csv1.push_back(2, 30);
+        csv1.push_back(5, -50);
+        csv1.sync();
+
+        unsigned visited = 0;
+        int value_sum = 0;
+        unsigned negative_count = 0;
+        rsc_sparse_vector_i32::bvector_type null_bv;
+        auto func = [&](int v, bool is_null,
+                        rsc_sparse_vector_i32::size_type idx) -> int
+        {
+            ++visited;
+            if (is_null)
+            {
+                null_bv.set(idx);
+            }
+            else
+            {
+                value_sum += v;
+                negative_count += (v < 0);
+            }
+            return 0;
+        };
+        int ret = bm::for_each_sparse(csv1, func, 2);
+        assert(ret == 0);
+        assert(visited == csv1.size());
+        assert(value_sum == -30);
+        assert(negative_count == 2);
+        assert(null_bv.count() == 3);
+        assert(null_bv.test(1));
+        assert(null_bv.test(3));
+        assert(null_bv.test(4));
+
+        visited = 0;
+        auto stop_func = [&](int, bool,
+                             rsc_sparse_vector_i32::size_type) -> int
+        {
+            return (++visited == 4) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(csv1, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 4);
+
+    }
 
     cout << " back inserter tests" << endl;
     {
@@ -45344,6 +46572,35 @@ void SparseVecFloatConstIteratorTests()
     assert(itGoto.pos() == 2);
     assert(floatEq(itGoto.value(), toAdd[2]));
 
+    // --- buffered go_to() ---
+    std::vector<float> bigData(9000);
+    for (sparseVecFloat::size_type i = 0; i < bigData.size(); ++i)
+        bigData[i] = float(i) * 0.5f;
+
+    sparseVecFloat bigSVF;
+    bigSVF.import(bigData.data(), (sparseVecFloat::size_type)bigData.size());
+    sparseVecFloat::const_iterator itBuffered(&bigSVF, 10);
+    assert(floatEq(itBuffered.value(), bigData[10]));
+    itBuffered.go_to(512);
+    assert(itBuffered.valid());
+    assert(itBuffered.pos() == 512);
+    assert(floatEq(itBuffered.value(), bigData[512]));
+    itBuffered.go_to(8202);
+    assert(itBuffered.valid());
+    assert(itBuffered.pos() == 8202);
+    assert(floatEq(itBuffered.value(), bigData[8202]));
+    itBuffered.go_to(9000);
+    assert(!itBuffered.valid());
+    itBuffered.go_to(1024);
+    assert(itBuffered.valid());
+    assert(floatEq(itBuffered.value(), bigData[1024]));
+    itBuffered.go_to(8998);
+    assert(itBuffered.valid());
+    assert(floatEq(itBuffered.value(), bigData[8998]));
+    assert(itBuffered.advance());
+    assert(floatEq(itBuffered.value(), bigData[8999]));
+    assert(!itBuffered.advance());
+
     // --- empty vector iterator ---
     sparseVecFloat emptySVF;
     sparseVecFloat::const_iterator itEmpty(&emptySVF);
@@ -45386,6 +46643,93 @@ void SparseVecFloatConstIteratorTests()
         assert(floatEq(*it, toAdd[idx]));
     }
     assert(idx == 3);
+}
+
+void SparseVecFloatForEachSparseTests()
+{
+    std::cout << "-------------------------SparseVecFloatForEachSparseTests()" << std::endl;
+
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    float toAdd[] = { 1.25f, 2.5f, -3.75f, 4.0f, 5.5f };
+    sparseVecFloat sv(bm::use_null);
+    sv.import(toAdd, 5);
+    sv.clear_range(2, 2, true);
+
+    unsigned visited = 0;
+    float value_sum = 0.0f;
+    sparseVecFloat::bvector_type null_bv;
+    auto func = [&](float v, bool is_null, sparseVecFloat::size_type idx) -> int
+    {
+        ++visited;
+        if (is_null)
+        {
+            null_bv.set(idx);
+        }
+        else
+        {
+            value_sum += v;
+        }
+        return 0;
+    };
+    int ret = bm::for_each_sparse(sv, func, 2);
+    assert(ret == 0);
+    assert(visited == sv.size());
+    assert(null_bv.count() == 1);
+    assert(null_bv.test(2));
+    assert(floatEq(value_sum, toAdd[0] + toAdd[1] + toAdd[3] + toAdd[4]));
+
+    visited = 0;
+    auto stop_func = [&](float, bool, sparseVecFloat::size_type) -> int
+    {
+        return (++visited == 4) ? -1 : 0;
+    };
+    ret = bm::for_each_sparse(sv, stop_func, 2);
+    assert(ret < 0);
+    assert(visited == 4);
+
+}
+
+void SparseVecFloatForEachSparseFilterTests()
+{
+    std::cout << "-------------------------SparseVecFloatForEachSparseFilterTests()" << std::endl;
+
+    auto floatEq = [](float a, float b) {
+        return std::fabs(a - b) < 0.001f;
+    };
+
+    float toAdd[] = { 1.25f, 2.5f, -3.75f, 4.0f, 5.5f };
+    sparseVecFloat sv(bm::use_null);
+    sv.import(toAdd, 5);
+    sv.clear_range(2, 2, true);
+
+    sparseVecFloat::bvector_type filter_bv { 0, 2, 4, 100 };
+    unsigned visited = 0;
+    float value_sum = 0.0f;
+    sparseVecFloat::bvector_type null_bv;
+    sparseVecFloat::bvector_type visited_bv;
+    auto filter_func = [&](float v, bool is_null, sparseVecFloat::size_type idx) -> int
+    {
+        ++visited;
+        visited_bv.set(idx);
+        if (is_null)
+            null_bv.set(idx);
+        else
+            value_sum += v;
+        return 0;
+    };
+    int ret = bm::for_each_sparse(sv, filter_bv, filter_func, 2);
+    assert(ret == 0);
+    assert(visited == 3);
+    assert(visited_bv.count() == 3);
+    assert(visited_bv.test(0));
+    assert(visited_bv.test(2));
+    assert(visited_bv.test(4));
+    assert(null_bv.count() == 1);
+    assert(null_bv.test(2));
+    assert(floatEq(value_sum, toAdd[0] + toAdd[4]));
 }
 
 void SparseVecFloatImportTest()
@@ -45966,6 +47310,7 @@ void SparseVecFloatTests()
 {
     SparseVecFloatGeneralTests();
     SparseVecFloatConstIteratorTests();
+    SparseVecFloatForEachSparseTests();
     SparseVecFloatImportTest();
     SparseVecFloatSerializeTest();
     SparseVecFloatRangeTests();
@@ -46004,20 +47349,36 @@ void in_range_const(sparseVecFloat sv, float from, float to, sparseVecFloat::bve
     }
 }
 
+void in_range_for_each_sparse(const sparseVecFloat& sv, float from, float to,
+                              sparseVecFloat::bvector_type& bv_out)
+{
+    if (from > to) std::swap(from, to);
+    auto func = [&](float v, bool is_null, sparseVecFloat::size_type idx) -> int
+    {
+        if (!is_null && v >= from && v <= to)
+            bv_out.set(idx);
+        return 0;
+    };
+    bm::for_each_sparse(sv, func);
+}
+
 void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to)
 {
     sparseVecFloat::bvector_type bv_range;
     sparseVecFloat::bvector_type bv_vector;
     sparseVecFloat::bvector_type bv_const;
+    sparseVecFloat::bvector_type bv_for_each_sparse;
 
     in_range(testSVF, from, to, bv_range);
     in_range_vect(temp, from, to, bv_vector);
     in_range_const(testSVF, from, to, bv_const);
+    in_range_for_each_sparse(testSVF, from, to, bv_for_each_sparse);
 
     bool range_eq_vector = (bv_range == bv_vector);
     bool range_eq_const  = (bv_range == bv_const);
+    bool range_eq_for_each_sparse = (bv_range == bv_for_each_sparse);
 
-    if (!range_eq_vector || !range_eq_const)
+    if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
     {
         std::cout << "Test[" << std::fixed << std::setprecision(6) << from << ", " << to << "] MISMATCH\n";
         if (!range_eq_vector)
@@ -46035,6 +47396,15 @@ void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float fr
             sparseVecFloat::bvector_type diff;
             diff = bv_range ^ bv_const;
             std::cout << "  range vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if (!range_eq_for_each_sparse)
+        {
+            sparseVecFloat::bvector_type diff;
+            diff = bv_range ^ bv_for_each_sparse;
+            std::cout << "  range vs for_each_sparse differs at " << diff.count() << " positions\n";
             auto en = diff.first();
             for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
                 std::cout << "  position: " << *en << "\n";
@@ -46164,21 +47534,37 @@ void in_range_constRSC(sparseVecFloatRSC sv, float from, float to, sparseVecFloa
     }
 }
 
+void in_range_for_each_sparseRSC(const sparseVecFloatRSC& sv, float from, float to,
+                                 sparseVecFloatRSC::bvector_type& bv_out)
+{
+    if (from > to) std::swap(from, to);
+    auto func = [&](float v, bool is_null, sparseVecFloatRSC::size_type idx) -> int
+    {
+        if (!is_null && v >= from && v <= to)
+            bv_out.set(idx);
+        return 0;
+    };
+    bm::for_each_sparse(sv, func);
+}
+
 void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, float from, float to)
 {
     sparseVecFloatRSC::bvector_type bv_range;
     sparseVecFloatRSC::bvector_type bv_vector;
     sparseVecFloatRSC::bvector_type bv_const;
+    sparseVecFloatRSC::bvector_type bv_for_each_sparse;
 
     in_rangeRSC(testSVF, from, to, bv_range);
     in_range_vectRSC(temp, from, to, bv_vector);
     in_range_constRSC(testSVF, from, to, bv_const);
+    in_range_for_each_sparseRSC(testSVF, from, to, bv_for_each_sparse);
 
     bool range_eq_vector = (bv_range == bv_vector);
     bool range_eq_const  = (bv_range == bv_const);
     bool range_eq_const_vector  = (bv_vector == bv_const);
+    bool range_eq_for_each_sparse = (bv_range == bv_for_each_sparse);
 
-    if (!range_eq_vector || !range_eq_const)
+    if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
     {
         std::cout << "Test[" << std::fixed << std::setprecision(6) << from << ", " << to << "] MISMATCH\n";
         if (!range_eq_vector)
@@ -46207,6 +47593,15 @@ void runSVFScannerTestRSC(std::vector<float> temp, sparseVecFloatRSC testSVF, fl
             sparseVecFloatRSC::bvector_type diff;
             diff = bv_vector ^ bv_const;
             std::cout << "  vector vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (sparseVecFloatRSC::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if (!range_eq_for_each_sparse)
+        {
+            sparseVecFloatRSC::bvector_type diff;
+            diff = bv_range ^ bv_for_each_sparse;
+            std::cout << "  range vs for_each_sparse differs at " << diff.count() << " positions\n";
             auto en = diff.first();
             for (sparseVecFloatRSC::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
                 std::cout << "  position: " << *en << "\n";
@@ -46373,20 +47768,36 @@ void in_range_const_unbounded(sparseVecFloat sv, float from, float to, sparseVec
     }
 }
 
+void in_range_for_each_sparse_unbounded(const sparseVecFloat& sv, float from, float to,
+                                        sparseVecFloat::bvector_type& bv_out)
+{
+    if (from > to) std::swap(from, to);
+    auto func = [&](float v, bool is_null, sparseVecFloat::size_type idx) -> int
+    {
+        if (!is_null && v > from && v < to)
+            bv_out.set(idx);
+        return 0;
+    };
+    bm::for_each_sparse(sv, func);
+}
+
 void runSVFScannerUnboundedTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to)
 {
     sparseVecFloat::bvector_type bv_range;
     sparseVecFloat::bvector_type bv_vector;
     sparseVecFloat::bvector_type bv_const;
+    sparseVecFloat::bvector_type bv_for_each_sparse;
 
     in_range_unbounded(testSVF, from, to, bv_range);
     in_range_vect_unbounded(temp, from, to, bv_vector);
     in_range_const_unbounded(testSVF, from, to, bv_const);
+    in_range_for_each_sparse_unbounded(testSVF, from, to, bv_for_each_sparse);
 
     bool range_eq_vector = (bv_range == bv_vector);
     bool range_eq_const  = (bv_range == bv_const);
+    bool range_eq_for_each_sparse = (bv_range == bv_for_each_sparse);
 
-    if (!range_eq_vector || !range_eq_const)
+    if (!range_eq_vector || !range_eq_const || !range_eq_for_each_sparse)
     {
         std::cout << "Test[" << std::fixed << std::setprecision(6) << from << ", " << to << "] MISMATCH\n";
         if (!range_eq_vector)
@@ -46404,6 +47815,15 @@ void runSVFScannerUnboundedTest(std::vector<float> temp, sparseVecFloat testSVF,
             sparseVecFloat::bvector_type diff;
             diff = bv_range ^ bv_const;
             std::cout << "  range vs const differs at " << diff.count() << " positions\n";
+            auto en = diff.first();
+            for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
+                std::cout << "  position: " << *en << "\n";
+        }
+        if (!range_eq_for_each_sparse)
+        {
+            sparseVecFloat::bvector_type diff;
+            diff = bv_range ^ bv_for_each_sparse;
+            std::cout << "  range vs for_each_sparse differs at " << diff.count() << " positions\n";
             auto en = diff.first();
             for (sparseVecFloat::size_type i = 0; i < 5 && en != diff.end(); ++i, ++en)
                 std::cout << "  position: " << *en << "\n";
@@ -47501,7 +48921,20 @@ return 0;
     ReplayGTSearchDebugDumpU32(36688, "/Users/anatoliykuznetsov/dev/BitMagic/tests/stress");
     return 0;
      */
-    
+/*
+    TestBasicMatrix();
+    CheckAllocLeaks(false);
+
+    TestSparseVectorSharedNullPlane();
+     CheckAllocLeaks(false);
+
+    TestRSCSparseVectorSharedNullPlane();
+     CheckAllocLeaks(false);
+ 
+    TestMixedSparseVectorSharedNullPlane();
+     CheckAllocLeaks(false);
+    return 0;
+*/
     if (is_all || is_low_level)
     {
 
@@ -47937,6 +49370,15 @@ return 0;
             TestSparseVector();
              CheckAllocLeaks(false);
 
+            TestSparseVectorSharedNullPlane();
+             CheckAllocLeaks(false);
+
+            TestMixedSparseVectorSharedNullPlane();
+             CheckAllocLeaks(false);
+
+            TestSparseVectorForEachSparseFilter();
+             CheckAllocLeaks(false);
+
             TestSignedSparseVector();
              CheckAllocLeaks(false);
 
@@ -48015,6 +49457,12 @@ return 0;
         if (is_all || is_csv || is_csv0)
         {
             TestCompressSparseVector();
+             CheckAllocLeaks(false);
+
+            TestRSCForEachSparseFilter();
+             CheckAllocLeaks(false);
+
+            TestRSCSparseVectorSharedNullPlane();
              CheckAllocLeaks(false);
 
             TestCompressSparseSignedVector();
@@ -48131,6 +49579,9 @@ return 0;
         if (is_all || is_svf0 || is_svf)
         {
             SparseVecFloatTests();
+            CheckAllocLeaks(false);
+
+            SparseVecFloatForEachSparseFilterTests();
             CheckAllocLeaks(false);
             
             SparseVecFloatScannerTests();
