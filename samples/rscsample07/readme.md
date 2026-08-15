@@ -1,49 +1,15 @@
-# rscsample07: shared NULL plane for RSC data frames
+# rscsample07: RSC shared NULL plane
 
-This example demonstrates a data-frame style construction where several sparse
-containers have identical NULL/not-NULL shape and therefore share one NOT NULL
-bit-vector.
+This sample demonstrates a data-frame style group of BitMagic sparse vectors where one `rsc_sparse_vector<>` owns the NOT NULL plane and secondary vectors attach to it.
 
-The leading column is an `rsc_sparse_vector<>`. It owns the NOT NULL plane and
-is responsible for its lifetime. Secondary columns attach to that plane after
-construction:
+The example covers:
 
-- another `rsc_sparse_vector<>`, which can also reuse the leader's rank-select
-  index after the leader is synchronized;
-- a plain `sparse_vector<>`, which shares the NULL plane but keeps its own value
-  bit-planes.
+- building multiple columns with the same NULL/not-NULL shape;
+- attaching RSC and plain sparse-vector followers to the master's NULL plane;
+- serializing followers without the external NULL plane;
+- restoring a connected group in the required order: master first, attach followers, then load followers;
+- using `set_bookmarks(true, 64)` for faster range deserialization;
+- range restore where the same `[from, to]` interval is applied to the master and every attached follower;
+- verifying that attached vectors keep the shared NULL plane and that RSC followers can reattach to the master's rank-select index after sync.
 
-## Construction pattern
-
-1. Construct all participating vectors as NULL-able containers.
-2. Load or build all vectors with the same logical NULL shape.
-3. Call `sync()` on the RSC owner when rank-select access is needed.
-4. Attach secondary vectors to the owner's NOT NULL plane.
-5. Keep the owner alive longer than all attached vectors.
-
-Secondary vectors do not own the shared NOT NULL plane. Destruction, clear,
-assignment and optimization of a secondary vector must not delete the master
-plane.
-
-## Mutations
-
-A write through any attached vector that changes NULL/not-NULL state changes the
-shared master plane. After such a shape-changing write, RSC vectors using that
-plane need their rank-select state invalidated and rebuilt before synced access.
-Value-only writes to already NOT NULL positions do not require rebuilding NULL
-state.
-
-## Serialization
-
-The master vector is serialized as a self-contained object because it owns the
-NOT NULL plane. Attached follower vectors skip externally owned NULL planes by
-default, reducing serialized size.
-
-Deserialization must follow the same build pattern:
-
-1. Deserialize the master first.
-2. Attach all follower vectors to the restored master's NOT NULL plane.
-3. Deserialize follower vectors whose external NULL plane was skipped.
-
-Loading a skipped-NULL follower into a standalone, non-attached vector is a
-configuration error and is expected to throw an exception.
+For connected groups, construct or attach all columns before deserializing followers whose external NULL plane was skipped. During range restore, use the same range for all columns so the restored value planes match the master-owned NULL plane.

@@ -23,7 +23,9 @@ For more information please visit:  http://bitmagic.io
   Shared NULL planes are useful when several columns are populated together and
   therefore have the same NULL/not-NULL shape. The leading vector owns the
   bit-vector lifetime. Secondary vectors reference the same bit-vector and skip
-  serializing it by default.
+  serializing it by default. The sample also shows range restore with
+  serializer bookmarks, where the same requested range is restored into the
+  master and all attached followers.
 
   \sa bm::sparse_vector
   \sa bm::rsc_sparse_vector
@@ -153,12 +155,15 @@ static
 void serialize_vector(const SV& sv,
                       bm::sparse_vector_serial_layout<SV>& layout,
                       bool serialize_external_null,
-                      bool disable_xor = false)
+                      bool disable_xor = false,
+                      bool use_bookmarks = false)
 {
     bm::sparse_vector_serializer<SV> ser;
     ser.set_serialize_external_null(serialize_external_null);
     if (disable_xor)
         ser.disable_xor_compression();
+    if (use_bookmarks)
+        ser.set_bookmarks(true, 64);
     ser.serialize(sv, layout);
 }
 
@@ -169,6 +174,17 @@ void deserialize_vector(SV& sv,
 {
     bm::sparse_vector_deserializer<SV> deser;
     deser.deserialize(sv, layout.buf());
+}
+
+template<typename SV>
+static
+void deserialize_vector_range(SV& sv,
+                              const bm::sparse_vector_serial_layout<SV>& layout,
+                              unsigned from,
+                              unsigned to)
+{
+    bm::sparse_vector_deserializer<SV> deser;
+    deser.deserialize_range(sv, layout.buf(), from, to);
 }
 
 /// Demonstrate skipped external NULL serialization and required load order.
@@ -208,10 +224,15 @@ void serialization_demo(const sample_data_frame& df)
         cout << "Skipped NULL follower rejected standalone deserialization" << endl;
     }
 
-    // Correct restore order: master first, attach followers, then load followers.
+    // Correct restore order: assemble the connected group, load the master,
+    // then load followers whose external NULL plane was skipped.
     sample_data_frame df2;
-    deserialize_vector(df2.master_id, master_layout);
     attach_followers(df2);
+    const bvector_type* bv_null_df2 = df2.master_id.get_null_bvector();
+    deserialize_vector(df2.master_id, master_layout);
+    assert(bv_null_df2 == df2.master_id.get_null_bvector());
+    assert(bv_null_df2 == df2.rsc_value.get_null_bvector());
+    assert(bv_null_df2 == df2.plain_value.get_null_bvector());
 
     bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> rsc_skip_xor_layout;
     bm::sparse_vector_serial_layout<sparse_vector_u32> sv_skip_xor_layout;
@@ -237,6 +258,117 @@ void serialization_demo(const sample_data_frame& df)
     assert(shared_stat.bv_count + 1 == owned_stat.bv_count);
 }
 
+/// Compare one restored range against the original data-frame columns.
+static
+void validate_range(const sample_data_frame& src,
+                    const sample_data_frame& restored,
+                    unsigned from,
+                    unsigned to)
+{
+    assert(restored.rsc_value.is_null_external());
+    assert(restored.plain_value.is_null_external());
+    assert(restored.master_id.get_null_bvector() ==
+           restored.rsc_value.get_null_bvector());
+    assert(restored.master_id.get_null_bvector() ==
+           restored.plain_value.get_null_bvector());
+
+    const unsigned check_to = (to < src.master_id.size()) ?
+                                to : unsigned(src.master_id.size() - 1);
+    for (unsigned i = from; i <= check_to; ++i)
+    {
+        assert(src.master_id.is_null(i) == restored.master_id.is_null(i));
+        assert(src.rsc_value.is_null(i) == restored.rsc_value.is_null(i));
+        assert(src.plain_value.is_null(i) == restored.plain_value.is_null(i));
+
+        unsigned src_v = 0, restored_v = 0;
+        bool src_found = src.master_id.try_get(i, src_v);
+        bool restored_found = restored.master_id.try_get(i, restored_v);
+        assert(src_found == restored_found);
+        if (src_found)
+            assert(src_v == restored_v);
+
+        src_found = src.rsc_value.try_get(i, src_v);
+        restored_found = restored.rsc_value.try_get(i, restored_v);
+        assert(src_found == restored_found);
+        if (src_found)
+            assert(src_v == restored_v);
+
+        src_found = src.plain_value.try_get(i, src_v);
+        restored_found = restored.plain_value.try_get(i, restored_v);
+        assert(src_found == restored_found);
+        if (src_found)
+            assert(src_v == restored_v);
+    }
+}
+
+/// Demonstrate follower edit and explicit RS rebuild for follow-up use.
+///
+/// This changes a value at an already NOT NULL position, so the shared NULL
+/// shape is preserved. Shape-changing edits must be coordinated across all RSC
+/// columns; otherwise their compressed value ranks no longer match the master.
+static
+void rs_rebuild_demo(sample_data_frame& df)
+{
+    const unsigned pos = 0;
+    assert(!df.master_id.is_null(pos));
+
+    df.plain_value.set(pos, 777);
+    assert(!df.master_id.is_null(pos));
+    assert(df.plain_value.get(pos) == 777);
+
+    // Explicitly rebuild the master RS index and reattach the RSC follower so
+    // subsequent rank/select operations can use the shared index again.
+    df.master_id.invalidate_rs_index();
+    df.rsc_value.invalidate_rs_index();
+    df.master_id.sync();
+    df.rsc_value.attach_null_bvector(df.master_id);
+
+    assert(df.master_id.in_sync());
+    assert(df.rsc_value.in_sync());
+    assert(df.rsc_value.is_rs_index_external());
+    assert(df.rsc_value.get_RS() == df.master_id.get_RS());
+}
+
+/// Demonstrate range restore for a connected group.
+///
+/// Bookmarks make range deserialization faster by adding skip points to the
+/// serialized bit-vector streams. All connected columns must be restored with
+/// the same range so the shared master NULL plane and value planes agree.
+static
+void range_restore_demo(const sample_data_frame& df)
+{
+    const unsigned from = 1024;
+    const unsigned to = 8192;
+
+    bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> master_layout;
+    bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> rsc_layout;
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_layout;
+
+    // Use bookmarks for fast range restore. Followers still skip external NULL.
+    serialize_vector(df.master_id, master_layout, true, false, true);
+    serialize_vector(df.rsc_value, rsc_layout, false, false, true);
+    serialize_vector(df.plain_value, sv_layout, false, false, true);
+
+    // Assemble the connected group before deserialization. The master owns the
+    // shared NULL plane; followers require it when their serialized NULL is skipped.
+    sample_data_frame df_range;
+    attach_followers(df_range);
+    const bvector_type* bv_null = df_range.master_id.get_null_bvector();
+    deserialize_vector_range(df_range.master_id, master_layout, from, to);
+    assert(bv_null == df_range.master_id.get_null_bvector());
+    assert(bv_null == df_range.rsc_value.get_null_bvector());
+
+    deserialize_vector_range(df_range.rsc_value, rsc_layout, from, to);
+    deserialize_vector_range(df_range.plain_value, sv_layout, from, to);
+
+    // Reattach the RSC follower after master sync so it can share the RS index.
+    df_range.master_id.sync();
+    df_range.rsc_value.attach_null_bvector(df_range.master_id);
+
+    validate_range(df, df_range, from, to);
+    cout << "Range restore [" << from << ", " << to << "] OK" << endl;
+}
+
 int main(void)
 {
     try
@@ -245,15 +377,9 @@ int main(void)
         fill_test_data(df);
         validate_data(df);
         serialization_demo(df);
+        range_restore_demo(df);
 
-        // Shape-changing edits through followers update the shared master plane.
-        // RSC containers must invalidate/rebuild RS state after such edits.
-        df.plain_value.set(2, 777);
-        assert(!df.master_id.is_null(2));
-        df.master_id.invalidate_rs_index();
-        df.rsc_value.invalidate_rs_index();
-        df.master_id.sync();
-        df.rsc_value.attach_null_bvector(df.master_id);
+        rs_rebuild_demo(df);
 
         cout << "rscsample07 OK" << endl;
     }
