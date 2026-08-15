@@ -477,6 +477,15 @@ protected:
                             const unsigned char* buf,
                             const bvector_type* mask_bv = 0);
 
+    /// deserialize bit-vector planes without an AND mask
+    void deserialize_planes_nomask(SV& sv, unsigned planes,
+                                   const unsigned char* buf);
+
+    /// deserialize bit-vector planes using an AND mask
+    void deserialize_planes_masked(SV& sv, unsigned planes,
+                                   const unsigned char* buf,
+                                   const bvector_type& mask_bv);
+
     /// load offset table
     void load_planes_off_table(const unsigned char* buf, bm::decoder& dec, unsigned planes);
 
@@ -1540,12 +1549,39 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
                                                 const unsigned char* buf,
                                                 const bvector_type* mask_bv)
 {
-    if (mask_bv && !idx_range_set_)
-        idx_range_set_ = mask_bv->find_range(idx_range_from_, idx_range_to_);
+    if (mask_bv)
+    {
+        if (!idx_range_set_)
+            idx_range_set_ = mask_bv->find_range(idx_range_from_, idx_range_to_);
+        deserialize_planes_masked(sv, planes, buf, *mask_bv);
+    }
+    else
+    {
+        deserialize_planes_nomask(sv, planes, buf);
+    }
 
-    // read-deserialize the planes based on offsets
-    //       backward order to bring the NULL vector first
-    //
+    switch (is_final_)
+    {
+    case bm::finalization::READONLY:
+        sv.set_ro_flag(true);
+        break;
+    default:
+        break;
+    }
+
+    deserial_.unset_range();
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::deserialize_planes_nomask(
+                                                SV& sv,
+                                                unsigned planes,
+                                                const unsigned char* buf)
+{
+    // Read-deserialize the planes based on offsets in backward order
+    // to bring the NULL vector first.
     for (int i = int(planes-1); i >= 0; --i)
     {
         size_t offset = off_vect_[unsigned(i)];
@@ -1558,49 +1594,28 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
         // add the vector into the XOR reference list
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));
-        if (mask_bv) // gather mask set, use AND operation deserializer
+
+        if (bm::conditional<SV::is_remap_support::value>::test() &&
+            !remap_buf_ptr_)
         {
-            typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
-            if (bm::conditional<SV::is_remap_support::value>::test()
-                && !remap_buf_ptr_) // last plane vector (special case)
-            {
-                size_t read_bytes =
-                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
-                bv->bit_and(*mask_bv, bvector_type::opt_compress);
-            }
-            else
-            {
-                if (idx_range_set_)
-                    deserial_.set_range(idx_range_from_, idx_range_to_);
-                deserial_.deserialize(*bv, bv_buf_ptr);
-                bv->bit_and(*mask_bv, bvector_type::opt_compress);
-            }
+            size_t read_bytes =
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+            if (idx_range_set_)
+                bv->keep_range(idx_range_from_, idx_range_to_);
         }
         else
         {
-            if (bm::conditional<SV::is_remap_support::value>::test() &&
-                !remap_buf_ptr_)
+            if (idx_range_set_)
             {
-                size_t read_bytes =
-                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
-                if (idx_range_set_)
-                    bv->keep_range(idx_range_from_, idx_range_to_);
+                deserial_.set_range(idx_range_from_, idx_range_to_);
+                deserial_.deserialize(*bv, bv_buf_ptr);
+                bv->keep_range(idx_range_from_, idx_range_to_);
             }
             else
             {
-                if (idx_range_set_)
-                {
-                    deserial_.set_range(idx_range_from_, idx_range_to_);
-                    deserial_.deserialize(*bv, bv_buf_ptr);
-                    bv->keep_range(idx_range_from_, idx_range_to_);
-                }
-                else
-                {
-                    //size_t read_bytes =
-                    deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-                }
+                //size_t read_bytes =
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
             }
         }
 
@@ -1613,18 +1628,58 @@ void sparse_vector_deserializer<SV>::deserialize_planes(
             break;
         }
     } // for i
+}
 
-    switch (is_final_)
+// -------------------------------------------------------------------------
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::deserialize_planes_masked(
+                                                SV& sv,
+                                                unsigned planes,
+                                                const unsigned char* buf,
+                                                const bvector_type& mask_bv)
+{
+    // Current masked restore decodes each selected plane, then applies AND.
+    // Keep it isolated for future bookmark-aware masked decoding.
+    for (int i = int(planes-1); i >= 0; --i)
     {
-    case bm::finalization::READONLY:
-        sv.set_ro_flag(true);
-        break;
-    default:
-        break;
-    }
+        size_t offset = off_vect_[unsigned(i)];
+        if (!offset) // empty vector
+            continue;
+        const unsigned char* bv_buf_ptr = buf + offset; // seek to position
+        bvector_type*  bv = sv.get_create_slice(unsigned(i));
+        BM_ASSERT(bv);
 
-    deserial_.unset_range();
+        // add the vector into the XOR reference list
+        if (!bv_ref_ptr_)
+            bv_ref_.add(bv, unsigned(i));
 
+        typename bvector_type::mem_pool_guard mp_g_z(pool_, *bv);
+        if (bm::conditional<SV::is_remap_support::value>::test()
+            && !remap_buf_ptr_) // last plane vector (special case)
+        {
+            size_t read_bytes =
+                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+            bv->bit_and(mask_bv, bvector_type::opt_compress);
+        }
+        else
+        {
+            if (idx_range_set_)
+                deserial_.set_range(idx_range_from_, idx_range_to_);
+            deserial_.deserialize(*bv, bv_buf_ptr);
+            bv->bit_and(mask_bv, bvector_type::opt_compress);
+        }
+
+        switch (is_final_)
+        {
+        case bm::finalization::READONLY:
+            bv->freeze();
+            break;
+        default:
+            break;
+        }
+    } // for i
 }
 
 // -------------------------------------------------------------------------
