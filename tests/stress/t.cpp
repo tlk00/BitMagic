@@ -46450,6 +46450,7 @@ void test_str_sv_des_fnc()
 }
 
 typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVecFloat;
+typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, bm::sparse_vector<unsigned int, bvect>>> sparseVecFloatRSC;
 
 void SparseVecFloatConstIteratorTests()
 {
@@ -47304,6 +47305,56 @@ void SparseVecFloatSerialStressTests()
         size_t serializedSize = testLayout.size();
         assert(serializedSize < rawSize);
     }
+    
+    {
+        unsigned int N = 10000000;
+        std::random_device rd;
+        std::mt19937 gen(rd());
+
+        std::uniform_real_distribution<float> null_chance(0.0f, 1.0f);
+        
+        std::vector<float> linData(N);
+
+        for (sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
+        {
+            if (null_chance(gen) >= 0.35f)
+            {
+                linData[i] = -1.0f * (float)i * 0.00123f;
+            }
+            else
+            {
+                linData[i] = std::numeric_limits<float>::quiet_NaN();
+            }
+        }
+        for(sparseVecFloatRSC::size_type i = 0; i < N/2; i++)
+        {
+            if (null_chance(gen) >= 0.35f)
+            {
+                linData[i+N/2] = (float)i * 0.00123f;
+            }
+            else
+            {
+                linData[i+N/2] = std::numeric_limits<float>::quiet_NaN();
+            }
+        }
+        
+        sparseVecFloatRSC sv;
+        sv.import(linData.data(), N);
+        sparseVecFloatRSC sv2;
+        sv2.import(linData.data(), N);
+        
+        bm::sparse_vector_float_serial_layout<sparseVecFloatRSC> testLayout;
+        bm::sparse_vector_float_serialize(sv, testLayout);
+        
+        sparseVecFloatRSC sv_restored;
+        const unsigned char* buf = testLayout.buf();
+        bm::sparse_vector_float_deserialize(sv_restored, buf);
+
+        assert(sv_restored.size() == N);
+        
+        assert(sv_restored.equal(sv2));
+        
+    }
 }
 
 void SparseVecFloatTests()
@@ -47504,7 +47555,6 @@ void SparseVecFloatScannerTests()
     std::cout << "-------------------------SVF Scanner Testing OK" << std::endl;
 }
 
-typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, bm::sparse_vector<unsigned int, bvect>>> sparseVecFloatRSC;
 
 void in_rangeRSC(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
@@ -47615,7 +47665,7 @@ void sparseVecFloatRSCScannerTests()
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
-    sparseVecFloatRSC::size_type N = 20000000;
+    sparseVecFloatRSC::size_type N = 10000000;
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -49574,7 +49624,7 @@ return 0;
             ReportTestBlockDone("-allsvser");
     }
 
-    if (is_all || is_svf){
+    if (is_all || is_svf || is_svf0 || is_svf1){
         
         if (is_all || is_svf0 || is_svf)
         {

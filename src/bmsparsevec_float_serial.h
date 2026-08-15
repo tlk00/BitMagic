@@ -456,6 +456,13 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
 
     signSerializer_.serialize(sv.signs_, signBufTemp);
     exponentSerializer_.serialize(sv.exponents_, expLayTemp);
+    
+    const bvector_type* bv_non_null_mask = sv.exponents_.get_null_bvector();
+    if (bv_non_null_mask)
+    {
+        mantissaSerializer_.set_serialize_external_null(false);
+    }
+    
     mantissaSerializer_.serialize(sv.mantissas_, mantLayTemp);
 
     size_t sign_size_ = signBufTemp.size();
