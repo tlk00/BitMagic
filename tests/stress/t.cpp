@@ -27738,7 +27738,7 @@ void TestSparseVectorForEachSparseFilter()
         sv.push_back(40);
         sv.set_null(1);
 
-        bm::bvector<> filter_bv { 0, 1, 3, 100 };
+        bvect filter_bv { 0, 1, 3, 100 };
         unsigned visited = 0;
         unsigned value_sum = 0;
         bm::bvector<> null_bv;
@@ -27783,7 +27783,7 @@ void TestSparseVectorForEachSparseFilter()
         sv.push_back(40);
         sv.set_null(1);
 
-        bm::bvector<> filter_bv { 0, 1, 2, 100 };
+        bvect filter_bv { 0, 1, 2, 100 };
         unsigned visited = 0;
         int value_sum = 0;
         unsigned negative_count = 0;
