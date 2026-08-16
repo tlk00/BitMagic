@@ -566,7 +566,7 @@ sparse_vector_float<SV>::sparse_vector_float(bm::null_support null_able,
  exponents_(is_rsc_sparse_vector<SV>::value ? bm::use_null : null_able, ap, bv_max_size, alloc),
  mantissas_(is_rsc_sparse_vector<SV>::value ? bm::use_null : null_able, ap, bv_max_size, alloc)
 {
-     if(null_able)
+     if(is_rsc_sparse_vector<SV>::value || null_able == bm::use_null)
      {
          mantissas_.attach_null_bvector(exponents_);
      }
