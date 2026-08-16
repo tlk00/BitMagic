@@ -460,7 +460,7 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
     const bvector_type* bv_non_null_mask = sv.exponents_.get_null_bvector();
     if (bv_non_null_mask)
     {
-        mantissaSerializer_.set_serialize_external_null(false);
+        mantissaSerializer_.set_serialize_external_null(true);
     }
     
     mantissaSerializer_.serialize(sv.mantissas_, mantLayTemp);
