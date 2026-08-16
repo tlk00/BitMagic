@@ -27945,12 +27945,15 @@ void TestSparseVectorSharedNullPlane()
     auto serialize_to_layout = [](const svector& sv,
                                   bm::sparse_vector_serial_layout<svector>& sv_lay,
                                   bool save_external_null,
-                                  bool disable_xor = false)
+                                  bool disable_xor = false,
+                                  bool use_bookmarks = false)
     {
         bm::sparse_vector_serializer<svector> sv_ser;
         sv_ser.set_serialize_external_null(save_external_null);
         if (disable_xor)
             sv_ser.disable_xor_compression();
+        if (use_bookmarks)
+            sv_ser.set_bookmarks(true, 64);
         sv_ser.serialize(sv, sv_lay);
     };
     auto deserialize_layout = [](svector& sv_out,
@@ -28022,6 +28025,143 @@ void TestSparseVectorSharedNullPlane()
         assert(sv1_c.is_null_external());
         assert(sv2_c.is_null_external());
     }
+
+    // Range restore uses the same range for the master and all attached followers.
+    auto deserialize_range_layout = [](svector& sv_out,
+                                       const bm::sparse_vector_serial_layout<svector>& sv_lay,
+                                       unsigned from,
+                                       unsigned to)
+    {
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize_range(sv_out, sv_lay.buf(), from, to);
+    };
+    auto check_range = [&](const svector& sv_src,
+                           const svector& sv_out,
+                           unsigned from,
+                           unsigned to)
+    {
+        unsigned check_to = (to < sv_size) ? to : sv_size - 1;
+        for (unsigned i = from; i <= check_to; ++i)
+        {
+            assert(sv_src.is_null(i) == sv_out.is_null(i));
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = sv_src.try_get(i, v_src);
+            bool f_out = sv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            if (f_src)
+                assert(v_src == v_out);
+        }
+    };
+    auto check_shared_range_restore = [&](unsigned from, unsigned to, bool use_bookmarks)
+    {
+        bm::sparse_vector_serial_layout<svector> sv0_lay, sv1_lay, sv2_lay;
+        serialize_to_layout(sv0, sv0_lay, true, false, use_bookmarks);
+        serialize_to_layout(sv1, sv1_lay, false, false, use_bookmarks);
+        serialize_to_layout(sv2, sv2_lay, false, false, use_bookmarks);
+
+        // Skipped external NULL must fail unless the destination is pre-attached.
+        bool ex_flag = false;
+        try
+        {
+            svector sv_bad(bm::use_null);
+            deserialize_range_layout(sv_bad, sv1_lay, from, to);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+
+        svector sv0_r(bm::use_null), sv1_r(bm::use_null), sv2_r(bm::use_null);
+        sv1_r.attach_null_bvector(sv0_r);
+        sv2_r.attach_null_bvector(sv0_r);
+        const bvect* bv_null_r = sv0_r.get_null_bvector();
+        deserialize_range_layout(sv0_r, sv0_lay, from, to);
+        assert(bv_null_r == sv0_r.get_null_bvector());
+        assert(bv_null_r == sv1_r.get_null_bvector());
+        deserialize_range_layout(sv1_r, sv1_lay, from, to);
+        deserialize_range_layout(sv2_r, sv2_lay, from, to);
+        assert(bv_null_r == sv0_r.get_null_bvector());
+        assert(bv_null_r == sv1_r.get_null_bvector());
+        assert(bv_null_r == sv2_r.get_null_bvector());
+        assert(sv1_r.is_null_external());
+        assert(sv2_r.is_null_external());
+        check_range(sv0, sv0_r, from, to);
+        check_range(sv1, sv1_r, from, to);
+        check_range(sv2, sv2_r, from, to);
+    };
+    check_shared_range_restore(0, 0, false);                         // point restore
+    check_shared_range_restore(0, 0, true);                          // bookmarked point restore
+    check_shared_range_restore(0, sv_size - 1, false);               // full range restore
+    check_shared_range_restore(0, sv_size - 1, true);                // bookmarked full range restore
+    check_shared_range_restore(sv_size - 8, sv_size + 1024, false);  // range past end
+    check_shared_range_restore(sv_size - 8, sv_size + 1024, true);   // bookmarked range past end
+
+    // Mask restore uses one address mask for master and every attached follower.
+    auto deserialize_mask_layout = [](svector& sv_out,
+                                      const bm::sparse_vector_serial_layout<svector>& sv_lay,
+                                      const bvect& bv_mask)
+    {
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize(sv_out, sv_lay.buf(), bv_mask);
+    };
+    auto check_mask = [&](const svector& sv_src,
+                          const svector& sv_out,
+                          const bvect& bv_mask)
+    {
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = bv_mask.test(i) && sv_src.try_get(i, v_src);
+            bool f_out = sv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            assert(sv_out.is_null(i) == !f_src);
+            if (f_src)
+                assert(v_src == v_out);
+        }
+    };
+    auto check_shared_mask_restore = [&]()
+    {
+        bm::sparse_vector_serial_layout<svector> sv0_lay, sv1_lay, sv2_lay;
+        serialize_to_layout(sv0, sv0_lay, true);
+        serialize_to_layout(sv1, sv1_lay, false);
+        serialize_to_layout(sv2, sv2_lay, false);
+
+        bvect bv_mask;
+        bv_mask.set(0); bv_mask.set(1); bv_mask.set(2);
+        bv_mask.set(100); bv_mask.set(sv_size - 1); bv_mask.set(sv_size + 512);
+
+        bool ex_flag = false;
+        try
+        {
+            svector sv_bad(bm::use_null);
+            deserialize_mask_layout(sv_bad, sv1_lay, bv_mask);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+
+        svector sv0_m(bm::use_null), sv1_m(bm::use_null), sv2_m(bm::use_null);
+        sv1_m.attach_null_bvector(sv0_m);
+        sv2_m.attach_null_bvector(sv0_m);
+        const bvect* bv_null_m = sv0_m.get_null_bvector();
+        deserialize_mask_layout(sv0_m, sv0_lay, bv_mask);
+        assert(bv_null_m == sv0_m.get_null_bvector());
+        assert(bv_null_m == sv1_m.get_null_bvector());
+        deserialize_mask_layout(sv1_m, sv1_lay, bv_mask);
+        deserialize_mask_layout(sv2_m, sv2_lay, bv_mask);
+        assert(bv_null_m == sv0_m.get_null_bvector());
+        assert(bv_null_m == sv1_m.get_null_bvector());
+        assert(bv_null_m == sv2_m.get_null_bvector());
+        assert(sv1_m.is_null_external());
+        assert(sv2_m.is_null_external());
+        check_mask(sv0, sv0_m, bv_mask);
+        check_mask(sv1, sv1_m, bv_mask);
+        check_mask(sv2, sv2_m, bv_mask);
+    };
+    check_shared_mask_restore();
 
     // Reattach deserialized vectors and recheck value/NULL equivalence.
     sv1_d.attach_null_bvector(sv0_d);
@@ -28205,12 +28345,15 @@ void TestRSCSparseVectorSharedNullPlane()
     auto serialize_to_layout = [](const csvector& csv,
                                   bm::sparse_vector_serial_layout<csvector>& sv_lay,
                                   bool save_external_null,
-                                  bool disable_xor = false)
+                                  bool disable_xor = false,
+                                  bool use_bookmarks = false)
     {
         bm::sparse_vector_serializer<csvector> sv_ser;
         sv_ser.set_serialize_external_null(save_external_null);
         if (disable_xor)
             sv_ser.disable_xor_compression();
+        if (use_bookmarks)
+            sv_ser.set_bookmarks(true, 64);
         sv_ser.serialize(csv, sv_lay);
     };
     auto deserialize_layout = [](csvector& csv_out,
@@ -28292,6 +28435,158 @@ void TestRSCSparseVectorSharedNullPlane()
         assert(stat_shared.bv_count + 1 == stat_owned.bv_count);
         assert(stat_shared.max_serialize_mem == stat_owned.max_serialize_mem);
     }
+
+    // Range restore uses the same range for the RSC master and attached followers.
+    auto deserialize_range_layout = [](csvector& csv_out,
+                                       const bm::sparse_vector_serial_layout<csvector>& sv_lay,
+                                       unsigned from,
+                                       unsigned to)
+    {
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize_range(csv_out, sv_lay.buf(), from, to);
+    };
+    auto check_range = [&](const csvector& csv_src,
+                           const csvector& csv_out,
+                           unsigned from,
+                           unsigned to)
+    {
+        unsigned check_to = (to < sv_size) ? to : sv_size - 1;
+        for (unsigned i = from; i <= check_to; ++i)
+        {
+            assert(csv_src.is_null(i) == csv_out.is_null(i));
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = csv_src.try_get(i, v_src);
+            bool f_out = csv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            if (f_src)
+                assert(v_src == v_out);
+        }
+    };
+    auto check_shared_range_restore = [&](unsigned from, unsigned to, bool use_bookmarks)
+    {
+        bm::sparse_vector_serial_layout<csvector> csv0_lay, csv1_lay, csv2_lay;
+        serialize_to_layout(csv0, csv0_lay, true, false, use_bookmarks);
+        serialize_to_layout(csv1, csv1_lay, false, false, use_bookmarks);
+        serialize_to_layout(csv2, csv2_lay, false, false, use_bookmarks);
+
+        // Skipped external NULL must fail unless the destination is pre-attached.
+        bool ex_flag = false;
+        try
+        {
+            csvector csv_bad;
+            deserialize_range_layout(csv_bad, csv1_lay, from, to);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+
+        csvector csv0_r, csv1_r, csv2_r;
+        csv1_r.attach_null_bvector(csv0_r);
+        csv2_r.attach_null_bvector(csv0_r);
+        const bvect* bv_null_r = csv0_r.get_null_bvector();
+        deserialize_range_layout(csv0_r, csv0_lay, from, to);
+        assert(bv_null_r == csv0_r.get_null_bvector());
+        assert(bv_null_r == csv1_r.get_null_bvector());
+        deserialize_range_layout(csv1_r, csv1_lay, from, to);
+        deserialize_range_layout(csv2_r, csv2_lay, from, to);
+        assert(bv_null_r == csv0_r.get_null_bvector());
+        assert(bv_null_r == csv1_r.get_null_bvector());
+        assert(bv_null_r == csv2_r.get_null_bvector());
+        csv0_r.sync();
+        csv1_r.attach_null_bvector(csv0_r);
+        csv2_r.attach_null_bvector(csv0_r);
+        assert(csv1_r.is_null_external());
+        assert(csv2_r.is_null_external());
+        assert(csv1_r.is_rs_index_external());
+        assert(csv2_r.is_rs_index_external());
+        check_range(csv0, csv0_r, from, to);
+        check_range(csv1, csv1_r, from, to);
+        check_range(csv2, csv2_r, from, to);
+    };
+    check_shared_range_restore(0, 0, false);                         // point restore
+    check_shared_range_restore(0, 0, true);                          // bookmarked point restore
+    check_shared_range_restore(0, sv_size - 1, false);               // full range restore
+    check_shared_range_restore(0, sv_size - 1, true);                // bookmarked full range restore
+    check_shared_range_restore(sv_size - 8, sv_size + 1024, false);  // range past end
+    check_shared_range_restore(sv_size - 8, sv_size + 1024, true);   // bookmarked range past end
+
+    // Mask restore uses one address mask for the RSC master and attached followers.
+    auto deserialize_mask_layout = [](csvector& csv_out,
+                                      const bm::sparse_vector_serial_layout<csvector>& sv_lay,
+                                      const bvect& bv_mask)
+    {
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize(csv_out, sv_lay.buf(), bv_mask);
+    };
+    auto check_mask = [&](const csvector& csv_src,
+                          const csvector& csv_out,
+                          const bvect& bv_mask)
+    {
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = csv_src.try_get(i, v_src);
+            bool f_out = csv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            assert(csv_out.is_null(i) == !f_src);
+            if (f_src)
+            {
+                if (bv_mask.test(i))
+                    assert(v_src == v_out);
+                else
+                    assert(v_out == 0);
+            }
+        }
+    };
+    auto check_shared_mask_restore = [&]()
+    {
+        bm::sparse_vector_serial_layout<csvector> csv0_lay, csv1_lay, csv2_lay;
+        serialize_to_layout(csv0, csv0_lay, true);
+        serialize_to_layout(csv1, csv1_lay, false);
+        serialize_to_layout(csv2, csv2_lay, false);
+
+        bvect bv_mask;
+        bv_mask.set(0); bv_mask.set(1); bv_mask.set(2);
+        bv_mask.set(100); bv_mask.set(sv_size - 1); bv_mask.set(sv_size + 512);
+
+        bool ex_flag = false;
+        try
+        {
+            csvector csv_bad;
+            deserialize_mask_layout(csv_bad, csv1_lay, bv_mask);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+
+        csvector csv0_m, csv1_m, csv2_m;
+        csv1_m.attach_null_bvector(csv0_m);
+        csv2_m.attach_null_bvector(csv0_m);
+        const bvect* bv_null_m = csv0_m.get_null_bvector();
+        deserialize_mask_layout(csv0_m, csv0_lay, bv_mask);
+        assert(bv_null_m == csv0_m.get_null_bvector());
+        assert(bv_null_m == csv1_m.get_null_bvector());
+        deserialize_mask_layout(csv1_m, csv1_lay, bv_mask);
+        deserialize_mask_layout(csv2_m, csv2_lay, bv_mask);
+        assert(bv_null_m == csv0_m.get_null_bvector());
+        assert(bv_null_m == csv1_m.get_null_bvector());
+        assert(bv_null_m == csv2_m.get_null_bvector());
+        csv0_m.sync();
+        csv1_m.attach_null_bvector(csv0_m);
+        csv2_m.attach_null_bvector(csv0_m);
+        assert(csv1_m.is_null_external());
+        assert(csv2_m.is_null_external());
+        assert(csv1_m.is_rs_index_external());
+        assert(csv2_m.is_rs_index_external());
+        check_mask(csv0, csv0_m, bv_mask);
+        check_mask(csv1, csv1_m, bv_mask);
+        check_mask(csv2, csv2_m, bv_mask);
+    };
+    check_shared_mask_restore();
 
     // Reattach deserialized RSC vectors and share the master's RS index.
     csv0_d.sync();
@@ -28418,15 +28713,29 @@ void TestMixedSparseVectorSharedNullPlane()
         bm::sparse_vector_deserializer<csvector> sv_deser;
         sv_deser.deserialize(csv_out, sv_lay.buf());
     };
+    auto serialize_rsc_to_layout = [](const csvector& csv,
+                                      bm::sparse_vector_serial_layout<csvector>& sv_lay,
+                                      bool save_external_null,
+                                      bool use_bookmarks = false)
+    {
+        bm::sparse_vector_serializer<csvector> sv_ser;
+        sv_ser.set_serialize_external_null(save_external_null);
+        if (use_bookmarks)
+            sv_ser.set_bookmarks(true, 64);
+        sv_ser.serialize(csv, sv_lay);
+    };
     auto serialize_sparse_to_layout = [](const svector& sv,
                                          bm::sparse_vector_serial_layout<svector>& sv_lay,
                                          bool save_external_null,
-                                         bool disable_xor = false)
+                                         bool disable_xor = false,
+                                         bool use_bookmarks = false)
     {
         bm::sparse_vector_serializer<svector> sv_ser;
         sv_ser.set_serialize_external_null(save_external_null);
         if (disable_xor)
             sv_ser.disable_xor_compression();
+        if (use_bookmarks)
+            sv_ser.set_bookmarks(true, 64);
         sv_ser.serialize(sv, sv_lay);
     };
     auto deserialize_sparse_layout = [](svector& sv_out,
@@ -28434,6 +28743,22 @@ void TestMixedSparseVectorSharedNullPlane()
     {
         bm::sparse_vector_deserializer<svector> sv_deser;
         sv_deser.deserialize(sv_out, sv_lay.buf());
+    };
+    auto deserialize_rsc_range_layout = [](csvector& csv_out,
+                                           const bm::sparse_vector_serial_layout<csvector>& sv_lay,
+                                           unsigned from,
+                                           unsigned to)
+    {
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize_range(csv_out, sv_lay.buf(), from, to);
+    };
+    auto deserialize_sparse_range_layout = [](svector& sv_out,
+                                              const bm::sparse_vector_serial_layout<svector>& sv_lay,
+                                              unsigned from,
+                                              unsigned to)
+    {
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize_range(sv_out, sv_lay.buf(), from, to);
     };
 
     // Skipping sparse follower NULL saves bytes and requires pre-attached load target.
@@ -28483,6 +28808,192 @@ void TestMixedSparseVectorSharedNullPlane()
     assert(sv2.equal(sv2_d));
     assert(sv1_d.is_null_external());
     assert(sv2_d.is_null_external());
+
+    // Range restore keeps the RSC owner and sparse followers on one NULL plane.
+    auto check_range_rsc = [&](const csvector& csv_src,
+                               const csvector& csv_out,
+                               unsigned from,
+                               unsigned to)
+    {
+        unsigned check_to = (to < sv_size) ? to : sv_size - 1;
+        for (unsigned i = from; i <= check_to; ++i)
+        {
+            assert(csv_src.is_null(i) == csv_out.is_null(i));
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = csv_src.try_get(i, v_src);
+            bool f_out = csv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            if (f_src)
+                assert(v_src == v_out);
+        }
+    };
+    auto check_range_sparse = [&](const svector& sv_src,
+                                  const svector& sv_out,
+                                  unsigned from,
+                                  unsigned to)
+    {
+        unsigned check_to = (to < sv_size) ? to : sv_size - 1;
+        for (unsigned i = from; i <= check_to; ++i)
+        {
+            assert(sv_src.is_null(i) == sv_out.is_null(i));
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = sv_src.try_get(i, v_src);
+            bool f_out = sv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            if (f_src)
+                assert(v_src == v_out);
+        }
+    };
+    auto check_mixed_range_restore = [&](unsigned from, unsigned to, bool use_bookmarks)
+    {
+        bm::sparse_vector_serial_layout<csvector> csv0_lay;
+        bm::sparse_vector_serial_layout<svector> sv1_lay, sv2_lay;
+        serialize_rsc_to_layout(csv0, csv0_lay, true, use_bookmarks);
+        serialize_sparse_to_layout(sv1, sv1_lay, false, false, use_bookmarks);
+        serialize_sparse_to_layout(sv2, sv2_lay, false, false, use_bookmarks);
+
+        // Sparse followers with skipped NULL must be connected before range load.
+        bool ex_flag = false;
+        try
+        {
+            svector sv_bad(bm::use_null);
+            deserialize_sparse_range_layout(sv_bad, sv1_lay, from, to);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+
+        csvector csv0_r;
+        svector sv1_r(bm::use_null), sv2_r(bm::use_null);
+        bvect* bv_null_r = csv0_r.get_null_bvector();
+        assert(bv_null_r);
+        sv1_r.attach_null_bvector(*bv_null_r);
+        sv2_r.attach_null_bvector(*bv_null_r);
+        deserialize_rsc_range_layout(csv0_r, csv0_lay, from, to);
+        assert(bv_null_r == csv0_r.get_null_bvector());
+        assert(bv_null_r == sv1_r.get_null_bvector());
+        deserialize_sparse_range_layout(sv1_r, sv1_lay, from, to);
+        deserialize_sparse_range_layout(sv2_r, sv2_lay, from, to);
+        assert(bv_null_r == csv0_r.get_null_bvector());
+        assert(bv_null_r == sv1_r.get_null_bvector());
+        assert(bv_null_r == sv2_r.get_null_bvector());
+        assert(sv1_r.is_null_external());
+        assert(sv2_r.is_null_external());
+        csv0_r.sync();
+        check_range_rsc(csv0, csv0_r, from, to);
+        check_range_sparse(sv1, sv1_r, from, to);
+        check_range_sparse(sv2, sv2_r, from, to);
+    };
+    check_mixed_range_restore(3, 3, false);                         // point restore
+    check_mixed_range_restore(3, 3, true);                          // bookmarked point restore
+    check_mixed_range_restore(0, sv_size - 1, false);               // full range restore
+    check_mixed_range_restore(0, sv_size - 1, true);                // bookmarked full range restore
+    check_mixed_range_restore(sv_size - 8, sv_size + 1024, false);  // range past end
+    check_mixed_range_restore(sv_size - 8, sv_size + 1024, true);   // bookmarked range past end
+
+    // Mask restore for mixed RSC owner and sparse followers uses one mask.
+    auto deserialize_rsc_mask_layout = [](csvector& csv_out,
+                                          const bm::sparse_vector_serial_layout<csvector>& sv_lay,
+                                          const bvect& bv_mask)
+    {
+        bm::sparse_vector_deserializer<csvector> sv_deser;
+        sv_deser.deserialize(csv_out, sv_lay.buf(), bv_mask);
+    };
+    auto deserialize_sparse_mask_layout = [](svector& sv_out,
+                                             const bm::sparse_vector_serial_layout<svector>& sv_lay,
+                                             const bvect& bv_mask)
+    {
+        bm::sparse_vector_deserializer<svector> sv_deser;
+        sv_deser.deserialize(sv_out, sv_lay.buf(), bv_mask);
+    };
+    auto check_mask_rsc = [&](const csvector& csv_src,
+                              const csvector& csv_out,
+                              const bvect& bv_mask)
+    {
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = csv_src.try_get(i, v_src);
+            bool f_out = csv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            assert(csv_out.is_null(i) == !f_src);
+            if (f_src)
+            {
+                if (bv_mask.test(i))
+                    assert(v_src == v_out);
+                else
+                    assert(v_out == 0);
+            }
+        }
+    };
+    auto check_mask_sparse = [&](const svector& sv_src,
+                                 const svector& sv_out,
+                                 const bvect& bv_mask)
+    {
+        for (unsigned i = 0; i < sv_size; ++i)
+        {
+            unsigned v_src = 0, v_out = 0;
+            bool f_src = sv_src.try_get(i, v_src);
+            bool f_out = sv_out.try_get(i, v_out);
+            assert(f_src == f_out);
+            assert(sv_out.is_null(i) == !f_src);
+            if (f_src)
+            {
+                if (bv_mask.test(i))
+                    assert(v_src == v_out);
+                else
+                    assert(v_out == 0);
+            }
+        }
+    };
+    auto check_mixed_mask_restore = [&]()
+    {
+        bm::sparse_vector_serial_layout<csvector> csv0_lay;
+        bm::sparse_vector_serial_layout<svector> sv1_lay, sv2_lay;
+        serialize_rsc_to_layout(csv0, csv0_lay, true);
+        serialize_sparse_to_layout(sv1, sv1_lay, false);
+        serialize_sparse_to_layout(sv2, sv2_lay, false);
+
+        bvect bv_mask;
+        bv_mask.set(0); bv_mask.set(1); bv_mask.set(2);
+        bv_mask.set(101); bv_mask.set(sv_size - 1); bv_mask.set(sv_size + 512);
+
+        bool ex_flag = false;
+        try
+        {
+            svector sv_bad(bm::use_null);
+            deserialize_sparse_mask_layout(sv_bad, sv1_lay, bv_mask);
+        }
+        catch (std::logic_error&)
+        {
+            ex_flag = true;
+        }
+        assert(ex_flag);
+
+        csvector csv0_m;
+        svector sv1_m(bm::use_null), sv2_m(bm::use_null);
+        bvect* bv_null_m = csv0_m.get_null_bvector();
+        assert(bv_null_m);
+        sv1_m.attach_null_bvector(*bv_null_m);
+        sv2_m.attach_null_bvector(*bv_null_m);
+        deserialize_rsc_mask_layout(csv0_m, csv0_lay, bv_mask);
+        assert(bv_null_m == csv0_m.get_null_bvector());
+        assert(bv_null_m == sv1_m.get_null_bvector());
+        deserialize_sparse_mask_layout(sv1_m, sv1_lay, bv_mask);
+        deserialize_sparse_mask_layout(sv2_m, sv2_lay, bv_mask);
+        assert(bv_null_m == csv0_m.get_null_bvector());
+        assert(bv_null_m == sv1_m.get_null_bvector());
+        assert(bv_null_m == sv2_m.get_null_bvector());
+        assert(sv1_m.is_null_external());
+        assert(sv2_m.is_null_external());
+        csv0_m.sync();
+        check_mask_rsc(csv0, csv0_m, bv_mask);
+        check_mask_sparse(sv1, sv1_m, bv_mask);
+        check_mask_sparse(sv2, sv2_m, bv_mask);
+    };
+    check_mixed_mask_restore();
 
     // Sparse follower stats exclude the RSC-owned NULL plane after mixed restore.
     svector sv1_owned(bm::use_null);
