@@ -655,6 +655,13 @@ public:
     typedef deseriaizer_base<DEC, block_idx_type>          parent_type;
     typedef typename parent_type::decoder_type             decoder_type;
     typedef bm::bv_ref_vector<BV>                          bv_ref_vector_type;
+#ifdef BM64ADDR
+    typedef bm::id64_t                                     marker_offset_type;
+#else
+    typedef unsigned                                       marker_offset_type;
+#endif
+    typedef bm::heap_vector<marker_offset_type,
+                            allocator_type, true>          marker_offset_vector_type;
 
 public:
     deserializer();
@@ -670,6 +677,45 @@ public:
     size_t deserialize(bvector_type&        bv,
                        const unsigned char* buf,
                        bm::word_t*          temp_block = 0);
+
+    /*!
+        Attach an optional external marker-offset vector to collect useful
+        plane-relative marker byte offsets during deserialize().
+
+        The caller must explicitly unset marker-offset use mode before enabling
+        construction mode.
+
+        @param marker_offsets - mutable output vector, or NULL to disable collection
+        @sa unset_marker_offset_vector()
+    */
+    void set_marker_offset_vector_construct(marker_offset_vector_type* marker_offsets);
+
+    /*!
+        Attach an optional read-only marker-offset vector for future optimized
+        deserialization. The current implementation wires the configuration but
+        still walks the serialized stream normally.
+
+        The caller must explicitly unset marker-offset construction mode before
+        enabling use mode.
+
+        @param marker_offsets - const input vector, or NULL to disable map use
+        @sa unset_marker_offset_vector()
+    */
+    void set_marker_offset_vector_use(const marker_offset_vector_type* marker_offsets);
+
+    /*! Disable marker-offset collection and marker-map use. */
+    void unset_marker_offset_vector() BMNOEXCEPT
+    {
+        marker_offsets_out_ = 0;
+        marker_offsets_in_ = 0;
+    }
+
+    /*! Attach optional block digest for marker-map based selective decoding. */
+    void set_block_digest_vector_use(const bvector_type* block_digest) BMNOEXCEPT
+        { block_digest_in_ = block_digest; }
+
+    /*! Disable block-digest selective decoding. */
+    void unset_block_digest_vector() BMNOEXCEPT { block_digest_in_ = 0; }
 
     // ----------------------------------------------------------------
     /**
@@ -706,6 +752,19 @@ protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
 protected:
+   static bool is_skip_marker(unsigned char btype) BMNOEXCEPT;
+   static bool is_single_block_payload_marker(unsigned char btype) BMNOEXCEPT;
+   static bool find_next_marker_offset(const marker_offset_vector_type* marker_offsets,
+                                       size_t marker_pos,
+                                       size_t& marker_idx,
+                                       size_t& next_marker_pos) BMNOEXCEPT;
+   static void clear_marker_offsets(marker_offset_vector_type& marker_offsets);
+   static void add_marker_offset(marker_offset_vector_type& marker_offsets,
+                                 size_t marker_pos);
+
+   bool is_block_requested(block_idx_type nb) const;
+   bool has_requested_blocks(block_idx_type nb_from, block_idx_type nb_to) const;
+
    void xor_decode(blocks_manager_type& bman);
    void xor_decode_chain(bm::word_t* BMRESTRICT blk) BMNOEXCEPT;
    void xor_reset() BMNOEXCEPT;
@@ -775,6 +834,11 @@ protected:
     unsigned                  is_range_set_;
     size_type                 idx_from_;
     size_type                 idx_to_;
+
+    // Optional marker-offset map wiring. Output and input modes are exclusive.
+    marker_offset_vector_type*       marker_offsets_out_;
+    const marker_offset_vector_type* marker_offsets_in_;
+    const bvector_type*              block_digest_in_;
 };
 
 
@@ -5115,7 +5179,10 @@ deserializer<BV, DEC>::deserializer()
   xor_block_(0),
   or_block_(0),
   or_block_idx_(0),
-  is_range_set_(0)
+  is_range_set_(0),
+  marker_offsets_out_(0),
+  marker_offsets_in_(0),
+  block_digest_in_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
     this->ex0_arr_ = alloc_.alloc_bit_block(tmp_buff_alloc_factor);
@@ -5512,6 +5579,11 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                                           const unsigned char* buf,
                                           bm::word_t*          /*temp_block*/)
 {
+    const marker_offset_vector_type* marker_offsets_in = marker_offsets_in_;
+    const bool digest_skip = marker_offsets_in && block_digest_in_;
+    if (digest_skip && bv.is_ro())
+        bv.clear(true);
+
     blocks_manager_type& bman = bv.get_blocks_manager();
     if (!bman.is_init())
     {
@@ -5526,8 +5598,11 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
 
     decoder_type dec(buf);
+    if (marker_offsets_out_)
+        clear_marker_offsets(*marker_offsets_out_);
+    size_t marker_idx = 0;
 
-    // Reading th serialization header
+    // Reading the serialization header
     //
     unsigned char header_flag =  dec.get_8();
     if (!(header_flag & BM_HM_NO_BO))
@@ -5635,7 +5710,10 @@ std::cout << "size=" << dec_last_size;
                 break; // early exit (out of target range)
         }
 
+        size_t marker_pos = size_t(dec.get_pos() - buf);
         btype = dec.get_8();
+        if (marker_offsets_out_ && is_skip_marker(btype))
+            add_marker_offset(*marker_offsets_out_, marker_pos);
         if (btype & (1 << 7)) // check if short zero-run packed here
         {
             nb = btype & ~(1 << 7);
@@ -5645,6 +5723,19 @@ std::cout << "size=" << dec_last_size;
         }
         bm::get_block_coord(nb_i, i0, j0);
         bm::word_t* blk = bman.get_block_ptr(i0, j0);
+        bool skip_payload = digest_skip && !is_block_requested(nb_i);
+        if (skip_payload && is_single_block_payload_marker(btype))
+        {
+            size_t next_marker_pos;
+            bool found = find_next_marker_offset(marker_offsets_in, marker_pos,
+                                                 marker_idx, next_marker_pos);
+            if (found)
+            {
+                dec.set_pos(buf + next_marker_pos);
+                ++nb_i;
+                continue;
+            }
+        }
 #ifdef BM_TRACE_DES
 auto dec_size = dec.size();
 std::cout << "_sz=" << (dec_size - dec_last_size);
@@ -5690,11 +5781,13 @@ dec_last_size = dec_size;
             #endif
             break;
         case set_block_aone:
-            bman.set_all_set(nb_i, bm::set_total_blocks-1);
+            if (has_requested_blocks(nb_i, bm::set_total_blocks-1))
+                bman.set_all_set(nb_i, bm::set_total_blocks-1);
             nb_i = bm::set_total_blocks;
             break;
         case set_block_1one:
-            bman.set_block_all_set(nb_i);
+            if (!skip_payload)
+                bman.set_block_all_set(nb_i);
             break;
         case set_block_8one:
             full_blocks = dec.get_8();
@@ -5724,9 +5817,13 @@ dec_last_size = dec_size;
             process_full_blocks:
             {
                 BM_ASSERT(full_blocks);
-                size_type from = nb_i * bm::gap_max_bits;
-                size_type to = from + full_blocks * bm::gap_max_bits;
-                bv.set_range(from, to-1);
+                block_idx_type nb_to = nb_i + block_idx_type(full_blocks) - 1;
+                if (has_requested_blocks(nb_i, nb_to))
+                {
+                    size_type from = nb_i * bm::gap_max_bits;
+                    size_type to = from + full_blocks * bm::gap_max_bits;
+                    bv.set_range(from, to-1);
+                }
                 nb_i += full_blocks-1;
             }
             break;
@@ -5990,6 +6087,186 @@ dec_last_size = dec_size;
     bman.shrink_top_blocks(); // reduce top blocks to necessary size
 
     return dec.size();
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::set_marker_offset_vector_construct(
+                                        marker_offset_vector_type* marker_offsets)
+{
+    if (marker_offsets && marker_offsets_in_)
+    {
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            throw std::logic_error("BM: marker offset map mode conflict");
+        #else
+            BM_THROW(BM_ERR_RANGE);
+        #endif
+    }
+    marker_offsets_out_ = marker_offsets;
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::set_marker_offset_vector_use(
+                                const marker_offset_vector_type* marker_offsets)
+{
+    if (marker_offsets && marker_offsets_out_)
+    {
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            throw std::logic_error("BM: marker offset map mode conflict");
+        #else
+            BM_THROW(BM_ERR_RANGE);
+        #endif
+    }
+    marker_offsets_in_ = marker_offsets;
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+bool deserializer<BV, DEC>::is_skip_marker(unsigned char btype) BMNOEXCEPT
+{
+    if (btype & (1u << 7u))
+        return true; // packed zero-run marker
+
+    switch (btype)
+    {
+    // Bookmarks and sync marks are block-index boundaries. Keep them in
+    // the marker map so skipped payloads resume through normal state updates.
+    case bm::set_nb_bookmark16:
+    case bm::set_nb_bookmark24:
+    case bm::set_nb_bookmark32:
+    case bm::set_nb_sync_mark8:
+    case bm::set_nb_sync_mark16:
+    case bm::set_nb_sync_mark24:
+    case bm::set_nb_sync_mark32:
+    case bm::set_nb_sync_mark48:
+    case bm::set_nb_sync_mark64:
+        return true;
+
+    default:
+        return true;
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+bool deserializer<BV, DEC>::is_single_block_payload_marker(
+                                        unsigned char btype) BMNOEXCEPT
+{
+    switch (btype)
+    {
+    case bm::set_block_bit:
+    case bm::set_block_bit_1bit:
+    case bm::set_block_bit_0runs:
+    case bm::set_block_bit_interval:
+    case bm::set_block_gap:
+    case bm::set_block_gapbit:
+    case bm::set_block_arrgap:
+    case bm::set_block_gap_egamma:
+    case bm::set_block_arrgap_egamma:
+    case bm::set_block_arrgap_egamma_inv:
+    case bm::set_block_arrgap_inv:
+    case bm::set_block_gap_bienc:
+    case bm::set_block_gap_bienc_v2:
+    case bm::set_block_arrgap_bienc:
+    case bm::set_block_arrgap_bienc_inv:
+    case bm::set_block_arrgap_bienc_v2:
+    case bm::set_block_arrgap_bienc_inv_v2:
+    case bm::set_block_gap_bienc_v3:
+    case bm::set_block_gap_bienc_v3s:
+    case bm::set_block_gap_egamma_v3:
+    case bm::set_block_arrbit:
+    case bm::set_block_arr_bienc:
+    case bm::set_block_arrbit_inv:
+    case bm::set_block_arr_bienc_inv:
+    case bm::set_block_bitgap_bienc:
+    case bm::set_block_arr_bienc_8bh:
+    case bm::set_block_arr_bienc_v3:
+    case bm::set_block_arr_bienc_inv_v3:
+    case bm::set_block_arr_bienc_v3s:
+    case bm::set_block_arr_bienc_inv_v3s:
+    case bm::set_block_bit_digest0:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+bool deserializer<BV, DEC>::find_next_marker_offset(
+                                const marker_offset_vector_type* marker_offsets,
+                                size_t marker_pos,
+                                size_t& marker_idx,
+                                size_t& next_marker_pos) BMNOEXCEPT
+{
+    if (!marker_offsets)
+        return false;
+
+    const size_t sz = marker_offsets->size();
+    while (marker_idx < sz && size_t((*marker_offsets)[marker_idx]) <= marker_pos)
+        ++marker_idx;
+    if (marker_idx >= sz)
+        return false;
+
+    next_marker_pos = size_t((*marker_offsets)[marker_idx]);
+    return next_marker_pos > marker_pos;
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+bool deserializer<BV, DEC>::is_block_requested(block_idx_type nb) const
+{
+    return (!block_digest_in_ || block_digest_in_->test(nb));
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+bool deserializer<BV, DEC>::has_requested_blocks(block_idx_type nb_from,
+                                                 block_idx_type nb_to) const
+{
+    if (!block_digest_in_)
+        return true;
+    if (nb_from > nb_to)
+        return false;
+    return block_digest_in_->count_range(nb_from, nb_to) != 0;
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::clear_marker_offsets(
+                                    marker_offset_vector_type& marker_offsets)
+{
+    marker_offsets.reset();
+}
+
+// ---------------------------------------------------------------------------
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::add_marker_offset(
+                                    marker_offset_vector_type& marker_offsets,
+                                    size_t marker_pos)
+{
+    if (marker_pos != size_t(marker_offset_type(marker_pos)))
+    {
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            throw std::logic_error("BM: marker offset overflow");
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    }
+    marker_offsets.push_back(marker_offset_type(marker_pos));
 }
 
 // ---------------------------------------------------------------------------

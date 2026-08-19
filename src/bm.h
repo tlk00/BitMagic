@@ -1056,6 +1056,22 @@ public:
     /// \sa is_ro
     void freeze();
 
+    /*!
+        \brief Optimize vector memory layout and freeze it as read-only.
+
+        This method runs optimize() before converting the vector into immutable
+        arena storage. Use it when the input may contain non-optimal bit blocks
+        and the final representation should minimize read-only memory usage.
+
+        @param temp_block - externally allocated temporary bit-block buffer,
+            or NULL to allocate internally
+        @param opt_mode - optimization level
+
+        \sa optimize, freeze, is_ro
+    */
+    void optimize_freeze(bm::word_t* temp_block = 0,
+                         optmode opt_mode = opt_compress);
+
     /// Returns true if vector is read-only
     bool is_ro() const BMNOEXCEPT { return blockman_.arena_; }
 
@@ -1995,6 +2011,15 @@ public:
         @internal
      */
     void fill_alloc_digest(bvector<Alloc>& bv_blocks) const;
+
+    /**
+        Build structural block digest vector.
+        1 is added if NB maps to a present block in this vector.
+
+        @param bv_blocks - [out] bvector where bit indexes are block numbers
+        @internal
+     */
+    void build_block_digest(bvector<Alloc>& bv_blocks) const;
     
     //@}
     
@@ -4084,6 +4109,43 @@ void bvector<Alloc>::fill_alloc_digest(bvector<Alloc>& bv_blocks) const
             } // for j
         } // for i
     } // if blk_root
+}
+
+// -----------------------------------------------------------------------
+
+template<typename Alloc>
+void bvector<Alloc>::build_block_digest(bvector<Alloc>& bv_blocks) const
+{
+    bv_blocks.clear(false);
+    bv_blocks.init();
+
+    const unsigned top_size = blockman_.top_block_size();
+    bm::word_t*** blk_root = blockman_.top_blocks_root();
+    if (!blk_root)
+        return;
+
+    typename bvector<Alloc>::bulk_insert_iterator bi(bv_blocks, bm::BM_SORTED);
+    for (unsigned i = 0; i < top_size; ++i)
+    {
+        const bm::word_t* const* blk_blk = blk_root[i];
+        if (!blk_blk)
+            continue;
+
+        const size_type nb_from = size_type(i) * bm::set_sub_array_size;
+        if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+        {
+            for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+                bi = nb_from + j;
+            continue;
+        }
+
+        for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
+        {
+            if (blk_blk[j])
+                bi = nb_from + j;
+        } // for j
+    } // for i
+    bi.flush();
 }
 
 
@@ -8077,6 +8139,17 @@ void bvector<Alloc>::freeze()
         return; // nothing to do read-only vector already
     bvector<Alloc> bv_ro(*this, bm::finalization::READONLY);
     swap(bv_ro);
+}
+
+//---------------------------------------------------------------------
+
+template<class Alloc>
+void bvector<Alloc>::optimize_freeze(bm::word_t* temp_block, optmode opt_mode)
+{
+    if (is_ro())
+        return; // nothing to do read-only vector already
+    optimize(temp_block, opt_mode);
+    freeze();
 }
 
 //---------------------------------------------------------------------

@@ -1,7 +1,7 @@
 #ifndef BMSPARSEVEC_SERIAL__H__INCLUDED__
 #define BMSPARSEVEC_SERIAL__H__INCLUDED__
 /*
-Copyright(c) 2002-2017 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,17 +37,6 @@ For more information please visit:  http://bitmagic.io
 
 namespace bm
 {
-
-template<class BV, typename TOut>
-void _print_bv(TOut& tout, const BV& bv)
-{
-    tout << bv.count() << ": ";
-    typename BV::enumerator en = bv.first();
-    for (; en.valid(); ++en)
-        tout << *en << ", ";
-    tout << std::endl;
-}
-
 
 /** \defgroup svserial Sparse vector serialization
     Sparse vector serialization
@@ -145,6 +134,10 @@ protected:
 
 };
 
+
+// -------------------------------------------------------------------------
+
+template<typename BV> class sparse_vector_deserialization_index;
 
 // -------------------------------------------------------------------------
 
@@ -365,6 +358,8 @@ public:
     typedef bvector_type*                   bvector_type_ptr;
     typedef typename SV::value_type         value_type;
     typedef typename SV::size_type          size_type;
+    typedef bm::sparse_vector_deserialization_index<bvector_type>
+                                            deserialization_index_type;
     typedef typename bvector_type::allocator_type::allocator_pool_type allocator_pool_type;
     typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
 
@@ -391,6 +386,33 @@ public:
         if NULL - resets the use of reference
     */
     void set_xor_ref(bv_ref_vector_type* bv_ref_ptr);
+
+    /**
+        Attach an optional non-owning deserialization index for masked/gather
+        deserialization. The caller owns the index and must keep it alive while
+        it is attached to the deserializer.
+
+        @param index - external index to use, or NULL to disable index-assisted deserialization
+    */
+    void set_deserialization_index(deserialization_index_type* index) BMNOEXCEPT
+        { deserialization_index_ = index; deserialization_index_use_ = false; }
+
+    /*! Enable use of attached deserialization index for masked deserialization. */
+    void set_deserialization_index_use(bool enable = true) BMNOEXCEPT
+        { deserialization_index_use_ = enable; }
+
+    /*!
+        Construct deserialization index for the serialized sparse vector.
+
+        The method performs a dry deserialization pass to collect the information
+        needed for later selective deserialization. Decoded temporary plane
+        content is cleared immediately after every plane, and remap data is not loaded.
+
+        @param index - [out] deserialization index to populate
+        @param buf - input BLOB source memory pointer
+    */
+    void construct_deserialization_index(deserialization_index_type& index,
+                                         const unsigned char* buf);
 
     /*!
         Deserialize sparse vector
@@ -489,6 +511,12 @@ protected:
     /// load offset table
     void load_planes_off_table(const unsigned char* buf, bm::decoder& dec, unsigned planes);
 
+    /// deserialize one plane and optionally build or use deserialization index entries
+    size_t deserialize_plane_with_deserialization_index(
+                    bvector_type& bv, const unsigned char* bv_buf_ptr,
+                    unsigned plane_idx,
+                    const bvector_type* block_digest_bv = 0);
+
     /// load NULL bit-plane (returns new planes count)
     int load_null_plane(SV& sv,
                         int planes,
@@ -536,11 +564,14 @@ protected:
     bm::rank_compressor<bvector_type>           rsc_compressor_;
     bvector_type                                not_null_mask_bv_;
     bvector_type                                rsc_mask_bv_;
+    bvector_type                                mask_block_digest_bv_;
     ///< Scratch decode target for serialized NULL discarded by attached vectors.
     bvector_type                                null_decode_scratch_bv_;
     bm::heap_vector<size_t, alloc_type, true>   off_vect_;
     bm::heap_vector<unsigned, alloc_type, true>  off32_vect_;
     rlen_vector_type                            remap_rlen_vect_;
+    deserialization_index_type*                deserialization_index_ = 0;
+    bool                                        deserialization_index_use_ = false;
 
     // XOR compression variables
     bv_ref_vector_type              bv_ref_;         ///< reference vector
@@ -552,6 +583,104 @@ protected:
     size_type                                   idx_range_to_;
 };
 
+
+/*!
+    \brief Acceleration index for selective sparse vector deserialization.
+
+    The index is built once from a serialized sparse vector BLOB and can be
+    attached to a deserializer to speed up masked/gather deserialization. It
+    lets the deserializer seek directly to serialized regions needed by the
+    requested element mask and skip unrelated data. The object is reusable for
+    the same serialized BLOB. Rebuild it whenever the serialized data changes.
+
+    \ingroup svserial
+*/
+template<typename BV>
+class sparse_vector_deserialization_index
+{
+public:
+    typedef BV                                               bvector_type;
+    typedef typename bvector_type::allocator_type            allocator_type;
+    typedef bm::deserializer<BV, bm::decoder>                deserializer_type;
+    typedef typename deserializer_type::marker_offset_type   offset_type;
+    typedef typename deserializer_type::marker_offset_vector_type row_type;
+    typedef bm::heap_vector<row_type, allocator_type, false> row_vector_type;
+
+public:
+    /*!
+        \brief Reset the index and allocate rows for serialized sparse-vector planes.
+
+        Existing index content is discarded. Empty row containers are created for
+        every plane expected in the serialized sparse vector.
+
+        \param rows - number of plane rows to prepare in the index
+    */
+    void reset(unsigned rows);
+
+    /*!
+        \brief Return number of plane rows stored in the index.
+
+        \return number of indexed plane rows
+    */
+    unsigned rows() const BMNOEXCEPT;
+
+    /*!
+        \brief Create or replace an index row for a serialized plane.
+
+        The requested row is cleared before it is returned. If the requested row
+        is beyond the current index size, the index is expanded to include it.
+
+        \param row - zero-based sparse-vector plane index
+        \return mutable row used to collect deserialization offsets for the plane
+    */
+    row_type* construct_row(unsigned row);
+
+    /*!
+        \brief Get a mutable index row for a serialized plane.
+
+        Empty and out-of-range rows are reported as NULL.
+
+        \param row - zero-based sparse-vector plane index
+        \return mutable row pointer, or NULL when the row has no index entries
+    */
+    row_type* get_row(unsigned row) BMNOEXCEPT;
+
+    /*!
+        \brief Get a read-only index row for a serialized plane.
+
+        Empty and out-of-range rows are reported as NULL.
+
+        \param row - zero-based sparse-vector plane index
+        \return const row pointer, or NULL when the row has no index entries
+    */
+    const row_type* get_row(unsigned row) const BMNOEXCEPT;
+
+    /*!
+        \brief Count serialized offset entries collected in the index.
+
+        \param non_empty_rows - optional output for the number of rows with entries
+        \return total number of offset entries in all index rows
+    */
+    size_t count_offsets(unsigned* non_empty_rows = 0) const BMNOEXCEPT;
+
+    /*!
+        \brief Release unused row capacity after index construction.
+
+        This compacts index memory after the deserializer has collected all
+        offset entries for the serialized BLOB.
+    */
+    void optimize();
+
+    /*!
+        \brief Estimate memory used by this deserialization index.
+
+        \return approximate memory footprint in bytes, including row containers
+    */
+    size_t memory_used() const BMNOEXCEPT;
+
+protected:
+    row_vector_type rows_;
+};
 
 
 /*!
@@ -817,7 +946,106 @@ int compressed_collection_deserializer<CBC>::deserialize(
 }
 
 // -------------------------------------------------------------------------
-//
+// sparse_vector_deserialization_index methods
+// -------------------------------------------------------------------------
+
+template<typename BV>
+void sparse_vector_deserialization_index<BV>::reset(unsigned rows)
+{
+    rows_.resize(rows);
+    for (unsigned i = 0; i < rows; ++i)
+        rows_[i].reset();
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+unsigned sparse_vector_deserialization_index<BV>::rows() const BMNOEXCEPT
+{
+    return unsigned(rows_.size());
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+typename sparse_vector_deserialization_index<BV>::row_type*
+sparse_vector_deserialization_index<BV>::construct_row(unsigned row)
+{
+    if (row >= rows_.size())
+        rows_.resize(row + 1);
+    rows_[row].reset();
+    return &rows_[row];
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+typename sparse_vector_deserialization_index<BV>::row_type*
+sparse_vector_deserialization_index<BV>::get_row(unsigned row) BMNOEXCEPT
+{
+    return (row < rows_.size() && !rows_[row].empty()) ? &rows_[row] : 0;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+const typename sparse_vector_deserialization_index<BV>::row_type*
+sparse_vector_deserialization_index<BV>::get_row(unsigned row) const BMNOEXCEPT
+{
+    return (row < rows_.size() && !rows_[row].empty()) ? &rows_[row] : 0;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+size_t sparse_vector_deserialization_index<BV>::count_offsets(
+                                    unsigned* non_empty_rows) const BMNOEXCEPT
+{
+    size_t count = 0;
+    unsigned non_empty = 0;
+    for (unsigned i = 0; i < rows_.size(); ++i)
+    {
+        size_t sz = rows_[i].size();
+        if (sz)
+        {
+            ++non_empty;
+            count += sz;
+        }
+    }
+    if (non_empty_rows)
+        *non_empty_rows = non_empty;
+    return count;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+void sparse_vector_deserialization_index<BV>::optimize()
+{
+    for (unsigned i = 0; i < rows_.size(); ++i)
+    {
+        row_type& row = rows_[i];
+        if (row.capacity() > row.size())
+        {
+            row_type tmp(row);
+            row.swap(tmp);
+        }
+    }
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+size_t sparse_vector_deserialization_index<BV>::memory_used() const BMNOEXCEPT
+{
+    size_t mem = sizeof(*this) + rows_.capacity() * sizeof(row_type);
+    for (unsigned i = 0; i < rows_.size(); ++i)
+        mem += rows_[i].capacity() * sizeof(offset_type);
+    return mem;
+}
+
+// -------------------------------------------------------------------------
+// sparse_vector_serializer methods
 // -------------------------------------------------------------------------
 
 template<typename SV>
@@ -1219,6 +1447,7 @@ sparse_vector_deserializer<SV>::sparse_vector_deserializer()
     temp_block_ = alloc_.alloc_bit_block();
     not_null_mask_bv_.set_allocator_pool(&pool_);
     rsc_mask_bv_.set_allocator_pool(&pool_);
+    mask_block_digest_bv_.set_allocator_pool(&pool_);
     // The scratch NULL decode target uses the deserializer pool, not master NULL ownership.
     null_decode_scratch_bv_.set_allocator_pool(&pool_);
 }
@@ -1321,6 +1550,81 @@ void sparse_vector_deserializer<SV>::deserialize_structure(SV& sv,
 // -------------------------------------------------------------------------
 
 template<typename SV>
+void sparse_vector_deserializer<SV>::construct_deserialization_index(
+                                            deserialization_index_type& matrix,
+                                            const unsigned char* buf)
+{
+    BM_ASSERT(buf);
+
+    SV sv_tmp;
+    remap_buf_ptr_ = 0;
+    idx_range_set_ = false;
+
+    bm::decoder dec(buf); // TODO: implement correct processing of byte-order
+
+    unsigned char matr_s_ser = 0;
+    unsigned planes = load_header(dec, sv_tmp, matr_s_ser);
+    (void)matr_s_ser;
+    matrix.reset(planes);
+    if (!sv_size_)
+        return;
+
+    sv_tmp.resize_internal(size_type(sv_size_));
+    sv_tmp.get_bmatrix().allocate_rows(planes);
+    bv_ref_.reset();
+
+    load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+
+    for (unsigned i = 0; i < planes; ++i)
+    {
+        if (!off_vect_[i]) // empty vector
+            continue;
+
+        bvector_type* bv = sv_tmp.get_create_slice(i);
+        BM_ASSERT(bv);
+        if (!bv_ref_ptr_)
+            bv_ref_.add(bv, i);
+    } // for i
+
+    setup_xor_compression();
+
+    struct marker_map_guard_type
+    {
+        bm::deserializer<bvector_type, bm::decoder>& deserial_;
+        bm::operation_deserializer<bvector_type>&    op_deserial_;
+        bv_ref_vector_type&                          bv_ref_;
+
+        ~marker_map_guard_type() BMNOEXCEPT
+        {
+            deserial_.unset_marker_offset_vector();
+            deserial_.unset_block_digest_vector();
+            op_deserial_.set_ref_vectors(0);
+            deserial_.set_ref_vectors(0);
+            bv_ref_.reset();
+        }
+    } marker_map_guard = { deserial_, op_deserial_, bv_ref_ };
+
+    for (int i = int(planes-1); i >= 0; --i)
+    {
+        size_t offset = off_vect_[unsigned(i)];
+        if (!offset) // empty vector
+            continue;
+
+        const unsigned char* bv_buf_ptr = buf + offset; // seek to position
+        bvector_type* bv = sv_tmp.get_bmatrix().get_row(unsigned(i));
+        BM_ASSERT(bv);
+
+        deserial_.unset_marker_offset_vector();
+        deserial_.unset_block_digest_vector();
+        deserial_.set_marker_offset_vector_construct(matrix.construct_row(unsigned(i)));
+        deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+        bv->clear(true);
+    } // for i
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
 void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
                                                  const unsigned char* buf,
                                                  size_type from,
@@ -1350,6 +1654,10 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
     bv_ref_.reset();
 
     load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+    if (deserialization_index_ && !deserialization_index_use_)
+    {
+        deserialization_index_->reset(planes);
+    }
 
     setup_xor_compression();
 
@@ -1423,8 +1731,18 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     bv_ref_.reset();
 
     load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+    if (deserialization_index_ && !deserialization_index_use_)
+    {
+        deserialization_index_->reset(planes);
+    }
 
     setup_xor_compression();
+
+    if (mask_bv && !idx_range_set_ &&
+        !bm::conditional<SV::is_rsc_support::value>::test())
+    {
+        idx_range_set_ = mask_bv->find_range(idx_range_from_, idx_range_to_);
+    }
 
     sv.get_bmatrix().allocate_rows(planes);
     planes = (unsigned)load_null_plane(sv, int(planes), buf, mask_bv);
@@ -1452,6 +1770,14 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     }
 
     deserialize_planes(sv, planes, buf, mask_bv);
+
+    if (mask_bv && !bm::conditional<SV::is_rsc_support::value>::test() &&
+        sv.is_nullable() && !sv.is_null_external())
+    {
+        bvector_type* bv_null = sv.get_bmatrix().get_row(SV::sv_value_slices);
+        if (bv_null)
+            bv_null->bit_and(*mask_bv, bvector_type::opt_compress);
+    }
 
     // restore NULL slice index
 #ifdef _MSC_VER
@@ -1599,30 +1925,29 @@ void sparse_vector_deserializer<SV>::deserialize_planes_nomask(
             !remap_buf_ptr_)
         {
             size_t read_bytes =
-                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
             remap_buf_ptr_ = bv_buf_ptr + read_bytes;
-            if (idx_range_set_)
-                bv->keep_range(idx_range_from_, idx_range_to_);
         }
         else
         {
             if (idx_range_set_)
             {
                 deserial_.set_range(idx_range_from_, idx_range_to_);
-                deserial_.deserialize(*bv, bv_buf_ptr);
-                bv->keep_range(idx_range_from_, idx_range_to_);
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
             }
             else
             {
-                //size_t read_bytes =
-                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
             }
         }
+        
+        if (idx_range_set_)
+            bv->keep_range(idx_range_from_, idx_range_to_);
 
         switch (is_final_)
         {
         case bm::finalization::READONLY:
-            bv->freeze();
+            bv->optimize_freeze(temp_block_, bvector_type::opt_compress);
             break;
         default:
             break;
@@ -1641,6 +1966,13 @@ void sparse_vector_deserializer<SV>::deserialize_planes_masked(
 {
     // Current masked restore decodes each selected plane, then applies AND.
     // Keep it isolated for future bookmark-aware masked decoding.
+    const bvector_type* block_digest_bv = 0;
+    if (deserialization_index_ && deserialization_index_use_)
+    {
+        mask_bv.build_block_digest(mask_block_digest_bv_);
+        block_digest_bv = &mask_block_digest_bv_;
+    }
+
     for (int i = int(planes-1); i >= 0; --i)
     {
         size_t offset = off_vect_[unsigned(i)];
@@ -1659,22 +1991,34 @@ void sparse_vector_deserializer<SV>::deserialize_planes_masked(
             && !remap_buf_ptr_) // last plane vector (special case)
         {
             size_t read_bytes =
-                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
+                                                       block_digest_bv);
             remap_buf_ptr_ = bv_buf_ptr + read_bytes;
-            bv->bit_and(mask_bv, bvector_type::opt_compress);
         }
         else
         {
-            if (idx_range_set_)
+            if (idx_range_set_ && !block_digest_bv)
                 deserial_.set_range(idx_range_from_, idx_range_to_);
-            deserial_.deserialize(*bv, bv_buf_ptr);
-            bv->bit_and(mask_bv, bvector_type::opt_compress);
+            deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
+                                                  block_digest_bv);
         }
+    } // for i
+
+    for (int i = int(planes-1); i >= 0; --i)
+    {
+        size_t offset = off_vect_[unsigned(i)];
+        if (!offset) // empty vector
+            continue;
+        bvector_type* bv = sv.get_bmatrix().get_row(unsigned(i));
+        if (!bv)
+            continue;
+
+        bv->bit_and(mask_bv, bvector_type::opt_compress); // apply mask
 
         switch (is_final_)
         {
         case bm::finalization::READONLY:
-            bv->freeze();
+            bv->optimize_freeze(temp_block_, bvector_type::opt_compress);
             break;
         default:
             break;
@@ -1719,11 +2063,20 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
         if (!bv_ref_ptr_)
             bv_ref_.add(bv, unsigned(i));
 
+        const bvector_type* block_digest_bv = 0;
+        if (mask_bv && deserialization_index_ && deserialization_index_use_ &&
+            !bm::conditional<SV::is_rsc_support::value>::test())
+        {
+            mask_bv->build_block_digest(mask_block_digest_bv_);
+            block_digest_bv = &mask_block_digest_bv_;
+        }
+
         if (bm::conditional<SV::is_rsc_support::value>::test())
         {
             // load the whole not-NULL vector regardless of range
             // TODO: load [0, idx_range_to_]
-            size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+            size_t read_bytes =
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
             remap_buf_ptr_ = bv_buf_ptr + read_bytes;
         }
         else // non-compressed SV
@@ -1733,7 +2086,9 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
             if (bm::conditional<SV::is_remap_support::value>::test())
             {
                 BM_ASSERT(!remap_buf_ptr_);
-                size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                size_t read_bytes =
+                    deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
+                                                           block_digest_bv);
                 remap_buf_ptr_ = bv_buf_ptr + read_bytes;
                 if (idx_range_set_)
                     bv->keep_range(idx_range_from_, idx_range_to_);
@@ -1741,17 +2096,19 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
             else
             if (idx_range_set_)
             {
-                deserial_.set_range(idx_range_from_, idx_range_to_);
-                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
-                bv->keep_range(idx_range_from_, idx_range_to_);
+                if (!block_digest_bv)
+                    deserial_.set_range(idx_range_from_, idx_range_to_);
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
+                                                      block_digest_bv);
+                if (!block_digest_bv)
+                    bv->keep_range(idx_range_from_, idx_range_to_);
                 deserial_.unset_range();
             }
             else
             {
-                deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+                deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
+                                                      block_digest_bv);
             }
-            if (mask_bv)
-                bv->bit_and(*mask_bv, bvector_type::opt_compress);
         }
 
         if (!is_external_null)
@@ -1759,7 +2116,7 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
             switch (is_final_)
             {
             case bm::finalization::READONLY:
-                bv->freeze();
+                bv->optimize_freeze(temp_block_, bvector_type::opt_compress);
                 break;
             default:
                 break;
@@ -1768,6 +2125,50 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
 
     }
     return planes-1;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+size_t sparse_vector_deserializer<SV>::deserialize_plane_with_deserialization_index(
+                    bvector_type& bv, const unsigned char* bv_buf_ptr,
+                    unsigned plane_idx,
+                    const bvector_type* block_digest_bv)
+{
+    struct deserial_map_guard_type
+    {
+        bm::deserializer<bvector_type, bm::decoder>& deserial_;
+        void reset_deserializer_maps() BMNOEXCEPT
+        {
+            deserial_.unset_marker_offset_vector();
+            deserial_.unset_block_digest_vector();
+        }
+        ~deserial_map_guard_type() BMNOEXCEPT
+        {
+            reset_deserializer_maps();
+        }
+    } deserial_map_guard = { deserial_ };    
+    deserial_map_guard.reset_deserializer_maps();
+
+    if (deserialization_index_)
+    {
+        if (deserialization_index_use_)
+        {
+            const typename deserialization_index_type::row_type* row =
+                deserialization_index_->get_row(plane_idx);
+            if (row && block_digest_bv)
+            {
+                deserial_.set_marker_offset_vector_use(row);
+                deserial_.set_block_digest_vector_use(block_digest_bv);
+            }
+            return deserial_.deserialize(bv, bv_buf_ptr, temp_block_);
+        }
+
+        deserial_.set_marker_offset_vector_construct(
+            deserialization_index_->construct_row(plane_idx));
+        return deserial_.deserialize(bv, bv_buf_ptr, temp_block_);
+    }
+    return deserial_.deserialize(bv, bv_buf_ptr, temp_block_);
 }
 
 // -------------------------------------------------------------------------
@@ -1797,11 +2198,7 @@ void sparse_vector_deserializer<SV>::load_planes_off_table(
                 if (plane_digest_bv_.test(i))
                     offset = (size_t) dec_o.get_64();
                 off_vect_[i] = offset;
-//std::cout << offset << ",";
             } // for i
-
-//std::cout << std::endl;
-//_Print_arr(&off_vect_[0], planes);
             break;
         case '3':
         {
