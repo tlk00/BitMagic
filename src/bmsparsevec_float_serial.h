@@ -183,6 +183,41 @@ protected:
     
 };
 
+template<typename SV> class sparse_vector_float_deserializer;
+
+/**
+    Acceleration index for selective sparse_vector_float deserialization.
+
+    The index is built once from a serialized sparse_vector_float BLOB and can
+    be attached to a deserializer to speed up masked/gather deserialization.
+    It lets the deserializer seek directly to serialized regions needed by the
+    requested element mask and skip unrelated data.
+
+    The object is reusable for the same serialized BLOB. Rebuild it whenever
+    the serialized data changes.
+*/
+template<typename SV>
+class sparse_vector_float_deserialization_index
+{
+    typedef typename SV::sparse_vector_u sparse_vector_type;
+    typedef bm::sparse_vector_deserializer<sparse_vector_type> sparse_vector_deserializer_type;
+
+public:
+    typedef typename sparse_vector_deserializer_type::deserialization_index_type deserialization_index_type;
+
+public:
+    void reset();
+    void optimize();
+    size_t count_offsets() const BMNOEXCEPT;
+    size_t memory_used() const BMNOEXCEPT;
+
+private:
+    friend class bm::sparse_vector_float_deserializer<SV>;
+
+    deserialization_index_type exponent_index_;
+    deserialization_index_type mantissa_index_;
+};
+
 /**
     sparse vector de-serializer
 */
@@ -194,6 +229,8 @@ class sparse_vector_float_deserializer
     typedef typename SV::size_type          size_type;
     typedef typename bm::serializer<bvector_type>::bv_ref_vector_type bv_ref_vector_type;
     typedef typename SV::sparse_vector_u   sparse_vector_type;
+    typedef bm::sparse_vector_deserializer<sparse_vector_type> sparse_vector_deserializer_type;
+    typedef bm::sparse_vector_float_deserialization_index<SV> deserialization_index_type;
 
 public:
     /// @brief constructor
@@ -218,6 +255,16 @@ public:
         if NULL - resets the use of reference
     */
     void set_xor_ref(bv_ref_vector_type* bv_ref_ptr);
+
+    /*! Attach external deserialization index. */
+    void set_deserialization_index(deserialization_index_type* index) BMNOEXCEPT;
+
+    /*! Enable use of attached deserialization index for masked deserialization. */
+    void set_deserialization_index_use(bool enable = true) BMNOEXCEPT;
+
+    /*! Build deserialization index for the serialized float sparse vector. */
+    void construct_deserialization_index(deserialization_index_type& index,
+                                         const unsigned char* buf);
 
     /*!
         Deserialize sparse vector
@@ -270,8 +317,8 @@ public:
                      const bvector_type& mask_bv);
 
 private:
-    bm::sparse_vector_deserializer<sparse_vector_type> exponentDeserializer_;   ///!< Exponents deserializer
-    bm::sparse_vector_deserializer<sparse_vector_type> mantissaDeserializer_;   ///!< Mantissas deserializer
+    sparse_vector_deserializer_type exponentDeserializer_;   ///!< Exponents deserializer
+    sparse_vector_deserializer_type mantissaDeserializer_;   ///!< Mantissas deserializer
 };
 
 //---------------------------------------------------------------------
@@ -494,6 +541,41 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
 }
 
 //---------------------------------------------------------------------
+// sparse_vector_float_deserialization_index methods
+
+template<class SV>
+void sparse_vector_float_deserialization_index<SV>::reset()
+{
+    exponent_index_.reset(0);
+    mantissa_index_.reset(0);
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserialization_index<SV>::optimize()
+{
+    exponent_index_.optimize();
+    mantissa_index_.optimize();
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+size_t sparse_vector_float_deserialization_index<SV>::count_offsets() const BMNOEXCEPT
+{
+    return exponent_index_.count_offsets() + mantissa_index_.count_offsets();
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+size_t sparse_vector_float_deserialization_index<SV>::memory_used() const BMNOEXCEPT
+{
+    return exponent_index_.memory_used() + mantissa_index_.memory_used();
+}
+
+//---------------------------------------------------------------------
 //sparse_vec_float_deserializer methods
 
 template<class SV>
@@ -523,6 +605,61 @@ void sparse_vector_float_deserializer<SV>::set_xor_ref(bv_ref_vector_type* bv_re
 {
     exponentDeserializer_.set_xor_ref(bv_ref_ptr);
     mantissaDeserializer_.set_xor_ref(bv_ref_ptr);
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserializer<SV>::set_deserialization_index(
+                                    deserialization_index_type* index) BMNOEXCEPT
+{
+    exponentDeserializer_.set_deserialization_index(
+        index ? &index->exponent_index_ : 0);
+    mantissaDeserializer_.set_deserialization_index(
+        index ? &index->mantissa_index_ : 0);
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserializer<SV>::set_deserialization_index_use(
+                                                            bool enable) BMNOEXCEPT
+{
+    exponentDeserializer_.set_deserialization_index_use(enable);
+    mantissaDeserializer_.set_deserialization_index_use(enable);
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float_deserializer<SV>::construct_deserialization_index(
+                                    deserialization_index_type& index,
+                                    const unsigned char* buf)
+{
+    const unsigned char* ptr = buf;
+    if (ptr[0] != 'b' || ptr[1] != 'f' || ptr[2] != '0')
+    {
+#ifndef BM_NO_STL
+    throw std::logic_error("BitMagic: Invalid serialization signature header");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+    }
+    ptr += 3;
+
+    size_t sign_size, exp_size, mant_size;
+    std::memcpy(&sign_size, ptr, sizeof(size_t));
+    ptr += sizeof(size_t);
+    std::memcpy(&exp_size,  ptr, sizeof(size_t));
+    ptr += sizeof(size_t);
+    std::memcpy(&mant_size, ptr, sizeof(size_t));
+    ptr += sizeof(size_t);
+
+    ptr += sign_size;
+    exponentDeserializer_.construct_deserialization_index(index.exponent_index_, ptr);
+    ptr += exp_size;
+    (void)mant_size;
+    mantissaDeserializer_.construct_deserialization_index(index.mantissa_index_, ptr);
 }
 
 //---------------------------------------------------------------------
@@ -627,9 +764,29 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
     bm::deserialize(sv.signs_, ptr);
     sv.signs_ &= mask_bv;
     ptr += sign_size;
-    exponentDeserializer_.deserialize(sv.exponents_, ptr, mask_bv);
-    ptr += exp_size;
-    mantissaDeserializer_.deserialize(sv.mantissas_, ptr, mask_bv);
+
+    if constexpr (is_rsc_sparse_vector<sparse_vector_type>::value)
+    {
+        sparse_vector_type exp_tmp;
+        sparse_vector_type mant_tmp;
+        exponentDeserializer_.deserialize(exp_tmp, ptr, mask_bv);
+        ptr += exp_size;
+        mantissaDeserializer_.deserialize(mant_tmp, ptr, mask_bv);
+
+        sv.exponents_ = static_cast<sparse_vector_type&&>(exp_tmp);
+        sv.mantissas_ = static_cast<sparse_vector_type&&>(mant_tmp);
+    }
+    else
+    {
+        sparse_vector_type exp_tmp;
+        sparse_vector_type mant_tmp;
+        exponentDeserializer_.deserialize(exp_tmp, ptr, mask_bv);
+        ptr += exp_size;
+        mantissaDeserializer_.deserialize(mant_tmp, ptr, mask_bv);
+
+        sv.exponents_.swap(exp_tmp);
+        sv.mantissas_.swap(mant_tmp);
+    }
 }
 
 //---------------------------------------------------------------------
