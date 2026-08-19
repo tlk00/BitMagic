@@ -5449,7 +5449,7 @@ void SparseVectorRangeDeserializationTest()
 
     bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
     bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
-    sv_serializer.set_bookmarks(false);
+    sv_serializer.set_bookmarks(true, 64);
 
     bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
     const unsigned char* buf;
@@ -5487,7 +5487,7 @@ void SparseVectorRangeDeserializationTest()
 
     // book-mark enabled serialization
     //
-    sv_serializer.set_bookmarks(true, 64);
+    sv_serializer.set_bookmarks(false);
     sv_serializer.serialize(sv1, sv_lay);
 
     buf = sv_lay.buf();
@@ -5521,8 +5521,207 @@ void SparseVectorRangeDeserializationTest()
 }
 
 
+static
+void generate_and_deserialization_test_set(sparse_vector_u32& sv,
+                                           unsigned vector_max)
+{
+    std::mt19937 local_gen(11);
+    std::uniform_int_distribution<unsigned> value_dist(0, 69999);
+    std::uniform_int_distribution<unsigned> null_dist(0, 3);
 
+    sparse_vector_u32::back_insert_iterator bi(sv.get_back_inserter());
+    for (unsigned i = 0; i < vector_max; ++i)
+    {
+        if (null_dist(local_gen) == 0) // 25% NULLs
+            bi.add_null();
+        else
+            *bi = value_dist(local_gen);
+    }
+    bi.flush();
+    sv.optimize();
+}
 
+static
+void generate_and_deserialization_mask(bvect& mask_bv,
+                                       unsigned vector_max,
+                                       unsigned case_id)
+{
+    mask_bv.clear(true);
+    switch (case_id)
+    {
+    case 0: // single point at known float/XOR debug mismatch location
+        mask_bv.set(9980000);
+        break;
+    case 1: // one island in the middle
+        mask_bv.set_range(vector_max / 2 - 20000, vector_max / 2 + 20000);
+        break;
+    case 2: // five sub-block islands, first one is a single point
+        for (unsigned i = 0; i < 5; ++i)
+        {
+            unsigned from = (i == 0) ? bm::gap_max_bits * 2 + 7 :
+                                        vector_max / 10 + i * (vector_max / 5);
+            unsigned len = (i == 0) ? 1 : 2048 + i * 1379;
+            BM_ASSERT(len < 10000);
+            unsigned to = from + len - 1;
+            if (to >= vector_max)
+                to = vector_max - 1;
+            mask_bv.set_range(from, to);
+        }
+        break;
+    default:
+        BM_ASSERT(0);
+    }
+    //mask_bv.optimize();
+}
+
+static
+void validate_and_deserialization(const sparse_vector_u32& sv,
+                                  const sparse_vector_u32& sv_out,
+                                  const bvect& mask_bv,
+                                  const char* name)
+{
+    sparse_vector_u32 sv_expected(sv);
+    sv_expected.filter(mask_bv);
+
+    bool eq = sv_expected.equal(sv_out);
+    if (!eq)
+    {
+        sparse_vector_u32::size_type pos = 0;
+        bool f = bm::sparse_vector_find_first_mismatch(sv_expected, sv_out, pos);
+        cerr << "Error: sparse_vector AND deserialization validation failed: "
+             << name << endl;
+        if (f)
+            cerr << "Mismatch at: " << pos << endl;
+        assert(eq); exit(1);
+    }
+}
+
+static
+void SparseVectorANDDeserializationTest()
+{
+    cout << " ------------------------------ SparseVectorANDDeserializationTest()" << endl;
+
+    const unsigned sv_size = 50000000;
+    const unsigned repeats = 100;
+
+    sparse_vector_u32 sv1(bm::use_null);
+    generate_and_deserialization_test_set(sv1, sv_size);
+
+    bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
+    sv_serializer.set_xor_ref(true);
+    sv_serializer.set_bookmarks(true, 64);
+
+    bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+    sv_serializer.serialize(sv1, sv_lay);
+    const unsigned char* buf = sv_lay.buf();
+
+#if 1
+    {
+        sparse_vector_u32 sv_check(bm::use_null);
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+        sv_deserial.deserialize(sv_check, buf);
+        bool eq = sv1.equal(sv_check);
+        if (!eq)
+        {
+            cerr << "Error: sparse_vector non-masked deserialization validation failed" << endl;
+            assert(eq); exit(1);
+        }
+    }
+#endif
+
+#if 1
+    {
+        sparse_vector_u32 sv2(bm::use_null);
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial_timed;
+        bm::chrono_taker<> tt(cout, "bm::sparse_vector<> deserialization - full", repeats);
+        for (unsigned i = 0; i < repeats; ++i)
+        {
+            sv_deserial_timed.deserialize(sv2, buf);
+            c_acc += sv2.size();
+        }
+    }
+#endif
+
+    typedef bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserializer_type;
+    typedef sv_deserializer_type::deserialization_index_type deserialization_index_type;
+    deserialization_index_type deserialization_index;
+    {
+        sv_deserializer_type sv_deserial_map;
+        bm::chrono_taker<> tt(cout, "bm::sparse_vector<> deserialization index construction", 1);
+        sv_deserial_map.construct_deserialization_index(deserialization_index, buf);
+    }
+    unsigned index_rows = 0;
+    size_t index_entry_count = deserialization_index.count_offsets(&index_rows);
+    size_t index_memory_before = deserialization_index.memory_used();
+    deserialization_index.optimize();
+    size_t index_memory_after = deserialization_index.memory_used();
+    cout << "Deserialization index rows = " << deserialization_index.rows()
+         << ", non-empty rows = " << index_rows
+         << ", entries = " << index_entry_count
+         << ", memory before optimize = " << index_memory_before
+         << ", memory after optimize = " << index_memory_after << endl;
+
+    const char* mask_names[] =
+    {
+        "single point",
+        "single island",
+        "multiple islands"
+    };
+
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+    {
+        bvect mask_bv;
+        generate_and_deserialization_mask(mask_bv, sv_size, case_id);
+
+        sparse_vector_u32 sv_check(bm::use_null);
+        bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
+        sv_deserial.deserialize(sv_check, buf, mask_bv);
+        validate_and_deserialization(sv1, sv_check, mask_bv, mask_names[case_id]);
+
+        sparse_vector_u32 sv_check_assist(bm::use_null);
+        sv_deserializer_type sv_deserial_assist;
+        sv_deserial_assist.set_deserialization_index(&deserialization_index);
+        sv_deserial_assist.set_deserialization_index_use(true);
+        sv_deserial_assist.deserialize(sv_check_assist, buf, mask_bv);
+        validate_and_deserialization(sv1, sv_check_assist, mask_bv, mask_names[case_id]);
+        bool eq = sv_check.equal(sv_check_assist);
+        if (!eq)
+        {
+            cerr << "Error: sparse_vector deserialization-index assisted AND mismatch: "
+                 << mask_names[case_id] << endl;
+            assert(eq); exit(1);
+        }
+
+        {
+            sparse_vector_u32 sv2(bm::use_null);
+            bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial_timed;
+            std::string msg("bm::sparse_vector<> AND deserialization - ");
+            msg += mask_names[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                sv_deserial_timed.deserialize(sv2, buf, mask_bv);
+                c_acc += sv2.size();
+            }
+        }
+        {
+            sparse_vector_u32 sv2(bm::use_null);
+            sv_deserializer_type sv_deserial_timed;
+            sv_deserial_timed.set_deserialization_index(&deserialization_index);
+            sv_deserial_timed.set_deserialization_index_use(true);
+            std::string msg("bm::sparse_vector<> AND deserialization index-assist - ");
+            msg += mask_names[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                sv_deserial_timed.deserialize(sv2, buf, mask_bv);
+                c_acc += sv2.size();
+            }
+        }
+    }
+
+    cout << " ------------------------------ SparseVectorANDDeserializationTest() OK" << endl;
+}
 
 
 static
@@ -5863,6 +6062,479 @@ typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVe
 typedef bm::sparse_vector<unsigned int, bvect> sparse_vec_u32;
 typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, sparse_vec_u32>> sparseVecFloatRSC;
 
+static
+bool find_float_and_mismatch(const sparseVecFloat& sv,
+                             const sparseVecFloat& sv_out,
+                             const bvect& mask_bv,
+                             sparseVecFloat::size_type& mismatch_idx)
+{
+    bvect::enumerator en = mask_bv.first();
+    for (; en.valid(); ++en)
+    {
+        sparseVecFloat::size_type idx = *en;
+        float sv_v = sv.get(idx);
+        float out_v = sv_out.get(idx);
+        if (sv_v != out_v)
+        {
+            mismatch_idx = idx;
+            return false;
+        }
+    }
+    return true;
+}
+
+static
+void validate_float_and_deserialization(const sparseVecFloat& sv,
+                                        const sparseVecFloat& sv_out,
+                                        const bvect& mask_bv,
+                                        const char* data_name,
+                                        const char* mask_name)
+{
+    sparseVecFloat::size_type mismatch_idx = 0;
+    bool eq_flag = find_float_and_mismatch(sv, sv_out, mask_bv, mismatch_idx);
+    if (!eq_flag)
+    {
+        float sv_v = sv.get(mismatch_idx);
+        float out_v = sv_out.get(mismatch_idx);
+        cerr << "Error: sparse_vector_float AND validation failed: "
+             << data_name << ", " << mask_name << endl;
+        cerr << "Mismatch at: " << mismatch_idx
+             << ", expected=" << sv_v << ", actual=" << out_v << endl;
+        assert(eq_flag); exit(1);
+    }
+}
+
+static
+void SparseVectorFloatANDDeserializationTest()
+{
+    cout << " ------------------------------ SparseVectorFloatANDDeserializationTest()" << endl;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef bm::sparse_vector_float_serializer<sparseVecFloat> svf_serializer_type;
+    typedef bm::sparse_vector_float_deserializer<sparseVecFloat> svf_deserializer_type;
+    typedef bm::sparse_vector_float_serial_layout<sparseVecFloat> svf_layout_type;
+    typedef svf_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    struct source_case_type
+    {
+        source_case_type(const char* n) : name(n) {}
+        const char* name;
+        sparseVecFloat sv;
+        svf_layout_type layout;
+        deserialization_index_type deserialization_index;
+    };
+
+    const sparseVecFloat::size_type sv_size = 20000000;
+    const unsigned case_repeats[] = { 500, 500, 50 };
+    const float upper = 1000000.0f;
+    const float lower = -1000000.0f;
+    const float lin_scale = 0.00123f;
+    const unsigned source_count = 3;
+
+    const char* mask_names[] =
+    {
+        "single point",
+        "single island",
+        "multiple islands"
+    };
+
+    source_case_type source_cases[source_count] =
+    {
+        source_case_type("Linear Data"),
+        source_case_type("Random Data"),
+        source_case_type("Skewed Data")
+    };
+
+    svf_serializer_type sv_serializer;
+    sv_serializer.set_xor_ref(true);
+    sv_serializer.set_bookmarks(true, 64);
+
+    auto prepare_case = [&](source_case_type& source_case,
+                            const std::vector<float>& data)
+    {
+        cout << "  float source distribution: " << source_case.name << endl;
+
+        source_case.sv.import(data.data(), (sparseVecFloat::size_type)data.size());
+        source_case.sv.optimize(tb);
+        sv_serializer.serialize(source_case.sv, source_case.layout);
+
+        sparseVecFloat sv_check;
+        svf_deserializer_type sv_deserial;
+        sv_deserial.deserialize(sv_check, source_case.layout.buf());
+        bool eq = source_case.sv.equal(sv_check);
+        if (!eq)
+        {
+            cerr << "Error: sparse_vector_float non-masked deserialization validation failed: "
+                 << source_case.name << endl;
+            assert(eq); exit(1);
+        }
+    };
+
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    std::vector<float> data(sv_size);
+    for (sparseVecFloat::size_type i = 0; i < sv_size / 2; ++i)
+        data[i] = -1.0f * (float)i * lin_scale;
+    for (sparseVecFloat::size_type i = 0; i < sv_size / 2; ++i)
+        data[i + sv_size / 2] = (float)i * lin_scale;
+    prepare_case(source_cases[0], data);
+
+    for (sparseVecFloat::size_type i = 0; i < sv_size; ++i)
+        data[i] = dis(gen);
+    prepare_case(source_cases[1], data);
+
+    std::fill(data.begin(), data.end(), 0.0f);
+    for (sparseVecFloat::size_type i = sv_size - sv_size / 20; i < sv_size; ++i)
+        data[i] = dis(gen);
+    prepare_case(source_cases[2], data);
+    data.clear();
+
+    {
+        bm::chrono_taker<> tt(cout,
+            "bm::sparse_vector_float<> deserialization index construction - mixed distributions", 1);
+        for (unsigned i = 0; i < source_count; ++i)
+        {
+            svf_deserializer_type sv_deserial_map;
+            sv_deserial_map.construct_deserialization_index(source_cases[i].deserialization_index,
+                                                         source_cases[i].layout.buf());
+        }
+    }
+
+    for (unsigned i = 0; i < source_count; ++i)
+    {
+        deserialization_index_type& deserialization_index = source_cases[i].deserialization_index;
+        size_t index_entry_count = deserialization_index.count_offsets();
+        size_t index_memory_before = deserialization_index.memory_used();
+        deserialization_index.optimize();
+        size_t index_memory_after = deserialization_index.memory_used();
+
+        cout << "  deserialization index (" << source_cases[i].name << ") entries = "
+             << index_entry_count << ", memory before optimize = " << index_memory_before
+             << ", memory after optimize = " << index_memory_after << endl;
+    }
+
+    bvect mask_bv[3];
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+        generate_and_deserialization_mask(mask_bv[case_id], (unsigned)sv_size, case_id);
+
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+    {
+        for (unsigned source_id = 0; source_id < source_count; ++source_id)
+        {
+            source_case_type& source_case = source_cases[source_id];
+            const unsigned char* buf = source_case.layout.buf();
+
+            sparseVecFloat sv_check;
+            svf_deserializer_type sv_deserial;
+            sv_deserial.deserialize(sv_check, buf, mask_bv[case_id]);
+            validate_float_and_deserialization(source_case.sv, sv_check,
+                                               mask_bv[case_id], source_case.name,
+                                               mask_names[case_id]);
+
+            sparseVecFloat sv_check_assist;
+            svf_deserializer_type sv_deserial_assist;
+            sv_deserial_assist.set_deserialization_index(&source_case.deserialization_index);
+            sv_deserial_assist.set_deserialization_index_use(true);
+            sv_deserial_assist.deserialize(sv_check_assist, buf, mask_bv[case_id]);
+            validate_float_and_deserialization(source_case.sv, sv_check_assist,
+                                               mask_bv[case_id], source_case.name,
+                                               mask_names[case_id]);
+            bool eq = sv_check.equal(sv_check_assist);
+            if (!eq)
+            {
+                cerr << "Error: sparse_vector_float deserialization-index assisted AND mismatch: "
+                     << source_case.name << ", " << mask_names[case_id] << endl;
+                assert(eq); exit(1);
+            }
+        }
+
+        {
+            sparseVecFloat sv2[source_count];
+            svf_deserializer_type sv_deserial_timed[source_count];
+            std::string msg("bm::sparse_vector_float<> AND deserialization - mixed distributions - ");
+            msg += mask_names[case_id];
+            unsigned repeats = case_repeats[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                for (unsigned source_id = 0; source_id < source_count; ++source_id)
+                {
+                    sv_deserial_timed[source_id].deserialize(
+                        sv2[source_id], source_cases[source_id].layout.buf(),
+                        mask_bv[case_id]);
+                    c_acc += sv2[source_id].size();
+                }
+            }
+        }
+        {
+            sparseVecFloat sv2[source_count];
+            svf_deserializer_type sv_deserial_timed[source_count];
+            for (unsigned source_id = 0; source_id < source_count; ++source_id)
+            {
+                sv_deserial_timed[source_id].set_deserialization_index(
+                    &source_cases[source_id].deserialization_index);
+                sv_deserial_timed[source_id].set_deserialization_index_use(true);
+            }
+            std::string msg("bm::sparse_vector_float<> AND deserialization index-assist - mixed distributions - ");
+            msg += mask_names[case_id];
+            unsigned repeats = case_repeats[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                for (unsigned source_id = 0; source_id < source_count; ++source_id)
+                {
+                    sv_deserial_timed[source_id].deserialize(
+                        sv2[source_id], source_cases[source_id].layout.buf(),
+                        mask_bv[case_id]);
+                    c_acc += sv2[source_id].size();
+                }
+            }
+        }
+    }
+
+    cout << " ------------------------------ SparseVectorFloatANDDeserializationTest() OK" << endl;
+}
+
+static
+bool find_float_rsc_and_mismatch(const sparseVecFloatRSC& sv,
+                                 const sparseVecFloatRSC& sv_out,
+                                 const bvect& mask_bv,
+                                 sparseVecFloatRSC::size_type& mismatch_idx)
+{
+    bvect::enumerator en = mask_bv.first();
+    for (; en.valid(); ++en)
+    {
+        sparseVecFloatRSC::size_type idx = *en;
+        float sv_v = sv.get(idx);
+        float out_v = sv_out.get(idx);
+        if (sv_v != out_v)
+        {
+            mismatch_idx = idx;
+            return false;
+        }
+    }
+    return true;
+}
+
+static
+void validate_float_rsc_and_deserialization(const sparseVecFloatRSC& sv,
+                                            sparseVecFloatRSC& sv_out,
+                                            const bvect& mask_bv,
+                                            const char* data_name,
+                                            const char* mask_name)
+{
+    sv_out.sync(true, true);
+
+    sparseVecFloatRSC::size_type mismatch_idx = 0;
+    bool eq_flag = find_float_rsc_and_mismatch(sv, sv_out, mask_bv, mismatch_idx);
+    if (!eq_flag)
+    {
+        float sv_v = sv.get(mismatch_idx);
+        float out_v = sv_out.get(mismatch_idx);
+        cerr << "Error: sparse_vector_float<RSC> AND validation failed: "
+             << data_name << ", " << mask_name << endl;
+        cerr << "Mismatch at: " << mismatch_idx
+             << ", expected=" << sv_v << ", actual=" << out_v << endl;
+        assert(eq_flag); exit(1);
+    }
+}
+
+static
+void SparseVectorFloatRSCANDDeserializationTest()
+{
+    cout << " ------------------------------ SparseVectorFloatRSCANDDeserializationTest()" << endl;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef bm::sparse_vector_float_serializer<sparseVecFloatRSC> svf_serializer_type;
+    typedef bm::sparse_vector_float_deserializer<sparseVecFloatRSC> svf_deserializer_type;
+    typedef bm::sparse_vector_float_serial_layout<sparseVecFloatRSC> svf_layout_type;
+    typedef svf_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    struct source_case_type
+    {
+        source_case_type(const char* n) : name(n) {}
+        const char* name;
+        sparseVecFloatRSC sv;
+        svf_layout_type layout;
+        deserialization_index_type deserialization_index;
+    };
+
+    const sparseVecFloatRSC::size_type sv_size = 20000000;
+    const unsigned case_repeats[] = { 500, 500, 50 };
+    const float upper = 1000000.0f;
+    const float lower = -1000000.0f;
+    const float lin_scale = 0.00123f;
+    const unsigned source_count = 3;
+
+    const char* mask_names[] =
+    {
+        "single point",
+        "single island",
+        "multiple islands"
+    };
+
+    source_case_type source_cases[source_count] =
+    {
+        source_case_type("Linear Data"),
+        source_case_type("Random Data"),
+        source_case_type("Skewed Data")
+    };
+
+    svf_serializer_type sv_serializer;
+    sv_serializer.set_xor_ref(true);
+    sv_serializer.set_bookmarks(true, 64);
+
+    auto prepare_case = [&](source_case_type& source_case,
+                            const std::vector<float>& data)
+    {
+        cout << "  RSC float source distribution: " << source_case.name << endl;
+
+        source_case.sv.import(data.data(), (sparseVecFloatRSC::size_type)data.size());
+        source_case.sv.optimize(tb);
+        source_case.sv.sync(true, true);
+        source_case.sv.freeze();
+        sv_serializer.serialize(source_case.sv, source_case.layout);
+
+        sparseVecFloatRSC sv_check;
+        svf_deserializer_type sv_deserial;
+        sv_deserial.deserialize(sv_check, source_case.layout.buf());
+        sv_check.sync(true, true);
+        bool eq = source_case.sv.equal(sv_check);
+        if (!eq)
+        {
+            cerr << "Error: sparse_vector_float<RSC> non-masked deserialization validation failed: "
+                 << source_case.name << endl;
+            assert(eq); exit(1);
+        }
+    };
+
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    std::vector<float> data(sv_size);
+    for (sparseVecFloatRSC::size_type i = 0; i < sv_size / 2; ++i)
+        data[i] = -1.0f * (float)i * lin_scale;
+    for (sparseVecFloatRSC::size_type i = 0; i < sv_size / 2; ++i)
+        data[i + sv_size / 2] = (float)i * lin_scale;
+    prepare_case(source_cases[0], data);
+
+    for (sparseVecFloatRSC::size_type i = 0; i < sv_size; ++i)
+        data[i] = dis(gen);
+    prepare_case(source_cases[1], data);
+
+    std::fill(data.begin(), data.end(), 0.0f);
+    for (sparseVecFloatRSC::size_type i = sv_size - sv_size / 20; i < sv_size; ++i)
+        data[i] = dis(gen);
+    prepare_case(source_cases[2], data);
+    data.clear();
+
+    {
+        bm::chrono_taker<> tt(cout,
+            "bm::sparse_vector_float<RSC> deserialization index construction - mixed distributions", 1);
+        for (unsigned i = 0; i < source_count; ++i)
+        {
+            svf_deserializer_type sv_deserial_map;
+            sv_deserial_map.construct_deserialization_index(source_cases[i].deserialization_index,
+                                                          source_cases[i].layout.buf());
+        }
+    }
+
+    for (unsigned i = 0; i < source_count; ++i)
+    {
+        deserialization_index_type& deserialization_index = source_cases[i].deserialization_index;
+        size_t index_entry_count = deserialization_index.count_offsets();
+        size_t index_memory_before = deserialization_index.memory_used();
+        deserialization_index.optimize();
+        size_t index_memory_after = deserialization_index.memory_used();
+
+        cout << "  RSC deserialization index (" << source_cases[i].name << ") entries = "
+             << index_entry_count << ", memory before optimize = " << index_memory_before
+             << ", memory after optimize = " << index_memory_after << endl;
+    }
+
+    bvect mask_bv[3];
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+        generate_and_deserialization_mask(mask_bv[case_id], (unsigned)sv_size, case_id);
+
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+    {
+        for (unsigned source_id = 0; source_id < source_count; ++source_id)
+        {
+            source_case_type& source_case = source_cases[source_id];
+            const unsigned char* buf = source_case.layout.buf();
+
+            sparseVecFloatRSC sv_check;
+            svf_deserializer_type sv_deserial;
+            sv_deserial.deserialize(sv_check, buf, mask_bv[case_id]);
+            validate_float_rsc_and_deserialization(source_case.sv, sv_check,
+                                                   mask_bv[case_id], source_case.name,
+                                                   mask_names[case_id]);
+
+            sparseVecFloatRSC sv_check_assist;
+            svf_deserializer_type sv_deserial_assist;
+            sv_deserial_assist.set_deserialization_index(&source_case.deserialization_index);
+            sv_deserial_assist.set_deserialization_index_use(true);
+            sv_deserial_assist.deserialize(sv_check_assist, buf, mask_bv[case_id]);
+            validate_float_rsc_and_deserialization(source_case.sv, sv_check_assist,
+                                                   mask_bv[case_id], source_case.name,
+                                                   mask_names[case_id]);
+            bool eq = sv_check.equal(sv_check_assist);
+            if (!eq)
+            {
+                cerr << "Error: sparse_vector_float<RSC> deserialization-index assisted AND mismatch: "
+                     << source_case.name << ", " << mask_names[case_id] << endl;
+                assert(eq); exit(1);
+            }
+        }
+
+        {
+            sparseVecFloatRSC sv2[source_count];
+            svf_deserializer_type sv_deserial_timed[source_count];
+            std::string msg("bm::sparse_vector_float<RSC> AND deserialization - mixed distributions - ");
+            msg += mask_names[case_id];
+            unsigned repeats = case_repeats[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                for (unsigned source_id = 0; source_id < source_count; ++source_id)
+                {
+                    sv_deserial_timed[source_id].deserialize(
+                        sv2[source_id], source_cases[source_id].layout.buf(),
+                        mask_bv[case_id]);
+                    c_acc += sv2[source_id].size();
+                }
+            }
+        }
+        {
+            sparseVecFloatRSC sv2[source_count];
+            svf_deserializer_type sv_deserial_timed[source_count];
+            for (unsigned source_id = 0; source_id < source_count; ++source_id)
+            {
+                sv_deserial_timed[source_id].set_deserialization_index(
+                    &source_cases[source_id].deserialization_index);
+                sv_deserial_timed[source_id].set_deserialization_index_use(true);
+            }
+            std::string msg("bm::sparse_vector_float<RSC> AND deserialization index-assist - mixed distributions - ");
+            msg += mask_names[case_id];
+            unsigned repeats = case_repeats[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                for (unsigned source_id = 0; source_id < source_count; ++source_id)
+                {
+                    sv_deserial_timed[source_id].deserialize(
+                        sv2[source_id], source_cases[source_id].layout.buf(),
+                        mask_bv[case_id]);
+                    c_acc += sv2[source_id].size();
+                }
+            }
+        }
+    }
+
+    cout << " ------------------------------ SparseVectorFloatRSCANDDeserializationTest() OK" << endl;
+}
+
 //Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
 inline
 void in_range_vect(const std::vector<float>& fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
@@ -5917,6 +6589,324 @@ void in_range_for_each_sparse(const sparseVecFloat& sv, float from, float to, sp
 
     svf_range_for_each_sparse_func func(from, to, bv_out);
     bm::for_each_sparse(sv, func);
+}
+
+struct svf_filtered_visit_func
+{
+    typedef sparseVecFloat::size_type size_type;
+
+    svf_filtered_visit_func(float& acc, unsigned long long& cnt)
+        : acc_(acc), cnt_(cnt)
+    {}
+
+    int operator()(float v, bool is_null, size_type)
+    {
+        if (!is_null)
+        {
+            acc_ += v;
+            ++cnt_;
+        }
+        return 0;
+    }
+
+    float& acc_;
+    unsigned long long& cnt_;
+};
+
+void TestSVFForEachSparseSearchResults()
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef sparseVecFloat::bvector_type bvect_type;
+
+    const sparseVecFloat::size_type N = 20000000;
+    const unsigned int tests = 1365;
+    const float upper = 1000000.0f;
+    const float lower = -1000000.0f;
+    const float lin_scale = 0.00123f;
+
+    std::uniform_real_distribution<float> dis(lower, upper);
+
+    auto make_ranges = [&](float range_from, float range_to)
+    {
+        std::vector<pair<float, float> > test_ranges(tests);
+        std::uniform_real_distribution<float> center_dis(range_from, range_to);
+        float width = (range_to - range_from) / 64.0f;
+        for (unsigned int i = 0; i < tests; ++i)
+        {
+            float center = center_dis(gen);
+            float from = std::max(range_from, center - width * 0.5f);
+            float to = std::min(range_to, center + width * 0.5f);
+            test_ranges[i] = pair<float, float>(from, to);
+        }
+        return test_ranges;
+    };
+
+    auto run_case = [&](const char* name, const std::vector<float>& data,
+                        const std::vector<pair<float, float> >& ranges)
+    {
+        sparseVecFloat sv;
+        sv.import(data.data(), (sparseVecFloat::size_type)data.size());
+        sv.optimize(tb);
+        sv.freeze();
+
+        bm::sparse_vector_scanner<sparseVecFloat> scan;
+        std::vector<std::unique_ptr<bvect_type> > result_bv;
+        result_bv.reserve(ranges.size());
+
+        for (unsigned int i = 0; i < ranges.size(); ++i)
+        {
+            std::unique_ptr<bvect_type> bv(new bvect_type());
+            scan.find_range_float(sv, ranges[i].first, ranges[i].second, *bv);
+            bv->optimize(tb);
+            bv->freeze();
+            result_bv.push_back(std::move(bv));
+        }
+
+        if (!result_bv.empty())
+        {
+            // Validate the filtered visitor path against direct sparse vector access
+            // for the first scanner result set. This catches cases where
+            // bm::for_each_sparse() skips or includes the wrong elements.
+            double sum_for_each = 0;
+            double sum_direct = 0;
+            auto sum_func = [&](float v, bool is_null, sparseVecFloat::size_type) -> int
+            {
+                if (!is_null)
+                    sum_for_each += v;
+                return 0;
+            };
+            bm::for_each_sparse(sv, *result_bv[0], sum_func);
+
+            bvect_type::enumerator en = result_bv[0]->first();
+            for (; en.valid(); ++en)
+                sum_direct += sv.get(*en);
+
+            // Float accumulation can differ slightly by traversal order, so use
+            // a small absolute/relative tolerance instead of exact equality.
+            double delta = std::fabs(sum_for_each - sum_direct);
+            double tolerance = std::max(0.001, std::fabs(sum_direct) * 0.00001);
+            if (delta > tolerance)
+            {
+                cerr << "SVF " << name
+                     << " for_each_sparse filtered SUM mismatch" << endl;
+                cerr << "sum_for_each=" << sum_for_each << endl;
+                cerr << "sum_direct=" << sum_direct << endl;
+                cerr << "delta=" << delta
+                     << " tolerance=" << tolerance << endl;
+                exit(1);
+            }
+        }
+
+        float acc = 0;
+        unsigned long long cnt = 0;
+        {
+            std::string msg("SVF ");
+            msg += name;
+            msg += " scanner result bvector visit with bm::for_each_sparse";
+            bm::chrono_taker<> tt(cout, msg.c_str(), (unsigned)result_bv.size());
+            for (unsigned int i = 0; i < result_bv.size(); ++i)
+            {
+                svf_filtered_visit_func func(acc, cnt);
+                bm::for_each_sparse(sv, *result_bv[i], func);
+            }
+        }
+        g_fl_cnt += acc;
+        c_acc += cnt;
+    };
+
+    // Linear distribution: monotonically increasing negative half followed by positive half.
+    std::vector<float> linData(N);
+    for (sparseVecFloat::size_type i = 0; i < N / 2; ++i)
+        linData[i] = -1.0f * (float)i * lin_scale;
+    for (sparseVecFloat::size_type i = 0; i < N / 2; ++i)
+        linData[i + N / 2] = (float)i * lin_scale;
+    float lin_upper = (float)(N / 2) * lin_scale;
+    run_case("with Linear Data", linData, make_ranges(-lin_upper, lin_upper));
+
+    // Random distribution: every element gets an independent uniform float value.
+    std::vector<float> randData(N);
+    for (sparseVecFloat::size_type i = 0; i < N; ++i)
+        randData[i] = dis(gen);
+    run_case("with Random Data", randData, make_ranges(lower, upper));
+
+    // Skewed distribution: sparse non-zero tail with the prefix left at default zero.
+    std::vector<float> skewData(N);
+    for (sparseVecFloat::size_type i = 19000000; i < N; ++i)
+        skewData[i] = dis(gen);
+    run_case("with Skewed Data", skewData, make_ranges(lower, upper));
+}
+
+struct svf_rsc_filtered_visit_func
+{
+    typedef sparseVecFloatRSC::size_type size_type;
+
+    svf_rsc_filtered_visit_func(float& acc, unsigned long long& cnt)
+        : acc_(acc), cnt_(cnt)
+    {}
+
+    int operator()(float v, bool is_null, size_type)
+    {
+        if (!is_null)
+        {
+            acc_ += v;
+            ++cnt_;
+        }
+        return 0;
+    }
+
+    float& acc_;
+    unsigned long long& cnt_;
+};
+
+void TestSVFRSCForEachSparseSearchResults()
+{
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef sparseVecFloatRSC::bvector_type bvect_type;
+
+    const sparseVecFloatRSC::size_type N = 20000000;
+    const unsigned int tests = 1365;
+    const float upper = 1000000.0f;
+    const float lower = -1000000.0f;
+    const float lin_scale = 0.00123f;
+
+    std::uniform_real_distribution<float> dis(lower, upper);
+    std::uniform_real_distribution<float> null_chance(0.0f, 1.0f);
+
+    auto make_ranges = [&](float range_from, float range_to)
+    {
+        std::vector<pair<float, float> > test_ranges(tests);
+        std::uniform_real_distribution<float> center_dis(range_from, range_to);
+        float width = (range_to - range_from) / 64.0f;
+        for (unsigned int i = 0; i < tests; ++i)
+        {
+            float center = center_dis(gen);
+            float from = std::max(range_from, center - width * 0.5f);
+            float to = std::min(range_to, center + width * 0.5f);
+            test_ranges[i] = pair<float, float>(from, to);
+        }
+        return test_ranges;
+    };
+
+    auto set_value_or_null = [&](std::vector<float>& data,
+                                 sparseVecFloatRSC::size_type idx,
+                                 float value)
+    {
+        data[idx] = (null_chance(gen) >= 0.35f) ?
+                    value : std::numeric_limits<float>::quiet_NaN();
+    };
+
+    auto run_case = [&](const char* name, const std::vector<float>& data,
+                        const std::vector<pair<float, float> >& ranges)
+    {
+        sparseVecFloatRSC sv;
+        sv.import(data.data(), (sparseVecFloatRSC::size_type)data.size());
+        sv.optimize(tb);
+        sv.sync(true, true);
+        sv.freeze();
+
+        bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
+        std::vector<std::unique_ptr<bvect_type> > result_bv;
+        result_bv.reserve(ranges.size());
+
+        for (unsigned int i = 0; i < ranges.size(); ++i)
+        {
+            std::unique_ptr<bvect_type> bv(new bvect_type());
+            scan.find_range_float(sv, ranges[i].first, ranges[i].second, *bv);
+            bv->optimize(tb);
+            bv->freeze();
+            result_bv.push_back(std::move(bv));
+        }
+/*
+        if (!result_bv.empty())
+        {
+            double sum_for_each = 0;
+            double sum_direct = 0;
+            unsigned long long cnt_for_each = 0;
+            unsigned long long cnt_direct = 0;
+            bool null_in_result = false;
+            auto sum_func = [&](float v, bool is_null, sparseVecFloatRSC::size_type) -> int
+            {
+                if (is_null)
+                {
+                    null_in_result = true;
+                    return 0;
+                }
+                sum_for_each += v;
+                ++cnt_for_each;
+                return 0;
+            };
+            bm::for_each_sparse(sv, *result_bv[0], sum_func);
+
+            const bvect_type* bv_null = sv.get_null_bvector();
+            bvect_type::enumerator en = result_bv[0]->first();
+            for (; en.valid(); ++en)
+            {
+                const sparseVecFloatRSC::size_type idx = *en;
+                if (bv_null && !bv_null->test(idx))
+                {
+                    null_in_result = true;
+                    continue;
+                }
+                sum_direct += sv.get(idx);
+                ++cnt_direct;
+            }
+
+            double delta = std::fabs(sum_for_each - sum_direct);
+            double tolerance = std::max(0.001, std::fabs(sum_direct) * 0.00001);
+            if (null_in_result || cnt_for_each != cnt_direct || delta > tolerance)
+            {
+                cerr << "SVF RSC " << name
+                     << " for_each_sparse filtered SUM mismatch" << endl;
+                cerr << "sum_for_each=" << sum_for_each << endl;
+                cerr << "sum_direct=" << sum_direct << endl;
+                cerr << "cnt_for_each=" << cnt_for_each << endl;
+                cerr << "cnt_direct=" << cnt_direct << endl;
+                cerr << "delta=" << delta
+                     << " tolerance=" << tolerance << endl;
+                cerr << "null_in_result=" << null_in_result << endl;
+                exit(1);
+            }
+        }
+*/
+        float acc = 0;
+        unsigned long long cnt = 0;
+        {
+            std::string msg("SVF RSC ");
+            msg += name;
+            msg += " scanner result bvector visit with bm::for_each_sparse";
+            bm::chrono_taker<> tt(cout, msg.c_str(), (unsigned)result_bv.size());
+            for (unsigned int i = 0; i < result_bv.size(); ++i)
+            {
+                svf_rsc_filtered_visit_func func(acc, cnt);
+                bm::for_each_sparse(sv, *result_bv[i], func);
+            }
+        }
+        g_fl_cnt += acc;
+        c_acc += cnt;
+    };
+
+    std::vector<float> linData(N);
+    for (sparseVecFloatRSC::size_type i = 0; i < N / 2; ++i)
+        set_value_or_null(linData, i, -1.0f * (float)i * lin_scale);
+    for (sparseVecFloatRSC::size_type i = 0; i < N / 2; ++i)
+        set_value_or_null(linData, i + N / 2, (float)i * lin_scale);
+    float lin_upper = (float)(N / 2) * lin_scale;
+    run_case("with Linear Data", linData, make_ranges(-lin_upper, lin_upper));
+
+#if 0
+    // Temporarily disabled for targeted RSC scanner profiling.
+    std::vector<float> randData(N);
+    for (sparseVecFloatRSC::size_type i = 0; i < N; ++i)
+        set_value_or_null(randData, i, dis(gen));
+    run_case("with Random Data", randData, make_ranges(lower, upper));
+
+    std::vector<float> skewData(N, std::numeric_limits<float>::quiet_NaN());
+    for (sparseVecFloatRSC::size_type i = 19000000; i < N; ++i)
+        set_value_or_null(skewData, i, dis(gen));
+    run_case("with Skewed Data", skewData, make_ranges(lower, upper));
+#endif
 }
 
 void TestSVFScanner()
@@ -7698,8 +8688,16 @@ int main(void)
 
         SparseVectorSerializationTest();
         SparseVectorRangeDeserializationTest();
+
+        SparseVectorANDDeserializationTest();
         cout << endl;
 
+        SparseVectorFloatANDDeserializationTest();
+        cout << endl;
+        SparseVectorFloatRSCANDDeserializationTest();
+        cout << endl;
+
+        
         RSC_SparseVectorFillTest();
 
         RSC_SparseVectorAccesTest();
@@ -7716,6 +8714,12 @@ int main(void)
         TestSVFScanner();
         cout << endl;
 
+        TestSVFForEachSparseSearchResults();
+        cout << endl;
+
+        TestSVFRSCForEachSparseSearchResults();
+        cout << endl;
+
         TestSVFScannerRSC();
         cout << endl;
   
@@ -7726,6 +8730,9 @@ int main(void)
         cout << endl;
         
         TestSVFScannerUnbounded();
+        cout << endl;
+
+        SparseVectorFloatANDDeserializationTest();
         cout << endl;
 
         if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code
@@ -7747,6 +8754,3 @@ int main(void)
 #ifdef _MSC_VER
 #pragma warning( pop )
 #endif
-
-
-

@@ -786,6 +786,493 @@ void FreezeTest()
 
 
 static
+void CheckBvectorBlockDigest()
+{
+    cout << "----------------------------- CheckBvectorBlockDigest()" << endl;
+
+    const bvect::size_type block_bits = bm::gap_max_bits;
+
+    auto check = [](const bvect& bv, const bvect& bv_control)
+    {
+        bvect bv_digest;
+        bv_digest.set(12345); // verify build_block_digest() clears stale target state
+        bv.build_block_digest(bv_digest);
+        bool eq = bv_digest.equal(bv_control);
+        assert(eq);
+    };
+
+    { // empty vector
+        bvect bv, bv_control;
+        check(bv, bv_control);
+    }
+
+    { // single allocated block at the start
+        bvect bv, bv_control;
+        bv.set(0);
+        bv_control.set(0);
+        check(bv, bv_control);
+    }
+
+    { // single allocated block at a high 64-bit coordinate
+        bvect bv, bv_control;
+        const bvect::size_type pos = (bvect::size_type(1) << 34) + 123;
+        const bvect::size_type nb = pos >> bm::set_block_shift;
+        bv.set(pos);
+        bv_control.set(nb);
+        check(bv, bv_control);
+    }
+
+    { // single allocated block in the middle
+        bvect bv, bv_control;
+        const bvect::size_type nb = 1234;
+        bv.set(nb * block_bits + 17);
+        bv_control.set(nb);
+        check(bv, bv_control);
+    }
+
+    { // repeated bits in the same block digest into one block coordinate
+        bvect bv, bv_control;
+        const bvect::size_type nb = 777;
+        bv.set(nb * block_bits + 1);
+        bv.set(nb * block_bits + 1024);
+        bv.set((nb + 1) * block_bits - 1);
+        bv_control.set(nb);
+        check(bv, bv_control);
+    }
+
+    { // interleaved allocated blocks across sub-block boundaries
+        bvect bv, bv_control;
+        const bvect::size_type blocks[] = { 0, 2, 5, 255, 256, 511, 1024 };
+        const unsigned count = unsigned(sizeof(blocks) / sizeof(blocks[0]));
+        for (unsigned i = 0; i < count; ++i)
+        {
+            bv.set(blocks[i] * block_bits + 7);
+            bv_control.set(blocks[i]);
+        }
+        check(bv, bv_control);
+    }
+
+    { // FULL blocks created by range assignment, optimized and frozen variants
+        bvect bv, bv_control;
+        bv.set_range(5 * block_bits, 7 * block_bits - 1);
+        bv.set(12 * block_bits + 11);
+        bv_control.set(5);
+        bv_control.set(6);
+        bv_control.set(12);
+        check(bv, bv_control);
+
+        bv.optimize();
+        check(bv, bv_control);
+
+        bvect bv_ro(bv, bm::finalization::READONLY);
+        check(bv_ro, bv_control);
+    }
+
+    { // bounded all-FULL vector via invert(), avoiding full 48-bit traversal
+        bvect bv, bv_control;
+        const bvect::size_type full_blocks = 3 * bm::set_sub_array_size;
+        bv.resize(full_blocks * block_bits);
+        bv.invert();
+        bv_control.set_range(0, full_blocks - 1);
+        check(bv, bv_control);
+    }
+
+    cout << "----------------------------- CheckBvectorBlockDigest() OK" << endl;
+}
+
+static
+void CheckBvectorDeserializeSkipDigest()
+{
+    cout << "----------------------------- CheckBvectorDeserializeSkipDigest()" << endl;
+
+    typedef bm::deserializer<bvect, bm::decoder> deserializer_type;
+    typedef deserializer_type::marker_offset_vector_type marker_offset_vector_type;
+
+    const bvect::size_type block_bits = bm::gap_max_bits;
+
+    auto build_bit_mask = [](const bvect& block_digest)
+    {
+        bvect bv_mask;
+        for (bvect::enumerator en = block_digest.first(); en.valid(); ++en)
+        {
+            bvect::size_type nb = *en;
+            bv_mask.set_range(nb * block_bits, (nb + 1) * block_bits - 1);
+        }
+        return bv_mask;
+    };
+
+    auto check = [&](const bvect& bv_src, const bvect& block_digest)
+    {
+        bm::serializer<bvect> bv_ser;
+        bm::serializer<bvect>::buffer buf;
+        bv_ser.serialize(bv_src, buf);
+
+        marker_offset_vector_type marker_offsets;
+        bvect bv_plain;
+        deserializer_type de_map;
+        de_map.set_marker_offset_vector_construct(&marker_offsets);
+        size_t plain_size = de_map.deserialize(bv_plain, buf.buf());
+        bool eq = bv_plain.equal(bv_src);
+        assert(eq);
+        assert(!marker_offsets.empty());
+
+        bvect bv_skip;
+        deserializer_type de_skip;
+        de_skip.set_marker_offset_vector_use(&marker_offsets);
+        de_skip.set_block_digest_vector_use(&block_digest);
+        size_t skip_size = de_skip.deserialize(bv_skip, buf.buf());
+        assert(skip_size == plain_size);
+
+        bvect bv_mask = build_bit_mask(block_digest);
+        bvect bv_control(bv_src);
+        bv_control.bit_and(bv_mask);
+        bv_skip.bit_and(bv_mask);
+
+        eq = bv_skip.equal(bv_control);
+        assert(eq);
+    };
+
+    { // empty digest skips all payload blocks
+        bvect bv, block_digest;
+        bv.set(0);
+        bv.set(17 * block_bits + 1);
+        bv.set(255 * block_bits + 31);
+        bv.optimize();
+        check(bv, block_digest);
+    }
+
+    { // single requested block at a high 64-bit coordinate
+        bvect bv, block_digest;
+        const bvect::size_type pos = (bvect::size_type(1) << 34) + 123;
+        const bvect::size_type nb = pos >> bm::set_block_shift;
+        bv.set(pos);
+        bv.set((nb + 4) * block_bits + 17);
+        block_digest.set(nb);
+        check(bv, block_digest);
+    }
+
+    { // interleaved requested and skipped blocks across sub-block boundaries
+        bvect bv, block_digest;
+        const bvect::size_type blocks[] = { 0, 1, 2, 7, 8, 31, 64, 127, 128, 255, 256, 511 };
+        const unsigned count = unsigned(sizeof(blocks) / sizeof(blocks[0]));
+        for (unsigned i = 0; i < count; ++i)
+            bv.set(blocks[i] * block_bits + 77);
+        block_digest.set(1);
+        block_digest.set(8);
+        block_digest.set(128);
+        block_digest.set(511);
+        bv.optimize();
+        check(bv, block_digest);
+    }
+
+    { // FULL-run markers may over-materialize; trailing AND validates semantics
+        bvect bv, block_digest;
+        bv.set_range(10 * block_bits, 18 * block_bits - 1);
+        bv.set(40 * block_bits + 5);
+        block_digest.set(12);
+        block_digest.set(40);
+        bv.optimize();
+        check(bv, block_digest);
+    }
+
+    cout << "----------------------------- CheckBvectorDeserializeSkipDigest() OK" << endl;
+}
+
+static
+void CheckBvectorDeserializeSkipDigestAND()
+{
+    cout << "----------------------------- CheckBvectorDeserializeSkipDigestAND()" << endl;
+
+    typedef bm::deserializer<bvect, bm::decoder> deserializer_type;
+    typedef deserializer_type::marker_offset_vector_type marker_offset_vector_type;
+
+    const bvect::size_type block_bits = bm::gap_max_bits;
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    auto check_equal = [](const bvect& bv1, const bvect& bv2, const char* name)
+    {
+        bool eq = bv1.equal(bv2);
+        if (!eq)
+        {
+            cerr << "Error: " << name << endl;
+            cerr << "  count1=" << bv1.count() << " count2=" << bv2.count() << endl;
+            assert(eq); exit(1);
+        }
+        assert(eq);
+    };
+
+    auto check = [&](bvect& bv_arg, bvect& bv_serialized, const char* name)
+    {
+        cout << "  " << name << endl;
+
+        bv_arg.optimize(tb);
+        bv_serialized.optimize(tb);
+
+        bm::serializer<bvect> bv_ser(tb);
+        bv_ser.set_bookmarks(true);
+        bm::serializer<bvect>::buffer buf;
+        bv_ser.serialize(bv_serialized, buf);
+
+        bvect bv_control(bv_arg);
+        bm::operation_deserializer<bvect> od;
+        od.deserialize(bv_control, buf.buf(), tb, bm::set_AND);
+
+        bvect bv_direct(bv_arg);
+        bv_direct.bit_and(bv_serialized, bvect::opt_compress);
+        check_equal(bv_control, bv_direct, "operation AND control mismatch");
+
+        marker_offset_vector_type marker_offsets;
+        bvect bv_plain;
+        deserializer_type de_map;
+        de_map.set_marker_offset_vector_construct(&marker_offsets);
+        size_t plain_size = de_map.deserialize(bv_plain, buf.buf(), tb);
+        check_equal(bv_plain, bv_serialized, "marker-map construction deserialize mismatch");
+        if (marker_offsets.empty())
+        {
+            cerr << "Error: deserialization index vector is empty in " << name << endl;
+            assert(!marker_offsets.empty()); exit(1);
+        }
+
+        bvect block_digest;
+        bv_arg.build_block_digest(block_digest);
+
+        bvect bv_skip;
+        deserializer_type de_skip;
+        de_skip.set_marker_offset_vector_use(&marker_offsets);
+        de_skip.set_block_digest_vector_use(&block_digest);
+        size_t skip_size = de_skip.deserialize(bv_skip, buf.buf(), tb);
+        if (skip_size != plain_size)
+        {
+            cerr << "Error: skip deserialization size mismatch in " << name
+                 << ", plain=" << plain_size << ", skip=" << skip_size << endl;
+            bool size_ok = false;
+            assert(size_ok); exit(1);
+        }
+
+        bvect bv_assisted(bv_arg, bm::finalization::READWRITE);
+        bv_assisted.bit_and(bv_skip, bvect::opt_compress);
+        check_equal(bv_assisted, bv_control, "deserialization-index assisted simulated AND mismatch");
+    };
+
+    { // empty AND argument should skip all serialized payload blocks
+        bvect bv_arg, bv_serialized;
+        bv_serialized.set(0);
+        bv_serialized.set(31 * block_bits + 17);
+        bv_serialized.set_range(90 * block_bits, 98 * block_bits - 1);
+        check(bv_arg, bv_serialized, "empty AND argument");
+    }
+    { // single requested block at a high 64-bit coordinate
+        bvect bv_arg, bv_serialized;
+        const bvect::size_type nb = bvect::size_type(1) << 18;
+        bv_arg.set(nb * block_bits + 123);
+        bv_serialized.set(nb * block_bits + 123);
+        bv_serialized.set((nb + 17) * block_bits + 77);
+        check(bv_arg, bv_serialized, "single requested high block");
+    }
+    { // interleaved requested blocks across sub-block groups
+        bvect bv_arg, bv_serialized;
+        for (unsigned nb = 0; nb < 1024; ++nb)
+        {
+            if ((nb % 3) == 0)
+                bv_serialized.set(bvect::size_type(nb) * block_bits + 31);
+            if ((nb % 17) == 0)
+            {
+                bv_arg.set(bvect::size_type(nb) * block_bits + 31);
+                bv_serialized.set(bvect::size_type(nb) * block_bits + 31);
+            }
+        }
+        check(bv_arg, bv_serialized, "interleaved requested blocks");
+    }
+    { // FULL serialized runs may decode extra; final AND must normalize result
+        bvect bv_arg, bv_serialized;
+        bv_serialized.set_range(10 * block_bits, 200 * block_bits - 1);
+        for (unsigned nb = 12; nb < 200; nb += 19)
+            bv_arg.set(bvect::size_type(nb) * block_bits + 77);
+        check(bv_arg, bv_serialized, "full serialized block runs");
+    }
+    { // random block subset against mixed GAP/BIT payloads
+        bvect bv_arg, bv_serialized;
+        std::mt19937 gen(0xA51D0F5u);
+        std::uniform_int_distribution<unsigned> block_dist(0, 4095);
+        for (unsigned i = 0; i < 8192; ++i)
+        {
+            unsigned nb = block_dist(gen);
+            bv_serialized.set(bvect::size_type(nb) * block_bits + (i & 65535u));
+        }
+        for (unsigned i = 0; i < 512; ++i)
+        {
+            unsigned nb = block_dist(gen);
+            bv_arg.set(bvect::size_type(nb) * block_bits + ((i * 131u) & 65535u));
+        }
+        check(bv_arg, bv_serialized, "random block subset");
+    }
+
+    cout << "----------------------------- CheckBvectorDeserializeSkipDigestAND() OK" << endl;
+}
+
+static
+void TestSparseVectorDeserializationIndexGather()
+{
+    cout << "---------------------------- Sparse vector deserialization index gather test" << endl;
+
+    typedef bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserializer_type;
+    typedef sv_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    const unsigned sv_size = 100000000;
+    const unsigned sv_value = 0x000F35A7u;
+    const unsigned max_null_run = 64;
+    const unsigned camel_head_size = 256u * 1024u;
+    const unsigned camel_middle_size = 10u * 1024u * 1024u;
+    const unsigned camel_tail_size = 256u * 1024u;
+    const char* source_names[] =
+    {
+        "null-run pattern",
+        "camel null plateau",
+        "camel value plateau"
+    };
+
+    auto build_source = [&](sparse_vector_u32& sv, unsigned source_id)
+    {
+        sv.clear(true);
+        switch (source_id)
+        {
+        case 0:
+            for (unsigned i = 0, null_run = 1; i < sv_size; )
+            {
+                sv.push_back(sv_value);
+                ++i;
+                for (unsigned j = 0; j < null_run && i < sv_size; ++j, ++i)
+                    sv.push_back_null();
+                if (++null_run > max_null_run)
+                    null_run = 1;
+            }
+            break;
+        case 1:
+        {
+            const unsigned tail_from = sv_size - camel_tail_size;
+            for (unsigned i = 0; i < sv_size; ++i)
+            {
+                if (i < camel_head_size)
+                    sv.push_back(0x01000000u + i * 97u);
+                else if (i >= tail_from)
+                    sv.push_back(0x00ABCDEFu);
+                else
+                    sv.push_back_null();
+            }
+            break;
+        }
+        default:
+        {
+            const unsigned mid_to = camel_head_size + camel_middle_size;
+            const unsigned tail_from = sv_size - camel_tail_size;
+            for (unsigned i = 0; i < sv_size; ++i)
+            {
+                if (i < camel_head_size)
+                    sv.push_back(0x02000000u + i * 131u);
+                else if (i < mid_to)
+                    sv.push_back(10u);
+                else if (i >= tail_from)
+                    sv.push_back(0x03000000u + (i - tail_from) * 193u);
+                else
+                    sv.push_back_null();
+            }
+            break;
+        }
+        }
+        sv.optimize();
+    };
+
+    auto build_random_mask = [](bvect& mask_bv, unsigned count,
+                                       unsigned seed)
+    {
+        std::mt19937 gen(seed);
+        std::uniform_int_distribution<unsigned> dist(0, sv_size - 1);
+        mask_bv.clear(true);
+        for (unsigned i = 0; i < count; ++i)
+            mask_bv.set(dist(gen));
+        mask_bv.optimize();
+    };
+
+    auto check_mask = [&](const sparse_vector_u32& sv, const unsigned char* buf,
+                          deserialization_index_type& deserialization_index,
+                          const bvect& mask_bv, const char* source_name,
+                          const char* name)
+    {
+        cout << "  deserialization index gather source: " << source_name
+             << ", mask: " << name << ", count=" << mask_bv.count() << endl;
+
+        sparse_vector_u32 sv_base(bm::use_null);
+        sv_deserializer_type sv_deserial_base;
+        sv_deserial_base.deserialize(sv_base, buf, mask_bv);
+
+        sparse_vector_u32 sv_assisted(bm::use_null);
+        sv_deserializer_type sv_deserial_assisted;
+        sv_deserial_assisted.set_deserialization_index(&deserialization_index);
+        sv_deserial_assisted.set_deserialization_index_use(true);
+        sv_deserial_assisted.deserialize(sv_assisted, buf, mask_bv);
+
+        bool eq = sv_base.equal(sv_assisted);
+        if (!eq)
+        {
+            sparse_vector_u32::size_type pos = 0;
+            bool found = bm::sparse_vector_find_first_mismatch(sv_base, sv_assisted, pos);
+            cout << "Deserialization index gather mismatch at " << (found ? pos : 0) << endl;
+            assert(eq); exit(1);
+        }
+
+        sparse_vector_u32 sv_expected(sv);
+        sv_expected.filter(mask_bv);
+        eq = sv_expected.equal(sv_assisted);
+        if (!eq)
+        {
+            sparse_vector_u32::size_type pos = 0;
+            bool found = bm::sparse_vector_find_first_mismatch(sv_expected, sv_assisted, pos);
+            cout << "Deserialization index gather expected mismatch at " << (found ? pos : 0) << endl;
+            assert(eq); exit(1);
+        }
+    };
+
+    const unsigned gather_counts[] = { 1, 8, 64, 512, 4096, 32768, 262144 };
+    for (unsigned source_id = 0; source_id < sizeof(source_names)/sizeof(source_names[0]); ++source_id)
+    {
+        sparse_vector_u32 sv(bm::use_null);
+        build_source(sv, source_id);
+
+        bm::sparse_vector_serializer<sparse_vector_u32> sv_serializer;
+        sv_serializer.set_xor_ref(true);
+        sv_serializer.set_bookmarks(true, 64);
+
+        bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
+        sv_serializer.serialize(sv, sv_lay);
+        const unsigned char* buf = sv_lay.buf();
+
+        deserialization_index_type deserialization_index;
+        {
+            sv_deserializer_type sv_deserial;
+            sv_deserial.construct_deserialization_index(deserialization_index, buf);
+
+            unsigned non_empty_rows = 0;
+            size_t index_entry_count = deserialization_index.count_offsets(&non_empty_rows);
+            assert(index_entry_count);
+            assert(non_empty_rows);
+            deserialization_index.optimize();
+        }
+
+        for (unsigned i = 0; i < sizeof(gather_counts)/sizeof(gather_counts[0]); ++i)
+        {
+            bvect mask_bv;
+            build_random_mask(mask_bv, gather_counts[i],
+                              0xB16B00B5u + source_id * 104729u + i * 65537u);
+            char name[64];
+            ::snprintf(name, sizeof(name), "random subset %u", gather_counts[i]);
+            check_mask(sv, buf, deserialization_index, mask_bv, source_names[source_id], name);
+        }
+    }
+
+    cout << "---------------------------- Sparse vector deserialization index gather test OK" << endl;
+}
+
+static
 void SetTest()
 {
     cout << "------------------------------------ SetTest()" << endl;
@@ -7114,6 +7601,65 @@ void TestRankCompress()
 }
 
 
+static
+void CheckSerializationANDWithDeserializationIndexs(const bvect& bv_arg,
+                                            const bvect& bv_rhs,
+                                            const unsigned char* serialized_rhs,
+                                            const bvect& bv_expected,
+                                            bm::word_t* tb)
+{
+    typedef bm::deserializer<bvect, bm::decoder> deserializer_type;
+    typedef deserializer_type::marker_offset_vector_type marker_offset_vector_type;
+
+    deserializer_type deserial;
+    marker_offset_vector_type marker_offsets;
+    bvect bv_plain;
+    deserial.set_marker_offset_vector_construct(&marker_offsets);
+    size_t plain_size = deserial.deserialize(bv_plain, serialized_rhs, tb);
+    deserial.unset_marker_offset_vector();
+
+    bool eq = bv_plain.equal(bv_rhs);
+    if (!eq)
+    {
+        cerr << "Error: deserialization-index construction deserialize mismatch" << endl;
+        cerr << "  rhs_count=" << bv_rhs.count()
+             << " plain_count=" << bv_plain.count() << endl;
+        assert(eq); exit(1);
+    }
+
+    bvect block_digest;
+    bv_arg.build_block_digest(block_digest);
+
+    bvect bv_skip;
+    deserial.set_marker_offset_vector_use(&marker_offsets);
+    deserial.set_block_digest_vector_use(&block_digest);
+    size_t skip_size = deserial.deserialize(bv_skip, serialized_rhs, tb);
+    deserial.unset_marker_offset_vector();
+    deserial.unset_block_digest_vector();
+
+    bool size_ok = skip_size == plain_size;
+    if (!size_ok)
+    {
+        cerr << "Error: deserialization-index assisted deserialize consumed byte mismatch" << endl;
+        cerr << "  skip_size=" << skip_size
+             << " plain_size=" << plain_size << endl;
+        assert(size_ok); exit(1);
+    }
+
+    bvect bv_assisted(bv_arg, bm::finalization::READWRITE);
+    bv_assisted.bit_and(bv_skip, bvect::opt_compress);
+
+    eq = bv_assisted.equal(bv_expected);
+    if (!eq)
+    {
+        cerr << "Error: deserialization-index assisted serialized AND mismatch" << endl;
+        cerr << "  expected_count=" << bv_expected.count()
+             << " assisted_count=" << bv_assisted.count() << endl;
+        assert(eq); exit(1);
+    }
+}
+
+
 // do logical operation through serialization
 static
 bvect::size_type SerializationOperation(bvect*     bv_target,
@@ -7399,6 +7945,8 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
                     cerr << "2. AND 2-way check error!" << endl;
                     assert(0); exit(1);
                 }
+                CheckSerializationANDWithDeserializationIndexs(bv1, bv2, smem2,
+                                                       *bv_target, tb);
             }
             break;
         case bm::set_SUB:
@@ -17322,6 +17870,139 @@ void TestCompressSparseVector()
         assert(pos == bm::id_max - 1);
     }
 
+    cout << "sparse_vector<>::for_each_sparse signed tests" << endl;
+    {
+        sparse_vector_i32 sv(bm::use_null);
+        sv.push_back(-10);
+        sv.push_back(20);
+        sv.push_back(-30);
+        sv.push_back(40);
+        sv.set_null(1);
+
+        unsigned visited = 0;
+        int value_sum = 0;
+        unsigned negative_count = 0;
+        sparse_vector_i32::bvector_type null_bv;
+        auto func = [&](int v, bool is_null,
+                        sparse_vector_i32::size_type idx) -> int
+        {
+            ++visited;
+            if (is_null)
+            {
+                null_bv.set(idx);
+            }
+            else
+            {
+                value_sum += v;
+                negative_count += (v < 0);
+            }
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, func, 2);
+        assert(ret == 0);
+        assert(visited == sv.size());
+        assert(value_sum == 0);
+        assert(negative_count == 2);
+        assert(null_bv.count() == 1);
+        assert(null_bv.test(1));
+
+        visited = 0;
+        auto stop_func = [&](int, bool,
+                             sparse_vector_i32::size_type) -> int
+        {
+            return (++visited == 3) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(sv, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 3);
+    }
+
+    cout << "rsc_sparse_vector<>::for_each_sparse tests" << endl;
+    {
+        rsc_sparse_vector_u32 csv1;
+        csv1.push_back(0, 10);
+        csv1.push_back(2, 30);
+        csv1.push_back(5, 50);
+        csv1.sync();
+
+        unsigned visited = 0;
+        unsigned value_sum = 0;
+        rsc_sparse_vector_u32::bvector_type null_bv;
+        auto func = [&](unsigned v, bool is_null,
+                        rsc_sparse_vector_u32::size_type idx) -> int
+        {
+            ++visited;
+            value_sum += v;
+            if (is_null)
+                null_bv.set(idx);
+            return 0;
+        };
+        int ret = bm::for_each_sparse(csv1, func, 2);
+        assert(ret == 0);
+        assert(visited == csv1.size());
+        assert(value_sum == 90);
+        assert(null_bv.count() == 3);
+        assert(null_bv.test(1));
+        assert(null_bv.test(3));
+        assert(null_bv.test(4));
+
+        visited = 0;
+        auto stop_func = [&](unsigned, bool,
+                             rsc_sparse_vector_u32::size_type) -> int
+        {
+            return (++visited == 4) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(csv1, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 4);
+    }
+    {
+        rsc_sparse_vector_i32 csv1;
+        csv1.push_back(0, -10);
+        csv1.push_back(2, 30);
+        csv1.push_back(5, -50);
+        csv1.sync();
+
+        unsigned visited = 0;
+        int value_sum = 0;
+        unsigned negative_count = 0;
+        rsc_sparse_vector_i32::bvector_type null_bv;
+        auto func = [&](int v, bool is_null,
+                        rsc_sparse_vector_i32::size_type idx) -> int
+        {
+            ++visited;
+            if (is_null)
+            {
+                null_bv.set(idx);
+            }
+            else
+            {
+                value_sum += v;
+                negative_count += (v < 0);
+            }
+            return 0;
+        };
+        int ret = bm::for_each_sparse(csv1, func, 2);
+        assert(ret == 0);
+        assert(visited == csv1.size());
+        assert(value_sum == -30);
+        assert(negative_count == 2);
+        assert(null_bv.count() == 3);
+        assert(null_bv.test(1));
+        assert(null_bv.test(3));
+        assert(null_bv.test(4));
+
+        visited = 0;
+        auto stop_func = [&](int, bool,
+                             rsc_sparse_vector_i32::size_type) -> int
+        {
+            return (++visited == 4) ? -1 : 0;
+        };
+        ret = bm::for_each_sparse(csv1, stop_func, 2);
+        assert(ret < 0);
+        assert(visited == 4);
+    }
+
     // set test
     {
         rsc_sparse_vector_u32 csv;
@@ -20496,6 +21177,420 @@ void TestSparseFindEqStrPipeline()
 
 typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVecFloat;
 
+struct svf_deserialization_index_serial_variant
+{
+    bool xor_ref;
+    bool bookmarks;
+    const char* name;
+};
+
+static
+bool svf_deserialization_index_is_null(const sparseVecFloat& sv,
+                               sparseVecFloat::size_type idx)
+{
+    if (idx >= sv.size())
+        return true;
+
+    const sparseVecFloat::bvector_type* bv_null = sv.get_null_bvector();
+    return bv_null ? !bv_null->test(idx) : false;
+}
+
+static
+float svf_deserialization_index_value(unsigned data_id,
+                              sparseVecFloat::size_type idx,
+                              sparseVecFloat::size_type sv_size)
+{
+    switch (data_id)
+    {
+    case 0:
+        if (idx < sv_size / 2)
+            return -1.0f * float(idx) * 0.00123f;
+        return float(idx - sv_size / 2) * 0.00123f;
+    case 1:
+    {
+        unsigned v = unsigned(((static_cast<unsigned long long>(idx) * 1103515245ull) +
+                               12345ull) >> 16);
+        return float(int(v % 2000000u) - 1000000) * 0.125f;
+    }
+    default:
+    {
+        unsigned v = unsigned(((static_cast<unsigned long long>(idx) * 1664525ull) +
+                               1013904223ull) >> 12);
+        return float(int(v % 200000u) - 100000) * 0.03125f;
+    }
+    }
+}
+
+static
+void svf_deserialization_index_make_source(unsigned data_id,
+                                   sparseVecFloat::size_type sv_size,
+                                   std::vector<float>& data,
+                                   std::vector<sparseVecFloat::size_type>& present_points,
+                                   std::vector<sparseVecFloat::size_type>& null_points)
+{
+    const sparseVecFloat::size_type block_bits = bm::gap_max_bits;
+    const size_t block_count = size_t((sv_size + block_bits - 1) / block_bits);
+    const sparseVecFloat::size_type skew_from = sv_size - sv_size / 20;
+    const sparseVecFloat::size_type camel_head_size = 256u * 1024u;
+    const sparseVecFloat::size_type camel_middle_size = 10u * 1024u * 1024u;
+    const sparseVecFloat::size_type camel_tail_size = 256u * 1024u;
+    const sparseVecFloat::size_type camel_middle_to = camel_head_size + camel_middle_size;
+    const sparseVecFloat::size_type camel_tail_from = sv_size - camel_tail_size;
+    const unsigned samples_per_block = 2;
+
+    std::vector<unsigned> present_samples(block_count);
+    std::vector<unsigned> null_samples(block_count);
+    std::vector<unsigned> null_seen(block_count);
+
+    data.assign(size_t(sv_size), NAN);
+    present_points.clear();
+    null_points.clear();
+
+    for (sparseVecFloat::size_type i = 0; i < sv_size; ++i)
+    {
+        size_t nb = size_t(i / block_bits);
+        unsigned null_run = 1 + unsigned(((i / 1024) + data_id) % 7);
+        bool present = ((i % (null_run + 1)) == 0);
+        float value = svf_deserialization_index_value(data_id, i, sv_size);
+        if (data_id == 2)
+        {
+            present = (i >= skew_from) && present;
+        }
+        else if (data_id == 3)
+        {
+            if (i < camel_head_size)
+            {
+                present = true;
+                value = 1.0f + float(i) * 0.03125f;
+            }
+            else if (i >= camel_tail_from)
+            {
+                present = true;
+                value = -777.25f;
+            }
+            else
+            {
+                present = false;
+            }
+        }
+        else if (data_id == 4)
+        {
+            if (i < camel_head_size)
+            {
+                present = true;
+                value = -2048.0f + float(i) * 0.015625f;
+            }
+            else if (i < camel_middle_to)
+            {
+                present = true;
+                value = 4096.0f;
+            }
+            else if (i >= camel_tail_from)
+            {
+                present = true;
+                value = 8192.0f + float(i - camel_tail_from) * 0.0625f;
+            }
+            else
+            {
+                present = false;
+            }
+        }
+
+        if (present)
+        {
+            data[size_t(i)] = value;
+            if (present_samples[nb] < samples_per_block)
+            {
+                present_points.push_back(i);
+                ++present_samples[nb];
+            }
+        }
+        else
+        {
+            ++null_seen[nb];
+            if ((null_seen[nb] & 1u) == 0 && null_samples[nb] < samples_per_block)
+            {
+                null_points.push_back(i);
+                ++null_samples[nb];
+            }
+        }
+    }
+}
+
+static
+void svf_deserialization_index_validate_mask(const sparseVecFloat& sv,
+                                     const sparseVecFloat& sv_out,
+                                     const bvect& mask_bv,
+                                     const char* data_name,
+                                     const char* variant_name,
+                                     const char* mask_name)
+{
+    bvect::enumerator en = mask_bv.first();
+    for (; en.valid(); ++en)
+    {
+        sparseVecFloat::size_type idx = *en;
+        bool src_null = svf_deserialization_index_is_null(sv, idx);
+        bool out_null = svf_deserialization_index_is_null(sv_out, idx);
+        bool eq = (src_null == out_null);
+        if (eq && !src_null)
+            eq = (sv.get(idx) == sv_out.get(idx));
+
+        if (!eq)
+        {
+            cerr << "Error: sparse_vector_float deserialization-index gather mismatch: "
+                 << data_name << ", " << variant_name << ", " << mask_name << endl;
+            cerr << "Mismatch at: " << idx
+                 << ", src_null=" << src_null << ", out_null=" << out_null;
+            if (!src_null)
+                cerr << ", expected=" << sv.get(idx);
+            if (!out_null)
+                cerr << ", actual=" << sv_out.get(idx);
+            cerr << endl;
+            assert(eq); exit(1);
+        }
+    }
+}
+
+static
+void svf_deserialization_index_check_mask(const sparseVecFloat& sv,
+                                  const unsigned char* buf,
+                                  const bvect& mask_bv,
+                                  bm::sparse_vector_float_deserializer<sparseVecFloat>::deserialization_index_type& deserialization_index,
+                                  const char* data_name,
+                                  const char* variant_name,
+                                  const char* mask_name)
+{
+    typedef bm::sparse_vector_float_deserializer<sparseVecFloat> svf_deserializer_type;
+
+    sparseVecFloat sv_plain(bm::use_null);
+    svf_deserializer_type deserial_plain;
+    deserial_plain.deserialize(sv_plain, buf, mask_bv);
+    svf_deserialization_index_validate_mask(sv, sv_plain, mask_bv,
+                                    data_name, variant_name, mask_name);
+
+    sparseVecFloat sv_assisted(bm::use_null);
+    svf_deserializer_type deserial_assisted;
+    deserial_assisted.set_deserialization_index(&deserialization_index);
+    deserial_assisted.set_deserialization_index_use(true);
+    deserial_assisted.deserialize(sv_assisted, buf, mask_bv);
+    svf_deserialization_index_validate_mask(sv, sv_assisted, mask_bv,
+                                    data_name, variant_name, mask_name);
+
+    bool eq = sv_plain.equal(sv_assisted, bm::use_null);
+    if (!eq)
+    {
+        cerr << "Error: sparse_vector_float plain/deserialization-index assisted gather mismatch: "
+             << data_name << ", " << variant_name << ", " << mask_name << endl;
+        assert(eq); exit(1);
+    }
+}
+
+static
+void svf_deserialization_index_make_block_islands(bvect& mask_bv,
+                                          sparseVecFloat::size_type sv_size,
+                                          unsigned seed)
+{
+    const sparseVecFloat::size_type block_bits = bm::gap_max_bits;
+    const sparseVecFloat::size_type block_count =
+        (sv_size + block_bits - 1) / block_bits;
+
+    mask_bv.clear();
+    for (sparseVecFloat::size_type nb = 0; nb < block_count; ++nb)
+    {
+        sparseVecFloat::size_type block_from = nb * block_bits;
+        sparseVecFloat::size_type block_to =
+            std::min(block_from + block_bits - 1, sv_size - 1);
+        sparseVecFloat::size_type width = block_to - block_from + 1;
+        sparseVecFloat::size_type off = (nb * 7919 + seed * 101) % width;
+        sparseVecFloat::size_type len = 1 + ((nb * 17 + seed * 13) % 257);
+        sparseVecFloat::size_type from = block_from + off;
+        sparseVecFloat::size_type to = std::min(from + len - 1, block_to);
+        mask_bv.set_range(from, to);
+    }
+    mask_bv.optimize();
+}
+
+static
+void svf_deserialization_index_make_random_islands(bvect& mask_bv,
+                                           sparseVecFloat::size_type sv_size,
+                                           unsigned seed,
+                                           unsigned island_count)
+{
+    const sparseVecFloat::size_type block_bits = bm::gap_max_bits;
+    const sparseVecFloat::size_type block_count =
+        (sv_size + block_bits - 1) / block_bits;
+
+    std::mt19937 gen(seed);
+    std::uniform_int_distribution<unsigned> block_dis(0, unsigned(block_count - 1));
+    std::uniform_int_distribution<unsigned> len_dis(1, 8192);
+
+    mask_bv.clear();
+    for (unsigned i = 0; i < island_count; ++i)
+    {
+        sparseVecFloat::size_type nb = block_dis(gen);
+        sparseVecFloat::size_type block_from = nb * block_bits;
+        sparseVecFloat::size_type block_to =
+            std::min(block_from + block_bits - 1, sv_size - 1);
+        sparseVecFloat::size_type width = block_to - block_from + 1;
+        std::uniform_int_distribution<unsigned> off_dis(0, unsigned(width - 1));
+        sparseVecFloat::size_type from = block_from + off_dis(gen);
+        sparseVecFloat::size_type to = std::min(from + len_dis(gen) - 1, block_to);
+        mask_bv.set_range(from, to);
+    }
+    mask_bv.optimize();
+}
+
+static
+void SparseVectorFloatDeserializationIndexGatherTest()
+{
+    cout << "---------------------------- Sparse vector float deserialization index gather test" << endl;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef bm::sparse_vector_float_serializer<sparseVecFloat> svf_serializer_type;
+    typedef bm::sparse_vector_float_deserializer<sparseVecFloat> svf_deserializer_type;
+    typedef bm::sparse_vector_float_serial_layout<sparseVecFloat> svf_layout_type;
+    typedef svf_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    const sparseVecFloat::size_type sv_size = 20000000;
+    const char* data_names[] =
+    {
+        "Linear Data",
+        "Random Data",
+        "Skewed Data",
+        "Camel Null Plateau",
+        "Camel Value Plateau"
+    };
+    const unsigned data_count = unsigned(sizeof(data_names) / sizeof(data_names[0]));
+    const svf_deserialization_index_serial_variant serial_variants[] =
+    {
+        { false, false, "plain" },
+        { true,  false, "xor" },
+        { false, true,  "bookmarks" },
+        { true,  true,  "xor+bookmarks" }
+    };
+
+    std::vector<float> data;
+    std::vector<sparseVecFloat::size_type> present_points;
+    std::vector<sparseVecFloat::size_type> null_points;
+
+    for (unsigned data_id = 0; data_id < data_count; ++data_id)
+    {
+        svf_deserialization_index_make_source(data_id, sv_size, data,
+                                      present_points, null_points);
+
+        sparseVecFloat sv(bm::use_null);
+        sv.import(data.data(), sv_size);
+        sv.optimize(tb);
+
+        if (!is_silent)
+        {
+            cout << "  float source distribution: " << data_names[data_id]
+                 << ", present samples=" << present_points.size()
+                 << ", null samples=" << null_points.size() << endl;
+        }
+
+        for (size_t variant_idx = 0;
+             variant_idx < sizeof(serial_variants) / sizeof(serial_variants[0]);
+             ++variant_idx)
+        {
+            const svf_deserialization_index_serial_variant& variant = serial_variants[variant_idx];
+
+            svf_serializer_type serializer;
+            serializer.set_xor_ref(variant.xor_ref);
+            if (variant.bookmarks)
+                serializer.set_bookmarks(true, 64);
+
+            svf_layout_type layout;
+            serializer.serialize(sv, layout);
+            const unsigned char* buf = layout.buf();
+
+            sparseVecFloat sv_full(bm::use_null);
+            svf_deserializer_type full_deserial;
+            full_deserial.deserialize(sv_full, buf);
+            bool full_ok = sv.equal(sv_full, bm::use_null);
+            if (!full_ok)
+            {
+                cerr << "Error: sparse_vector_float full deserialize mismatch: "
+                     << data_names[data_id] << ", " << variant.name << endl;
+                assert(full_ok); exit(1);
+            }
+
+            deserialization_index_type deserialization_index;
+            svf_deserializer_type index_deserial;
+            index_deserial.construct_deserialization_index(deserialization_index, buf);
+            deserialization_index.optimize();
+
+            if (!is_silent)
+                cout << "    serialization variant: " << variant.name << endl;
+
+            const size_t single_total = present_points.size() + null_points.size();
+            size_t single_idx = 0;
+            bvect mask_bv;
+            for (size_t i = 0; i < present_points.size(); ++i, ++single_idx)
+            {
+                if (!is_silent && ((single_idx & 255u) == 0))
+                    cout << "\r      single point " << single_idx << "/"
+                         << single_total << flush;
+                mask_bv.clear();
+                mask_bv.set(present_points[i]);
+                svf_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                             data_names[data_id], variant.name,
+                                             "single point present");
+            }
+            for (size_t i = 0; i < null_points.size(); ++i, ++single_idx)
+            {
+                if (!is_silent && ((single_idx & 255u) == 0))
+                    cout << "\r      single point " << single_idx << "/"
+                         << single_total << flush;
+                mask_bv.clear();
+                mask_bv.set(null_points[i]);
+                svf_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                             data_names[data_id], variant.name,
+                                             "single point null");
+            }
+            if (!is_silent && single_total)
+                cout << "\r      single point " << single_total << "/"
+                     << single_total << endl;
+
+            if (!is_silent)
+                cout << "      block islands" << flush;
+            for (unsigned i = 0; i < 3; ++i)
+            {
+                if (!is_silent)
+                    cout << " " << (i + 1) << "/3" << flush;
+                svf_deserialization_index_make_block_islands(mask_bv, sv_size, i + data_id * 17);
+                svf_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                             data_names[data_id], variant.name,
+                                             "block islands");
+            }
+            if (!is_silent)
+                cout << endl;
+
+            const unsigned island_counts[] = { 1, 4, 16, 64, 256, 1024 };
+            for (unsigned attempt = 0; attempt < 24; ++attempt)
+            {
+                if (!is_silent)
+                    cout << "\r      random islands " << (attempt + 1)
+                         << "/24" << flush;
+                unsigned island_count = island_counts[attempt %
+                    (sizeof(island_counts) / sizeof(island_counts[0]))];
+                unsigned seed = 117u + data_id * 1009u +
+                                unsigned(variant_idx) * 7919u + attempt * 104729u;
+                svf_deserialization_index_make_random_islands(mask_bv, sv_size,
+                                                      seed, island_count);
+                svf_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                             data_names[data_id], variant.name,
+                                             "random islands");
+            }
+            if (!is_silent)
+                cout << endl;
+        }
+    }
+
+    cout << "---------------------------- Sparse vector float deserialization index gather test OK" << endl;
+}
+
 void SparseVecFloatConstIteratorTests()
 {
     std::cout << "-------------------------SparseVecFloatConstIteratorTests()" << std::endl;
@@ -21342,6 +22437,246 @@ void SparseVecFloatScannerTests()
 
 typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, bm::sparse_vector<unsigned int, bvect>>> sparseVecFloatRSC;
 
+struct svf_rsc_deserialization_index_serial_variant
+{
+    bool xor_ref;
+    unsigned bookmark_block;
+    const char* name;
+};
+
+static
+bool svf_rsc_deserialization_index_is_null(const sparseVecFloatRSC& sv,
+                                   sparseVecFloatRSC::size_type idx)
+{
+    if (idx >= sv.size())
+        return true;
+
+    const sparseVecFloatRSC::bvector_type* bv_null = sv.get_null_bvector();
+    return bv_null ? !bv_null->test(idx) : false;
+}
+
+static
+void svf_rsc_deserialization_index_validate_mask(const sparseVecFloatRSC& sv,
+                                         const sparseVecFloatRSC& sv_out,
+                                         const bvect& mask_bv,
+                                         const char* data_name,
+                                         const char* variant_name,
+                                         const char* mask_name)
+{
+    bvect::enumerator en = mask_bv.first();
+    for (; en.valid(); ++en)
+    {
+        sparseVecFloatRSC::size_type idx = *en;
+        bool src_null = svf_rsc_deserialization_index_is_null(sv, idx);
+        bool out_null = svf_rsc_deserialization_index_is_null(sv_out, idx);
+        bool eq = (src_null == out_null);
+        if (eq && !src_null)
+            eq = (sv.get(idx) == sv_out.get(idx));
+
+        if (!eq)
+        {
+            cerr << "Error: sparse_vector_float<RSC> deserialization-index gather mismatch: "
+                 << data_name << ", " << variant_name << ", " << mask_name << endl;
+            cerr << "Mismatch at: " << idx
+                 << ", src_null=" << src_null << ", out_null=" << out_null;
+            if (!src_null)
+                cerr << ", expected=" << sv.get(idx);
+            if (!out_null)
+                cerr << ", actual=" << sv_out.get(idx);
+            cerr << endl;
+            assert(eq); exit(1);
+        }
+    }
+}
+
+static
+void svf_rsc_deserialization_index_check_mask(const sparseVecFloatRSC& sv,
+                                      const unsigned char* buf,
+                                      const bvect& mask_bv,
+                                      bm::sparse_vector_float_deserializer<sparseVecFloatRSC>::deserialization_index_type& deserialization_index,
+                                      const char* data_name,
+                                      const char* variant_name,
+                                      const char* mask_name)
+{
+    typedef bm::sparse_vector_float_deserializer<sparseVecFloatRSC> svf_deserializer_type;
+
+    sparseVecFloatRSC sv_plain;
+    svf_deserializer_type deserial_plain;
+    deserial_plain.deserialize(sv_plain, buf, mask_bv);
+    sv_plain.sync(true, true);
+    svf_rsc_deserialization_index_validate_mask(sv, sv_plain, mask_bv,
+                                        data_name, variant_name, mask_name);
+
+    sparseVecFloatRSC sv_assisted;
+    svf_deserializer_type deserial_assisted;
+    deserial_assisted.set_deserialization_index(&deserialization_index);
+    deserial_assisted.set_deserialization_index_use(true);
+    deserial_assisted.deserialize(sv_assisted, buf, mask_bv);
+    sv_assisted.sync(true, true);
+    svf_rsc_deserialization_index_validate_mask(sv, sv_assisted, mask_bv,
+                                        data_name, variant_name, mask_name);
+
+    bool eq = sv_plain.equal(sv_assisted);
+    if (!eq)
+    {
+        cerr << "Error: sparse_vector_float<RSC> plain/deserialization-index assisted gather mismatch: "
+             << data_name << ", " << variant_name << ", " << mask_name << endl;
+        assert(eq); exit(1);
+    }
+}
+
+static
+void SparseVectorFloatRSCDeserializationIndexGatherTest()
+{
+    cout << "---------------------------- RSC sparse vector float deserialization index gather test" << endl;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    typedef bm::sparse_vector_float_serializer<sparseVecFloatRSC> svf_serializer_type;
+    typedef bm::sparse_vector_float_deserializer<sparseVecFloatRSC> svf_deserializer_type;
+    typedef bm::sparse_vector_float_serial_layout<sparseVecFloatRSC> svf_layout_type;
+    typedef svf_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    const sparseVecFloatRSC::size_type sv_size = 20000000;
+    const char* data_names[] = { "Linear Data", "Random Data", "Skewed Data" };
+    const svf_rsc_deserialization_index_serial_variant serial_variants[] =
+    {
+        { false, 0,   "plain" },
+        { true,  0,   "xor" },
+        { false, 16,  "bookmarks-16" },
+        { false, 64,  "bookmarks-64" },
+        { false, 256, "bookmarks-256" },
+        { true,  16,  "xor+bookmarks-16" },
+        { true,  64,  "xor+bookmarks-64" },
+        { true,  256, "xor+bookmarks-256" }
+    };
+
+    std::vector<float> data;
+    std::vector<sparseVecFloat::size_type> present_points;
+    std::vector<sparseVecFloat::size_type> null_points;
+
+    for (unsigned data_id = 0; data_id < 3; ++data_id)
+    {
+        svf_deserialization_index_make_source(data_id, sv_size, data,
+                                      present_points, null_points);
+
+        sparseVecFloatRSC sv;
+        sv.import(data.data(), sv_size);
+        sv.optimize(tb);
+        sv.sync(true, true);
+        sv.freeze();
+
+        if (!is_silent)
+        {
+            cout << "  RSC float source distribution: " << data_names[data_id]
+                 << ", present samples=" << present_points.size()
+                 << ", null samples=" << null_points.size() << endl;
+        }
+
+        for (size_t variant_idx = 0;
+             variant_idx < sizeof(serial_variants) / sizeof(serial_variants[0]);
+             ++variant_idx)
+        {
+            const svf_rsc_deserialization_index_serial_variant& variant = serial_variants[variant_idx];
+
+            svf_serializer_type serializer;
+            serializer.set_xor_ref(variant.xor_ref);
+            if (variant.bookmark_block)
+                serializer.set_bookmarks(true, variant.bookmark_block);
+
+            svf_layout_type layout;
+            serializer.serialize(sv, layout);
+            const unsigned char* buf = layout.buf();
+
+            sparseVecFloatRSC sv_full;
+            svf_deserializer_type full_deserial;
+            full_deserial.deserialize(sv_full, buf);
+            sv_full.sync(true, true);
+            bool full_ok = sv.equal(sv_full);
+            if (!full_ok)
+            {
+                cerr << "Error: sparse_vector_float<RSC> full deserialize mismatch: "
+                     << data_names[data_id] << ", " << variant.name << endl;
+                assert(full_ok); exit(1);
+            }
+
+            deserialization_index_type deserialization_index;
+            svf_deserializer_type index_deserial;
+            index_deserial.construct_deserialization_index(deserialization_index, buf);
+            deserialization_index.optimize();
+
+            if (!is_silent)
+                cout << "    serialization variant: " << variant.name << endl;
+
+            const size_t single_total = present_points.size() + null_points.size();
+            size_t single_idx = 0;
+            bvect mask_bv;
+            for (size_t i = 0; i < present_points.size(); ++i, ++single_idx)
+            {
+                if (!is_silent && ((single_idx & 255u) == 0))
+                    cout << "\r      single point " << single_idx << "/"
+                         << single_total << flush;
+                mask_bv.clear();
+                mask_bv.set(present_points[i]);
+                svf_rsc_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                                 data_names[data_id], variant.name,
+                                                 "single point present");
+            }
+            for (size_t i = 0; i < null_points.size(); ++i, ++single_idx)
+            {
+                if (!is_silent && ((single_idx & 255u) == 0))
+                    cout << "\r      single point " << single_idx << "/"
+                         << single_total << flush;
+                mask_bv.clear();
+                mask_bv.set(null_points[i]);
+                svf_rsc_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                                 data_names[data_id], variant.name,
+                                                 "single point null");
+            }
+            if (!is_silent && single_total)
+                cout << "\r      single point " << single_total << "/"
+                     << single_total << endl;
+
+            if (!is_silent)
+                cout << "      block islands" << flush;
+            for (unsigned i = 0; i < 4; ++i)
+            {
+                if (!is_silent)
+                    cout << " " << (i + 1) << "/4" << flush;
+                svf_deserialization_index_make_block_islands(mask_bv, sv_size,
+                                                     i + data_id * 17 +
+                                                     unsigned(variant_idx) * 97);
+                svf_rsc_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                                 data_names[data_id], variant.name,
+                                                 "block islands");
+            }
+            if (!is_silent)
+                cout << endl;
+
+            const unsigned island_counts[] = { 1, 2, 4, 8, 16, 64, 256, 1024, 4096 };
+            for (unsigned attempt = 0; attempt < 32; ++attempt)
+            {
+                if (!is_silent)
+                    cout << "\r      random islands " << (attempt + 1)
+                         << "/32" << flush;
+                unsigned island_count = island_counts[attempt %
+                    (sizeof(island_counts) / sizeof(island_counts[0]))];
+                unsigned seed = 4099u + data_id * 1009u +
+                                unsigned(variant_idx) * 7919u + attempt * 104729u;
+                svf_deserialization_index_make_random_islands(mask_bv, sv_size,
+                                                      seed, island_count);
+                svf_rsc_deserialization_index_check_mask(sv, buf, mask_bv, deserialization_index,
+                                                 data_names[data_id], variant.name,
+                                                 "random islands");
+            }
+            if (!is_silent)
+                cout << endl;
+        }
+    }
+
+    cout << "---------------------------- RSC sparse vector float deserialization index gather test OK" << endl;
+}
+
 void in_rangeRSC(sparseVecFloatRSC sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
     bm::sparse_vector_scanner<sparseVecFloatRSC> scan;
@@ -22111,6 +23446,51 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     scanner.find_lt(sv, v, bv_lt);
     scanner.find_le(sv, v, bv_le);
     scanner.find_range(sv, 0, v, bv_r_0v);
+
+    // Validate scanner GT result set using filtered for_each_sparse().
+    // Every visited hit must be NOT NULL and must satisfy value > v.
+    //
+    {
+        bvect bv_gt_for_each;
+        bool predicate_ok = true;
+        typename SV::size_type bad_idx = 0;
+        typename SV::value_type bad_value = typename SV::value_type();
+        bool bad_is_null = false;
+        auto gt_func = [&](typename SV::value_type v1, bool is_null,
+                           typename SV::size_type idx) -> int
+        {
+            if (is_null || !(v1 > v))
+            {
+                predicate_ok = false;
+                bad_idx = idx;
+                bad_value = v1;
+                bad_is_null = is_null;
+                return -1;
+            }
+            bv_gt_for_each.set(idx);
+            return 0;
+        };
+        int ret = bm::for_each_sparse(sv, bv_gt, gt_func);
+        bool eq = (ret == 0) && predicate_ok && bv_gt_for_each.equal(bv_gt);
+        if (!eq)
+        {
+            cout << "GT for_each_sparse result-set validation failed" << endl;
+            cout << "query_value=" << v << endl;
+            cout << "bad_idx=" << bad_idx
+                 << " bad_value=" << bad_value
+                 << " bad_is_null=" << bad_is_null << endl;
+            cout << "scanner_gt_count=" << bv_gt.count() << endl;
+            cout << "for_each_verified_count=" << bv_gt_for_each.count() << endl;
+            cout << "BV_GT=" << endl;
+            print_bv(bv_gt);
+            cout << "BV_FOR_EACH=" << endl;
+            print_bv(bv_gt_for_each);
+            bv_gt_for_each ^= bv_gt;
+            cout << "diff=" << endl;
+            print_bv(bv_gt_for_each);
+            assert(eq);exit(1);
+        }
+    }
 
     {
     bvect bv_r_vv, bv_r_vv_control;
@@ -23122,7 +24502,6 @@ int main(int argc, char *argv[])
         }
     }
 */
-
     // -----------------------------------------------------------------
     
     if (is_all || is_bvbasic)
@@ -23141,6 +24520,15 @@ int main(int argc, char *argv[])
          CheckAllocLeaks(false);
 
          FreezeTest();
+         CheckAllocLeaks(false);
+
+         CheckBvectorBlockDigest();
+         CheckAllocLeaks(false);
+
+         CheckBvectorDeserializeSkipDigest();
+         CheckAllocLeaks(false);
+
+         CheckBvectorDeserializeSkipDigestAND();
          CheckAllocLeaks(false);
 
         ExportTest();
@@ -23318,6 +24706,9 @@ int main(int argc, char *argv[])
          TestSparseVector();
          CheckAllocLeaks(false);
 
+         TestSparseVectorDeserializationIndexGather();
+         CheckAllocLeaks(false);
+
          TestSignedSparseVector();
          CheckAllocLeaks(false);
 
@@ -23438,12 +24829,18 @@ int main(int argc, char *argv[])
             
             SparseVecFloatScannerUnboundedTests();
             CheckAllocLeaks(false);
+
+            SparseVectorFloatDeserializationIndexGatherTest();
+            CheckAllocLeaks(false);
             
             ReportTestBlockDone("-svf0");
         }
         
         if (is_all || is_svf1 || is_svf)
         {
+            SparseVectorFloatRSCDeserializationIndexGatherTest();
+            CheckAllocLeaks(false);
+
             sparseVecFloatRSCScannerTests();
             CheckAllocLeaks(false);
             
