@@ -507,7 +507,7 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
     const bvector_type* bv_non_null_mask = sv.exponents_.get_null_bvector();
     if (bv_non_null_mask)
     {
-        mantissaSerializer_.set_serialize_external_null(true);
+        mantissaSerializer_.set_serialize_external_null(false);
     }
     
     mantissaSerializer_.serialize(sv.mantissas_, mantLayTemp);
@@ -537,7 +537,6 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
     std::memcpy(dest, expLayTemp.buf(), exp_size_);
     dest += exp_size_;
     std::memcpy(dest, mantLayTemp.buf(), mant_size_);
-
 }
 
 //---------------------------------------------------------------------
@@ -694,7 +693,12 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
 
     exponentDeserializer_.deserialize(sv.exponents_, buf, clear_sv);
     buf += exp_size;
-
+    
+    if(is_rsc_sparse_vector<SV>::value)
+    {
+        sv.exponents_.sync(false, false);
+        sv.mantissas_.attach_null_bvector(sv.exponents_);
+    }
     mantissaDeserializer_.deserialize(sv.mantissas_, buf, clear_sv);
 }
 
