@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Bounded parallel stress-test runner for macOS.
+# Bounded parallel stress-test runner for Unix-like systems.
 # Compatible with the Bash 3.2 version included with macOS.
 
 set -u
@@ -10,8 +10,9 @@ cd "$SCRIPT_DIR" || exit 1
 
 JOBS=""
 RUN_NAME=""
-LOG_DIR="logs/macos"
+LOG_DIR="logs/parallel"
 FAIL_FAST=0
+HEAVY_FIRST=0
 TESTS=()
 
 usage()
@@ -19,16 +20,21 @@ usage()
     cat <<EOF
 Usage: $0 [runner options] [test selectors]
 
-Runs the release NEON stress-test binary by default on Apple Silicon. Debug
-builds are never selected automatically; use --binary stress_debug explicitly.
-With no test selectors, all independent test groups are run in parallel.
+Runs the selected stress-test binary. A build name is required so the same
+script can run platform-specific builds such as stress_release_avx2 on Linux
+or stress_release_neon on Apple Silicon. With no test selectors, all
+independent test groups are run in parallel.
 
 Runner options:
   -j N, --jobs N        Run at most N test processes concurrently
-  -b BIN, --binary BIN  Use BIN instead of the architecture-specific release
-                        default (stress_release_neon on Apple Silicon)
-  -l DIR, --log-dir DIR Write logs below DIR (default: logs/macos)
+  --build NAME          Use ./NAME as the test binary (required unless
+                        --binary is used)
+  -b BIN, --binary BIN  Use BIN as the test binary path/name (required unless
+                        --build is used)
+  -l DIR, --log-dir DIR Write logs below DIR (default: logs/parallel)
   --fail-fast           Stop launching new groups after the first failure
+  --heavy-first         With the default test partition, launch heavier
+                        groups first
   -h, --help            Display this help and exit
 
 Test selectors from t.cpp:
@@ -45,25 +51,39 @@ Test selectors from t.cpp:
   -agg,  -aggregator    Aggregator tests
   -sv0                  Sparse-vector tests, part 0
   -sv1                  Sparse-vector tests, part 1
+  -sv1a                 Sparse-vector tests, part 1a
+  -sv1b                 Sparse-vector tests, part 1b
+  -sv1c                 Sparse-vector tests, part 1c
   -sort, --sort         Sparse-vector sorting tests
   -csv0                 Compressed sparse-vector tests, part 0
+  -csv0a                Compressed sparse-vector tests, part 0a
+  -csv0b                Compressed sparse-vector tests, part 0b
+  -csv0c                Compressed sparse-vector tests, part 0c
   -csv1                 Compressed sparse-vector tests, part 1
+  -csv1a                Compressed sparse-vector tests, part 1a
+  -csv1b                Compressed sparse-vector tests, part 1b
   -strsv, -svstr        String sparse-vector tests
   -cc                   Compressed-collection tests
   -ser                  All serialization tests
+  -svf                  All floating-point sparse-vector tests
   -svf0                 Floating-point sparse-vector tests, part 0
+  -svf0a                Floating-point sparse-vector tests, part 0a
+  -svf0b                Floating-point sparse-vector tests, part 0b
+  -svf0c                Floating-point sparse-vector tests, part 0c
   -svf1                 Floating-point sparse-vector tests, part 1
 
 The broader overlapping selectors -bvb/-bvbasic, -bvo/-bvops/-bvl, -sv,
--csv/-rsc, and -allsvser are accepted for targeted runs but are not included
-in the default partition because they duplicate work covered by groups above.
+-csv/-rsc, -allsvser, and -svf are accepted for targeted runs but are not
+included in the default partition because they duplicate work covered by
+groups above.
 
 Examples:
-  $0
-  $0 --jobs 6
-  $0 --jobs 4 -ll -bvb0 -bvb1
-  $0 --binary stress_release --jobs 6
-  $0 --binary stress_debug --jobs 3
+  ./run_macos_pl.sh -b bmtest -j 7 --fail-fast --heavy-first
+  $0 --build stress_release
+  $0 --build stress_release --heavy-first
+  $0 --build stress_release_avx2 --jobs 6
+  $0 --build stress_release_neon --jobs 4 -ll -bvb0 -bvb1
+  $0 --binary ./stress_debug --jobs 3
 EOF
 }
 
@@ -73,8 +93,9 @@ is_valid_test()
         -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvser|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
-        -sv|-sv0|-sv1|-sort|--sort|-csv|-rsc|-csv0|-csv1|\
-        -strsv|-svstr|-cc|-ser|-allsvser|-svf0|-svf1)
+        -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1c|-sort|--sort|\
+        -csv|-rsc|-csv0|-csv0a|-csv0b|-csv0c|-csv1|-csv1a|-csv1b|\
+        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf1)
             return 0
             ;;
         *)
@@ -91,6 +112,14 @@ while [ "$#" -gt 0 ]; do
                 exit 2
             }
             JOBS="$2"
+            shift 2
+            ;;
+        --build)
+            [ "$#" -ge 2 ] || {
+                echo "Missing value for $1" >&2
+                exit 2
+            }
+            RUN_NAME="$2"
             shift 2
             ;;
         -b|--binary)
@@ -113,6 +142,10 @@ while [ "$#" -gt 0 ]; do
             FAIL_FAST=1
             shift
             ;;
+        --heavy-first)
+            HEAVY_FIRST=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -133,26 +166,9 @@ done
 ARCH="$(uname -m)"
 
 if [ -z "$RUN_NAME" ]; then
-    case "$ARCH" in
-        arm64|aarch64)
-            if [ -x ./stress_release_neon ]; then
-                RUN_NAME="stress_release_neon"
-            else
-                RUN_NAME="stress_release"
-            fi
-            ;;
-        x86_64)
-            if [ -x ./stress_release_avx2 ]; then
-                RUN_NAME="stress_release_avx2"
-            else
-                RUN_NAME="stress_release"
-            fi
-            ;;
-        *)
-            echo "Unsupported architecture: $ARCH" >&2
-            exit 2
-            ;;
-    esac
+    echo "Missing required --build NAME or --binary BIN" >&2
+    usage >&2
+    exit 2
 fi
 
 case "$RUN_NAME" in
@@ -167,6 +183,7 @@ fi
 
 if [ -z "$JOBS" ]; then
     JOBS="$(sysctl -n hw.logicalcpu 2>/dev/null)"
+    [ -n "$JOBS" ] || JOBS="$(nproc 2>/dev/null)"
     [ -n "$JOBS" ] || JOBS=4
     [ "$JOBS" -le 8 ] || JOBS=8
 fi
@@ -179,16 +196,27 @@ case "$JOBS" in
 esac
 
 if [ "${#TESTS[@]}" -eq 0 ]; then
-    TESTS=(
-        -ll -s
-        -bvb0 -bvb1 -bvser
-        -bvl0 -bvl1 -bvl2
-        -bvs -rc -agg
-        -sv0 -sv1 -sort
-        -csv0 -csv1
-        -strsv -cc -ser
-        -svf0 -svf1
-    )
+    if [ "$HEAVY_FIRST" -ne 0 ]; then
+        TESTS=(
+            -svf0c -csv1a -csv0a -sv1c
+            -bvb1 -bvs -strsv -ser
+            -svf0b -bvl2 -svf1 -bvl0 -bvl1
+            -sv1a -sv1b -csv0b -csv0c
+            -ll -sv0 -bvb0 -bvser
+            -agg -s -csv1b -sort -cc -rc
+        )
+    else
+        TESTS=(
+            -ll -s
+            -bvb0 -bvb1 -bvser
+            -bvl0 -bvl1 -bvl2
+            -bvs -rc -agg
+            -sv0 -sv1a -sv1b -sv1c -sort
+            -csv0a -csv0c -csv0b -csv1a -csv1b
+            -strsv -cc -ser
+            -svf0a -svf0c -svf0b -svf1
+        )
+    fi
 fi
 
 RUN_LOG_DIR="${LOG_DIR}/${RUN_NAME}"
@@ -198,12 +226,50 @@ RUN_LOG_DIR="$(cd "$RUN_LOG_DIR" && pwd)" || exit 1
 PIDS=()
 PID_TESTS=()
 PID_LOGS=()
+PID_STARTS=()
+PID_SECONDS=()
+PID_STATUS=()
 FAILED_TESTS=()
 FAILED_LOGS=()
 FAILED_STATUS=()
 FAILURES=0
 STOP_LAUNCHING=0
 RUNNING_COUNT=0
+
+format_duration()
+{
+    seconds="$1"
+    hours=$((seconds / 3600))
+    minutes=$(((seconds % 3600) / 60))
+    secs=$((seconds % 60))
+    printf "%02d:%02d:%02d" "$hours" "$minutes" "$secs"
+}
+
+print_timing_table()
+{
+    echo "============================================================"
+    echo "Test timings (launch order)"
+    echo "============================================================"
+    printf "%-12s %-10s %-12s %s\n" "Test" "Status" "Elapsed" "Log"
+    printf "%-12s %-10s %-12s %s\n" "----" "------" "-------" "---"
+
+    index=0
+    while [ "$index" -lt "${#PID_TESTS[@]}" ]; do
+        elapsed="${PID_SECONDS[$index]}"
+        [ -n "$elapsed" ] || elapsed=0
+
+        status="${PID_STATUS[$index]}"
+        [ -n "$status" ] || status="not-run"
+
+        printf "%-12s %-10s %-12s %s\n" \
+            "${PID_TESTS[$index]}" \
+            "$status" \
+            "$(format_duration "$elapsed")" \
+            "${PID_LOGS[$index]}"
+
+        index=$((index + 1))
+    done
+}
 
 start_test()
 {
@@ -221,6 +287,9 @@ start_test()
     PIDS[$index]=$!
     PID_TESTS[$index]="$test_opt"
     PID_LOGS[$index]="$log_file"
+    PID_STARTS[$index]="$(date +%s)"
+    PID_SECONDS[$index]=""
+    PID_STATUS[$index]="running"
 }
 
 reap_finished()
@@ -233,11 +302,15 @@ reap_finished()
         if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
             wait "$pid"
             status=$?
+            elapsed=$(($(date +%s) - PID_STARTS[$index]))
+            PID_SECONDS[$index]="$elapsed"
 
             if [ "$status" -eq 0 ]; then
-                echo "PASS   ${PID_TESTS[$index]}"
+                PID_STATUS[$index]="pass"
+                echo "PASS   ${PID_TESTS[$index]} ($(format_duration "$elapsed"))"
             else
-                echo "FAIL   ${PID_TESTS[$index]} (exit $status)"
+                PID_STATUS[$index]="fail:$status"
+                echo "FAIL   ${PID_TESTS[$index]} (exit $status, $(format_duration "$elapsed"))"
                 echo "       Details: ${PID_LOGS[$index]}"
 
                 failure_index=${#FAILED_TESTS[@]}
@@ -274,6 +347,11 @@ count_running()
 echo "Architecture : $ARCH"
 echo "Binary       : $RUN_PATH"
 echo "Parallel jobs: $JOBS"
+if [ "$HEAVY_FIRST" -ne 0 ]; then
+    echo "Schedule     : heavy-first"
+else
+    echo "Schedule     : natural"
+fi
 echo "Test groups  : ${#TESTS[@]}"
 echo "Logs         : $RUN_LOG_DIR"
 echo
@@ -300,6 +378,9 @@ while :; do
     sleep 0.1
 done
 
+echo
+
+print_timing_table
 echo
 
 if [ "$FAILURES" -ne 0 ]; then
