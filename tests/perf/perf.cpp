@@ -5596,6 +5596,334 @@ void validate_and_deserialization(const sparse_vector_u32& sv,
     }
 }
 
+typedef bm::str_sparse_vector<char, bvect, 16> str_gather_svect_type;
+
+static
+bool is_str_gather_null(str_gather_svect_type::size_type idx)
+{
+    return (idx % 17 == 0) || ((idx & 0xFFFF) == 13);
+}
+
+static
+void make_str_gather_value(str_gather_svect_type::size_type idx, string& str)
+{
+    static const char* prefixes[] =
+    {
+        "az", "az", "bx", "cx", "gene", "rs", "tag", "nm"
+    };
+    const unsigned prefix_idx =
+        unsigned((idx / 1024) % (sizeof(prefixes) / sizeof(prefixes[0])));
+    str = prefixes[prefix_idx];
+    str.append(to_string(idx));
+    if ((idx & 7) == 0)
+        str.append("A");
+}
+
+static
+void generate_str_gather_test_set(str_gather_svect_type& str_sv,
+                                  unsigned vector_max)
+{
+    string str;
+    str_gather_svect_type::back_insert_iterator bi = str_sv.get_back_inserter();
+    for (unsigned i = 0; i < vector_max; ++i)
+    {
+        if (is_str_gather_null(i))
+            bi.add_null();
+        else
+        {
+            make_str_gather_value(i, str);
+            bi = str;
+        }
+    }
+    bi.flush();
+    str_sv.optimize();
+}
+
+static
+void generate_str_gather_deserialization_masks(std::vector<bvect>& mask_vect,
+                                               unsigned vector_max,
+                                               unsigned case_id,
+                                               unsigned sample_count)
+{
+    mask_vect.clear();
+    mask_vect.reserve(sample_count);
+
+    std::mt19937 mask_gen(1717 + case_id * 191);
+    const unsigned island_max = 40000;
+    const unsigned island_limit = vector_max - island_max - 1;
+    std::uniform_int_distribution<unsigned> point_dist(0, vector_max - 1);
+    std::uniform_int_distribution<unsigned> island_from_dist(0, island_limit);
+    std::uniform_int_distribution<unsigned> island_len_dist(256, island_max);
+
+    for (unsigned i = 0; i < sample_count; ++i)
+    {
+        mask_vect.emplace_back();
+        bvect& mask_bv = mask_vect.back();
+        switch (case_id)
+        {
+        case 0:
+            mask_bv.set(point_dist(mask_gen));
+            break;
+        case 1:
+        {
+            unsigned from = island_from_dist(mask_gen);
+            unsigned len = island_len_dist(mask_gen);
+            mask_bv.set_range(from, from + len - 1);
+            break;
+        }
+        case 2:
+            for (unsigned j = 0; j < 5; ++j)
+            {
+                unsigned from = island_from_dist(mask_gen);
+                unsigned len = island_len_dist(mask_gen) / (j + 1);
+                if (!len)
+                    len = 1;
+                mask_bv.set_range(from, from + len - 1);
+            }
+            break;
+        default:
+            BM_ASSERT(0);
+        }
+    }
+    std::shuffle(mask_vect.begin(), mask_vect.end(), mask_gen);
+}
+
+static
+void validate_str_gather_deserialization(const str_gather_svect_type& str_sv,
+                                         const str_gather_svect_type& str_out,
+                                         const bvect& mask_bv,
+                                         const char* variant_name,
+                                         const char* mask_name)
+{
+    string sv_str;
+    string out_str;
+
+    bool size_ok = str_sv.size() == str_out.size();
+    if (!size_ok)
+    {
+        cerr << "Error: str_sparse_vector gather deserialization size mismatch: "
+             << variant_name << ", " << mask_name
+             << ", expected=" << str_sv.size()
+             << ", actual=" << str_out.size() << endl;
+        assert(size_ok); exit(1);
+    }
+
+    bvect::enumerator en = mask_bv.first();
+    for (; en.valid(); ++en)
+    {
+        str_gather_svect_type::size_type idx = *en;
+        bool sv_null = str_sv.is_null(idx);
+        bool out_null = str_out.is_null(idx);
+        if (sv_null != out_null)
+        {
+            cerr << "Error: str_sparse_vector gather NULL mismatch: "
+                 << variant_name << ", " << mask_name
+                 << ", idx=" << idx
+                 << ", expected_null=" << sv_null
+                 << ", actual_null=" << out_null << endl;
+            assert(sv_null == out_null); exit(1);
+        }
+        if (sv_null)
+            continue;
+
+        str_sv.get(idx, sv_str);
+        str_out.get(idx, out_str);
+        bool eq = sv_str == out_str;
+        if (!eq)
+        {
+            cerr << "Error: str_sparse_vector gather value mismatch: "
+                 << variant_name << ", " << mask_name
+                 << ", idx=" << idx
+                 << ", expected=" << sv_str
+                 << ", actual=" << out_str << endl;
+            assert(eq); exit(1);
+        }
+    }
+}
+
+static
+void StrSparseVectorGatherDeserializationTest()
+{
+    cout << " ------------------------------ StrSparseVectorGatherDeserializationTest()" << endl;
+
+    typedef bm::sparse_vector_serializer<str_gather_svect_type> sv_serializer_type;
+    typedef bm::sparse_vector_deserializer<str_gather_svect_type> sv_deserializer_type;
+    typedef bm::sparse_vector_serial_layout<str_gather_svect_type> sv_layout_type;
+    typedef sv_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    const unsigned sv_size = 10000000;
+    const unsigned case_repeats[] = { 500, 500, 50 };
+
+    const char* mask_names[] =
+    {
+        "single point",
+        "single island",
+        "multiple islands"
+    };
+
+    cout << "  string source distribution: prefix-number vocabulary" << endl;
+    str_gather_svect_type str_sv(bm::use_null);
+    generate_str_gather_test_set(str_sv, sv_size);
+
+    str_gather_svect_type str_sv_remap(bm::use_null);
+    str_sv_remap.remap_from(str_sv);
+    str_sv_remap.optimize();
+    str_sv_remap.freeze();
+    str_sv.freeze();
+
+    struct variant_type
+    {
+        variant_type(const char* n, const str_gather_svect_type& s, bool x)
+            : name(n), sv(s), use_xor(x)
+        {}
+
+        const char* name;
+        const str_gather_svect_type& sv;
+        bool use_xor;
+        sv_layout_type layout;
+        deserialization_index_type deserialization_index;
+    };
+
+    variant_type variants[] =
+    {
+        variant_type("plain", str_sv, false),
+        variant_type("xor", str_sv, true),
+        variant_type("remap", str_sv_remap, false),
+        variant_type("remap+xor", str_sv_remap, true)
+    };
+    const unsigned variant_count = unsigned(sizeof(variants) / sizeof(variants[0]));
+
+    for (unsigned i = 0; i < variant_count; ++i)
+    {
+        sv_serializer_type sv_serializer;
+        sv_serializer.set_xor_ref(variants[i].use_xor);
+        sv_serializer.set_bookmarks(true, 64);
+        sv_serializer.serialize(variants[i].sv, variants[i].layout);
+
+        str_gather_svect_type str_check(bm::use_null);
+        sv_deserializer_type sv_deserial;
+        sv_deserial.deserialize(str_check, variants[i].layout.buf());
+        bool eq = variants[i].sv.equal(str_check);
+        if (!eq)
+        {
+            cerr << "Error: str_sparse_vector non-masked deserialization validation failed: "
+                 << variants[i].name << endl;
+            assert(eq); exit(1);
+        }
+    }
+
+    {
+        bm::chrono_taker<> tt(cout,
+            "bm::str_sparse_vector<> deserialization index construction - all variants", 1);
+        for (unsigned i = 0; i < variant_count; ++i)
+        {
+            sv_deserializer_type sv_deserial_map;
+            sv_deserial_map.construct_deserialization_index(variants[i].deserialization_index,
+                                                            variants[i].layout.buf());
+        }
+    }
+
+    for (unsigned i = 0; i < variant_count; ++i)
+    {
+        size_t index_entry_count = variants[i].deserialization_index.count_offsets();
+        size_t index_memory_before = variants[i].deserialization_index.memory_used();
+        variants[i].deserialization_index.optimize();
+        size_t index_memory_after = variants[i].deserialization_index.memory_used();
+
+        cout << "  deserialization index (" << variants[i].name << ") entries = "
+             << index_entry_count << ", memory before optimize = " << index_memory_before
+             << ", memory after optimize = " << index_memory_after << endl;
+    }
+
+    const unsigned mask_sample_count = 100;
+    std::vector<bvect> mask_sets[3];
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+        generate_str_gather_deserialization_masks(mask_sets[case_id], sv_size,
+                                                  case_id, mask_sample_count);
+
+    for (unsigned case_id = 0; case_id < 3; ++case_id)
+    {
+        const std::vector<bvect>& masks = mask_sets[case_id];
+        const unsigned mask_count = unsigned(masks.size());
+
+        for (unsigned variant_id = 0; variant_id < variant_count; ++variant_id)
+        {
+            variant_type& variant = variants[variant_id];
+            const unsigned char* buf = variant.layout.buf();
+
+            for (unsigned mask_id = 0; mask_id < mask_count; ++mask_id)
+            {
+                const bvect& mask_bv = masks[mask_id];
+
+                str_gather_svect_type str_check(bm::use_null);
+                sv_deserializer_type sv_deserial;
+                sv_deserial.deserialize(str_check, buf, mask_bv);
+                validate_str_gather_deserialization(variant.sv, str_check,
+                                                    mask_bv, variant.name,
+                                                    mask_names[case_id]);
+
+                str_gather_svect_type str_check_assist(bm::use_null);
+                sv_deserializer_type sv_deserial_assist;
+                sv_deserial_assist.set_deserialization_index(&variant.deserialization_index);
+                sv_deserial_assist.set_deserialization_index_use(true);
+                sv_deserial_assist.deserialize(str_check_assist, buf, mask_bv);
+                validate_str_gather_deserialization(variant.sv, str_check_assist,
+                                                    mask_bv, variant.name,
+                                                    mask_names[case_id]);
+                bool eq = str_check.equal(str_check_assist);
+                if (!eq)
+                {
+                    cerr << "Error: str_sparse_vector deserialization-index assisted gather mismatch: "
+                         << variant.name << ", " << mask_names[case_id]
+                         << ", mask=" << mask_id << endl;
+                    assert(eq); exit(1);
+                }
+            }
+        }
+
+        for (unsigned variant_id = 0; variant_id < variant_count; ++variant_id)
+        {
+            variant_type& variant = variants[variant_id];
+            str_gather_svect_type str_out(bm::use_null);
+            sv_deserializer_type sv_deserial_timed;
+            std::string msg("bm::str_sparse_vector<> gather deserialization - ");
+            msg += variant.name;
+            msg += " - ";
+            msg += mask_names[case_id];
+            unsigned repeats = case_repeats[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                const bvect& mask_bv = masks[i % mask_count];
+                sv_deserial_timed.deserialize(str_out, variant.layout.buf(), mask_bv);
+                c_acc += str_out.size();
+            }
+        }
+        for (unsigned variant_id = 0; variant_id < variant_count; ++variant_id)
+        {
+            variant_type& variant = variants[variant_id];
+            str_gather_svect_type str_out(bm::use_null);
+            sv_deserializer_type sv_deserial_timed;
+            sv_deserial_timed.set_deserialization_index(&variant.deserialization_index);
+            sv_deserial_timed.set_deserialization_index_use(true);
+            std::string msg("bm::str_sparse_vector<> gather deserialization index-assist - ");
+            msg += variant.name;
+            msg += " - ";
+            msg += mask_names[case_id];
+            unsigned repeats = case_repeats[case_id];
+            bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
+            for (unsigned i = 0; i < repeats; ++i)
+            {
+                const bvect& mask_bv = masks[i % mask_count];
+                sv_deserial_timed.deserialize(str_out, variant.layout.buf(), mask_bv);
+                c_acc += str_out.size();
+            }
+        }
+    }
+
+    cout << " ------------------------------ StrSparseVectorGatherDeserializationTest() OK" << endl;
+}
+
 static
 void SparseVectorANDDeserializationTest()
 {
@@ -8692,6 +9020,10 @@ int main(void)
         SparseVectorANDDeserializationTest();
         cout << endl;
 
+        StrSparseVectorGatherDeserializationTest();
+        cout << endl;
+        return 0;
+        
         SparseVectorFloatANDDeserializationTest();
         cout << endl;
         SparseVectorFloatRSCANDDeserializationTest();
