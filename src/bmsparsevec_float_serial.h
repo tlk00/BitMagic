@@ -87,6 +87,21 @@ private:
 };
 
 
+/**
+    \brief Serializer for bm::sparse_vector_float<> containers.
+
+    Serializes a floating sparse vector as a compact three-part BLOB: sign
+    bit-vector, exponent sparse vector, and mantissa sparse vector. The exponent
+    and mantissa planes use the regular sparse-vector serializer, so options such
+    as bookmarks and XOR reference compression apply to the embedded sparse
+    vectors. The resulting BLOB can be used for full, range, or masked gather
+    deserialization, including deserialization-index assisted reads.
+
+    @tparam SV bm::sparse_vector_float<> specialization.
+    @ingroup sv
+    @sa sparse_vector_float_deserializer
+    @sa sparse_vector_float_serial_layout
+*/
 template<typename SV>
 class sparse_vector_float_serializer
 {
@@ -219,7 +234,28 @@ private:
 };
 
 /**
-    sparse vector de-serializer
+    \brief Deserializer for bm::sparse_vector_float<> BLOBs.
+
+    Restores floating sparse vectors serialized by sparse_vector_float_serializer.
+    The input BLOB contains sign bits plus embedded sparse-vector BLOBs for
+    exponent and mantissa planes, so this class delegates most plane decoding to
+    bm::sparse_vector_deserializer while preserving the float-vector NULL
+    relationship between exponent and mantissa storage.
+
+    Supported modes:
+    - full deserialization into a target vector;
+    - range deserialization for a closed [from, to] interval;
+    - masked/gather deserialization using an address bit-vector;
+    - optional deserialization-index assisted masked reads for repeated random
+      access workloads.
+
+    XOR reference vectors and deserialization indexes are non-owning attachments:
+    the caller must keep them alive for the duration of deserializer use.
+
+    @tparam SV bm::sparse_vector_float<> specialization.
+    @ingroup sv
+    @sa sparse_vector_float_serializer
+    @sa sparse_vector_float_deserialization_index
 */
 template<typename SV>
 class sparse_vector_float_deserializer
@@ -769,28 +805,14 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
     sv.signs_ &= mask_bv;
     ptr += sign_size;
 
+    exponentDeserializer_.deserialize(sv.exponents_, ptr, mask_bv);
+    ptr += exp_size;
+
     if constexpr (is_rsc_sparse_vector<sparse_vector_type>::value)
-    {
-        sparse_vector_type exp_tmp;
-        sparse_vector_type mant_tmp;
-        exponentDeserializer_.deserialize(exp_tmp, ptr, mask_bv);
-        ptr += exp_size;
-        mantissaDeserializer_.deserialize(mant_tmp, ptr, mask_bv);
+        sv.exponents_.sync(false, false);
 
-        sv.exponents_ = static_cast<sparse_vector_type&&>(exp_tmp);
-        sv.mantissas_ = static_cast<sparse_vector_type&&>(mant_tmp);
-    }
-    else
-    {
-        sparse_vector_type exp_tmp;
-        sparse_vector_type mant_tmp;
-        exponentDeserializer_.deserialize(exp_tmp, ptr, mask_bv);
-        ptr += exp_size;
-        mantissaDeserializer_.deserialize(mant_tmp, ptr, mask_bv);
-
-        sv.exponents_.swap(exp_tmp);
-        sv.mantissas_.swap(mant_tmp);
-    }
+    sv.attach_mantissa_null_plane_();
+    mantissaDeserializer_.deserialize(sv.mantissas_, ptr, mask_bv);
 }
 
 //---------------------------------------------------------------------

@@ -305,6 +305,10 @@ public:
     const bvector_type* get_null_bvector() const BMNOEXCEPT
         { return mantissas_.get_null_bvector(); }
 
+    /*! \brief return vector NULL support mode */
+    bm::null_support get_null_support() const BMNOEXCEPT
+        { return mantissas_.get_null_support(); }
+
     /*! \brief return Rank-Select index pointer for RSC vectors */
     const rs_index_type* get_RS() const BMNOEXCEPT
     {
@@ -546,6 +550,12 @@ protected:
     enum buf_size_e{
         n_buf_size = 1024 * 8
     };
+
+    /** Link mantissa NULL plane to exponent NULL plane when float storage
+        uses shared NULL ownership.
+    */
+    void attach_mantissa_null_plane_();
+
 //private:
 public:
     bvector_type      signs_;      ///!< sign bit vector
@@ -566,11 +576,25 @@ sparse_vector_float<SV>::sparse_vector_float(bm::null_support null_able,
  exponents_(is_rsc_sparse_vector<SV>::value ? bm::use_null : null_able, ap, bv_max_size, alloc),
  mantissas_(is_rsc_sparse_vector<SV>::value ? bm::use_null : null_able, ap, bv_max_size, alloc)
 {
-     if(is_rsc_sparse_vector<SV>::value || null_able == bm::use_null)
-     {
-         mantissas_.attach_null_bvector(exponents_);
-     }
+     attach_mantissa_null_plane_();
  }
+
+//---------------------------------------------------------------------
+
+template<class SV>
+void sparse_vector_float<SV>::attach_mantissa_null_plane_()
+{
+    if constexpr (is_rsc_sparse_vector<SV>::value)
+    {
+        mantissas_.sv_.attach_null_bvector(exponents_.sv_);
+        mantissas_.invalidate_rs_index();
+    }
+    else
+    {
+        if (get_null_support() == bm::use_null)
+            mantissas_.attach_null_bvector(exponents_);
+    }
+}
 
 //---------------------------------------------------------------------
 

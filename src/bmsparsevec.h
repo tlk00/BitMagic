@@ -601,6 +601,10 @@ public:
     static constexpr
     bool is_str() BMNOEXCEPT { return false; }
 
+    /*! \brief return vector NULL support mode */
+    bm::null_support get_null_support() const BMNOEXCEPT
+        { return parent_type::get_null_support(); }
+
     ///@}
 
 

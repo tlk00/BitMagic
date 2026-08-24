@@ -732,6 +732,9 @@ public:
         \brief if container supports NULL(unassigned) values (true)
     */
     bool is_nullable() const { return true; }
+
+    /*! \brief return vector NULL support mode */
+    bm::null_support get_null_support() const BMNOEXCEPT { return bm::use_null; }
     
     /** \brief various type traits
     */

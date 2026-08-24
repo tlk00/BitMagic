@@ -639,6 +639,10 @@ protected:
     bm::word_t*          ex1_arr_=0;     ///< array for exceptions
 };
 
+template<class BV>
+class deserialization_index;
+
+
 /**
     Deserializer for bit-vector
     \ingroup bvserial 
@@ -655,13 +659,7 @@ public:
     typedef deseriaizer_base<DEC, block_idx_type>          parent_type;
     typedef typename parent_type::decoder_type             decoder_type;
     typedef bm::bv_ref_vector<BV>                          bv_ref_vector_type;
-#ifdef BM64ADDR
-    typedef bm::id64_t                                     marker_offset_type;
-#else
-    typedef unsigned                                       marker_offset_type;
-#endif
-    typedef bm::heap_vector<marker_offset_type,
-                            allocator_type, true>          marker_offset_vector_type;
+    typedef bm::deserialization_index<BV>                  deserialization_index_type;
 
 public:
     deserializer();
@@ -679,35 +677,34 @@ public:
                        bm::word_t*          temp_block = 0);
 
     /*!
-        Attach an optional external marker-offset vector to collect useful
-        plane-relative marker byte offsets during deserialize().
+        Attach an optional external deserialization index to collect useful
+        marker byte offsets during deserialize().
 
-        The caller must explicitly unset marker-offset use mode before enabling
+        The caller must explicitly unset index use mode before enabling
         construction mode.
 
-        @param marker_offsets - mutable output vector, or NULL to disable collection
-        @sa unset_marker_offset_vector()
+        @param dindex - mutable output index, or NULL to disable collection
+        @sa unset_deserialization_index()
     */
-    void set_marker_offset_vector_construct(marker_offset_vector_type* marker_offsets);
+    void set_deserialization_index_construct(deserialization_index_type* dindex);
 
     /*!
-        Attach an optional read-only marker-offset vector for future optimized
-        deserialization. The current implementation wires the configuration but
-        still walks the serialized stream normally.
+        Attach an optional read-only deserialization index for optimized
+        selective deserialization.
 
-        The caller must explicitly unset marker-offset construction mode before
+        The caller must explicitly unset index construction mode before
         enabling use mode.
 
-        @param marker_offsets - const input vector, or NULL to disable map use
-        @sa unset_marker_offset_vector()
+        @param dindex - const input index, or NULL to disable index use
+        @sa unset_deserialization_index()
     */
-    void set_marker_offset_vector_use(const marker_offset_vector_type* marker_offsets);
+    void set_deserialization_index_use(const deserialization_index_type* dindex);
 
-    /*! Disable marker-offset collection and marker-map use. */
-    void unset_marker_offset_vector() BMNOEXCEPT
+    /*! Disable deserialization index collection and index-assisted use. */
+    void unset_deserialization_index() BMNOEXCEPT
     {
-        marker_offsets_out_ = 0;
-        marker_offsets_in_ = 0;
+        deserialization_index_out_ = 0;
+        deserialization_index_in_ = 0;
     }
 
     /*! Attach optional block digest for marker-map based selective decoding. */
@@ -754,13 +751,6 @@ protected:
 protected:
    static bool is_skip_marker(unsigned char btype) BMNOEXCEPT;
    static bool is_single_block_payload_marker(unsigned char btype) BMNOEXCEPT;
-   static bool find_next_marker_offset(const marker_offset_vector_type* marker_offsets,
-                                       size_t marker_pos,
-                                       size_t& marker_idx,
-                                       size_t& next_marker_pos) BMNOEXCEPT;
-   static void clear_marker_offsets(marker_offset_vector_type& marker_offsets);
-   static void add_marker_offset(marker_offset_vector_type& marker_offsets,
-                                 size_t marker_pos);
 
    bool is_block_requested(block_idx_type nb) const;
    bool has_requested_blocks(block_idx_type nb_from, block_idx_type nb_to) const;
@@ -835,10 +825,99 @@ protected:
     size_type                 idx_from_;
     size_type                 idx_to_;
 
-    // Optional marker-offset map wiring. Output and input modes are exclusive.
-    marker_offset_vector_type*       marker_offsets_out_;
-    const marker_offset_vector_type* marker_offsets_in_;
-    const bvector_type*              block_digest_in_;
+    // Optional deserialization index wiring. Output and input modes are exclusive.
+    deserialization_index_type*       deserialization_index_out_;
+    const deserialization_index_type* deserialization_index_in_;
+    const bvector_type*               block_digest_in_;
+};
+
+
+/**
+    Acceleration index for selective bit-vector deserialization.
+
+    The index is constructed from a serialized bit-vector BLOB and can be reused
+    with the same BLOB to skip unrequested block payloads during masked
+    deserialization. It owns all blob-side lookup structures needed by the
+    deserializer.
+
+    \ingroup bvserial
+*/
+template<class BV>
+class deserialization_index
+{
+public:
+    typedef BV                                             bvector_type;
+    typedef typename bvector_type::allocator_type          allocator_type;
+#ifdef BM64ADDR
+    typedef bm::id64_t                                     marker_offset_type;
+#else
+    typedef unsigned                                       marker_offset_type;
+#endif
+    typedef bm::heap_vector<marker_offset_type,
+                            allocator_type, true>          marker_offset_vector_type;
+
+public:
+    /*! Clear all collected index data. */
+    void clear() BMNOEXCEPT { marker_offsets_.reset(); }
+
+    /*! True if the index has no collected marker offsets. */
+    bool empty() const BMNOEXCEPT { return marker_offsets_.empty(); }
+
+    /*! Number of marker-offset entries in the index. */
+    size_t size() const BMNOEXCEPT { return marker_offsets_.size(); }
+
+    /*! Release unused capacity after construction. */
+    void optimize()
+    {
+        if (marker_offsets_.capacity() > marker_offsets_.size())
+        {
+            marker_offset_vector_type tmp(marker_offsets_);
+            marker_offsets_.swap(tmp);
+        }
+    }
+
+    /*! Approximate index memory footprint in bytes. */
+    size_t memory_used() const BMNOEXCEPT
+    {
+        return sizeof(*this) +
+            marker_offsets_.capacity() * sizeof(marker_offset_type);
+    }
+
+    /*! Add serialized marker byte offset. */
+    void add_marker_offset(size_t marker_pos)
+    {
+        if (marker_pos != size_t(marker_offset_type(marker_pos)))
+        {
+            BM_ASSERT(0);
+            #ifndef BM_NO_STL
+                throw std::logic_error("BM: marker offset overflow");
+            #else
+                BM_THROW(BM_ERR_SERIALFORMAT);
+            #endif
+        }
+        marker_offsets_.push_back(marker_offset_type(marker_pos));
+    }
+
+    /*! Find the next serialized marker offset after marker_pos. */
+    bool find_next_marker_offset(size_t marker_pos,
+                                 size_t& marker_idx,
+                                 size_t& next_marker_pos) const BMNOEXCEPT
+    {
+        const size_t sz = marker_offsets_.size();
+        while (marker_idx < sz &&
+               size_t(marker_offsets_[marker_idx]) <= marker_pos)
+        {
+            ++marker_idx;
+        }
+        if (marker_idx >= sz)
+            return false;
+
+        next_marker_pos = size_t(marker_offsets_[marker_idx]);
+        return next_marker_pos > marker_pos;
+    }
+
+protected:
+    marker_offset_vector_type marker_offsets_;
 };
 
 
@@ -4511,9 +4590,9 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
                 len = dec.get_16();
             else
                 len = dec.get_8();
-            if (!len) // there is a known issue in older version which could produce this
+            if (len < 2) // there is a known issue in older version which could produce this
             {
-                //BM_ASSERT(0);
+                BM_ASSERT(0);
                 #ifndef BM_NO_STL
                     throw std::logic_error(err_msg());
                 #else
@@ -4572,6 +4651,18 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
             len = (sb_flag & bm::sblock_flag_len16) ?
                             bin.delta16():
                             bin.get_bits(8);
+            // BIC sparse super-blocks store first and last bit positions
+            // explicitly, then decode the interior values. Shorter records
+            // cannot be decoded as this format.
+            if (len < 2)
+            {
+                BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            }
             bm::word_t min_v;
             if (sb_flag & bm::sblock_flag_min24)
                 if (sb_flag & bm::sblock_flag_min16) // 24 and 16
@@ -5180,8 +5271,8 @@ deserializer<BV, DEC>::deserializer()
   or_block_(0),
   or_block_idx_(0),
   is_range_set_(0),
-  marker_offsets_out_(0),
-  marker_offsets_in_(0),
+  deserialization_index_out_(0),
+  deserialization_index_in_(0),
   block_digest_in_(0)
 {
     temp_block_ = alloc_.alloc_bit_block();
@@ -5579,8 +5670,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                                           const unsigned char* buf,
                                           bm::word_t*          /*temp_block*/)
 {
-    const marker_offset_vector_type* marker_offsets_in = marker_offsets_in_;
-    const bool digest_skip = marker_offsets_in && block_digest_in_;
+    const deserialization_index_type* dindex_in = deserialization_index_in_;
+    const bool digest_skip = dindex_in && block_digest_in_;
     if (digest_skip && bv.is_ro())
         bv.clear(true);
 
@@ -5598,8 +5689,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
 
 
     decoder_type dec(buf);
-    if (marker_offsets_out_)
-        clear_marker_offsets(*marker_offsets_out_);
+    if (deserialization_index_out_)
+        deserialization_index_out_->clear();
     size_t marker_idx = 0;
 
     // Reading the serialization header
@@ -5712,8 +5803,8 @@ std::cout << "size=" << dec_last_size;
 
         size_t marker_pos = size_t(dec.get_pos() - buf);
         btype = dec.get_8();
-        if (marker_offsets_out_ && is_skip_marker(btype))
-            add_marker_offset(*marker_offsets_out_, marker_pos);
+        if (deserialization_index_out_ && is_skip_marker(btype))
+            deserialization_index_out_->add_marker_offset(marker_pos);
         if (btype & (1 << 7)) // check if short zero-run packed here
         {
             nb = btype & ~(1 << 7);
@@ -5727,7 +5818,7 @@ std::cout << "size=" << dec_last_size;
         if (skip_payload && is_single_block_payload_marker(btype))
         {
             size_t next_marker_pos;
-            bool found = find_next_marker_offset(marker_offsets_in, marker_pos,
+            bool found = dindex_in->find_next_marker_offset(marker_pos,
                                                  marker_idx, next_marker_pos);
             if (found)
             {
@@ -6092,37 +6183,37 @@ dec_last_size = dec_size;
 // ---------------------------------------------------------------------------
 
 template<class BV, class DEC>
-void deserializer<BV, DEC>::set_marker_offset_vector_construct(
-                                        marker_offset_vector_type* marker_offsets)
+void deserializer<BV, DEC>::set_deserialization_index_construct(
+                                        deserialization_index_type* dindex)
 {
-    if (marker_offsets && marker_offsets_in_)
+    if (dindex && deserialization_index_in_)
     {
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error("BM: marker offset map mode conflict");
+            throw std::logic_error("BM: deserialization index mode conflict");
         #else
             BM_THROW(BM_ERR_RANGE);
         #endif
     }
-    marker_offsets_out_ = marker_offsets;
+    deserialization_index_out_ = dindex;
 }
 
 // ---------------------------------------------------------------------------
 
 template<class BV, class DEC>
-void deserializer<BV, DEC>::set_marker_offset_vector_use(
-                                const marker_offset_vector_type* marker_offsets)
+void deserializer<BV, DEC>::set_deserialization_index_use(
+                                const deserialization_index_type* dindex)
 {
-    if (marker_offsets && marker_offsets_out_)
+    if (dindex && deserialization_index_out_)
     {
         BM_ASSERT(0);
         #ifndef BM_NO_STL
-            throw std::logic_error("BM: marker offset map mode conflict");
+            throw std::logic_error("BM: deserialization index mode conflict");
         #else
             BM_THROW(BM_ERR_RANGE);
         #endif
     }
-    marker_offsets_in_ = marker_offsets;
+    deserialization_index_in_ = dindex;
 }
 
 // ---------------------------------------------------------------------------
@@ -6201,28 +6292,6 @@ bool deserializer<BV, DEC>::is_single_block_payload_marker(
 // ---------------------------------------------------------------------------
 
 template<class BV, class DEC>
-bool deserializer<BV, DEC>::find_next_marker_offset(
-                                const marker_offset_vector_type* marker_offsets,
-                                size_t marker_pos,
-                                size_t& marker_idx,
-                                size_t& next_marker_pos) BMNOEXCEPT
-{
-    if (!marker_offsets)
-        return false;
-
-    const size_t sz = marker_offsets->size();
-    while (marker_idx < sz && size_t((*marker_offsets)[marker_idx]) <= marker_pos)
-        ++marker_idx;
-    if (marker_idx >= sz)
-        return false;
-
-    next_marker_pos = size_t((*marker_offsets)[marker_idx]);
-    return next_marker_pos > marker_pos;
-}
-
-// ---------------------------------------------------------------------------
-
-template<class BV, class DEC>
 bool deserializer<BV, DEC>::is_block_requested(block_idx_type nb) const
 {
     return (!block_digest_in_ || block_digest_in_->test(nb));
@@ -6239,34 +6308,6 @@ bool deserializer<BV, DEC>::has_requested_blocks(block_idx_type nb_from,
     if (nb_from > nb_to)
         return false;
     return block_digest_in_->count_range(nb_from, nb_to) != 0;
-}
-
-// ---------------------------------------------------------------------------
-
-template<class BV, class DEC>
-void deserializer<BV, DEC>::clear_marker_offsets(
-                                    marker_offset_vector_type& marker_offsets)
-{
-    marker_offsets.reset();
-}
-
-// ---------------------------------------------------------------------------
-
-template<class BV, class DEC>
-void deserializer<BV, DEC>::add_marker_offset(
-                                    marker_offset_vector_type& marker_offsets,
-                                    size_t marker_pos)
-{
-    if (marker_pos != size_t(marker_offset_type(marker_pos)))
-    {
-        BM_ASSERT(0);
-        #ifndef BM_NO_STL
-            throw std::logic_error("BM: marker offset overflow");
-        #else
-            BM_THROW(BM_ERR_SERIALFORMAT);
-        #endif
-    }
-    marker_offsets.push_back(marker_offset_type(marker_pos));
 }
 
 // ---------------------------------------------------------------------------
