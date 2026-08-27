@@ -17618,6 +17618,43 @@ void Check_SimModel(const bm::xor_sim_model<bvect>& sim1,
 
 
 static
+void Check_Large_AllOnes_BVector_Serialization()
+{
+    cout << "  large all-1 bvector serialization regression" << endl;
+
+    const bvect::size_type bv_size = 255u * 1024u * 1024u;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    bvect bv;
+    bv.resize(bv_size);
+    bv.set_range(0, bv_size - 1);
+    bv.optimize(tb);
+    bv.freeze();
+
+    bm::serializer<bvect> bv_ser(tb);
+    bv_ser.set_compression_level(5);
+    bv_ser.set_bookmarks(true);
+
+    bm::serializer<bvect>::buffer sermem_buf;
+    bv_ser.serialize(bv, sermem_buf, 0);
+
+    bvect bv2;
+    bm::deserialize(bv2, sermem_buf.buf());
+
+    bool eq = bv.equal(bv2);
+    if (!eq)
+    {
+        cerr << "Large all-1 bvector serialization mismatch, size="
+             << bv_size << endl;
+        assert(0); exit(1);
+    }
+
+    Check_BVector_Gather_Deserialization_Index(bv, sermem_buf.buf(), tb,
+                                               "LargeAllOnesBVectorSerialization");
+}
+
+static
 void SerializationCompressionLevelsTest()
 {
    cout << " ----------------------------------- SerializationCompressionLevelsTest()" << endl;
@@ -17649,7 +17686,8 @@ void SerializationCompressionLevelsTest()
     }
     CheckAllocLeaks(false);
 
-
+    Check_Large_AllOnes_BVector_Serialization();
+    CheckAllocLeaks(false);
 
    {
         operation_deserializer<bvect> od;
@@ -36319,13 +36357,20 @@ void TestCompressedSparseVectorScan()
 
 }
 
+static const unsigned csv_scan_gt_basic        = 1u;
+static const unsigned csv_scan_gt_random_pass0 = 2u;
+static const unsigned csv_scan_gt_random_pass1 = 4u;
+static const unsigned csv_scan_gt_all =
+        csv_scan_gt_basic | csv_scan_gt_random_pass0 | csv_scan_gt_random_pass1;
+
 static
-void TestCompressedSparseVectorScanGT()
+void TestCompressedSparseVectorScanGT(unsigned test_mask = csv_scan_gt_all)
 {
     cout << " --------------- Test rsc_sparse_vector<> TestCompressedSparseVectorScanGT()" << endl;
 
     bm::sparse_vector_scanner<rsc_sparse_vector_u32> scanner_csv;
     bm::sparse_vector_scanner<sparse_vector_u32> scanner_sv;
+    if (test_mask & csv_scan_gt_basic)
     {
     rsc_sparse_vector_u32 csv(bm::use_null);
     sparse_vector_u32 sv(bm::use_null);
@@ -36360,9 +36405,11 @@ void TestCompressedSparseVectorScanGT()
         } // pass
     }
 
-    cout << "  stress test GT on random data " << endl;
-    cout << "  data generation..." << flush;
+    if (test_mask & (csv_scan_gt_random_pass0 | csv_scan_gt_random_pass1))
     {
+        cout << "  stress test GT on random data " << endl;
+        cout << "  data generation..." << flush;
+
         const rsc_sparse_vector_u32::size_type total_size = 25 * 1024 * 1024;
         const unsigned sample_size = 1024;
 
@@ -36405,6 +36452,10 @@ void TestCompressedSparseVectorScanGT()
 
         for (unsigned pass = 0; pass < 2; ++pass)
         {
+            if (pass == 0 && !(test_mask & csv_scan_gt_random_pass0))
+                continue;
+            if (pass == 1 && !(test_mask & csv_scan_gt_random_pass1))
+                continue;
             if (pass)
                 csv.optimize();
             cout << "  PASS = " << pass << " sample count = " << bv_subset.count() << endl;
@@ -46846,12 +46897,14 @@ void show_help()
         << "-csv                  - test compressed sparse vectors" << endl
         << "-csv0a, -csv0b, -csv0c- compressed sparse-vector tests, part 0 split groups" << endl
         << "-csv1a, -csv1b        - compressed sparse-vector tests, part 1 split groups" << endl
+        << "-csv1a0,-csv1a1,-csv1a2 - compressed sparse-vector GT scan split groups" << endl
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
         << "-ser                  - test all serialization" << endl
         << "-allsvser             - test serailization of sparse vectors (all)" << endl
         << "-sort                 - sparse vector sort tests" << endl
         << "-svf0a, -svf0b, -svf0c- floating-point sparse-vector split groups" << endl
+        << "-svf0c1,-svf0c2,-svf0c3 - SVF scanner linear/random/skewed groups" << endl
         << endl
         << "-silent               -run without excessive progress report prints"
         << endl;
@@ -46886,6 +46939,9 @@ bool         is_csv0a = false;
 bool         is_csv0b = false;
 bool         is_csv0c = false;
 bool         is_csv1a = false;
+bool         is_csv1a0 = false;
+bool         is_csv1a1 = false;
+bool         is_csv1a2 = false;
 bool         is_csv1b = false;
 
 bool         is_str_sv = false;
@@ -46899,6 +46955,9 @@ bool         is_svf1 = false;
 bool         is_svf0a = false;
 bool         is_svf0b = false;
 bool         is_svf0c = false;
+bool         is_svf0c1 = false;
+bool         is_svf0c2 = false;
+bool         is_svf0c3 = false;
 
 static
 void ReportTestBlockDone(const char* name)
@@ -47088,6 +47147,24 @@ int parse_args(int argc, char *argv[])
             is_csv1a = true;
             continue;
         }
+        if (arg == "-csv1a0")
+        {
+            is_all = false;
+            is_csv1a0 = true;
+            continue;
+        }
+        if (arg == "-csv1a1")
+        {
+            is_all = false;
+            is_csv1a1 = true;
+            continue;
+        }
+        if (arg == "-csv1a2")
+        {
+            is_all = false;
+            is_csv1a2 = true;
+            continue;
+        }
         if (arg == "-csv1b")
         {
             is_all = false;
@@ -47146,6 +47223,24 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_svf0c = true;
+            continue;
+        }
+        if (arg == "-svf0c1")
+        {
+            is_all = false;
+            is_svf0c1 = true;
+            continue;
+        }
+        if (arg == "-svf0c2")
+        {
+            is_all = false;
+            is_svf0c2 = true;
+            continue;
+        }
+        if (arg == "-svf0c3")
+        {
+            is_all = false;
+            is_svf0c3 = true;
             continue;
         }
         if (arg == "-svf1")
@@ -48178,6 +48273,83 @@ void str_deserialization_index_make_source(str_deserialization_index_svect_type&
     }
     bi.flush();
     str_sv.optimize();
+}
+
+template<class STR_SV>
+static
+void str_sparse_vector_full_top_block_make_constant(
+        STR_SV& str_sv,
+        typename STR_SV::size_type sv_size,
+        const char* value)
+{
+    typedef typename STR_SV::bvector_type bvector_type;
+
+    str_sv.resize(sv_size);
+    auto& bmatr = str_sv.get_bmatrix();
+    for (unsigned char_idx = 0; value[char_idx]; ++char_idx)
+    {
+        unsigned ch = unsigned((unsigned char)value[char_idx]);
+        for (unsigned bit = 0; bit < 8; ++bit)
+        {
+            if (ch & (1u << bit))
+            {
+                bvector_type* bv = bmatr.construct_row(char_idx * 8 + bit);
+                BM_ASSERT(bv);
+                bv->set_range(0, sv_size - 1);
+            }
+        }
+    }
+    str_sv.optimize();
+    str_sv.freeze();
+}
+
+static
+void StrSparseVectorFullTopBlockSerializationRegressionTest()
+{
+    cout << "---------------------------- String sparse vector full top-block serialization regression test" << endl;
+
+    typedef str_deserialization_index_svect_type regression_svect_type;
+    typedef bm::sparse_vector_serializer<regression_svect_type> sv_serializer_type;
+    typedef bm::sparse_vector_deserializer<regression_svect_type> sv_deserializer_type;
+    typedef bm::sparse_vector_serial_layout<regression_svect_type> sv_layout_type;
+    typedef regression_svect_type::size_type size_type;
+
+    const size_type sv_size = 256u * 1024u * 1024u;
+    const char* value = "svm_";
+
+    regression_svect_type str_sv(bm::no_null);
+    str_sparse_vector_full_top_block_make_constant(str_sv, sv_size, value);
+
+    sv_serializer_type sv_serializer;
+    sv_serializer.set_bookmarks(true, 64);
+
+    sv_layout_type layout;
+    sv_serializer.serialize(str_sv, layout);
+
+    cout << "  vector size=" << str_sv.size()
+         << ", serialized BLOB size=" << layout.size() << endl;
+
+    regression_svect_type str_out(bm::no_null);
+    sv_deserializer_type sv_deserializer;
+    sv_deserializer.deserialize(str_out, layout.buf());
+
+    std::string str;
+    str_out.get(0, str);
+    bool eq = (str == value);
+    if (eq)
+    {
+        str_out.get(sv_size - 1, str);
+        eq = (str == value);
+    }
+    if (eq)
+        eq = str_sv.equal(str_out);
+    if (!eq)
+    {
+        cerr << "Error: str_sparse_vector full top-block serialization regression mismatch" << endl;
+        assert(eq); exit(1);
+    }
+
+    cout << "---------------------------- String sparse vector full top-block serialization regression test OK" << endl;
 }
 
 static
@@ -50126,7 +50298,13 @@ void runSVFScannerTest(std::vector<float> temp, sparseVecFloat testSVF, float fr
     }
 }
 
-void SparseVecFloatScannerTests()
+static const unsigned svf_scanner_linear = 1u;
+static const unsigned svf_scanner_random = 2u;
+static const unsigned svf_scanner_skewed = 4u;
+static const unsigned svf_scanner_all =
+        svf_scanner_linear | svf_scanner_random | svf_scanner_skewed;
+
+void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
@@ -50148,18 +50326,21 @@ void SparseVecFloatScannerTests()
         to[i] = dis(gen);
     }
 
-    std::vector<float> linData(N);
-
-    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
-        linData[i] = -1.0f * (float)i * 0.00123f;
-    for(sparseVecFloat::size_type i = 0; i < N/2; i++)
-        linData[i+N/2] = (float)i * 0.00123f;
-
     sparseVecFloat testSVF;
-    testSVF.import(linData.data(), N);
-    testSVF.optimize(tb);
 
+    if (test_mask & svf_scanner_linear)
     {
+        std::vector<float> linData(N);
+
+        for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+            linData[i] = -1.0f * (float)i * 0.00123f;
+        for(sparseVecFloat::size_type i = 0; i < N/2; i++)
+            linData[i+N/2] = (float)i * 0.00123f;
+
+        testSVF.clear();
+        testSVF.import(linData.data(), N);
+        testSVF.optimize(tb);
+
         std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(linData, testSVF, from[i], to[i]);
@@ -50171,16 +50352,17 @@ void SparseVecFloatScannerTests()
             std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
-    testSVF.clear();
-    std::vector<float> randData(N);
-    for (sparseVecFloat::size_type i = 0; i < N; ++i)
+    if (test_mask & svf_scanner_random)
     {
-        randData[i] = dis(gen);
-    }
-    testSVF.import(randData.data(), N);
-    testSVF.optimize(tb);
+        std::vector<float> randData(N);
+        for (sparseVecFloat::size_type i = 0; i < N; ++i)
+        {
+            randData[i] = dis(gen);
+        }
+        testSVF.clear();
+        testSVF.import(randData.data(), N);
+        testSVF.optimize(tb);
 
-    {
         std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(randData, testSVF, from[i], to[i]);
@@ -50192,16 +50374,17 @@ void SparseVecFloatScannerTests()
             std::cout << "\r" << std::string(20, ' ') << "\r" << std::flush;
     }
 
-    testSVF.clear();
-    std::vector<float> skewData(N);
-    for (sparseVecFloat::size_type i = 19000000; i < N; ++i)
+    if (test_mask & svf_scanner_skewed)
     {
-        skewData[i] = dis(gen);
-    }
-    testSVF.import(skewData.data(), N);
-    testSVF.optimize(tb);
+        std::vector<float> skewData(N);
+        for (sparseVecFloat::size_type i = 19000000; i < N; ++i)
+        {
+            skewData[i] = dis(gen);
+        }
+        testSVF.clear();
+        testSVF.import(skewData.data(), N);
+        testSVF.optimize(tb);
 
-    {
         std::cout << "-------------------------SVF Skewed Values Scanner" << std::endl;
         for(unsigned int i = 0; i < tests; i++){
             runSVFScannerTest(skewData, testSVF, from[i], to[i]);
@@ -52170,14 +52353,14 @@ return 0;
             TestSignedSparseVectorScanGT();
              CheckAllocLeaks(false);
 
-            TestSignedSparseVectorScan();
-             CheckAllocLeaks(false);
-
             if (is_sv1b)
                 ReportTestBlockDone("-sv1b");
          }
         if (is_all || is_sv || is_sv1 || is_sv1c)
         {
+            TestSignedSparseVectorScan();
+             CheckAllocLeaks(false);
+
             TestSparseVector_Stress(3);
              CheckAllocLeaks(false);
 
@@ -52202,7 +52385,8 @@ return 0;
     }
 
     if (is_all || is_csv || is_csv0 || is_csv1 ||
-        is_csv0a || is_csv0b || is_csv0c || is_csv1a || is_csv1b)
+        is_csv0a || is_csv0b || is_csv0c ||
+        is_csv1a || is_csv1a0 || is_csv1a1 || is_csv1a2 || is_csv1b)
     {
         if (is_all || is_csv || is_csv0 || is_csv0a)
         {
@@ -52250,6 +52434,27 @@ return 0;
 
             if (is_csv1a)
                 ReportTestBlockDone("-csv1a");
+        }
+        else
+        {
+            if (is_csv1a0)
+            {
+                TestCompressedSparseVectorScanGT(csv_scan_gt_basic);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone("-csv1a0");
+            }
+            if (is_csv1a1)
+            {
+                TestCompressedSparseVectorScanGT(csv_scan_gt_random_pass0);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone("-csv1a1");
+            }
+            if (is_csv1a2)
+            {
+                TestCompressedSparseVectorScanGT(csv_scan_gt_random_pass1);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone("-csv1a2");
+            }
         }
 
         if (is_all || is_csv || is_csv1 || is_csv1b)
@@ -52340,6 +52545,9 @@ return 0;
         TestStrSparseVectorSerial();
         CheckAllocLeaks(false);
 
+        StrSparseVectorFullTopBlockSerializationRegressionTest();
+        CheckAllocLeaks(false);
+
         StrSparseVectorDeserializationIndexGatherTest();
         CheckAllocLeaks(false);
 
@@ -52350,7 +52558,8 @@ return 0;
             ReportTestBlockDone("-allsvser");
     }
 
-    if (is_all || is_svf || is_svf0 || is_svf1 || is_svf0a || is_svf0b || is_svf0c){
+    if (is_all || is_svf || is_svf0 || is_svf1 || is_svf0a || is_svf0b ||
+        is_svf0c || is_svf0c1 || is_svf0c2 || is_svf0c3){
         
         if (is_all || is_svf0 || is_svf || is_svf0a)
         {
@@ -52379,6 +52588,27 @@ return 0;
 
             if (is_svf0c)
                 ReportTestBlockDone("-svf0c");
+        }
+        else
+        {
+            if (is_svf0c1)
+            {
+                SparseVecFloatScannerTests(svf_scanner_linear);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone("-svf0c1");
+            }
+            if (is_svf0c2)
+            {
+                SparseVecFloatScannerTests(svf_scanner_random);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone("-svf0c2");
+            }
+            if (is_svf0c3)
+            {
+                SparseVecFloatScannerTests(svf_scanner_skewed);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone("-svf0c3");
+            }
         }
         if (is_all || is_svf0 || is_svf)
             ReportTestBlockDone("-svf0");

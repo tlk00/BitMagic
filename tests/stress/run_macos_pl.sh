@@ -61,6 +61,9 @@ Test selectors from t.cpp:
   -csv0c                Compressed sparse-vector tests, part 0c
   -csv1                 Compressed sparse-vector tests, part 1
   -csv1a                Compressed sparse-vector tests, part 1a
+  -csv1a0               Compressed sparse-vector GT scan basic checks
+  -csv1a1               Compressed sparse-vector GT scan random pass 0
+  -csv1a2               Compressed sparse-vector GT scan optimized pass 1
   -csv1b                Compressed sparse-vector tests, part 1b
   -strsv, -svstr        String sparse-vector tests
   -cc                   Compressed-collection tests
@@ -70,6 +73,9 @@ Test selectors from t.cpp:
   -svf0a                Floating-point sparse-vector tests, part 0a
   -svf0b                Floating-point sparse-vector tests, part 0b
   -svf0c                Floating-point sparse-vector tests, part 0c
+  -svf0c1               Floating-point sparse-vector scanner linear data
+  -svf0c2               Floating-point sparse-vector scanner random data
+  -svf0c3               Floating-point sparse-vector scanner skewed data
   -svf1                 Floating-point sparse-vector tests, part 1
 
 The broader overlapping selectors -bvb/-bvbasic, -bvo/-bvops/-bvl, -sv,
@@ -94,8 +100,8 @@ is_valid_test()
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
         -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1c|-sort|--sort|\
-        -csv|-rsc|-csv0|-csv0a|-csv0b|-csv0c|-csv1|-csv1a|-csv1b|\
-        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf1)
+        -csv|-rsc|-csv0|-csv0a|-csv0b|-csv0c|-csv1|-csv1a|-csv1a0|-csv1a1|-csv1a2|-csv1b|\
+        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf0c1|-svf0c2|-svf0c3|-svf1)
             return 0
             ;;
         *)
@@ -198,12 +204,12 @@ esac
 if [ "${#TESTS[@]}" -eq 0 ]; then
     if [ "$HEAVY_FIRST" -ne 0 ]; then
         TESTS=(
-            -svf0c -csv1a -csv0a -sv1c
-            -bvb1 -bvs -strsv -ser
-            -svf0b -bvl2 -svf1 -bvl0 -bvl1
-            -sv1a -sv1b -csv0b -csv0c
+            -csv0a -bvb1 -csv1a1 -csv1a2
+            -bvs -sv1b -ser -bvl0
+            -strsv -bvl2 -svf0c1 -svf0c2 -svf0c3
+            -svf0b -svf1 -bvl1 -sv1a -sv1c -csv0b
             -ll -sv0 -bvb0 -bvser
-            -agg -s -csv1b -sort -cc -rc
+            -agg -s -csv1a0 -csv1b -sort -csv0c -cc -rc
         )
     else
         TESTS=(
@@ -212,9 +218,9 @@ if [ "${#TESTS[@]}" -eq 0 ]; then
             -bvl0 -bvl1 -bvl2
             -bvs -rc -agg
             -sv0 -sv1a -sv1b -sv1c -sort
-            -csv0a -csv0c -csv0b -csv1a -csv1b
+            -csv0a -csv0c -csv0b -csv1a0 -csv1a1 -csv1a2 -csv1b
             -strsv -cc -ser
-            -svf0a -svf0c -svf0b -svf1
+            -svf0a -svf0c1 -svf0c2 -svf0c3 -svf0b -svf1
         )
     fi
 fi
