@@ -519,6 +519,11 @@ public:
                     nb += bm::set_sub_array_size - j;
                 }
                 else
+                if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
+                {
+                    return nb;
+                }
+                else
                    for (;j < bm::set_sub_array_size; ++j, ++nb)
                    {
                        bm::word_t* blk = blk_blk[j];

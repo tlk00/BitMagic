@@ -1338,6 +1338,15 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         }
         size_t buf_size = (size_t)
             bvs_.serialize(*bv, buf_ptr, sv_stat.max_serialize_mem);
+#ifdef BM_TRACE_SV_DESERIAL
+        if (i == 43)
+        {
+            std::cout << "SV serialize trace plane=43, offset="
+                      << (unsigned long long)(buf_ptr - buf)
+                      << ", size=" << (unsigned long long)buf_size
+                      << std::endl;
+        }
+#endif
         
         sv_layout.set_plane(i, buf_ptr, buf_size);
         buf_ptr += buf_size;
@@ -1883,6 +1892,15 @@ unsigned sparse_vector_deserializer<SV>::load_header(
         digest_offset_ = dec.get_64();
     }
 
+#ifdef BM_TRACE_SV_DESERIAL
+    std::cout << "SV deserialize header: h2=" << char(h2)
+              << ", matr_s_ser=" << unsigned(matr_s_ser)
+              << ", planes=" << planes
+              << ", sv_size=" << (unsigned long long)sv_size_
+              << ", digest_offset=" << (unsigned long long)digest_offset_
+              << std::endl;
+#endif
+
     return planes;
 }
 
@@ -1947,6 +1965,13 @@ void sparse_vector_deserializer<SV>::deserialize_planes_nomask(
             size_t read_bytes =
                 deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
             remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+#ifdef BM_TRACE_SV_DESERIAL
+            std::cout << "SV deserialize remap candidate: plane=" << unsigned(i)
+                      << ", plane_offset=" << (unsigned long long)offset
+                      << ", read_bytes=" << (unsigned long long)read_bytes
+                      << ", remap_offset=" << (unsigned long long)(remap_buf_ptr_ - buf)
+                      << std::endl;
+#endif
         }
         else
         {
@@ -1963,6 +1988,9 @@ void sparse_vector_deserializer<SV>::deserialize_planes_nomask(
         
         if (idx_range_set_)
             bv->keep_range(idx_range_from_, idx_range_to_);
+        else
+        if (!bm::conditional<SV::is_rsc_support::value>::test())
+            bv->keep_range(0, size_type(sv_size_ - 1));
 
         switch (is_final_)
         {
@@ -2138,6 +2166,14 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
 
         if (!is_external_null)
         {
+            if (!bm::conditional<SV::is_rsc_support::value>::test())
+            {
+                if (idx_range_set_)
+                    bv->keep_range(idx_range_from_, idx_range_to_);
+                else
+                    bv->keep_range(0, size_type(sv_size_ - 1));
+            }
+
             switch (is_final_)
             {
             case bm::finalization::READONLY:
@@ -2214,6 +2250,14 @@ void sparse_vector_deserializer<SV>::load_planes_off_table(
         bm::decoder dec_o(buf_ptr);
 
         unsigned char dtype = dec_o.get_8();
+#ifdef BM_TRACE_SV_DESERIAL
+        std::cout << "SV deserialize plane offset table: digest_offset="
+                  << (unsigned long long)digest_offset_
+                  << ", digest_read_bytes=" << (unsigned long long)read_bytes
+                  << ", dtype=" << char(dtype)
+                  << ", digest_count=" << (unsigned long long)plane_digest_bv_.count()
+                  << std::endl;
+#endif
         switch (dtype)
         {
         case '6':
@@ -2266,6 +2310,38 @@ void sparse_vector_deserializer<SV>::load_planes_off_table(
             off_vect_[i] = offset;
         } // for i
     }
+#ifdef BM_TRACE_SV_DESERIAL
+    size_t min_offset = size_t(-1), max_offset = 0;
+    unsigned non_zero = 0, first_plane = 0, last_plane = 0;
+    for (unsigned i = 0; i < planes; ++i)
+    {
+        size_t offset = off_vect_[i];
+        if (!offset)
+            continue;
+        if (!non_zero)
+            first_plane = i;
+        last_plane = i;
+        ++non_zero;
+        if (offset < min_offset)
+            min_offset = offset;
+        if (offset > max_offset)
+            max_offset = offset;
+    }
+    std::cout << "SV deserialize plane offsets: non_zero=" << non_zero
+              << ", first_plane=" << first_plane
+              << ", last_plane=" << last_plane
+              << ", min_offset=" << (unsigned long long)(non_zero ? min_offset : 0)
+              << ", max_offset=" << (unsigned long long)max_offset
+              << std::endl;
+    if (planes)
+    {
+        unsigned start = (planes > 8) ? planes - 8 : 0;
+        std::cout << "SV deserialize tail offsets:";
+        for (unsigned i = start; i < planes; ++i)
+            std::cout << ' ' << i << ':' << (unsigned long long)off_vect_[i];
+        std::cout << std::endl;
+    }
+#endif
 }
 
 // -------------------------------------------------------------------------
@@ -2280,6 +2356,9 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
     bm::decoder dec_m(remap_buf_ptr);
 
     unsigned char rh = dec_m.get_8();
+#ifdef BM_TRACE_SV_DESERIAL
+    std::cout << "SV deserialize remap marker: " << char(rh) << std::endl;
+#endif
     switch (rh)
     {
     case 'N':
@@ -2287,6 +2366,10 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
     case 'R':
         {
             size_t remap_size = (size_t) dec_m.get_64();
+#ifdef BM_TRACE_SV_DESERIAL
+            std::cout << "SV deserialize remap flat size="
+                      << (unsigned long long)remap_size << std::endl;
+#endif
             unsigned char* remap_buf = sv.init_remap_buffer();
             BM_ASSERT(remap_buf);
             size_t target_remap_size = sv.remap_size();
@@ -2308,6 +2391,12 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
             }
             size_t rows = (size_t) dec_m.get_32();
             size_t cols = dec_m.get_16();
+#ifdef BM_TRACE_SV_DESERIAL
+            std::cout << "SV deserialize remap CSR: rows="
+                      << (unsigned long long)rows
+                      << ", cols=" << (unsigned long long)cols
+                      << std::endl;
+#endif
             if (cols > 256)
             {
                 raise_invalid_format();
