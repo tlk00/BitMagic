@@ -128,7 +128,7 @@ protected:
     typedef bm::heap_vector<size_t, allocator_type, true> sizet_vector_type;
 
 
-    buffer_type       buf_;                       ///< serialization buffer
+    buffer_type       buf_;        ///< serialization buffer
     ptr_vector_type   plane_ptrs_; ///< pointers on serialized bit-planes
     sizet_vector_type plane_size_; ///< serialized plane size
 
@@ -512,6 +512,9 @@ protected:
     /// load offset table
     void load_planes_off_table(const unsigned char* buf, bm::decoder& dec, unsigned planes);
 
+    /// load offset table from attached deserialization index if available
+    bool load_planes_off_table_from_index(unsigned planes);
+
     /// deserialize one plane and optionally build or use deserialization index entries
     size_t deserialize_plane_with_deserialization_index(
                     bvector_type& bv, const unsigned char* bv_buf_ptr,
@@ -629,6 +632,7 @@ public:
     typedef typename deserializer_type::deserialization_index_type row_type;
     typedef typename row_type::marker_offset_type             offset_type;
     typedef bm::heap_vector<row_type, allocator_type, false> row_vector_type;
+    typedef bm::heap_vector<size_t, allocator_type, true>     plane_offset_vector_type;
 
 public:
     /*!
@@ -688,6 +692,34 @@ public:
     size_t count_offsets(unsigned* non_empty_rows = 0) const BMNOEXCEPT;
 
     /*!
+        \brief Count collected serialized stream bookmarks.
+
+        \param non_empty_rows - optional output for the number of rows with bookmarks
+        \return total number of bookmark entries in all index rows
+    */
+    size_t count_bookmarks(unsigned* non_empty_rows = 0) const BMNOEXCEPT;
+
+    /*! Store sparse-vector plane offsets decoded from the serialized stream. */
+    void set_plane_offsets(const plane_offset_vector_type& offsets,
+                           size_t digest_offset,
+                           size_t remap_offset = 0);
+
+    /*! Return true if the index has cached sparse-vector plane offsets. */
+    bool has_plane_offsets() const BMNOEXCEPT;
+
+    /*! Return cached plane offset by row index. */
+    size_t plane_offset(unsigned row) const BMNOEXCEPT;
+
+    /*! Return cached plane-offset table digest offset. */
+    size_t digest_offset() const BMNOEXCEPT;
+
+    /*! Store serialized remap matrix offset. */
+    void set_remap_offset(size_t remap_offset) BMNOEXCEPT;
+
+    /*! Return serialized remap matrix offset, or 0 if it is not cached. */
+    size_t remap_offset() const BMNOEXCEPT;
+
+    /*!
         \brief Release unused row capacity after index construction.
 
         This compacts index memory after the deserializer has collected all
@@ -703,7 +735,10 @@ public:
     size_t memory_used() const BMNOEXCEPT;
 
 protected:
-    row_vector_type rows_;
+    row_vector_type          rows_;
+    plane_offset_vector_type plane_offsets_;
+    size_t                   digest_offset_ = 0;
+    size_t                   remap_offset_ = 0;
 };
 
 
@@ -979,6 +1014,9 @@ void sparse_vector_deserialization_index<BV>::reset(unsigned rows)
     rows_.resize(rows);
     for (unsigned i = 0; i < rows; ++i)
         rows_[i].clear();
+    plane_offsets_.reset();
+    digest_offset_ = 0;
+    remap_offset_ = 0;
 }
 
 // -------------------------------------------------------------------------
@@ -1044,6 +1082,84 @@ size_t sparse_vector_deserialization_index<BV>::count_offsets(
 // -------------------------------------------------------------------------
 
 template<typename BV>
+size_t sparse_vector_deserialization_index<BV>::count_bookmarks(
+                                    unsigned* non_empty_rows) const BMNOEXCEPT
+{
+    size_t count = 0;
+    unsigned non_empty = 0;
+    for (unsigned i = 0; i < rows_.size(); ++i)
+    {
+        size_t sz = rows_[i].bookmark_size();
+        if (sz)
+        {
+            ++non_empty;
+            count += sz;
+        }
+    }
+    if (non_empty_rows)
+        *non_empty_rows = non_empty;
+    return count;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+void sparse_vector_deserialization_index<BV>::set_plane_offsets(
+                                const plane_offset_vector_type& offsets,
+                                size_t digest_offset,
+                                size_t remap_offset)
+{
+    plane_offsets_.resize(unsigned(offsets.size()));
+    for (unsigned i = 0; i < offsets.size(); ++i)
+        plane_offsets_[i] = offsets[i];
+    digest_offset_ = digest_offset;
+    remap_offset_ = remap_offset;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+bool sparse_vector_deserialization_index<BV>::has_plane_offsets() const BMNOEXCEPT
+{
+    return !plane_offsets_.empty();
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+size_t sparse_vector_deserialization_index<BV>::plane_offset(unsigned row) const BMNOEXCEPT
+{
+    return (row < plane_offsets_.size()) ? plane_offsets_[row] : 0;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+size_t sparse_vector_deserialization_index<BV>::digest_offset() const BMNOEXCEPT
+{
+    return digest_offset_;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+void sparse_vector_deserialization_index<BV>::set_remap_offset(
+                                                    size_t remap_offset) BMNOEXCEPT
+{
+    remap_offset_ = remap_offset;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
+size_t sparse_vector_deserialization_index<BV>::remap_offset() const BMNOEXCEPT
+{
+    return remap_offset_;
+}
+
+// -------------------------------------------------------------------------
+
+template<typename BV>
 void sparse_vector_deserialization_index<BV>::optimize()
 {
     for (unsigned i = 0; i < rows_.size(); ++i)
@@ -1059,6 +1175,7 @@ template<typename BV>
 size_t sparse_vector_deserialization_index<BV>::memory_used() const BMNOEXCEPT
 {
     size_t mem = sizeof(*this) + rows_.capacity() * sizeof(row_type);
+    mem += plane_offsets_.capacity() * sizeof(size_t);
     for (unsigned i = 0; i < rows_.size(); ++i)
         mem += rows_[i].memory_used();
     return mem;
@@ -1603,6 +1720,21 @@ void sparse_vector_deserializer<SV>::construct_deserialization_index(
     bv_ref_.reset();
 
     load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+    matrix.set_plane_offsets(off_vect_, size_t(digest_offset_));
+
+    unsigned remap_plane = 0;
+    size_t max_plane_offset = 0;
+    if (bm::conditional<SV::is_remap_support::value>::test())
+    {
+        for (unsigned i = 0; i < planes; ++i)
+        {
+            if (off_vect_[i] > max_plane_offset)
+            {
+                max_plane_offset = off_vect_[i];
+                remap_plane = i;
+            }
+        }
+    }
 
     for (unsigned i = 0; i < planes; ++i)
     {
@@ -1646,7 +1778,9 @@ void sparse_vector_deserializer<SV>::construct_deserialization_index(
         deserial_.unset_deserialization_index();
         deserial_.unset_block_digest_vector();
         deserial_.set_deserialization_index_construct(matrix.construct_row(unsigned(i)));
-        deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+        size_t read_bytes = deserial_.deserialize(*bv, bv_buf_ptr, temp_block_);
+        if (max_plane_offset && unsigned(i) == remap_plane)
+            matrix.set_remap_offset(offset + read_bytes);
         bv->clear(true);
     } // for i
 }
@@ -1682,7 +1816,8 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
     sv.resize_internal(size_type(sv_size_));
     bv_ref_.reset();
 
-    load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+    if (!load_planes_off_table_from_index(planes))
+        load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
     if (deserialization_index_ && !deserialization_index_use_)
     {
         deserialization_index_->reset(planes);
@@ -1759,7 +1894,8 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     sv.resize_internal(size_type(sv_size_));
     bv_ref_.reset();
 
-    load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
+    if (!load_planes_off_table_from_index(planes))
+        load_planes_off_table(buf, dec, planes); // read the offset vector of bit-planes
     if (deserialization_index_ && !deserialization_index_use_)
     {
         deserialization_index_->reset(planes);
@@ -2038,10 +2174,19 @@ void sparse_vector_deserializer<SV>::deserialize_planes_masked(
         if (bm::conditional<SV::is_remap_support::value>::test()
             && !remap_buf_ptr_) // last plane vector (special case)
         {
-            size_t read_bytes =
+            if (deserialization_index_ && deserialization_index_use_ &&
+                deserialization_index_->remap_offset())
+            {
+                remap_buf_ptr_ = buf + deserialization_index_->remap_offset();
                 deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
-                                                       block_digest_bv);
-            remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                                                      block_digest_bv);
+            }
+            else
+            {
+                size_t read_bytes =
+                    deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
+                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+            }
         }
         else
         {
@@ -2139,10 +2284,19 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
             if (bm::conditional<SV::is_remap_support::value>::test())
             {
                 BM_ASSERT(!remap_buf_ptr_);
-                size_t read_bytes =
+                if (deserialization_index_ && deserialization_index_use_ &&
+                    deserialization_index_->remap_offset())
+                {
+                    remap_buf_ptr_ = buf + deserialization_index_->remap_offset();
                     deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i),
-                                                           block_digest_bv);
-                remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                                                          block_digest_bv);
+                }
+                else
+                {
+                    size_t read_bytes =
+                        deserialize_plane_with_deserialization_index(*bv, bv_buf_ptr, unsigned(i));
+                    remap_buf_ptr_ = bv_buf_ptr + read_bytes;
+                }
                 if (idx_range_set_)
                     bv->keep_range(idx_range_from_, idx_range_to_);
             }
@@ -2230,6 +2384,28 @@ size_t sparse_vector_deserializer<SV>::deserialize_plane_with_deserialization_in
         return deserial_.deserialize(bv, bv_buf_ptr, temp_block_);
     }
     return deserial_.deserialize(bv, bv_buf_ptr, temp_block_);
+}
+
+// -------------------------------------------------------------------------
+
+template<typename SV>
+bool sparse_vector_deserializer<SV>::load_planes_off_table_from_index(
+                                                            unsigned planes)
+{
+    if (!deserialization_index_ || !deserialization_index_use_ ||
+        !deserialization_index_->has_plane_offsets())
+    {
+        return false;
+    }
+
+    if (deserialization_index_->rows() < planes)
+        return false;
+
+    off_vect_.resize(planes);
+    for (unsigned i = 0; i < planes; ++i)
+        off_vect_[i] = deserialization_index_->plane_offset(i);
+    digest_offset_ = deserialization_index_->digest_offset();
+    return true;
 }
 
 // -------------------------------------------------------------------------
