@@ -117,6 +117,17 @@ a general claim of a better compression ratio; chunked or explicitly seekable
 compression formats can offer comparable access patterns, and dense sequential
 reads may favor conventional decompression.
 
+Columnar formats such as Apache Parquet and ORC provide a closer comparison.
+They divide columns into independently encoded and compressed pages or chunks
+and can store page or row-group indexes with the file, allowing readers to skip
+units that cannot contribute to a query. A selected page is still normally
+decompressed and decoded as a unit before individual values are returned.
+BitMagic instead accepts an explicit mask of logical positions and navigates the
+bit-plane streams to reconstruct the selected positions. In this sample the
+deserialization index is constructed from the mapped BLOB at startup; a planned
+extension is to serialize the index as reusable metadata, avoiding repeated
+index construction when the same BLOB is opened again.
+
 ## Gather deserialization
 
 For every request, the sample creates a fresh output vector, attaches the
