@@ -115,26 +115,6 @@ The output vector contains the selected logical positions. The sample prints the
 requested island ranges but intentionally avoids correctness checks or timing
 comparisons so the API flow remains easy to follow.
 
-## Build and run
-
-From the repository root, using CMake:
-
-```sh
-cmake --build . --target strsvsample10
-./strsvsample10
-```
-
-Using the traditional make build:
-
-```sh
-make -C samples/strsvsample10
-./samples/strsvsample10/strsvsample10
-```
-
-The sample creates `strsvsample10_data.bm` while it runs and removes it before
-exit. If removal fails, the program prints that the generated file was left on
-disk.
-
 ## Understanding the output
 
 A typical run prints:
