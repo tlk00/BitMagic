@@ -17,10 +17,12 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example svsample08.cpp
-  Example of how to serialize bm::sparse_vector<> container
- 
+  Example of how to serialize bm::sparse_vector<> container and selectively
+  deserialize only requested elements.
+
   \sa bm::sparse_vector
   \sa bm::sparse_vector_deserializer
+  \sa bm::sparse_vector_deserialization_index
   \sa bm::sparse_vector_serial_layout
   \sa bm::sparse_vector_serializer
 
@@ -31,6 +33,7 @@ For more information please visit:  http://bitmagic.io
     and range deserialization
 
     @sa strsvsample05.cpp
+    @sa strsvsample10.cpp
 */
 
 #include <iostream>
@@ -144,6 +147,42 @@ int main(void)
         }
         PrintSV(sv2); // size() = 8 : 0, 11, NULL, 13, 14, NULL, NULL, 0,
 
+        // Case 3:
+        // Here we use the same gather mask idea as Case 1, but add a
+        // deserialization index. The index is built once for a serialized BLOB
+        // and can be reused by multiple gather or range deserialization calls.
+        //
+        // The index records positions of serialized stream markers and
+        // bookmarks. It acts as a compact "map" of the BLOB so the deserializer
+        // can jump closer to requested blocks and skip unrelated payloads. This
+        // is useful when an application repeatedly extracts small subsets from
+        // a large serialized vector.
+        //
+        // This small sample is meant to illustrate the API and object lifetime,
+        // not to benchmark the optimization. Larger serialized vectors with
+        // sparse, repeated gather requests benefit more from the index.
+        {
+            typedef bm::sparse_vector_deserializer<svector_u32>::
+                                        deserialization_index_type dindex_type;
+
+            dindex_type dindex;
+            {
+                bm::sparse_vector_deserializer<svector_u32> index_builder;
+                index_builder.construct_deserialization_index(dindex, buf);
+                dindex.optimize();
+            }
+
+            svector_u32::bvector_type bv_mask;
+            bv_mask.set(0);
+            bv_mask.set(7);
+
+            bm::sparse_vector_deserializer<svector_u32> sv_deserial_indexed;
+            sv_deserial_indexed.set_deserialization_index(&dindex);
+            sv_deserial_indexed.set_deserialization_index_use(true);
+            sv_deserial_indexed.deserialize(sv2, buf, bv_mask);
+        }
+        PrintSV(sv2); // size() = 8 : 10, 0, NULL, 0, 0, NULL, NULL, 256,
+
     }
     catch(std::exception& ex)
     {
@@ -151,8 +190,5 @@ int main(void)
         return 1;
     }
     
-    
-
     return 0;
 }
-
