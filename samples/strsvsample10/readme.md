@@ -4,6 +4,10 @@ This example demonstrates how to keep a large `bm::str_sparse_vector<>` as a
 serialized file and later retrieve a small fraction of its elements with gather
 deserialization.
 
+The method combines an mmap-backed BLOB, serialized bookmarks, and a compact
+deserialization index to skip unrelated bit-plane blocks and reconstruct only
+the logical positions selected by a gather mask.
+
 The intended use case is a large string vector that is queried only
 occasionally. Instead of keeping the succinct vector resident in RAM, an
 application can prepare and serialize it once, evict the live vector, and later
@@ -98,6 +102,20 @@ This reduces two costs:
 The index itself uses RAM, so this technique trades a small auxiliary structure
 for lower memory residency of the large vector and more selective access to the
 serialized representation.
+
+Compared with a conventional ZIP archive, this is a more data-aware form of
+selective access. A ZIP central directory can locate an archive member, but it
+does not locate arbitrary logical records inside one large DEFLATE-compressed
+member; extraction within that stream normally requires decoding from its
+beginning or from an additional checkpoint or independently compressed chunk,
+after which the application must still parse the recovered bytes. BitMagic's
+index instead follows the sparse-vector layout: bookmarks position the decoder
+near requested blocks, marker offsets help it skip unrelated encoded payloads,
+and gather deserialization materializes the selected logical positions directly.
+The advantage is therefore granular logical navigation for sparse requests, not
+a general claim of a better compression ratio; chunked or explicitly seekable
+compression formats can offer comparable access patterns, and dense sequential
+reads may favor conventional decompression.
 
 ## Gather deserialization
 
