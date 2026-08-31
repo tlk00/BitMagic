@@ -898,10 +898,21 @@ public:
     /*! Add serialized bookmark block index and byte offset. */
     void add_bookmark(typename bvector_type::block_idx_type nb, size_t marker_pos);
 
-    /*! Find the nearest bookmark not greater than target block index. */
+    /*! Add decoded bookmark target block index and byte offset. */
+    void add_bookmark_target(typename bvector_type::block_idx_type bookmark_nb,
+                             typename bvector_type::block_idx_type target_nb,
+                             size_t target_pos);
+
+    /*! Find the nearest bookmark marker not greater than target block index. */
     bool find_bookmark(typename bvector_type::block_idx_type target_nb,
                        typename bvector_type::block_idx_type& bookmark_nb,
                        size_t& bookmark_pos) const BMNOEXCEPT;
+
+    /*! Find the nearest bookmark target not greater than target block index. */
+    bool find_bookmark_target(typename bvector_type::block_idx_type target_nb,
+                              typename bvector_type::block_idx_type& bookmark_nb,
+                              typename bvector_type::block_idx_type& bookmark_target_nb,
+                              size_t& bookmark_target_pos) const BMNOEXCEPT;
 
     /*! Find the next serialized marker offset after marker_pos. */
     bool find_next_marker_offset(size_t marker_pos,
@@ -912,6 +923,9 @@ protected:
     marker_offset_vector_type  marker_offsets_;
     bookmark_block_vector_type bookmark_blocks_;
     marker_offset_vector_type  bookmark_offsets_;
+    bookmark_block_vector_type bookmark_target_source_blocks_;
+    bookmark_block_vector_type bookmark_target_blocks_;
+    marker_offset_vector_type  bookmark_target_offsets_;
     size_t                     serialized_size_;
 };
 
@@ -922,6 +936,9 @@ void deserialization_index<BV>::clear() BMNOEXCEPT
     marker_offsets_.reset();
     bookmark_blocks_.reset();
     bookmark_offsets_.reset();
+    bookmark_target_source_blocks_.reset();
+    bookmark_target_blocks_.reset();
+    bookmark_target_offsets_.reset();
     serialized_size_ = 0;
 }
 
@@ -944,6 +961,21 @@ void deserialization_index<BV>::optimize()
         bookmark_block_vector_type tmp(bookmark_blocks_);
         bookmark_blocks_.swap(tmp);
     }
+    if (bookmark_target_source_blocks_.capacity() > bookmark_target_source_blocks_.size())
+    {
+        bookmark_block_vector_type tmp(bookmark_target_source_blocks_);
+        bookmark_target_source_blocks_.swap(tmp);
+    }
+    if (bookmark_target_blocks_.capacity() > bookmark_target_blocks_.size())
+    {
+        bookmark_block_vector_type tmp(bookmark_target_blocks_);
+        bookmark_target_blocks_.swap(tmp);
+    }
+    if (bookmark_target_offsets_.capacity() > bookmark_target_offsets_.size())
+    {
+        marker_offset_vector_type tmp(bookmark_target_offsets_);
+        bookmark_target_offsets_.swap(tmp);
+    }
 }
 
 
@@ -953,7 +985,12 @@ size_t deserialization_index<BV>::memory_used() const BMNOEXCEPT
     return sizeof(*this) +
         marker_offsets_.capacity() * sizeof(marker_offset_type) +
         bookmark_offsets_.capacity() * sizeof(marker_offset_type) +
-        bookmark_blocks_.capacity() * sizeof(typename bvector_type::block_idx_type);
+        bookmark_blocks_.capacity() * sizeof(typename bvector_type::block_idx_type) +
+        bookmark_target_source_blocks_.capacity() *
+            sizeof(typename bvector_type::block_idx_type) +
+        bookmark_target_blocks_.capacity() *
+            sizeof(typename bvector_type::block_idx_type) +
+        bookmark_target_offsets_.capacity() * sizeof(marker_offset_type);
 }
 
 
@@ -992,6 +1029,27 @@ void deserialization_index<BV>::add_bookmark(typename BV::block_idx_type nb,
 
 
 template<class BV>
+void deserialization_index<BV>::add_bookmark_target(
+        typename BV::block_idx_type bookmark_nb,
+        typename BV::block_idx_type target_nb,
+        size_t target_pos)
+{
+    if (target_pos != size_t(marker_offset_type(target_pos)))
+    {
+        BM_ASSERT(0);
+        #ifndef BM_NO_STL
+            throw std::logic_error("BM: bookmark target offset overflow");
+        #else
+            BM_THROW(BM_ERR_SERIALFORMAT);
+        #endif
+    }
+    bookmark_target_source_blocks_.push_back(bookmark_nb);
+    bookmark_target_blocks_.push_back(target_nb);
+    bookmark_target_offsets_.push_back(marker_offset_type(target_pos));
+}
+
+
+template<class BV>
 bool deserialization_index<BV>::find_bookmark(
         typename BV::block_idx_type target_nb,
         typename BV::block_idx_type& bookmark_nb,
@@ -1019,6 +1077,40 @@ bool deserialization_index<BV>::find_bookmark(
     --left;
     bookmark_nb = bookmark_blocks_[left];
     bookmark_pos = size_t(bookmark_offsets_[left]);
+    return true;
+}
+
+
+template<class BV>
+bool deserialization_index<BV>::find_bookmark_target(
+        typename BV::block_idx_type target_nb,
+        typename BV::block_idx_type& bookmark_nb,
+        typename BV::block_idx_type& bookmark_target_nb,
+        size_t& bookmark_target_pos) const BMNOEXCEPT
+{
+    const size_t sz = bookmark_target_blocks_.size();
+    if (!sz)
+        return false;
+
+    const size_t linear_cutoff = 8;
+    size_t left = 0, right = sz;
+    while (right - left > linear_cutoff)
+    {
+        size_t mid = left + ((right - left) >> 1);
+        if (bookmark_target_blocks_[mid] <= target_nb)
+            left = mid + 1;
+        else
+            right = mid;
+    }
+    while (left < right && bookmark_target_blocks_[left] <= target_nb)
+        ++left;
+    if (!left)
+        return false;
+
+    --left;
+    bookmark_nb = bookmark_target_source_blocks_[left];
+    bookmark_target_nb = bookmark_target_blocks_[left];
+    bookmark_target_pos = size_t(bookmark_target_offsets_[left]);
     return true;
 }
 
@@ -3481,10 +3573,6 @@ serializer<BV>::interpolated_arr_bit_block_v3(bm::encoder& enc,
     if (split_cnt > bit_stat_.bc)
         return false;
 
-/*
-    if (r_cnt < 5)
-        return false;
-*/
     // TODO: ADD CHECK if SPLIT is correct (arr_s non sequential)
     unsigned char scode =
         inverted ? bm::set_block_arr_bienc_inv_v3 : bm::set_block_arr_bienc_v3;
@@ -3960,10 +4048,6 @@ serializer<BV>::serialize(const BV& bv,
                                 header_flag_ |= BM_HM_SPARSE;
                                 continue;
                             #endif
-
-//std::cout << "\n GAPs:";
-//std::cout << "*:" << sub_stat.gap_blocks << "=" << sub_stat.bv_count << " \n";
-//sub_stat.print();
                             }
                         }
                     }
@@ -4155,7 +4239,6 @@ serializer<BV>::serialize(const BV& bv,
                       sub_stat.top_level_idx == i0);
 
             unsigned char model = find_bit_best_encoding(blk, sub_stat, i);
-//std::cout << unsigned(model) << " ";
             switch (model)
             {
             case bm::set_block_bit:
@@ -5949,7 +6032,18 @@ std::cout << "size=" << dec_last_size;
         if (have_target)
         {
             block_idx_type bookmark_nb;
+            block_idx_type bookmark_target_nb;
             size_t bookmark_pos;
+            if (dindex_in->find_bookmark_target(target_nb,
+                                                bookmark_nb,
+                                                bookmark_target_nb,
+                                                bookmark_pos))
+            {
+                this->bookmark_idx_ = bookmark_nb;
+                dec.set_pos(buf + bookmark_pos);
+                nb_i = bookmark_target_nb;
+            }
+            else
             if (dindex_in->find_bookmark(target_nb, bookmark_nb, bookmark_pos))
             {
                 dec.set_pos(buf + bookmark_pos);
@@ -6001,7 +6095,21 @@ std::cout << "size=" << dec_last_size;
             if (block_digest_in_->find(size_type(nb_i + 1), next_requested_nb))
             {
                 block_idx_type bookmark_nb;
+                block_idx_type bookmark_target_nb;
                 size_t bookmark_pos;
+                if (dindex_in->find_bookmark_target(block_idx_type(next_requested_nb),
+                                                    bookmark_nb,
+                                                    bookmark_target_nb,
+                                                    bookmark_pos) &&
+                                        bookmark_target_nb > nb_i)
+                {
+                    if (x_ref_d64_) // flush delayed XOR before seeking forward
+                        xor_decode(bman);
+                    this->bookmark_idx_ = bookmark_nb;
+                    dec.set_pos(buf + bookmark_pos);
+                    nb_i = bookmark_target_nb;
+                    continue;
+                }
                 if (dindex_in->find_bookmark(block_idx_type(next_requested_nb),
                                              bookmark_nb, bookmark_pos) &&
                                         bookmark_nb > nb_i)
@@ -6201,9 +6309,59 @@ dec_last_size = dec_size;
             this->bookmark_idx_ = nb_i;
             this->skip_offset_ = dec.get_16();
         process_bookmark:
+            this->skip_pos_ = dec.get_pos() + this->skip_offset_;
+            if (deserialization_index_out_ && this->skip_offset_)
+            {
+                const unsigned char* save_pos = dec.get_pos();
+                const unsigned char* target_pos = this->skip_pos_;
+                block_idx_type nb_sync = 0;
+                bool target_found = true;
+                dec.set_pos(target_pos);
+                unsigned char sync_mark = dec.get_8();
+                switch (sync_mark)
+                {
+                case set_nb_sync_mark8:
+                    nb_sync = dec.get_8();
+                    break;
+                case set_nb_sync_mark16:
+                    nb_sync = dec.get_16();
+                    break;
+                case set_nb_sync_mark24:
+                    nb_sync = dec.get_24();
+                    break;
+                case set_nb_sync_mark32:
+                    nb_sync = dec.get_32();
+                    break;
+                case set_nb_sync_mark48:
+                #ifdef BM64ADDR
+                    nb_sync = block_idx_type(dec.get_48());
+                    break;
+                #else
+                    target_found = false;
+                    break;
+                #endif
+                case set_nb_sync_mark64:
+                #ifdef BM64ADDR
+                    nb_sync = block_idx_type(dec.get_64());
+                    break;
+                #else
+                    target_found = false;
+                    break;
+                #endif
+                default:
+                    target_found = false;
+                    break;
+                } // switch
+                dec.set_pos(save_pos);
+                if (target_found)
+                {
+                    deserialization_index_out_->add_bookmark_target(
+                                        nb_i, nb_i + nb_sync,
+                                        size_t(target_pos - buf));
+                }
+            }
             if (is_range_set_)
             {
-                this->skip_pos_ = dec.get_pos() + this->skip_offset_;
                 block_idx_type nb_from = (idx_from_ >> bm::set_block_shift);
                 nb_from = this->try_skip(dec, nb_i, nb_from);
                 if (nb_from)
