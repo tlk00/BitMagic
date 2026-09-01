@@ -51,6 +51,17 @@ types.
 - [`svsample09`](./svsample09) - `bm::sparse_vector_find_first_mismatch`.
 - [`svsample10`](./svsample10) - `bm::sparse_vector_scanner<>::find_gt()` searches: GT, GE, LT, LE and RANGE.
 
+## Float Sparse Vectors
+
+Float sparse-vector samples demonstrate bit-transposed vectors for floating
+point values.
+
+- [`svfsample01`](./svfsample01) - basic example of `sparse_vector_float<>`.
+- [`svfsample02`](./svfsample02) - `sparse_vector_float<>` serialization, deserialization and const iterator.
+- [`svfsample03`](./svfsample03) - `sparse_vector_float<>` comparison, join, merge and freeze.
+- [`svfsample04`](./svfsample04) - `sparse_vector_float<>` extract, range extract, gather and back-insert iterator.
+- [`svfsample05`](./svfsample05) - search `sparse_vector_float<>` with scanner, serialize result sets, and later retrieve selected values using deserialization-index assisted gather.
+
 ## RSC Sparse Vectors
 
 RSC sparse-vector samples demonstrate rank-select compressed vectors for scalar
