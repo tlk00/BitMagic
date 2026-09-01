@@ -6314,27 +6314,27 @@ dec_last_size = dec_size;
             {
                 const unsigned char* save_pos = dec.get_pos();
                 const unsigned char* target_pos = this->skip_pos_;
-                block_idx_type nb_sync = 0;
+                block_idx_type bookmark_sync = 0;
                 bool target_found = true;
                 dec.set_pos(target_pos);
                 unsigned char sync_mark = dec.get_8();
                 switch (sync_mark)
                 {
                 case set_nb_sync_mark8:
-                    nb_sync = dec.get_8();
+                    bookmark_sync = dec.get_8();
                     break;
                 case set_nb_sync_mark16:
-                    nb_sync = dec.get_16();
+                    bookmark_sync = dec.get_16();
                     break;
                 case set_nb_sync_mark24:
-                    nb_sync = dec.get_24();
+                    bookmark_sync = dec.get_24();
                     break;
                 case set_nb_sync_mark32:
-                    nb_sync = dec.get_32();
+                    bookmark_sync = dec.get_32();
                     break;
                 case set_nb_sync_mark48:
                 #ifdef BM64ADDR
-                    nb_sync = block_idx_type(dec.get_48());
+                    bookmark_sync = block_idx_type(dec.get_48());
                     break;
                 #else
                     target_found = false;
@@ -6342,7 +6342,7 @@ dec_last_size = dec_size;
                 #endif
                 case set_nb_sync_mark64:
                 #ifdef BM64ADDR
-                    nb_sync = block_idx_type(dec.get_64());
+                    bookmark_sync = block_idx_type(dec.get_64());
                     break;
                 #else
                     target_found = false;
@@ -6356,7 +6356,7 @@ dec_last_size = dec_size;
                 if (target_found)
                 {
                     deserialization_index_out_->add_bookmark_target(
-                                        nb_i, nb_i + nb_sync,
+                                        nb_i, nb_i + bookmark_sync,
                                         size_t(target_pos - buf));
                 }
             }
