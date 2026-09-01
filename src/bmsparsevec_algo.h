@@ -170,10 +170,14 @@ int for_each_sparse(const SV& sv,
         }
     };
 
-    index_buffer_type idx_tmp_buf;
-    size_type* idx_tmp_ptr = 0;
+    typedef typename std::conditional<
+        bm::is_rsc_sparse_vector<SV>::value,
+        index_buffer_type,
+        unsigned char>::type index_tmp_buffer_type;
+
+    index_tmp_buffer_type idx_tmp_buf;
     if constexpr (bm::is_rsc_sparse_vector<SV>::value)
-        idx_tmp_ptr = idx_tmp_buf.resize_no_copy(buf_size);
+        idx_tmp_buf.resize_no_copy(buf_size);
 
     typename SV::bvector_type::enumerator en = filter_bv.first();
     while (en.valid())
@@ -191,7 +195,11 @@ int for_each_sparse(const SV& sv,
             break;
 
         if constexpr (bm::is_rsc_sparse_vector<SV>::value)
+        {
+            size_type* idx_tmp_ptr = idx_tmp_buf.data();
+            BM_ASSERT(idx_tmp_ptr);
             sv.gather(buf_ptr, idx_ptr, idx_tmp_ptr, idx_cnt, bm::BM_SORTED);
+        }
         else
             sv.gather(buf_ptr, idx_ptr, idx_cnt, bm::BM_SORTED);
 
@@ -616,19 +624,6 @@ bool sparse_vector_find_first_mismatch(const SV& sv1,
                 found = f; mismatch = midx;
             }
         }
-
-/*
-        else // search for mismatch in the NOT NULL vectors
-        {
-            if (null_proc == bm::use_null)
-            {
-                // no need for address translation in this case
-                typename SV::bvector_type_const_ptr bv_null1 = sv1.get_null_bvector();
-                typename SV::bvector_type_const_ptr bv_null2 = sv2.get_null_bvector();
-                found = bv_null1->find_first_mismatch(*bv_null2, mismatch);
-            }
-        }
-*/
     }
 
     midx = mismatch; // minimal mismatch
