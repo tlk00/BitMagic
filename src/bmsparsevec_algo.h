@@ -170,48 +170,67 @@ int for_each_sparse(const SV& sv,
         }
     };
 
-    typedef typename std::conditional<
-        bm::is_rsc_sparse_vector<SV>::value,
-        index_buffer_type,
-        unsigned char>::type index_tmp_buffer_type;
-
-    index_tmp_buffer_type idx_tmp_buf;
     if constexpr (bm::is_rsc_sparse_vector<SV>::value)
-        idx_tmp_buf.resize_no_copy(buf_size);
-
-    typename SV::bvector_type::enumerator en = filter_bv.first();
-    while (en.valid())
     {
-        size_type idx_cnt = 0;
-        for (; en.valid() && idx_cnt < buf_size; ++en)
+        index_buffer_type idx_tmp_buf;
+        size_type* idx_tmp_ptr = idx_tmp_buf.resize_no_copy(buf_size);
+
+        typename SV::bvector_type::enumerator en = filter_bv.first();
+        while (en.valid())
         {
-            const size_type idx = *en;
-            if (idx >= sv_size)
+            size_type idx_cnt = 0;
+            for (; en.valid() && idx_cnt < buf_size; ++en)
+            {
+                const size_type idx = *en;
+                if (idx >= sv_size)
+                    break;
+                idx_ptr[idx_cnt++] = idx;
+            } // for en
+
+            if (!idx_cnt)
                 break;
-            idx_ptr[idx_cnt++] = idx;
-        } // for en
 
-        if (!idx_cnt)
-            break;
-
-        if constexpr (bm::is_rsc_sparse_vector<SV>::value)
-        {
-            size_type* idx_tmp_ptr = idx_tmp_buf.data();
-            BM_ASSERT(idx_tmp_ptr);
             sv.gather(buf_ptr, idx_ptr, idx_tmp_ptr, idx_cnt, bm::BM_SORTED);
-        }
-        else
+
+            for (size_type i = 0; i < idx_cnt; ++i)
+            {
+                const size_type idx = idx_ptr[i];
+                const bool is_null = bv_null && !bv_null->test(idx);
+                int ret = invoke_visitor(buf_ptr[i], is_null, idx);
+                if (ret < 0)
+                    return ret;
+            } // for i
+        } // while
+    }
+    else
+    {
+        typename SV::bvector_type::enumerator en = filter_bv.first();
+        while (en.valid())
+        {
+            size_type idx_cnt = 0;
+            for (; en.valid() && idx_cnt < buf_size; ++en)
+            {
+                const size_type idx = *en;
+                if (idx >= sv_size)
+                    break;
+                idx_ptr[idx_cnt++] = idx;
+            } // for en
+
+            if (!idx_cnt)
+                break;
+
             sv.gather(buf_ptr, idx_ptr, idx_cnt, bm::BM_SORTED);
 
-        for (size_type i = 0; i < idx_cnt; ++i)
-        {
-            const size_type idx = idx_ptr[i];
-            const bool is_null = bv_null && !bv_null->test(idx);
-            int ret = invoke_visitor(buf_ptr[i], is_null, idx);
-            if (ret < 0)
-                return ret;
-        } // for i
-    } // while
+            for (size_type i = 0; i < idx_cnt; ++i)
+            {
+                const size_type idx = idx_ptr[i];
+                const bool is_null = bv_null && !bv_null->test(idx);
+                int ret = invoke_visitor(buf_ptr[i], is_null, idx);
+                if (ret < 0)
+                    return ret;
+            } // for i
+        } // while
+    }
     return 0;
 }
 
