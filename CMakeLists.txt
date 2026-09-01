@@ -199,6 +199,7 @@ add_executable(svfsample01 ${PROJECT_SOURCE_DIR}/samples/svfsample01/svfsample01
 add_executable(svfsample02 ${PROJECT_SOURCE_DIR}/samples/svfsample02/svfsample02.cpp ${BM_HEADERS})
 add_executable(svfsample03 ${PROJECT_SOURCE_DIR}/samples/svfsample03/svfsample03.cpp ${BM_HEADERS})
 add_executable(svfsample04 ${PROJECT_SOURCE_DIR}/samples/svfsample04/svfsample04.cpp ${BM_HEADERS})
+add_executable(svfsample05 ${PROJECT_SOURCE_DIR}/samples/svfsample05/svfsample05.cpp ${BM_HEADERS})
 
 add_executable(svsample01 ${PROJECT_SOURCE_DIR}/samples/svsample01/svsample01.cpp ${BM_HEADERS})
 add_executable(svsample02 ${PROJECT_SOURCE_DIR}/samples/svsample02/svsample02.cpp ${BM_HEADERS})
@@ -230,6 +231,7 @@ add_executable(strsvsample06 ${PROJECT_SOURCE_DIR}/samples/strsvsample06/strsvsa
 add_executable(strsvsample07 ${PROJECT_SOURCE_DIR}/samples/strsvsample07/strsvsample07.cpp ${BM_HEADERS})
 add_executable(strsvsample08 ${PROJECT_SOURCE_DIR}/samples/strsvsample08/strsvsample08.cpp ${BM_HEADERS})
 add_executable(strsvsample09 ${PROJECT_SOURCE_DIR}/samples/strsvsample09/strsvsample09.cpp ${BM_HEADERS})
+add_executable(strsvsample10 ${PROJECT_SOURCE_DIR}/samples/strsvsample10/strsvsample10.cpp ${BM_HEADERS})
 
 
 add_executable(bmbsample01 ${PROJECT_SOURCE_DIR}/samples/bmbsample01/bmbsample01.cpp ${BM_HEADERS})
