@@ -403,6 +403,19 @@ public:
         buffer_.swap(other.buffer_);
     }
 
+    bool equal(const heap_vector<Val, BVAlloc, trivial_type>& hv) const BMNOEXCEPT
+    {
+        const size_type sz = size();
+        if (sz != hv.size())
+            return false;
+        for (size_type i = 0; i < sz; ++i)
+        {
+            if ((*this)[i] != hv[i])
+                return false;
+        }
+        return true;
+    }
+
     const value_type& operator[](size_type pos) const BMNOEXCEPT
     {
         BM_ASSERT(pos < size());

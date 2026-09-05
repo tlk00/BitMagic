@@ -1,7 +1,7 @@
 #ifndef BMSERIAL__H__INCLUDED__
 #define BMSERIAL__H__INCLUDED__
 /*
-Copyright(c) 2002-2024 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -680,6 +680,10 @@ public:
         Attach an optional external deserialization index to collect useful
         marker byte offsets during deserialize().
 
+        Index construction mode consumes the serialized stream to build the
+        index, but does not materialize decoded blocks into the target bit-vector.
+        The target vector contents are unspecified after this mode.
+
         The caller must explicitly unset index use mode before enabling
         construction mode.
 
@@ -843,6 +847,55 @@ protected:
 
     \ingroup bvserial
 */
+template<class BV> class deserialization_index_serializer;
+template<class BV> class deserialization_index_deserializer;
+
+/*!
+    Deserialization-index serialized format descriptor.
+
+    The "di" prefix is short for deserialization index. This internal helper
+    keeps wire-format constants shared by the serializer and deserializer.
+*/
+struct di_format
+{
+    enum
+    {
+        magic0                 = 'B',
+        magic1                 = 'i',
+        version                = 1,
+        section_count          = 6,
+        standalone_header_size = 26,
+        compact_header_size    = 9,
+        section_header_size    = 20
+    };
+
+    enum section_field
+    {
+        field_marker_offsets = 1,
+        field_bookmark_blocks,
+        field_bookmark_offsets,
+        field_bookmark_target_source_blocks,
+        field_bookmark_target_blocks,
+        field_bookmark_target_offsets
+    };
+
+    enum codec
+    {
+        codec_empty    = 0,
+        codec_single32 = 1,
+        codec_single48 = 2,
+        codec_single64 = 3,
+        codec_plain32  = 4,
+        codec_plain48  = 5,
+        codec_plain64  = 6,
+        codec_bic32    = 7
+    };
+
+    static const unsigned flag_64addr = 1u;
+    static const unsigned flag_little_endian = 2u;
+    static const unsigned flags_mask = flag_64addr | flag_little_endian;
+};
+
 template<class BV>
 class deserialization_index
 {
@@ -892,6 +945,12 @@ public:
     /*! Approximate index memory footprint in bytes. */
     size_t memory_used() const BMNOEXCEPT;
 
+    /*! True if another index contains the same logical index data. */
+    bool equal(const deserialization_index& dindex) const BMNOEXCEPT;
+
+    /*! Swap two deserialization indexes. */
+    void swap(deserialization_index& dindex) BMNOEXCEPT;
+
     /*! Add serialized marker byte offset. */
     void add_marker_offset(size_t marker_pos);
 
@@ -920,13 +979,187 @@ public:
                                  size_t& next_marker_pos) const BMNOEXCEPT;
 
 protected:
-    marker_offset_vector_type  marker_offsets_;
-    bookmark_block_vector_type bookmark_blocks_;
-    marker_offset_vector_type  bookmark_offsets_;
-    bookmark_block_vector_type bookmark_target_source_blocks_;
-    bookmark_block_vector_type bookmark_target_blocks_;
-    marker_offset_vector_type  bookmark_target_offsets_;
-    size_t                     serialized_size_;
+    friend class deserialization_index_serializer<BV>;
+    friend class deserialization_index_deserializer<BV>;
+
+    marker_offset_vector_type  marker_offsets_; ///< Stream byte offsets of regular block/content markers.
+    bookmark_block_vector_type bookmark_blocks_; ///< Logical block numbers (nb) of encoded bookmark markers.
+    marker_offset_vector_type  bookmark_offsets_; ///< Stream byte offsets of encoded bookmark markers.
+    bookmark_block_vector_type bookmark_target_source_blocks_; ///< Logical bookmark block numbers (nb) for decoded jump targets.
+    bookmark_block_vector_type bookmark_target_blocks_; ///< Logical target block numbers (nb) reached by bookmark jumps.
+    marker_offset_vector_type  bookmark_target_offsets_; ///< Stream byte offsets reached by bookmark jumps.
+    size_t                     serialized_size_; ///< Full serialized BLOB size for consumed-size contract returns.
+};
+
+
+/*!
+    Deserialization index serializer.
+
+    Owns the persisted format for bm::deserialization_index, leaving the index
+    class focused on lookup data and lookup operations.
+
+    \ingroup bvserial
+*/
+template<class BV>
+class deserialization_index_serializer
+{
+public:
+    enum serialization_format
+    {
+        format_standalone = 0,
+        format_compact = 1
+    };
+
+    typedef BV                                             bvector_type;
+    typedef bm::deserialization_index<BV>                  index_type;
+    typedef typename bvector_type::allocator_type          allocator_type;
+    typedef byte_buffer<allocator_type>                    buffer;
+
+public:
+    deserialization_index_serializer() BMNOEXCEPT
+        : compression_level_(2),
+          format_(format_standalone)
+    {}
+
+    /*!
+        Set compression level. Level 0 uses fixed-width section coding.
+        Level 2 enables adaptive BIC coding for eligible 32-bit sections.
+
+        @param clevel - compression level (0-6)
+        @sa get_compression_level
+    */
+    void set_compression_level(unsigned clevel) BMNOEXCEPT;
+
+    /*! Get current compression level. */
+    unsigned get_compression_level() const BMNOEXCEPT
+        { return compression_level_; }
+
+    /*! Set serialization format. */
+    void set_format(serialization_format format) BMNOEXCEPT
+        { format_ = format; }
+
+    /*! Get current serialization format. */
+    serialization_format get_format() const BMNOEXCEPT
+        { return format_; }
+
+    /*! Conservative serialization memory estimate in bytes. */
+    size_t max_serialize_mem(const index_type& dindex) const;
+
+    /*! Serialize index into caller-provided memory. */
+    size_t serialize(const index_type& dindex,
+                     unsigned char* buf,
+                     size_t capacity) const;
+
+    /*! Serialize index into a managed BM byte buffer. */
+    size_t serialize(const index_type& dindex, buffer& buf) const;
+
+protected:
+    static size_t serialize_size(const index_type& dindex,
+                                 serialization_format format);
+
+    static bool size_add(size_t a, size_t b, size_t& r) BMNOEXCEPT;
+    static bool size_mul(size_t a, size_t b, size_t& r) BMNOEXCEPT;
+
+    template<class V>
+    static bool validate_vector_order(const V& v) BMNOEXCEPT;
+
+    template<class V>
+    static bool can_bic_encode_vector(const V& v,
+                                      bool is_block_vector,
+                                      size_t serialized_size) BMNOEXCEPT;
+
+    template<class V>
+    static unsigned calc_bic_delta(const V& v) BMNOEXCEPT;
+
+    template<class V>
+    static size_t vector_payload_size(const V& v, bool is_block_vector);
+
+    template<class V>
+    static unsigned vector_codec(const V& v, bool is_block_vector) BMNOEXCEPT;
+
+    template<class V>
+    static void validate_and_encode_vector(bm::encoder& enc,
+                                           unsigned field_id,
+                                           const V& v,
+                                           bool is_block_vector,
+                                           size_t serialized_size,
+                                           unsigned compression_level);
+
+    static void throw_bad_index();
+    static void require(bool condition);
+
+protected:
+    unsigned        compression_level_;
+    serialization_format format_;
+};
+
+
+/*!
+    Deserialization index deserializer.
+
+    Restores bm::deserialization_index from a bounded memory buffer.
+
+    \ingroup bvserial
+*/
+template<class BV>
+class deserialization_index_deserializer
+{
+public:
+    enum serialization_format
+    {
+        format_standalone =
+            deserialization_index_serializer<BV>::format_standalone,
+        format_compact =
+            deserialization_index_serializer<BV>::format_compact
+    };
+
+    typedef BV                                             bvector_type;
+    typedef bm::deserialization_index<BV>                  index_type;
+
+public:
+    deserialization_index_deserializer() BMNOEXCEPT
+        : format_(format_standalone)
+    {}
+
+    /*! Set expected serialization format. */
+    void set_format(serialization_format format) BMNOEXCEPT
+        { format_ = format; }
+
+    /*! Get expected serialization format. */
+    serialization_format get_format() const BMNOEXCEPT
+        { return format_; }
+
+    /*! Deserialize index from a bounded memory buffer. */
+    size_t deserialize(index_type& dindex,
+                       const unsigned char* buf,
+                       size_t available_size) const;
+
+protected:
+    static bool size_mul(size_t a, size_t b, size_t& r) BMNOEXCEPT;
+
+    template<class V>
+    static bool validate_vector_order(const V& v) BMNOEXCEPT;
+
+    template<class V, class DEC>
+    static void decode_vector(V& v,
+                              DEC& dec,
+                              const unsigned char* section_end,
+                              unsigned codec,
+                              bm::id64_t count,
+                              bool is_block_vector,
+                              size_t serialized_size);
+
+    template<class DEC>
+    size_t deserialize_impl(index_type& dindex,
+                            const unsigned char* buf,
+                            size_t available_size,
+                            serialization_format format) const;
+
+    static void throw_bad_index();
+    static void require(bool condition);
+
+protected:
+    serialization_format format_;
 };
 
 
@@ -991,6 +1224,842 @@ size_t deserialization_index<BV>::memory_used() const BMNOEXCEPT
         bookmark_target_blocks_.capacity() *
             sizeof(typename bvector_type::block_idx_type) +
         bookmark_target_offsets_.capacity() * sizeof(marker_offset_type);
+}
+
+
+template<class BV>
+bool deserialization_index<BV>::equal(
+                            const deserialization_index<BV>& dindex) const BMNOEXCEPT
+{
+    return
+        serialized_size_ == dindex.serialized_size_ &&
+        marker_offsets_.equal(dindex.marker_offsets_) &&
+        bookmark_blocks_.equal(dindex.bookmark_blocks_) &&
+        bookmark_offsets_.equal(dindex.bookmark_offsets_) &&
+        bookmark_target_source_blocks_.equal(
+            dindex.bookmark_target_source_blocks_) &&
+        bookmark_target_blocks_.equal(dindex.bookmark_target_blocks_) &&
+        bookmark_target_offsets_.equal(dindex.bookmark_target_offsets_);
+}
+
+
+template<class BV>
+void deserialization_index_serializer<BV>::set_compression_level(
+                                                    unsigned clevel) BMNOEXCEPT
+{
+    if (clevel <= bm::set_compression_max)
+        compression_level_ = clevel;
+}
+
+
+template<class BV>
+bool deserialization_index_serializer<BV>::size_add(size_t a,
+                                                    size_t b,
+                                                    size_t& r) BMNOEXCEPT
+{
+    if (a > size_t(-1) - b)
+        return false;
+    r = a + b;
+    return true;
+}
+
+
+template<class BV>
+bool deserialization_index_serializer<BV>::size_mul(size_t a,
+                                                    size_t b,
+                                                    size_t& r) BMNOEXCEPT
+{
+    if (a && b > size_t(-1) / a)
+        return false;
+    r = a * b;
+    return true;
+}
+
+
+template<class BV>
+template<class V>
+bool deserialization_index_serializer<BV>::validate_vector_order(
+                                                        const V& v) BMNOEXCEPT
+{
+    const size_t sz = v.size();
+    if (sz < 2)
+        return true;
+    for (size_t i = 1; i < sz; ++i)
+    {
+        if (v[i] < v[i-1])
+            return false;
+    }
+    return true;
+}
+
+
+template<class BV>
+template<class V>
+bool deserialization_index_serializer<BV>::can_bic_encode_vector(
+                                        const V& v,
+                                        bool is_block_vector,
+                                        size_t serialized_size) BMNOEXCEPT
+{
+    const size_t sz = v.size();
+    if (sz < 2 || sz > size_t(~0u))
+        return false;
+
+    bm::word_t prev = 0;
+    for (size_t i = 0; i < sz; ++i)
+    {
+        bm::id64_t v64 = bm::id64_t(v[i]);
+        if (is_block_vector)
+        {
+            if (v64 > bm::id64_t(~0u))
+                return false;
+        }
+        else
+        {
+            if (v64 > bm::id64_t(serialized_size) ||
+                v64 > bm::id64_t(~0u))
+                return false;
+        }
+
+        bm::word_t value = bm::word_t(v64);
+        if (i && value <= prev)
+            return false;
+        prev = value;
+    }
+    return true;
+}
+
+
+template<class BV>
+template<class V>
+unsigned deserialization_index_serializer<BV>::calc_bic_delta(
+                                                    const V& v) BMNOEXCEPT
+{
+    const size_t sz = v.size();
+    if (sz < 2)
+        return 0;
+
+    bm::id64_t min_delta = bm::id64_t(v[1]) - bm::id64_t(v[0]);
+    for (size_t i = 2; i < sz; ++i)
+    {
+        bm::id64_t delta = bm::id64_t(v[i]) - bm::id64_t(v[i-1]);
+        if (delta < min_delta)
+            min_delta = delta;
+    }
+
+    if (min_delta <= 1)
+        return 0;
+
+    bm::id64_t d1 = min_delta - 1;
+    return d1 > 65535 ? 65535u : unsigned(d1);
+}
+
+
+template<class BV>
+void deserialization_index_serializer<BV>::throw_bad_index()
+{
+    BM_ASSERT(0);
+#ifndef BM_NO_STL
+    throw std::logic_error("BM: deserialization index serialization format");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+}
+
+
+template<class BV>
+void deserialization_index_serializer<BV>::require(bool condition)
+{
+    if (!condition)
+        throw_bad_index();
+}
+
+
+template<class BV>
+template<class V>
+unsigned deserialization_index_serializer<BV>::vector_codec(
+                                                const V& v,
+                                                bool is_block_vector) BMNOEXCEPT
+{
+    const size_t sz = v.size();
+    if (!sz)
+        return bm::di_format::codec_empty;
+
+    bm::id64_t max_v = 0;
+    for (size_t i = 0; i < sz; ++i)
+    {
+        bm::id64_t v64 = bm::id64_t(v[i]);
+        if (v64 > max_v)
+            max_v = v64;
+    }
+
+    if (is_block_vector || max_v <= bm::id64_t(~0u))
+        return sz == 1 ?
+            bm::di_format::codec_single32 :
+            bm::di_format::codec_plain32;
+    if (max_v <= bm::id64_t(0xFFFFFFFFFFFFull))
+        return sz == 1 ?
+            bm::di_format::codec_single48 :
+            bm::di_format::codec_plain48;
+    return sz == 1 ?
+        bm::di_format::codec_single64 :
+        bm::di_format::codec_plain64;
+}
+
+
+template<class BV>
+template<class V>
+size_t deserialization_index_serializer<BV>::vector_payload_size(
+                                                const V& v,
+                                                bool is_block_vector)
+{
+    unsigned codec = vector_codec(v, is_block_vector);
+    switch (codec)
+    {
+    case bm::di_format::codec_empty:    return 0;
+    case bm::di_format::codec_single32: return 4;
+    case bm::di_format::codec_single48: return 6;
+    case bm::di_format::codec_single64: return 8;
+    case bm::di_format::codec_plain32:
+    {
+        size_t r;
+        require(size_mul(v.size(), size_t(4), r));
+        return r;
+    }
+    case bm::di_format::codec_plain48:
+    {
+        size_t r;
+        require(size_mul(v.size(), size_t(6), r));
+        return r;
+    }
+    case bm::di_format::codec_plain64:
+    {
+        size_t r;
+        require(size_mul(v.size(), size_t(8), r));
+        return r;
+    }
+    default:
+        throw_bad_index();
+    }
+    return 0;
+}
+
+
+template<class BV>
+template<class V>
+void deserialization_index_serializer<BV>::validate_and_encode_vector(
+                                           bm::encoder& enc,
+                                           unsigned field_id,
+                                           const V& v,
+                                           bool is_block_vector,
+                                           size_t serialized_size,
+                                           unsigned compression_level)
+{
+    require(validate_vector_order(v));
+
+    const size_t sz = v.size();
+    for (size_t i = 0; i < sz; ++i)
+    {
+        bm::id64_t v64 = bm::id64_t(v[i]);
+        if (is_block_vector)
+            require(v64 <= bm::id64_t(~0u));
+        else
+            require(v64 <= bm::id64_t(serialized_size));
+    }
+
+    unsigned codec = vector_codec(v, is_block_vector);
+    if (compression_level >= 2 &&
+        can_bic_encode_vector(v, is_block_vector, serialized_size))
+    {
+        codec = bm::di_format::codec_bic32;
+    }
+
+    enc.put_8((unsigned char)field_id);
+    enc.put_8((unsigned char)codec);
+    enc.put_16(0);
+    enc.put_64(bm::id64_t(sz));
+    unsigned char* payload_size_pos = enc.get_pos();
+    enc.put_64(0);
+
+    if (!sz)
+        return;
+
+    unsigned char* payload_pos = enc.get_pos();
+    switch (codec)
+    {
+    case bm::di_format::codec_single32:
+        enc.put_32(bm::word_t(v[0]));
+        break;
+    case bm::di_format::codec_single48:
+        enc.put_48(bm::id64_t(v[0]));
+        break;
+    case bm::di_format::codec_single64:
+        enc.put_64(bm::id64_t(v[0]));
+        break;
+    case bm::di_format::codec_plain32:
+        if ((sizeof(typename V::value_type) == sizeof(bm::word_t)) &&
+            (sz <= size_t(~0u)))
+        {
+            enc.put_32(reinterpret_cast<const bm::word_t*>(v.data()),
+                       unsigned(sz));
+        }
+        else
+        {
+            for (size_t i = 0; i < sz; ++i)
+                enc.put_32(bm::word_t(v[i]));
+        }
+        break;
+    case bm::di_format::codec_plain48:
+        for (size_t i = 0; i < sz; ++i)
+            enc.put_48(bm::id64_t(v[i]));
+        break;
+    case bm::di_format::codec_plain64:
+        for (size_t i = 0; i < sz; ++i)
+            enc.put_64(bm::id64_t(v[i]));
+        break;
+    case bm::di_format::codec_bic32:
+    {
+        bm::word_t min_v = bm::word_t(v[0]);
+        unsigned delta = calc_bic_delta(v);
+        bm::id64_t max_adj64 =
+            bm::id64_t(v[sz-1]) - bm::id64_t(delta) * bm::id64_t(sz - 1);
+        require(max_adj64 <= bm::id64_t(~0u));
+        bm::word_t max_v = bm::word_t(max_adj64);
+        require(min_v < max_v);
+
+        enc.put_32(min_v);
+        enc.put_32(max_v);
+        enc.put_16((unsigned short)delta);
+
+        bm::heap_vector<bm::word_t, allocator_type, true> wv;
+        bm::word_t* wv_ptr = wv.resize_no_copy(sz);
+        wv_ptr[0] = min_v;
+        for (size_t i = 1; i < sz; ++i)
+        {
+            bm::id64_t v64 =
+                bm::id64_t(v[i]) - bm::id64_t(delta) * bm::id64_t(i);
+            require(v64 <= bm::id64_t(~0u));
+            wv_ptr[i] = bm::word_t(v64);
+            require(wv_ptr[i] > wv_ptr[i-1]);
+        }
+
+        bm::bit_out<bm::encoder> bo(enc);
+        if (sz > 2)
+            bo.bic_encode_u32_cm(wv_ptr + 1,
+                                 unsigned(sz - 2), min_v, max_v);
+        bo.flush();
+        break;
+    }
+    default:
+        throw_bad_index();
+    }
+
+    unsigned char* section_end = enc.get_pos();
+    enc.set_pos(payload_size_pos);
+    enc.put_64(bm::id64_t(section_end - payload_pos));
+    enc.set_pos(section_end);
+}
+
+
+template<class BV>
+bool deserialization_index_deserializer<BV>::size_mul(size_t a,
+                                                      size_t b,
+                                                      size_t& r) BMNOEXCEPT
+{
+    if (a && b > size_t(-1) / a)
+        return false;
+    r = a * b;
+    return true;
+}
+
+
+template<class BV>
+template<class V>
+bool deserialization_index_deserializer<BV>::validate_vector_order(
+                                                        const V& v) BMNOEXCEPT
+{
+    const size_t sz = v.size();
+    if (sz < 2)
+        return true;
+    for (size_t i = 1; i < sz; ++i)
+    {
+        if (v[i] < v[i-1])
+            return false;
+    }
+    return true;
+}
+
+
+template<class BV>
+void deserialization_index_deserializer<BV>::throw_bad_index()
+{
+    BM_ASSERT(0);
+#ifndef BM_NO_STL
+    throw std::logic_error("BM: deserialization index serialization format");
+#else
+    BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+}
+
+
+template<class BV>
+void deserialization_index_deserializer<BV>::require(bool condition)
+{
+    if (!condition)
+        throw_bad_index();
+}
+
+
+template<class BV>
+template<class V, class DEC>
+void deserialization_index_deserializer<BV>::decode_vector(
+                              V& v,
+                              DEC& dec,
+                              const unsigned char* section_end,
+                              unsigned codec,
+                              bm::id64_t count,
+                              bool is_block_vector,
+                              size_t serialized_size)
+{
+    require(count <= bm::id64_t(size_t(-1)));
+    const size_t sz = size_t(count);
+    v.resize(sz);
+
+    if (!sz)
+    {
+        require(codec == bm::di_format::codec_empty);
+        return;
+    }
+
+    unsigned width = 0;
+    switch (codec)
+    {
+    case bm::di_format::codec_single32:
+        require(sz == 1);
+        width = 4;
+        break;
+    case bm::di_format::codec_single48:
+        require(sz == 1);
+        width = 6;
+        break;
+    case bm::di_format::codec_single64:
+        require(sz == 1);
+        width = 8;
+        break;
+    case bm::di_format::codec_plain32:
+        width = 4;
+        break;
+    case bm::di_format::codec_plain48:
+        width = 6;
+        break;
+    case bm::di_format::codec_plain64:
+        width = 8;
+        break;
+    case bm::di_format::codec_bic32:
+    {
+        require(sz >= 2);
+        require(size_t(section_end - dec.get_pos()) >= 10);
+        bm::word_t min_v = dec.get_32();
+        bm::word_t max_v = dec.get_32();
+        unsigned delta = dec.get_16();
+        require(min_v < max_v);
+
+        bm::id64_t min64 = bm::id64_t(min_v);
+        bm::id64_t max64 =
+            bm::id64_t(max_v) + bm::id64_t(delta) * bm::id64_t(sz - 1);
+        if (!is_block_vector)
+        {
+            require(min64 <= bm::id64_t(serialized_size));
+            require(max64 <= bm::id64_t(serialized_size));
+        }
+
+        v[0] = typename V::value_type(min_v);
+        require(max64 <= bm::id64_t(~0u));
+        typename V::value_type max_value =
+            static_cast<typename V::value_type>(max64);
+        require(max64 == bm::id64_t(max_value));
+        v[sz-1] = max_value;
+        if (sz > 2)
+        {
+            bm::heap_vector<bm::word_t,
+                            typename bvector_type::allocator_type, true> wv;
+            bm::word_t* wv_ptr = wv.resize_no_copy(sz - 2);
+            bm::bit_in<DEC> bi(dec);
+            bi.bic_decode_u32_cm(wv_ptr, unsigned(sz - 2), min_v, max_v);
+            for (size_t i = 0; i < sz - 2; ++i)
+            {
+                size_t target_idx = i + 1;
+                bm::id64_t v64 = bm::id64_t(wv_ptr[i]) +
+                    bm::id64_t(delta) * bm::id64_t(target_idx);
+                if (is_block_vector)
+                    require(v64 <= bm::id64_t(~0u));
+                else
+                    require(v64 <= bm::id64_t(serialized_size));
+                typename V::value_type value =
+                    static_cast<typename V::value_type>(v64);
+                require(v64 == bm::id64_t(value));
+                v[target_idx] = value;
+            }
+        }
+        require(validate_vector_order(v));
+        return;
+    }
+    default:
+        throw_bad_index();
+    }
+
+    for (size_t i = 0; i < sz; ++i)
+    {
+        bm::id64_t v64 = 0;
+        require(size_t(section_end - dec.get_pos()) >= width);
+        switch (width)
+        {
+        case 4: v64 = dec.get_32(); break;
+        case 6: v64 = dec.get_48(); break;
+        case 8: v64 = dec.get_64(); break;
+        default: throw_bad_index();
+        }
+
+        if (is_block_vector)
+            require(v64 <= bm::id64_t(~0u));
+        else
+            require(v64 <= bm::id64_t(serialized_size));
+        typename V::value_type value = static_cast<typename V::value_type>(v64);
+        require(v64 == bm::id64_t(value));
+        v[i] = value;
+    }
+
+    require(validate_vector_order(v));
+}
+
+
+template<class BV>
+void deserialization_index<BV>::swap(deserialization_index<BV>& dindex) BMNOEXCEPT
+{
+    marker_offsets_.swap(dindex.marker_offsets_);
+    bookmark_blocks_.swap(dindex.bookmark_blocks_);
+    bookmark_offsets_.swap(dindex.bookmark_offsets_);
+    bookmark_target_source_blocks_.swap(dindex.bookmark_target_source_blocks_);
+    bookmark_target_blocks_.swap(dindex.bookmark_target_blocks_);
+    bookmark_target_offsets_.swap(dindex.bookmark_target_offsets_);
+    size_t serialized_size = serialized_size_;
+    serialized_size_ = dindex.serialized_size_;
+    dindex.serialized_size_ = serialized_size;
+}
+
+
+template<class BV>
+size_t deserialization_index_serializer<BV>::serialize_size(
+                                                const index_type& dindex,
+                                                serialization_format format)
+{
+    require(dindex.bookmark_blocks_.size() ==
+            dindex.bookmark_offsets_.size());
+    require(dindex.bookmark_target_source_blocks_.size() ==
+            dindex.bookmark_target_blocks_.size());
+    require(dindex.bookmark_target_blocks_.size() ==
+            dindex.bookmark_target_offsets_.size());
+
+    size_t total = 0;
+    switch (format)
+    {
+    case format_standalone:
+        require(size_add(total,
+                size_t(bm::di_format::standalone_header_size),
+                total));
+        break;
+    case format_compact:
+        require(size_add(total,
+                size_t(bm::di_format::compact_header_size),
+                total));
+        break;
+    default:
+        throw_bad_index();
+    }
+
+    const size_t payloads[] =
+    {
+        vector_payload_size(dindex.marker_offsets_, false),
+        vector_payload_size(dindex.bookmark_blocks_, true),
+        vector_payload_size(dindex.bookmark_offsets_, false),
+        vector_payload_size(dindex.bookmark_target_source_blocks_, true),
+        vector_payload_size(dindex.bookmark_target_blocks_, true),
+        vector_payload_size(dindex.bookmark_target_offsets_, false)
+    };
+
+    for (unsigned i = 0; i < bm::di_format::section_count; ++i)
+    {
+        require(size_add(total,
+                size_t(bm::di_format::section_header_size),
+                total));
+        require(size_add(total, payloads[i], total));
+    }
+    return total;
+}
+
+
+template<class BV>
+size_t deserialization_index_serializer<BV>::max_serialize_mem(
+                                                const index_type& dindex) const
+{
+    size_t size = serialize_size(dindex, format_);
+    size_t headroom = size / 5;
+    require(size_add(size, headroom, size));
+    return size;
+}
+
+
+template<class BV>
+size_t deserialization_index_serializer<BV>::serialize(
+                                            const index_type& dindex,
+                                            unsigned char* buf,
+                                            size_t capacity) const
+{
+    const size_t max_record_size = max_serialize_mem(dindex);
+    require(buf);
+    require(capacity >= max_record_size);
+
+    bm::encoder enc(buf, capacity);
+    unsigned flags = 0;
+#ifdef BM64ADDR
+    flags |= bm::di_format::flag_64addr;
+#endif
+    if (globals<true>::byte_order() == LittleEndian)
+        flags |= bm::di_format::flag_little_endian;
+    unsigned char* record_size_pos = 0;
+    if (format_ == format_standalone)
+    {
+        enc.put_8((unsigned char)bm::di_format::magic0);
+        enc.put_8((unsigned char)bm::di_format::magic1);
+        enc.put_8((unsigned char)bm::di_format::version);
+        enc.put_8((unsigned char)flags);
+        enc.put_16(0);
+        record_size_pos = enc.get_pos();
+        enc.put_64(0);
+        enc.put_64(bm::id64_t(dindex.serialized_size_));
+        enc.put_32(bm::di_format::section_count);
+    }
+    else
+    {
+        enc.put_8((unsigned char)flags);
+        enc.put_64(bm::id64_t(dindex.serialized_size_));
+    }
+
+    validate_and_encode_vector(enc,
+            bm::di_format::field_marker_offsets,
+            dindex.marker_offsets_, false, dindex.serialized_size_,
+            compression_level_);
+    validate_and_encode_vector(enc,
+            bm::di_format::field_bookmark_blocks,
+            dindex.bookmark_blocks_, true, dindex.serialized_size_,
+            compression_level_);
+    validate_and_encode_vector(enc,
+            bm::di_format::field_bookmark_offsets,
+            dindex.bookmark_offsets_, false, dindex.serialized_size_,
+            compression_level_);
+    validate_and_encode_vector(enc,
+            bm::di_format::field_bookmark_target_source_blocks,
+                               dindex.bookmark_target_source_blocks_, true,
+                               dindex.serialized_size_, compression_level_);
+    validate_and_encode_vector(enc,
+            bm::di_format::field_bookmark_target_blocks,
+            dindex.bookmark_target_blocks_, true, dindex.serialized_size_,
+            compression_level_);
+    validate_and_encode_vector(enc,
+            bm::di_format::field_bookmark_target_offsets,
+            dindex.bookmark_target_offsets_, false, dindex.serialized_size_,
+            compression_level_);
+
+    const size_t actual_size = enc.size();
+    require(actual_size <= capacity);
+
+    if (record_size_pos)
+    {
+        unsigned char* end_pos = enc.get_pos();
+        enc.set_pos(record_size_pos);
+        enc.put_64(bm::id64_t(actual_size));
+        enc.set_pos(end_pos);
+    }
+
+    return actual_size;
+}
+
+
+template<class BV>
+size_t deserialization_index_serializer<BV>::serialize(
+                                            const index_type& dindex,
+                                            buffer& buf) const
+{
+    size_t capacity = max_serialize_mem(dindex);
+
+    buf.resize(capacity, false);
+    size_t actual_size = serialize(dindex, buf.data(), buf.size());
+    buf.resize(actual_size, false);
+    return actual_size;
+}
+
+
+template<class BV>
+size_t deserialization_index_deserializer<BV>::deserialize(
+                                              index_type& dindex,
+                                              const unsigned char* buf,
+                                              size_t available_size) const
+{
+    require(buf);
+    require(available_size >= (format_ == format_standalone ?
+            bm::di_format::standalone_header_size :
+            bm::di_format::compact_header_size));
+
+    unsigned flags;
+    if (format_ == format_standalone)
+    {
+        require(buf[0] == bm::di_format::magic0);
+        require(buf[1] == bm::di_format::magic1);
+        require(buf[2] == bm::di_format::version);
+        flags = buf[3];
+    }
+    else
+    {
+        flags = buf[0];
+    }
+    require((flags & ~bm::di_format::flags_mask) == 0);
+
+    ByteOrder bo_current = globals<true>::byte_order();
+    ByteOrder bo_serial =
+        (flags & bm::di_format::flag_little_endian) ?
+            LittleEndian : BigEndian;
+
+    if (bo_current == bo_serial)
+        return deserialize_impl<bm::decoder>(dindex, buf, available_size,
+                                             format_);
+
+    switch (bo_current)
+    {
+    case BigEndian:
+        return deserialize_impl<bm::decoder_big_endian>(dindex, buf,
+                                                        available_size,
+                                                        format_);
+    case LittleEndian:
+        return deserialize_impl<bm::decoder_little_endian>(dindex, buf,
+                                                           available_size,
+                                                           format_);
+    default:
+        BM_ASSERT(0);
+    }
+    return 0;
+}
+
+
+template<class BV>
+template<class DEC>
+size_t deserialization_index_deserializer<BV>::deserialize_impl(
+                                              index_type& dindex,
+                                              const unsigned char* buf,
+                                              size_t available_size,
+                                              serialization_format format) const
+{
+    require(buf);
+    require(available_size >= (format == format_standalone ?
+            bm::di_format::standalone_header_size :
+            bm::di_format::compact_header_size));
+
+    DEC dec(buf);
+    bm::id64_t record_size64 = bm::id64_t(available_size);
+    bm::id64_t serialized_size64 = 0;
+
+    if (format == format_standalone)
+    {
+        require(dec.get_8() == bm::di_format::magic0);
+        require(dec.get_8() == bm::di_format::magic1);
+        require(dec.get_8() == bm::di_format::version);
+        unsigned flags = dec.get_8();
+        require((flags & ~bm::di_format::flags_mask) == 0);
+        require(dec.get_16() == 0);
+        record_size64 = dec.get_64();
+        serialized_size64 = dec.get_64();
+        bm::word_t section_count = dec.get_32();
+
+        require(record_size64 <= bm::id64_t(available_size));
+        require(record_size64 <= bm::id64_t(size_t(-1)));
+        require(section_count ==
+                bm::di_format::section_count);
+    }
+    else
+    {
+        unsigned flags = dec.get_8();
+        require((flags & ~bm::di_format::flags_mask) == 0);
+        serialized_size64 = dec.get_64();
+    }
+
+    require(serialized_size64 <= bm::id64_t(size_t(-1)));
+
+    const size_t record_size = size_t(record_size64);
+    const size_t source_size = size_t(serialized_size64);
+    const unsigned char* record_end = buf + record_size;
+
+    index_type tmp;
+    tmp.serialized_size_ = source_size;
+
+    bool seen[bm::di_format::section_count] = { false };
+    for (unsigned section = 0;
+         section < bm::di_format::section_count; ++section)
+    {
+        require(size_t(record_end - dec.get_pos()) >=
+                bm::di_format::section_header_size);
+        unsigned field_id = dec.get_8();
+        unsigned codec = dec.get_8();
+        require(dec.get_16() == 0);
+        bm::id64_t count = dec.get_64();
+        bm::id64_t payload_size64 = dec.get_64();
+        require(field_id >= 1 &&
+                field_id <= bm::di_format::section_count);
+        require(!seen[field_id - 1]);
+        seen[field_id - 1] = true;
+        require(payload_size64 <= bm::id64_t(record_end - dec.get_pos()));
+        require(payload_size64 <= bm::id64_t(size_t(-1)));
+
+        const unsigned char* section_end = dec.get_pos() + size_t(payload_size64);
+        switch (field_id)
+        {
+        case bm::di_format::field_marker_offsets:
+            decode_vector(tmp.marker_offsets_, dec, section_end, codec, count,
+                          false, source_size);
+            break;
+        case bm::di_format::field_bookmark_blocks:
+            decode_vector(tmp.bookmark_blocks_, dec, section_end, codec, count,
+                          true, source_size);
+            break;
+        case bm::di_format::field_bookmark_offsets:
+            decode_vector(tmp.bookmark_offsets_, dec, section_end, codec, count,
+                          false, source_size);
+            break;
+        case bm::di_format::
+                field_bookmark_target_source_blocks:
+            decode_vector(tmp.bookmark_target_source_blocks_, dec, section_end,
+                          codec, count, true, source_size);
+            break;
+        case bm::di_format::field_bookmark_target_blocks:
+            decode_vector(tmp.bookmark_target_blocks_, dec, section_end, codec,
+                          count, true, source_size);
+            break;
+        case bm::di_format::field_bookmark_target_offsets:
+            decode_vector(tmp.bookmark_target_offsets_, dec, section_end, codec,
+                          count, false, source_size);
+            break;
+        default:
+            throw_bad_index();
+        }
+        require(dec.get_pos() == section_end);
+    }
+
+    require(dec.get_pos() == record_end);
+    require(tmp.bookmark_blocks_.size() == tmp.bookmark_offsets_.size());
+    require(tmp.bookmark_target_source_blocks_.size() ==
+            tmp.bookmark_target_blocks_.size());
+    require(tmp.bookmark_target_blocks_.size() ==
+            tmp.bookmark_target_offsets_.size());
+
+    dindex.swap(tmp);
+    return record_size;
 }
 
 
@@ -5945,7 +7014,8 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         for (unsigned cnt = dec.get_32(); cnt; --cnt)
         {
             bm::id_t idx = dec.get_32();
-            bv.set(idx);
+            if (!deserialization_index_out_)
+                bv.set(idx);
         } // for
         // -1 for compatibility with other deserialization branches
         size_t read_size = dec.size()-1;
@@ -6143,6 +7213,274 @@ std::cout << "_sz=" << (dec_size - dec_last_size);
 std::cout << "  [" << unsigned(btype) << ", " << nb_i << "]" << std::flush;
 dec_last_size = dec_size;
 #endif
+        if (deserialization_index_out_)
+        {
+            switch (btype)
+            {
+            case set_block_azero:
+            case set_block_end:
+                nb_i = bm::set_total_blocks;
+                break;
+            case set_block_1zero:
+                break;
+            case set_block_8zero:
+                nb = dec.get_8();
+                BM_ASSERT(nb);
+                nb_i += nb;
+                continue; // bypass ++nb_i;
+            case set_block_16zero:
+                nb = dec.get_16();
+                BM_ASSERT(nb);
+                nb_i += nb;
+                continue; // bypass ++nb_i;
+            case set_block_32zero:
+                nb = dec.get_32();
+                BM_ASSERT(nb);
+                nb_i += nb;
+                continue; // bypass ++nb_i;
+            case set_block_64zero:
+            #ifdef BM64ADDR
+                nb = dec.get_64();
+                BM_ASSERT(nb);
+                nb_i += nb;
+                continue; // bypass ++nb_i;
+            #else
+                BM_ASSERT(0);
+                dec.get_64();
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif
+            case set_block_aone:
+                nb_i = bm::set_total_blocks;
+                break;
+            case set_block_1one:
+                break;
+            case set_block_8one:
+                full_blocks = dec.get_8();
+                goto process_full_blocks_index_only;
+            case set_block_16one:
+                full_blocks = dec.get_16();
+                goto process_full_blocks_index_only;
+            case set_block_32one:
+                full_blocks = dec.get_32();
+                goto process_full_blocks_index_only;
+            case set_block_64one:
+            #ifdef BM64ADDR
+                full_blocks = dec.get_64();
+                goto process_full_blocks_index_only;
+            #else
+                BM_ASSERT(0);
+                dec.get_64();
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            #endif
+            process_full_blocks_index_only:
+                BM_ASSERT(full_blocks);
+                nb_i += full_blocks - 1;
+                break;
+            case set_block_bit:
+                dec.get_32(temp_block, bm::set_block_size);
+                break;
+            case set_block_bit_1bit:
+                dec.get_16();
+                break;
+            case set_block_bit_0runs:
+                this->read_0runs_block(dec, temp_block);
+                break;
+            case set_block_bit_interval:
+            {
+                unsigned head_idx = dec.get_16();
+                unsigned tail_idx = dec.get_16();
+                dec.get_32(temp_block + head_idx, tail_idx - head_idx + 1);
+                break;
+            }
+            case set_block_gap:
+            case set_block_gapbit:
+            {
+                gap_word_t gap_head = (gap_word_t)
+                    (sizeof(gap_word_t) == 2 ? dec.get_16() : dec.get_32());
+                unsigned len = gap_length(&gap_head);
+                --len;
+                if (len > 1)
+                    dec.get_16(this->id_array_, len - 1);
+                break;
+            }
+            case set_block_arrgap:
+            case set_block_arrgap_inv:
+            case set_block_arrgap_egamma:
+            case set_block_arrgap_egamma_inv:
+            case set_block_arrgap_bienc:
+            case set_block_arrgap_bienc_inv:
+            case set_block_arrgap_bienc_v2:
+            case set_block_arrgap_bienc_inv_v2:
+                this->read_id_list(dec, btype, this->id_array_);
+                break;
+            case set_block_gap_egamma:
+            {
+                gap_word_t gap_head = dec.get_16();
+                this->read_gap_block(dec, btype,
+                                     gap_temp_block_.data(), gap_head);
+                break;
+            }
+            case bm::set_block_gap_bienc:
+            case bm::set_block_gap_bienc_v2:
+            {
+                gap_word_t gap_head = dec.get_16();
+                this->read_gap_block(dec, btype,
+                                     gap_temp_block_.data(), gap_head);
+                break;
+            }
+            case bm::set_block_gap_bienc_v3:
+            case bm::set_block_gap_bienc_v3s:
+            case bm::set_block_gap_egamma_v3:
+            {
+                gap_word_t gap_head = 0;
+                this->read_gap_block(dec, btype,
+                                     gap_temp_block_.data(), gap_head);
+                break;
+            }
+            case set_block_arrbit:
+            {
+                gap_word_t len = dec.get_16();
+                for (unsigned k = 0; k < len; ++k)
+                    dec.get_16();
+                break;
+            }
+            case bm::set_block_arrbit_inv:
+            {
+                gap_word_t len = dec.get_16();
+                for (unsigned k = 0; k < len; ++k)
+                    dec.get_16();
+                break;
+            }
+            case bm::set_block_arr_bienc:
+            case bm::set_block_arr_bienc_8bh:
+            case bm::set_block_arr_bienc_v3:
+            case bm::set_block_arr_bienc_v3s:
+                this->read_bic_arr(dec, 0, btype);
+                break;
+            case bm::set_block_arr_bienc_inv:
+            case bm::set_block_arr_bienc_inv_v3:
+            case bm::set_block_arr_bienc_inv_v3s:
+                this->read_bic_arr(dec, 0, btype);
+                break;
+            case bm::set_block_bitgap_bienc:
+                this->read_bic_gap(dec, 0);
+                break;
+            case bm::set_block_bit_digest0:
+                this->read_digest0_block(dec, 0);
+                break;
+            case bm::set_sblock_bienc:
+            case bm::set_sblock_bienc_v3:
+            {
+                unsigned sb = 0;
+                this->read_bic_sb_arr(dec, btype, this->sb_id_array_, &sb);
+                nb_i += (bm::set_sub_array_size - j0);
+                continue; // bypass ++i;
+            }
+            case bm::set_sblock_bienc_gaps_v3:
+                nb_i += (bm::set_sub_array_size - j0);
+                continue; // bypass ++i;
+            case set_nb_bookmark32:
+                this->bookmark_idx_ = nb_i;
+                this->skip_offset_ = dec.get_32();
+                goto process_bookmark;
+            case set_nb_bookmark24:
+                this->bookmark_idx_ = nb_i;
+                this->skip_offset_ = dec.get_24();
+                goto process_bookmark;
+            case set_nb_bookmark16:
+                this->bookmark_idx_ = nb_i;
+                this->skip_offset_ = dec.get_16();
+                goto process_bookmark;
+            case set_nb_sync_mark8:
+                nb_sync = dec.get_8();
+                goto process_nb_sync;
+            case set_nb_sync_mark16:
+                nb_sync = dec.get_16();
+                goto process_nb_sync;
+            case set_nb_sync_mark24:
+                nb_sync = dec.get_24();
+                goto process_nb_sync;
+            case set_nb_sync_mark32:
+                nb_sync = dec.get_32();
+                goto process_nb_sync;
+            case set_nb_sync_mark48:
+                nb_sync = block_idx_type(dec.get_48());
+                goto process_nb_sync;
+            case set_nb_sync_mark64:
+                nb_sync = block_idx_type(dec.get_64());
+                goto process_nb_sync;
+            case bm::set_block_ref_eq:
+                dec.get_32();
+                break;
+            case bm::set_block_xor_ref8:
+            case bm::set_block_xor_ref8_um:
+                dec.get_8();
+                if (btype <= bm::set_block_xor_ref32)
+                    dec.get_64();
+                continue; // XOR marker does not advance nb_i
+            case bm::set_block_xor_ref16:
+            case bm::set_block_xor_ref16_um:
+            case bm::set_block_xor_gap_ref16:
+                dec.get_16();
+                if (btype <= bm::set_block_xor_ref32)
+                    dec.get_64();
+                continue; // XOR marker does not advance nb_i
+            case bm::set_block_xor_ref32:
+            case bm::set_block_xor_ref32_um:
+            case bm::set_block_xor_gap_ref32:
+                dec.get_32();
+                if (btype <= bm::set_block_xor_ref32)
+                    dec.get_64();
+                continue; // XOR marker does not advance nb_i
+            case bm::set_block_xor_gap_ref8:
+                dec.get_8();
+                continue; // XOR marker does not advance nb_i
+            case bm::set_block_xor_chain:
+            {
+                unsigned char vbr_flag = dec.get_8();
+                switch (vbr_flag)
+                {
+                case 1: dec.get_8(); break;
+                case 2: dec.get_16(); break;
+                case 0: dec.get_32(); break;
+                default: BM_ASSERT(0); break;
+                }
+                dec.get_h64();
+                unsigned xchain_size = dec.get_8();
+                BM_ASSERT(xchain_size);
+                for (unsigned ci = 0; ci < xchain_size; ++ci)
+                {
+                    switch (vbr_flag)
+                    {
+                    case 1: dec.get_8(); break;
+                    case 2: dec.get_16(); break;
+                    case 0: dec.get_32(); break;
+                    default: BM_ASSERT(0); break;
+                    }
+                    dec.get_h64();
+                }
+                continue; // XOR marker does not advance nb_i
+            }
+            default:
+                BM_ASSERT(0);
+                #ifndef BM_NO_STL
+                    throw std::logic_error(this->err_msg());
+                #else
+                    BM_THROW(BM_ERR_SERIALFORMAT);
+                #endif
+            }
+            ++nb_i;
+            continue;
+        }
+
         switch (btype)
         {
         case set_block_azero: 
