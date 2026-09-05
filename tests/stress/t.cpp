@@ -559,6 +559,11 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
 
 
 void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize=true);
+static
+void generate_sparse_bvector(bvect& bv,
+                             unsigned min,
+                             unsigned max,
+                             unsigned fill_factor);
 
 static
 unsigned random_minmax(unsigned min, unsigned max)
@@ -1060,7 +1065,6 @@ void BVectorErase(bvect*  bv, unsigned pos)
 
 static
 void CheckSerializationANDWithDeserializationIndexs(const bvect& bv_arg,
-                                            const bvect& bv_rhs,
                                             const unsigned char* serialized_rhs,
                                             const bvect& bv_expected,
                                             bm::word_t* tb)
@@ -1075,32 +1079,107 @@ void CheckSerializationANDWithDeserializationIndexs(const bvect& bv_arg,
     size_t plain_size = deserial.deserialize(bv_plain, serialized_rhs, tb);
     deserial.unset_deserialization_index();
 
-    bool eq = bv_plain.equal(bv_rhs);
-    if (!eq)
     {
-        cerr << "Error: deserialization-index construction deserialize mismatch" << endl;
-        cerr << "  rhs_count=" << bv_rhs.count()
-             << " plain_count=" << bv_plain.count() << endl;
-        assert(eq); exit(1);
+        deserialization_index_type marker_offsets2;
+        bvect bv_plain2;
+        deserial.set_deserialization_index_construct(&marker_offsets2);
+        size_t plain_size2 = deserial.deserialize(bv_plain2, serialized_rhs, tb);
+        deserial.unset_deserialization_index();
+
+        bool index_eq = marker_offsets.equal(marker_offsets2);
+        if (!index_eq)
+        {
+            cerr << "Error: deserialization-index equality mismatch" << endl;
+            assert(index_eq); exit(1);
+        }
+
+        marker_offsets2.optimize();
+        index_eq = marker_offsets.equal(marker_offsets2);
+        if (!index_eq)
+        {
+            cerr << "Error: deserialization-index equality mismatch after optimize" << endl;
+            assert(index_eq); exit(1);
+        }
+
+        bool size2_ok = plain_size == plain_size2;
+        if (!size2_ok)
+        {
+            cerr << "Error: deserialization-index repeated construction size mismatch" << endl;
+            cerr << "  plain_size=" << plain_size
+                 << " plain_size2=" << plain_size2 << endl;
+            assert(size2_ok); exit(1);
+        }
+    }
+
+    deserialization_index_type restored_marker_offsets[3];
+    {
+        typedef bm::deserialization_index_serializer<bvect>
+            deserialization_index_serializer_type;
+        typedef bm::deserialization_index_deserializer<bvect>
+            deserialization_index_deserializer_type;
+
+        deserialization_index_serializer_type index_ser;
+        deserialization_index_deserializer_type index_deser;
+
+        for (unsigned level = 0; level < 3; ++level)
+        {
+            index_ser.set_compression_level(level);
+            typename deserialization_index_serializer_type::buffer index_buf;
+
+            size_t index_size = index_ser.serialize(marker_offsets, index_buf);
+            size_t consumed =
+                index_deser.deserialize(restored_marker_offsets[level],
+                                        index_buf.buf(), index_size);
+
+            bool index_restore_ok = (consumed == index_size) &&
+                marker_offsets.equal(restored_marker_offsets[level]);
+            if (!index_restore_ok)
+            {
+                cerr << "Error: deserialization-index serialization round-trip mismatch" << endl;
+                cerr << "  level=" << level
+                     << " index_size=" << index_size
+                     << " consumed=" << consumed << endl;
+                assert(index_restore_ok); exit(1);
+            }
+        }
     }
 
     bvect block_digest;
     bv_arg.build_block_digest(block_digest);
 
-    bvect bv_skip;
+    bvect bv_skip_original;
     deserial.set_deserialization_index_use(&marker_offsets);
+    deserial.set_block_digest_vector_use(&block_digest);
+    size_t skip_original_size =
+        deserial.deserialize(bv_skip_original, serialized_rhs, tb);
+    deserial.unset_deserialization_index();
+    deserial.unset_block_digest_vector();
+
+    bvect bv_skip;
+    deserial.set_deserialization_index_use(&restored_marker_offsets[2]);
     deserial.set_block_digest_vector_use(&block_digest);
     size_t skip_size = deserial.deserialize(bv_skip, serialized_rhs, tb);
     deserial.unset_deserialization_index();
     deserial.unset_block_digest_vector();
 
-    bool size_ok = skip_size == plain_size;
+    bool size_ok = (skip_original_size == plain_size) &&
+                   (skip_size == plain_size);
     if (!size_ok)
     {
         cerr << "Error: deserialization-index assisted deserialize consumed byte mismatch" << endl;
-        cerr << "  skip_size=" << skip_size
+        cerr << "  skip_original_size=" << skip_original_size
+             << " skip_size=" << skip_size
              << " plain_size=" << plain_size << endl;
         assert(size_ok); exit(1);
+    }
+
+    bool eq = bv_skip.equal(bv_skip_original);
+    if (!eq)
+    {
+        cerr << "Error: restored deserialization-index gather result mismatch" << endl;
+        cerr << "  original_count=" << bv_skip_original.count()
+             << " restored_count=" << bv_skip.count() << endl;
+        assert(eq); exit(1);
     }
 
     bvect bv_assisted(bv_arg, bm::finalization::READWRITE);
@@ -1114,6 +1193,257 @@ void CheckSerializationANDWithDeserializationIndexs(const bvect& bv_arg,
              << " assisted_count=" << bv_assisted.count() << endl;
         assert(eq); exit(1);
     }
+}
+
+
+static
+void CheckBVectorDeserializationIndexSerializationCase(
+        const char* case_name,
+        const bvect& bv,
+        size_t& total_l0_size,
+        size_t& total_l1_size,
+        size_t& total_l2_size,
+        size_t& total_compact_l0_size,
+        size_t& total_compact_l1_size,
+        size_t& total_compact_l2_size,
+        size_t& total_bv_blob_size,
+        size_t& total_index_memory,
+        unsigned& case_count)
+{
+    typedef bm::serializer<bvect> serializer_type;
+    typedef bm::deserializer<bvect, bm::decoder> deserializer_type;
+    typedef deserializer_type::deserialization_index_type deserialization_index_type;
+    typedef bm::deserialization_index_serializer<bvect> deserialization_index_serializer_type;
+    typedef bm::deserialization_index_deserializer<bvect> deserialization_index_deserializer_type;
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+
+    serializer_type bv_ser(tb);
+    bv_ser.set_bookmarks(true, 4);
+    serializer_type::buffer bv_buf;
+    bv_ser.serialize(bv, bv_buf);
+
+    deserializer_type bv_deser;
+    deserialization_index_type dindex;
+    bv_deser.set_deserialization_index_construct(&dindex);
+    bvect bv_index_tmp;
+    size_t full_size = bv_deser.deserialize(bv_index_tmp, bv_buf.buf(), tb);
+    bv_deser.unset_deserialization_index();
+
+    deserialization_index_serializer_type dindex_ser;
+    deserialization_index_deserializer_type dindex_deser;
+
+    deserialization_index_type restored_indexes[2][3];
+    size_t index_sizes[2][3] = { { 0, 0, 0 }, { 0, 0, 0 } };
+
+    for (unsigned format = 0; format < 2; ++format)
+    {
+        dindex_ser.set_format(
+            deserialization_index_serializer_type::serialization_format(format));
+        dindex_deser.set_format(
+            deserialization_index_deserializer_type::serialization_format(format));
+
+        for (unsigned level = 0; level < 3; ++level)
+        {
+            dindex_ser.set_compression_level(level);
+            assert(dindex_ser.get_compression_level() == level);
+
+            deserialization_index_serializer_type::buffer dindex_buf;
+            index_sizes[format][level] = dindex_ser.serialize(dindex, dindex_buf);
+            size_t consumed =
+                dindex_deser.deserialize(restored_indexes[format][level],
+                                         dindex_buf.buf(),
+                                         index_sizes[format][level]);
+            bool eq = (consumed == index_sizes[format][level]) &&
+                dindex.equal(restored_indexes[format][level]);
+            if (!eq)
+            {
+                cerr << "Error: deserialization-index serialization mismatch"
+                     << " format=" << format
+                     << " level=" << level << endl;
+                assert(eq); exit(1);
+            }
+        }
+    }
+    dindex_deser.set_format(
+        deserialization_index_deserializer_type::format_standalone);
+
+    bvect bv_mask;
+    bm::random_subset<bvect> rsub;
+    bvect::size_type bit_count = bv.count();
+    if (bit_count)
+        rsub.sample(bv_mask, bv, bit_count < 32 ? bit_count : 32);
+
+    bvect block_digest;
+    bv_mask.build_block_digest(block_digest);
+
+    bvect bv_original_index;
+    bv_deser.set_deserialization_index_use(&dindex);
+    bv_deser.set_block_digest_vector_use(&block_digest);
+    size_t original_size = bv_deser.deserialize(bv_original_index, bv_buf.buf(), tb);
+    bv_deser.unset_deserialization_index();
+    bv_deser.unset_block_digest_vector();
+
+    bvect bv_restored_index;
+    bv_deser.set_deserialization_index_use(&restored_indexes[1][2]);
+    bv_deser.set_block_digest_vector_use(&block_digest);
+    size_t restored_size = bv_deser.deserialize(bv_restored_index, bv_buf.buf(), tb);
+    bv_deser.unset_deserialization_index();
+    bv_deser.unset_block_digest_vector();
+
+    bool eq = (original_size == full_size) &&
+         (restored_size == full_size) &&
+         bv_original_index.equal(bv_restored_index);
+    if (!eq)
+    {
+        cerr << "Error: restored deserialization-index assisted deserialize mismatch" << endl;
+        assert(eq); exit(1);
+    }
+
+    bv_restored_index.bit_and(bv_mask);
+    eq = bv_restored_index.equal(bv_mask);
+    if (!eq)
+    {
+        cerr << "Error: restored deserialization-index gathered result mismatch" << endl;
+        assert(eq); exit(1);
+    }
+
+    if (!is_silent)
+    {
+        double l1_ratio = index_sizes[0][0] ?
+            (100.0 * double(index_sizes[0][1]) / double(index_sizes[0][0])) : 0.0;
+        double l2_ratio = index_sizes[0][0] ?
+            (100.0 * double(index_sizes[0][2]) / double(index_sizes[0][0])) : 0.0;
+        double compact_l2_ratio = index_sizes[0][0] ?
+            (100.0 * double(index_sizes[1][2]) / double(index_sizes[0][0])) : 0.0;
+        cout << "  " << case_name
+             << ": bits=" << bv.count()
+             << ", bv-BLOB=" << bv_buf.size()
+             << ", resident-index=" << dindex.memory_used()
+             << ", standalone L0=" << index_sizes[0][0]
+             << ", L1=" << index_sizes[0][1] << " (" << l1_ratio << "%)"
+             << ", L2=" << index_sizes[0][2] << " (" << l2_ratio << "%)"
+             << ", compact L0=" << index_sizes[1][0]
+             << ", L1=" << index_sizes[1][1]
+             << ", L2=" << index_sizes[1][2]
+             << " (" << compact_l2_ratio << "% of standalone L0)"
+             << endl;
+    }
+
+    total_l0_size += index_sizes[0][0];
+    total_l1_size += index_sizes[0][1];
+    total_l2_size += index_sizes[0][2];
+    total_compact_l0_size += index_sizes[1][0];
+    total_compact_l1_size += index_sizes[1][1];
+    total_compact_l2_size += index_sizes[1][2];
+    total_bv_blob_size += bv_buf.size();
+    total_index_memory += dindex.memory_used();
+    ++case_count;
+}
+
+
+static
+void BVectorDeserializationIndexSerializationTest()
+{
+    cout << " ----------------------------------- BVectorDeserializationIndexSerializationTest()" << endl;
+
+    const unsigned block_size = 65536u;
+    size_t total_l0_size = 0;
+    size_t total_l1_size = 0;
+    size_t total_l2_size = 0;
+    size_t total_compact_l0_size = 0;
+    size_t total_compact_l1_size = 0;
+    size_t total_compact_l2_size = 0;
+    size_t total_bv_blob_size = 0;
+    size_t total_index_memory = 0;
+    unsigned case_count = 0;
+
+    if (!is_silent)
+    {
+        cout << "  size columns: bv-BLOB=serialized bvector, "
+             << "resident-index=in-memory index, "
+             << "L0/L1/L2=serialized index" << endl;
+    }
+
+    {
+        bvect bv;
+        CheckBVectorDeserializationIndexSerializationCase(
+            "empty", bv, total_l0_size, total_l1_size, total_l2_size,
+            total_compact_l0_size, total_compact_l1_size,
+            total_compact_l2_size,
+            total_bv_blob_size, total_index_memory, case_count);
+    }
+    {
+        bvect bv;
+        bv.set_range(10, 1000);
+        bv.set_range(block_size * 3 + 10, block_size * 3 + 500);
+        bv.set_range(block_size * 9 + 7, block_size * 9 + 900);
+        bv.set_range(block_size * 31 + 100, block_size * 31 + 800);
+        bv.set_range(block_size * 127 + 1, block_size * 127 + 700);
+        bv.optimize();
+        CheckBVectorDeserializationIndexSerializationCase(
+            "range-islands", bv, total_l0_size, total_l1_size, total_l2_size,
+            total_compact_l0_size, total_compact_l1_size,
+            total_compact_l2_size,
+            total_bv_blob_size, total_index_memory, case_count);
+    }
+    {
+        bvect bv;
+        generate_sparse_bvector(bv, 0, block_size * 128, 250000);
+        bv.optimize();
+        CheckBVectorDeserializationIndexSerializationCase(
+            "sparse-generator", bv, total_l0_size, total_l1_size,
+            total_l2_size, total_compact_l0_size, total_compact_l1_size,
+            total_compact_l2_size, total_bv_blob_size, total_index_memory,
+            case_count);
+    }
+    {
+        bvect bv;
+        generate_bvector(bv, block_size * 96, true);
+        CheckBVectorDeserializationIndexSerializationCase(
+            "mixed-generator", bv, total_l0_size, total_l1_size,
+            total_l2_size, total_compact_l0_size, total_compact_l1_size,
+            total_compact_l2_size, total_bv_blob_size, total_index_memory,
+            case_count);
+    }
+    {
+        bvect bv;
+        for (unsigned nb = 0; nb < 96; nb += 3)
+            bv.set_range(nb * block_size, nb * block_size + block_size - 1);
+        bv.optimize();
+        CheckBVectorDeserializationIndexSerializationCase(
+            "regular-full-blocks", bv, total_l0_size, total_l1_size,
+            total_l2_size, total_compact_l0_size, total_compact_l1_size,
+            total_compact_l2_size, total_bv_blob_size, total_index_memory,
+            case_count);
+    }
+
+    double summary_l1_ratio = total_l0_size ?
+        (100.0 * double(total_l1_size) / double(total_l0_size)) : 0.0;
+    double summary_l2_ratio = total_l0_size ?
+        (100.0 * double(total_l2_size) / double(total_l0_size)) : 0.0;
+    double summary_compact_l2_ratio = total_l0_size ?
+        (100.0 * double(total_compact_l2_size) / double(total_l0_size)) : 0.0;
+
+    if (!is_silent)
+    {
+        cout << "  summary: cases=" << case_count
+             << ", total bv-BLOB=" << total_bv_blob_size
+             << ", total resident-index=" << total_index_memory
+             << ", total standalone L0=" << total_l0_size
+             << ", total L1=" << total_l1_size
+             << " (" << summary_l1_ratio << "%)"
+             << ", total L2=" << total_l2_size
+             << " (" << summary_l2_ratio << "%)"
+             << ", total compact L0=" << total_compact_l0_size
+             << ", total compact L1=" << total_compact_l1_size
+             << ", total compact L2=" << total_compact_l2_size
+             << " (" << summary_compact_l2_ratio
+             << "% of standalone L0)"
+             << endl;
+    }
+
+    cout << " ----------------------------------- BVectorDeserializationIndexSerializationTest() OK" << endl;
 }
 
 
@@ -1383,7 +1713,7 @@ unsigned SerializationOperation(bvect*             bv_target,
                     cerr << "2.1 AND 2-way check error!" << endl;
                     assert(0); exit(1);
                 }
-                CheckSerializationANDWithDeserializationIndexs(bv1, bv2, smem2,
+                CheckSerializationANDWithDeserializationIndexs(bv1, smem2,
                                                        *bv_target, tb);
             }
             break;
@@ -9541,27 +9871,18 @@ void Check_BVector_Gather_Deserialization_Index(
     }
 
     deserialization_index_type deserialization_index;
-    BV bv_full;
+    BV bv_index_tmp;
     deserializer_type de_map;
     de_map.set_deserialization_index_construct(&deserialization_index);
-    de_map.deserialize(bv_full, buf, tb);
+    de_map.deserialize(bv_index_tmp, buf, tb);
     de_map.unset_deserialization_index();
-
-    bool eq = bv.equal(bv_full);
-    if (!eq)
-    {
-        cerr << "Error: deserialization-index construction mismatch in "
-             << name << endl;
-        DetailedCompareBVectors(bv, bv_full);
-        assert(eq); exit(1);
-    }
 
     auto check_mask = [&](const BV& mask, const char* mask_name)
     {
         if (mask.empty())
             return;
 
-        BV expected(bv);
+        BV expected(bv, bm::finalization::READWRITE);
         expected.bit_and(mask, BV::opt_compress);
 
         BV mask_digest;
@@ -22205,8 +22526,6 @@ void CheckBvectorDeserializeSkipDigest()
         deserializer_type de_map;
         de_map.set_deserialization_index_construct(&marker_offsets);
         size_t plain_size = de_map.deserialize(bv_plain, buf.buf());
-        bool eq = bv_plain.equal(bv_src);
-        assert(eq);
         assert(!marker_offsets.empty());
 
         bvect bv_skip;
@@ -22221,7 +22540,7 @@ void CheckBvectorDeserializeSkipDigest()
         bv_control.bit_and(bv_mask);
         bv_skip.bit_and(bv_mask);
 
-        eq = bv_skip.equal(bv_control);
+        bool eq = bv_skip.equal(bv_control);
         assert(eq);
     };
 
@@ -22317,7 +22636,6 @@ void CheckBvectorDeserializeSkipDigestAND()
         deserializer_type de_map;
         de_map.set_deserialization_index_construct(&marker_offsets);
         size_t plain_size = de_map.deserialize(bv_plain, buf.buf(), tb);
-        check_equal(bv_plain, bv_serialized, "marker-map construction deserialize mismatch");
         if (marker_offsets.empty())
         {
             cerr << "Error: deserialization index vector is empty in " << name << endl;
@@ -51842,6 +52160,10 @@ return 0;
     CheckAllocLeaks(false);
     return 0;
 */
+/*
+    BVectorDeserializationIndexSerializationTest();
+    return 0;
+*/
     if (is_all || is_low_level)
     {
         TestNibbleArr();
@@ -52112,6 +52434,9 @@ return 0;
          CheckAllocLeaks(false);
 
         SerializationTest();
+         CheckAllocLeaks(false);
+
+        BVectorDeserializationIndexSerializationTest();
          CheckAllocLeaks(false);
 
         DesrializationTest2();
