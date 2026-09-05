@@ -41,8 +41,11 @@ ifeq ($(origin PROJECT_NAME), undefined)
 endif
 
 ifndef PROJECT_DIR
-     PROJECT_DIR=$(HOME)/$(PROJECT_NAME)
+    PROJECT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+else
+    PROJECT_DIR := $(abspath $(PROJECT_DIR))
 endif
+export PROJECT_DIR
 
 
 DEBUGDIR=Debug/
