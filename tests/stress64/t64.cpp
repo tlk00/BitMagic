@@ -25969,6 +25969,7 @@ void show_help()
         << endl
         << "-onlystress    - run ONLY stress tests " << endl
         << "-nostress      - do NOT run stress tests " << endl
+        << "-silent        - run without excessive progress output" << endl
         ;
 }
 
@@ -26120,6 +26121,11 @@ int parse_args(int argc, char *argv[])
         if (arg == "-nostress")
         {
             is_nostress = true;
+            continue;
+        }
+        if (arg == "-silent" || arg == "--silent")
+        {
+            is_silent = true;
             continue;
         }
         if (arg == "-svf")
