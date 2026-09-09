@@ -42,7 +42,13 @@ Test selectors from t.cpp:
   -s,   -support        Support-container tests
   -bvb0                 Bit-vector basic tests, part 0
   -bvb1                 Bit-vector basic tests, part 1
-  -bvser                Bit-vector serialization tests
+  -bvser, -bvset        Bit-vector serialization tests
+  -fileser              File serialization/deserialization and corruption tests
+  -svfileser            Sparse-vector file and stringstream tests
+  -strsvstream          Disk-free string streaming and gather tests
+  -svfstream            Float file/stringstream serialization and gather tests
+  -svfsteam             Alias for -svfstream
+  -svindex              Sparse-vector index persistence tests
   -bvl0, -bvops0        Bit-vector logical operations, part 0
   -bvl1, -bvops1        Bit-vector logical operations, part 1
   -bvl2, -bvops2        Bit-vector logical operations, part 2
@@ -84,19 +90,19 @@ included in the default partition because they duplicate work covered by
 groups above.
 
 Examples:
-  ./run_macos_pl.sh -b bmtest -j 7 --fail-fast --heavy-first
-  $0 --build stress_release
-  $0 --build stress_release --heavy-first
-  $0 --build stress_release_avx2 --jobs 6
-  $0 --build stress_release_neon --jobs 4 -ll -bvb0 -bvb1
-  $0 --binary ./stress_debug --jobs 3
+  ./run_all_pl.sh -b bmtest -j 7 --fail-fast --heavy-first
+  ./run_all_pl.sh --build stress_release
+  ./run_all_pl.sh --build stress_release --heavy-first
+  ./run_all_pl.sh --build stress_release_avx2 --jobs 6
+  ./run_all_pl.sh --build stress_release_neon --jobs 4 -ll -bvb0 -bvb1
+  ./run_all_pl.sh --binary ./stress_debug --jobs 3
 EOF
 }
 
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvser|\
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvser|-bvset|-fileser|-svfileser|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
         -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1c|-sort|--sort|\
@@ -150,6 +156,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --heavy-first)
             HEAVY_FIRST=1
+            shift
+            ;;
+        -svfsteam)
+            TESTS[${#TESTS[@]}]="-svfstream"
             shift
             ;;
         -h|--help)
@@ -208,13 +218,13 @@ if [ "${#TESTS[@]}" -eq 0 ]; then
             -bvs -sv1b -ser -bvl0
             -strsv -bvl2 -svf0c1 -svf0c2 -svf0c3
             -svf0b -svf1 -bvl1 -sv1a -sv1c -csv0b
-            -ll -sv0 -bvb0 -bvser
+            -ll -sv0 -bvb0 -bvser -fileser -svfileser -strsvstream -svfstream -svindex
             -agg -s -csv1a0 -csv1b -sort -csv0c -cc -rc
         )
     else
         TESTS=(
             -ll -s
-            -bvb0 -bvb1 -bvser
+            -bvb0 -bvb1 -bvser -fileser -svfileser -strsvstream -svfstream -svindex
             -bvl0 -bvl1 -bvl2
             -bvs -rc -agg
             -sv0 -sv1a -sv1b -sv1c -sort
