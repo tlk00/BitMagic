@@ -53,8 +53,6 @@ For more information please visit:  http://bitmagic.io
 #include <bmaggregator.h>
 #include <bmutil.h>
 #include <bmserial.h>
-#include <bmbvimport.h>
-#include <bmrandom.h>
 #include <bmvmin.h>
 #include <bmbmatrix.h>
 #include <bmintervals.h>
@@ -72,16 +70,130 @@ For more information please visit:  http://bitmagic.io
 #include <bmthreadpool.h>
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
+#include <bmfio.h>
+#include <encoding.h>
+#include <bmbvimport.h>
+#include <bmrandom.h>
+#include <bmdbg.h>
+
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <chrono>
+#include <filesystem>
+#include <atomic>
+#include <limits.h>
 
 using namespace bm;
 using namespace std;
 
-#include "rlebtv.h"
-#include <encoding.h>
-#include <limits.h>
+// Persistence traits keep the same stress helper usable for every sparse-vector index.
+template<class INDEX> struct SparseIndexCodecs;
+template<class BV> struct SparseIndexCodecs<bm::sparse_vector_deserialization_index<BV>>
+{
+    enum { kind = 1 };
+    using serializer = bm::sparse_vector_deserialization_index_serializer<BV>;
+    using deserializer = bm::sparse_vector_deserialization_index_deserializer<BV>;
+};
+template<class SV> struct SparseIndexCodecs<bm::sparse_vector_float_deserialization_index<SV>>
+{
+    enum { kind = 2 };
+    using serializer = bm::sparse_vector_float_deserialization_index_serializer<SV>;
+    using deserializer = bm::sparse_vector_float_deserialization_index_deserializer<SV>;
+};
 
-#include <bmdbg.h>
-#include <vector>
+// Replace the live gather index with a restored index, once per construction.
+// This helper is entirely RAM based, including its streaming transport.
+template<class INDEX>
+void CycleSparseIndex(INDEX& index, bool comprehensive = false)
+{
+    typename SparseIndexCodecs<INDEX>::serializer serializer;
+    typename SparseIndexCodecs<INDEX>::deserializer deserializer;
+    typename SparseIndexCodecs<INDEX>::serializer::buffer bytes;
+    for (unsigned mode = 0; mode < (comprehensive ? 6u : 1u); ++mode)
+    {
+        serializer.set_compact(bool(mode & 1)); deserializer.set_compact(bool(mode & 1));
+        const unsigned levels[] = {2, 0, 6}; serializer.set_compression_level(levels[mode / 2]);
+        const size_t size = serializer.serialize(index, bytes);
+        INDEX restored;
+        if (deserializer.deserialize(restored, bytes.data(), size) != size || !index.equal(restored))
+            throw std::runtime_error("Sparse index RAM cycle mismatch");
+        restored.optimize();
+        if (!index.equal(restored)) throw std::runtime_error("Sparse index optimize changed content");
+        std::stringstream stream(std::ios::in | std::ios::out | std::ios::binary);
+        stream.write("prefix", 6);
+        for (unsigned repeat = 0; repeat < 2; ++repeat)
+            if (serializer.serialize(index, stream) != size) throw std::runtime_error("Sparse index stream write failed");
+        stream.write("sentinelPAYLOAD", 15);
+        std::string record = stream.str();
+        if (record.size() != 6 + 2*size + 15 || std::memcmp(record.data()+6, bytes.data(), size) ||
+            std::memcmp(record.data()+6+size, bytes.data(), size))
+            throw std::runtime_error("Sparse index stream bytes mismatch");
+        if (deserializer.deserialize(restored, reinterpret_cast<const unsigned char*>(record.data()+6), record.size()-6) != size ||
+            !index.equal(restored)) throw std::runtime_error("Sparse index bounded trailing payload failed");
+        if (comprehensive)
+        {
+            typename SparseIndexCodecs<INDEX>::serializer::buffer caller;
+            caller.resize(serializer.max_serialize_mem(index));
+            if (serializer.serialize(index, caller.data(), caller.size()) != size ||
+                std::memcmp(caller.data(), bytes.data(), size)) throw std::runtime_error("Sparse index caller buffer mismatch");
+        }
+        stream.seekg(6);
+        for (unsigned repeat = 0; repeat < 2; ++repeat)
+            if (deserializer.deserialize(restored, stream) != size || !index.equal(restored) ||
+                stream.tellg() != std::streampos(std::streamoff(6+(repeat+1)*size)))
+                throw std::runtime_error("Sparse index stream cycle/position mismatch");
+        char tail[15]; stream.read(tail, 15);
+        if (!stream || std::memcmp(tail, "sentinelPAYLOAD", 15)) throw std::runtime_error("Sparse index sentinel mismatch");
+        if (comprehensive)
+        {
+            for (size_t cut : {size_t(0), size_t(7), size-1})
+            {
+                bool caught = false;
+                try { deserializer.deserialize(restored, bytes.data(), cut); }
+                catch (const std::logic_error&) { caught = true; }
+                if (!caught || !index.equal(restored)) throw std::runtime_error("Sparse index truncation transaction failed");
+                std::stringstream broken(std::string(reinterpret_cast<const char*>(bytes.data()), cut));
+                caught = false;
+                try { deserializer.deserialize(restored, broken); }
+                catch (const std::logic_error&) { caught = true; }
+                if (!caught || !index.equal(restored)) throw std::runtime_error("Sparse index stream truncation transaction failed");
+            }
+            if (!(mode & 1))
+            {
+                std::string bad(reinterpret_cast<const char*>(bytes.data()), size); bad[2] = 99;
+                bool caught = false;
+                try { deserializer.deserialize(restored, reinterpret_cast<const unsigned char*>(bad.data()), bad.size()); }
+                catch (const std::logic_error&) { caught = true; }
+                if (!caught || !index.equal(restored)) throw std::runtime_error("Sparse index version accepted");
+            }
+            // A valid first child followed by a bad second child must not commit a float index.
+            std::string bad_record(reinterpret_cast<const char*>(bytes.data()), size);
+            const size_t h = mode & 1 ? 8 : 12;
+            if constexpr (SparseIndexCodecs<INDEX>::kind == 1)
+                bm::sv_di_detail::put64(reinterpret_cast<unsigned char*>(&bad_record[h]), bm::id64_t(-1));
+            else
+            {
+                const size_t child_size = size_t(bm::sv_di_detail::get64(bytes.data() + h));
+                bm::sv_di_detail::put64(reinterpret_cast<unsigned char*>(&bad_record[h + child_size]), 0);
+            }
+            bool rejected = false;
+            try { deserializer.deserialize(restored, reinterpret_cast<const unsigned char*>(bad_record.data()), size); }
+            catch (const std::logic_error&) { rejected = true; }
+            if (!rejected || !index.equal(restored)) throw std::runtime_error("Sparse index malformed metadata transaction failed");
+            std::stringstream failed;
+            failed.setstate(std::ios::badbit);
+            if (serializer.serialize(index, failed) || deserializer.deserialize(restored, failed) || !index.equal(restored))
+                throw std::runtime_error("Sparse index I/O failure accepted");
+        }
+        index.swap(restored);
+    }
+}
+
+
+
+#include "rlebtv.h"
+
 
 bool is_silent = false;
 
@@ -1447,6 +1559,130 @@ void BVectorDeserializationIndexSerializationTest()
 }
 
 
+// Each process owns a private directory below a predictable root. Normal
+// completion removes files and the private directory; killed runs are easy to
+// find under bm-file-tests/. Parallel overnight groups cannot share filenames.
+class BVectorTestFile
+{
+    struct directory
+    {
+        std::filesystem::path path;
+        directory()
+        {
+            const std::filesystem::path root("bm-file-tests");
+            std::filesystem::create_directories(root);
+            const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+            for (unsigned attempt = 0; ; ++attempt)
+            {
+                path = root / ("run-" + std::to_string(stamp) + "-" + std::to_string(attempt));
+                if (std::filesystem::create_directory(path)) break;
+            }
+        }
+        ~directory()
+        {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+            if (ec) std::cerr << "File-test directory cleanup failed: " << path << ": " << ec.message() << std::endl;
+        }
+    };
+public:
+    std::string path;
+    explicit BVectorTestFile(const char* label)
+    {
+        static directory dir;
+        static std::atomic<unsigned long long> sequence{0};
+        path = (dir.path / (std::string(label) + "-" + std::to_string(sequence++) + ".bin")).string();
+    }
+    ~BVectorTestFile()
+    {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        if (ec)
+        {
+            std::cerr << "File-test cleanup failed: " << path << ": " << ec.message() << std::endl;
+            std::abort();
+        }
+    }
+    BVectorTestFile(const BVectorTestFile&) = delete;
+    BVectorTestFile& operator=(const BVectorTestFile&) = delete;
+};
+
+// Exercise the current distribution with the same serializer settings as its
+// RAM check. Compare all bytes in chunks, then check full and scattered gather
+// restoration and the application's trailer through the underlying stream.
+template<class BV>
+static void CheckFileSerialization(const BV& bv, bm::serializer<BV>& ser,
+                                   const unsigned char* ram, size_t size)
+{
+    BVectorTestFile fixture("distribution");
+    std::fstream file(fixture.path, std::ios::binary | std::ios::in |
+                                    std::ios::out | std::ios::trunc);
+    const char magic[] = "BM-bvector-END\x00\xff";
+    const unsigned char payload[] = {3, 0, 0, 0, 0x12, 0xa7, 0x91, 0, 0x42};
+    file.write("prefix", 6);
+    {
+        bm::streams_encoder out(file);
+        assert(ser.serialize(bv, out)); assert(out.finish());
+        assert(out.size() == size);
+    }
+    file.write(magic, sizeof(magic));
+    file.write(reinterpret_cast<const char*>(payload), sizeof(payload));
+    file.flush(); assert(file.good());
+    file.seekg(6);
+    unsigned char bytes[65536];
+    for (size_t offset = 0; offset < size; )
+    {
+        const size_t count = std::min(sizeof(bytes), size - offset);
+        file.read(reinterpret_cast<char*>(bytes), std::streamsize(count));
+        assert(file.good()); assert(!memcmp(bytes, ram + offset, count));
+        offset += count;
+    }
+    auto check_trailer = [&]()
+    {
+        assert(size_t(file.tellg()) == size + 6);
+        char marker[sizeof(magic)]; unsigned char data[sizeof(payload)];
+        file.read(marker, sizeof(marker));
+        file.read(reinterpret_cast<char*>(data), sizeof(data));
+        assert(file.good()); assert(!memcmp(marker, magic, sizeof(magic)));
+        assert(!memcmp(data, payload, sizeof(payload)));
+    };
+    bm::streams_decoder in(file);
+    bm::streams_deserializer<BV> reader;
+    file.seekg(6);
+    {
+        BV restored;
+        assert(reader.deserialize(restored, in)); assert(restored == bv);
+        check_trailer();
+    }
+    // Preserve the caller's random sequence: selection is deterministic over
+    // whatever distribution the stress generator supplied this iteration.
+    BV blocks, mask, digest;
+    bv.build_block_digest(blocks);
+    unsigned ordinal = 0;
+    for (typename BV::enumerator en = blocks.first(); en.valid(); ++en, ++ordinal)
+        if (ordinal % 7 == 0)
+        {
+            typename BV::size_type first = *en << bm::set_block_shift;
+            typename BV::size_type last = first + 65535;
+            if (last == bm::id_max) --last;
+            mask.set_range(first, last);
+        }
+    mask.build_block_digest(digest);
+    bm::deserialization_index<BV> index;
+    bm::deserializer<BV, bm::decoder> index_reader;
+    BV scratch;
+    index_reader.set_deserialization_index_construct(&index);
+    index_reader.deserialize(scratch, ram);
+    reader.set_deserialization_index_use(&index);
+    reader.set_block_digest_vector_use(&digest);
+    file.seekg(6);
+    BV gathered;
+    BV expected(bv, bm::finalization::READWRITE);
+    expected &= mask;
+    assert(reader.deserialize(gathered, in)); gathered &= mask;
+    assert(gathered == expected); check_trailer();
+}
+
 // do logical operation through serialization
 static
 unsigned SerializationOperation(bvect*             bv_target,
@@ -1506,6 +1742,11 @@ unsigned SerializationOperation(bvect*             bv_target,
 
    size_t slen1 = bm::serialize(bv1, smem1, tb);
    size_t slen2 = bm::serialize(bv2, smem2, tb);
+   bm::serializer<bvect> file_ser;
+   file_ser.gap_length_serialization(true); // bm::serialize() free-function default
+   CheckFileSerialization(bv1, file_ser, smem1, slen1);
+   CheckFileSerialization(bv2, file_ser, smem2, slen2);
+
 
    if (slen1 > st1.max_serialize_mem || slen2 > st2.max_serialize_mem)
    {
@@ -9928,6 +10169,7 @@ void Check_V3DR_Serializations(const BV& bv,
    {
        bv_ser.set_bic_dynamic_range_reduce(true);
        bv_ser.serialize(bv, sermem_buf, 0);
+       CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        const bvect::size_type* cstat = bv_ser.get_compression_stat();
        (void)cstat;
        drange_size = sermem_buf.size();
@@ -10029,6 +10271,7 @@ void Check_V3DR_Serializations(const BV& bv,
    {
        bv_ser.set_bic_dynamic_range_reduce(false);
        bv_ser.serialize(bv, sermem_buf, 0);
+       CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        const bvect::size_type* cstat = bv_ser.get_compression_stat(); (void)cstat;
        //assert(cstat[bm::set_block_arrgap_bienc_v2]==1 || cstat[bm::set_block_gap_bienc]==1);
        no_drange_size = sermem_buf.size();
@@ -16465,6 +16708,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         bm::serializer<bvect>::buffer sermem_buf;
        
         bv_ser.serialize(*bvect_full1, sermem_buf, 0);
+        CheckFileSerialization(*bvect_full1, bv_ser, sermem_buf.data(), sermem_buf.size());
         unsigned slen = (unsigned)sermem_buf.size();
 
         delete bvect_full1;
@@ -17808,6 +18052,795 @@ void MutationOperationsTest()
 
 }
 
+// A controllable seekable sink exercises failures at each I/O boundary.
+class SerializationFailBuffer : public std::stringbuf
+{
+public:
+    enum failure { none, write_failure, seek_failure, finish_failure } fail = none;
+protected:
+    std::streamsize xsputn(const char* s, std::streamsize n) override
+    {
+        if (fail == write_failure) return 0;
+        return std::stringbuf::xsputn(s, n);
+    }
+    pos_type seekpos(pos_type p, std::ios_base::openmode m) override
+    {
+        if (fail == seek_failure) return pos_type(off_type(-1));
+        return std::stringbuf::seekpos(p, m);
+    }
+    int sync() override
+    {
+        return fail == finish_failure ? -1 : std::stringbuf::sync();
+    }
+};
+
+// Read the application sentinel directly from the underlying file, bypassing
+// the decoder: catches both under-consumption and read-ahead past the BLOB.
+static void CheckStreamDeserialization(const bvect& original,
+    const unsigned char* blob, size_t size, const std::string& /*label*/,
+    bool selective, const bm::bv_ref_vector<bvect>* refs = nullptr)
+{
+    const unsigned char magic[] = {0x42,0x4d,0,0xff,0x73,0x65,0x6e,0x74,
+                                   0x69,0x6e,0x65,0x6c,0x91,0x23,0,0x7a};
+    BVectorTestFile fixture("read");
+    const std::string& path = fixture.path;
+    const unsigned char payload[] = {4, 0, 0, 0, 0xde, 0xad, 0, 0xbe, 0xef};
+    std::fstream file(path, std::ios::binary | std::ios::in |
+                            std::ios::out | std::ios::trunc);
+    file.write("prefix", 6);
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        file.write(reinterpret_cast<const char*>(blob), std::streamsize(size));
+        file.write(reinterpret_cast<const char*>(magic), sizeof(magic));
+        file.write(reinterpret_cast<const char*>(payload), sizeof(payload));
+    }
+    file.flush(); assert(file.good()); file.seekg(6);
+    bm::streams_decoder in(file);
+    bm::streams_deserializer<bvect> reader; // reuse retained memory
+    reader.set_ref_vectors(refs);
+    auto check_end = [&](unsigned ordinal)
+    {
+        assert(size_t(file.tellg()) == 6 + size * (ordinal + 1) + (sizeof(magic) + sizeof(payload)) * ordinal);
+        unsigned char actual[sizeof(magic)];
+        file.read(reinterpret_cast<char*>(actual), sizeof(actual));
+        assert(file.good()); assert(!memcmp(actual, magic, sizeof(magic)));
+        unsigned char data[sizeof(payload)];
+        file.read(reinterpret_cast<char*>(data), sizeof(data));
+        assert(file.good()); assert(!memcmp(data, payload, sizeof(payload)));
+    };
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        bvect restored;
+        assert(reader.deserialize(restored, in)); assert(in.is_good());
+        assert(restored == original); check_end(i);
+    }
+    if (!selective) return;
+    // Construction peeks at bookmark targets and restores its cursor.
+    file.seekg(6);
+    bm::deserialization_index<bvect> index;
+    reader.set_deserialization_index_construct(&index);
+    bvect scratch;
+    assert(reader.deserialize(scratch, in));
+    assert(index.serialized_size() == size); check_end(0);
+    reader.unset_deserialization_index();
+    bm::deserialization_index<bvect> ram_index;
+    bm::deserializer<bvect, bm::decoder> ram_reader;
+    ram_reader.set_deserialization_index_construct(&ram_index);
+    ram_reader.deserialize(scratch, blob);
+    bvect blocks; original.build_block_digest(blocks);
+    bvect::size_type first = 0, last = 0;
+    original.find_range(first, last);
+    for (unsigned pattern = 0; pattern < 6; ++pattern)
+    {
+        bvect mask, digest;
+        unsigned ordinal = 0;
+        for (bvect::enumerator en = blocks.first(); en.valid(); ++en, ++ordinal)
+        {
+            bool take = pattern == 1 || (pattern == 2 && ordinal == 0) ||
+                (pattern == 3 && *en == (last >> bm::set_block_shift)) ||
+                (pattern == 4 && ordinal % 7 == 0) ||
+                (pattern == 5 && ordinal % 2 == 0);
+            if (take)
+            {
+                bvect::size_type start = *en << bm::set_block_shift;
+                bvect::size_type end = start + 65535;
+                if (end == bm::id_max) --end;
+                mask.set_range(start, end);
+            }
+        }
+        if (pattern == 5) mask.set(19); // also request absent positions
+        mask.build_block_digest(digest);
+        bvect expected(original, bm::finalization::READWRITE); expected &= mask;
+        for (bool indexed : {false, true})
+        {
+            file.seekg(6);
+            if (indexed)
+                reader.set_deserialization_index_use(pattern & 1 ? &index : &ram_index);
+            reader.set_block_digest_vector_use(&digest);
+            bvect restored;
+            assert(reader.deserialize(restored, in));
+            restored &= mask; // decoder selection is at block granularity
+            assert(restored == expected); check_end(0);
+            reader.unset_deserialization_index(); reader.unset_block_digest_vector();
+        }
+    }
+    for (auto point : {first, last})
+    for (bool indexed : {false, true})
+    {
+        file.seekg(6);
+        if (indexed) reader.set_deserialization_index_use(&index);
+        reader.set_range(point, point);
+        bvect restored;
+        assert(reader.deserialize(restored, in));
+        restored.keep_range(point, point);
+        bvect expected(original, bm::finalization::READWRITE); expected.keep_range(point, point);
+        assert(restored == expected); check_end(0);
+        reader.unset_range(); reader.unset_deserialization_index();
+    }
+}
+
+class DeserializationFailBuffer : public std::stringbuf
+{
+public:
+    explicit DeserializationFailBuffer(const std::string& data) : std::stringbuf(data) {}
+    bool fail_seek = false, fail_read = false;
+protected:
+    std::streamsize xsgetn(char* p, std::streamsize n) override
+    {
+        if (fail_read) throw std::ios_base::failure("test read failure");
+        return std::stringbuf::xsgetn(p, n);
+    }
+    pos_type seekpos(pos_type p, std::ios_base::openmode m) override
+    {
+        if (fail_seek) return pos_type(off_type(-1));
+        return std::stringbuf::seekpos(p, m);
+    }
+};
+
+static void BVectorStreamDeserializationFailureTest()
+{
+    typedef bm::serializer<bvect> serializer_type;
+    serializer_type ser; ser.set_bookmarks(true, 16);
+    bvect bv;
+    for (unsigned i = 0; i < 400; ++i) bv.set(i * 137);
+    serializer_type::buffer buffer; ser.serialize(bv, buffer);
+    std::string blob(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    bm::streams_deserializer<bvect> reader;
+    // Deterministic on-disk trailer truncation. The BLOB remains intact:
+    // bvector decoding must succeed, while reading the application trailer fails.
+    // This deliberately does not fuzz or corrupt encoded bvector content.
+    {
+        const char sentinel[] = "BM-END-sentinel";
+        const unsigned char payload[] = {3, 0, 0, 0, 0x81, 0, 0xff};
+        bm::deserialization_index<bvect> index;
+        bm::deserializer<bvect, bm::decoder> index_reader;
+        bvect scratch, digest; digest.set(0);
+        index_reader.set_deserialization_index_construct(&index);
+        index_reader.deserialize(scratch, buffer.data());
+        for (size_t trailer_bytes : {size_t(0), size_t(3), sizeof(sentinel),
+                                     sizeof(sentinel) + size_t(2)})
+        for (bool throwing : {false, true})
+        for (unsigned mode = 0; mode < 3; ++mode)
+        {
+            BVectorTestFile fixture("truncated-trailer");
+            {
+                std::ofstream file(fixture.path, std::ios::binary | std::ios::trunc);
+                file.write(blob.data(), std::streamsize(blob.size()));
+                file.write(sentinel, sizeof(sentinel));
+                file.write(reinterpret_cast<const char*>(payload), sizeof(payload));
+                file.close(); assert(file.good());
+            }
+            size_t cut;
+            {
+                // Reopen and locate the known sentinel boundary before truncating.
+                std::ifstream file(fixture.path, std::ios::binary);
+                file.seekg(std::streamoff(blob.size()));
+                char marker[sizeof(sentinel)]; file.read(marker, sizeof(marker));
+                assert(file.good()); assert(!memcmp(marker, sentinel, sizeof(sentinel)));
+                file.seekg(std::streamoff(blob.size() + trailer_bytes));
+                assert(file.good()); cut = size_t(file.tellg());
+            }
+            std::filesystem::resize_file(fixture.path, cut);
+            assert(std::filesystem::file_size(fixture.path) == cut);
+            std::ifstream file(fixture.path, std::ios::binary);
+            if (throwing) file.exceptions(std::ios::badbit | std::ios::failbit | std::ios::eofbit);
+            bm::streams_decoder in(file);
+            if (mode == 1)
+            {
+                reader.set_deserialization_index_use(&index);
+                reader.set_block_digest_vector_use(&digest);
+            }
+            if (mode == 2) reader.set_range(0, 0);
+            bvect restored;
+            assert(reader.deserialize(restored, in));
+            assert(in.is_good()); assert(size_t(file.tellg()) == blob.size());
+            if (mode == 2) { restored.keep_range(0, 0); assert(restored.count() == 1); }
+            else assert(restored == bv);
+            reader.unset_range(); reader.unset_deserialization_index();
+            reader.unset_block_digest_vector();
+            char marker[sizeof(sentinel)]; unsigned char data[sizeof(payload)];
+            bool caught = false;
+            try
+            {
+                file.read(marker, sizeof(marker));
+                if (file.good()) assert(!memcmp(marker, sentinel, sizeof(sentinel)));
+                file.read(reinterpret_cast<char*>(data), sizeof(data));
+            }
+            catch (const std::ios_base::failure&) { caught = true; }
+            assert(file.fail()); assert(caught == throwing);
+        }
+    }
+    // Every proper prefix must fail, including truncation inside bit_in words.
+    for (bool throwing : {false, true})
+    for (size_t cut = 0; cut < blob.size(); ++cut)
+    {
+        std::istringstream file(blob.substr(0, cut));
+        if (throwing) file.exceptions(std::ios::badbit | std::ios::failbit | std::ios::eofbit);
+        bm::streams_decoder in(file);
+        bvect restored;
+        assert(!reader.deserialize(restored, in)); assert(!in.is_good());
+        assert(in.error() == bm::streams_decoder::invalid_input);
+    }
+    for (bool throwing : {false, true})
+    for (bool read_failure : {false, true})
+    {
+        DeserializationFailBuffer storage(blob + "sentinel");
+        std::istream file(&storage);
+        if (throwing) file.exceptions(std::ios::badbit | std::ios::failbit);
+        bm::streams_decoder in(file);
+        storage.fail_read = read_failure;
+        storage.fail_seek = !read_failure; // final physical seek after read-ahead
+        bvect restored;
+        bool ok = false, caught = false;
+        try { ok = reader.deserialize(restored, in); }
+        catch (const std::ios_base::failure&) { caught = true; }
+        assert(!ok); assert(caught == throwing); assert(!in.is_good());
+        assert(in.error() == bm::streams_decoder::io_error);
+        file.clear(); assert(!reader.deserialize(restored, in));
+    }
+    // Legacy ID_LIST: its count determines the exact physical end.
+    unsigned char ids[64]; bm::encoder enc(ids, sizeof(ids));
+    enc.put_8(bm::BM_HM_ID_LIST | bm::BM_HM_NO_BO);
+    enc.put_32(3); enc.put_32(2); enc.put_32(37); enc.put_32(65537);
+    bvect expected; expected.set(2); expected.set(37); expected.set(65537);
+    CheckStreamDeserialization(expected, ids, enc.size(), "bm-stream-id-test.bin", true);
+    // A count-prefixed list spans several input windows; it has no END marker.
+    std::vector<unsigned char> large_ids(200000);
+    bm::encoder id_enc(large_ids.data(), large_ids.size());
+    id_enc.put_8(bm::BM_HM_ID_LIST | bm::BM_HM_NO_BO);
+    id_enc.put_32(40000);
+    expected.clear();
+    for (unsigned i = 0; i < 40000; ++i)
+    {
+        id_enc.put_32(i * 3); expected.set(i * 3);
+    }
+    CheckStreamDeserialization(expected, large_ids.data(), id_enc.size(),
+                               "bm-stream-large-id-test.bin", true);
+
+    // Legacy raw arrays can exceed the usual working window. Exercise growth
+    // independently of whether the current compressor chooses this encoding.
+    bm::encoder arr_enc(large_ids.data(), large_ids.size());
+    arr_enc.put_8(bm::BM_HM_NO_BO | bm::BM_HM_NO_GAPL);
+    arr_enc.put_8(bm::set_block_arrbit); arr_enc.put_16(65535);
+    expected.clear();
+    for (unsigned i = 0; i < 65535; ++i)
+    {
+        arr_enc.put_16(bm::short_t(i)); expected.set(i);
+    }
+    arr_enc.put_8(bm::set_block_end);
+    CheckStreamDeserialization(expected, large_ids.data(), arr_enc.size(),
+                               "bm-stream-large-arr-test.bin", true);
+}
+
+// Disk-free companion to legacy RAM serialization stress cases.
+template<class SV>
+void CheckSparseVectorStringStream(const SV& source, bool gather = false,
+                                   unsigned expected_remap = 0)
+{
+    bm::sparse_vector_serializer<SV> serializer;
+    serializer.set_bookmarks(true, 16);
+    serializer.set_serialize_external_null(true); // standalone round-trip reference
+    bm::sparse_vector_serial_layout<SV> ram;
+    serializer.serialize(source, ram);
+    std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
+    stream.write("prefix", 6);
+    bm::streams_encoder out(stream);
+    if (!serializer.serialize(source, out) || !out.finish())
+        throw std::runtime_error("Stringstream serialization failed");
+    stream.write("sentinel", 8);
+    const std::string bytes = stream.str();
+    if (bytes.size() != ram.size()+14 || std::memcmp(bytes.data()+6, ram.buf(), ram.size()))
+        throw std::runtime_error("Stringstream and RAM bytes differ");
+    SV restored(source.get_null_support());
+    bm::streams_sparse_vector_deserializer<SV> reader;
+    stream.seekg(6);
+    const bool restored_ok = reader.deserialize(restored, stream);
+    if (!restored_ok || !source.equal(restored))
+    {
+        cerr << "Stream restore: ok=" << restored_ok << " size=" << source.size()
+             << " restored_size=" << restored.size() << endl;
+        if constexpr (SV::is_remap_support::value) cerr << "remap=" << source.is_remap() << endl;
+        throw std::runtime_error("Stringstream/source equality failed");
+    }
+    if (stream.tellg() != std::streampos(std::streamoff(6+ram.size())))
+        throw std::runtime_error("Stringstream BLOB end differs");
+    bm::sparse_vector_deserializer<SV> legacy;
+    SV restored_ram(source.get_null_support());
+    legacy.deserialize(restored_ram, reinterpret_cast<const unsigned char*>(bytes.data()+6));
+    if (!source.equal(restored_ram))
+        throw std::runtime_error("Stream bytes restored by legacy reader differ");
+    if (gather)
+    {
+        typename bm::sparse_vector_deserializer<SV>::deserialization_index_type index;
+        stream.seekg(6);
+        if (!reader.construct_deserialization_index(index, stream))
+            throw std::runtime_error("Stringstream index construction failed");
+        CycleSparseIndex(index);
+        if (expected_remap && (!index.remap_offset() ||
+            (unsigned char)bytes[6+index.remap_offset()] != expected_remap))
+            throw std::runtime_error("Expected remap representation was not exercised");
+        reader.set_deserialization_index(&index);
+        reader.set_deserialization_index_use();
+        for (unsigned pattern = 0; pattern < 3; ++pattern)
+        {
+            typename SV::bvector_type mask;
+            if (source.size() && pattern)
+            {
+                mask.set(source.size()-1);
+                if (pattern == 2) mask.set_range(0, 128);
+            }
+            legacy.deserialize(restored_ram, ram.buf(), mask);
+            stream.seekg(6);
+            if (!reader.deserialize(restored, stream, &mask) || !restored.equal(restored_ram))
+                throw std::runtime_error("Stringstream gather differs");
+            if (stream.tellg() != std::streampos(std::streamoff(6+ram.size())))
+                throw std::runtime_error("Stringstream gather end differs");
+        }
+        if (expected_remap == 'C' || expected_remap == 'R')
+        {
+            std::string broken = bytes;
+            broken[6+index.digest_offset()-1] = 'X'; // deterministic missing remap END
+            std::istringstream bad(broken);
+            bad.seekg(6);
+            if (reader.deserialize(restored, bad))
+                throw std::runtime_error("Invalid remap END accepted");
+        }
+    }
+    char sentinel[8];
+    stream.read(sentinel, 8);
+    if (!stream || std::memcmp(sentinel, "sentinel", 8))
+        throw std::runtime_error("Stringstream sentinel differs");
+}
+
+void StringSparseVectorStreamTest()
+{
+    // Non-nullable empty strings produce no planes, but still carry remap state.
+    bm::str_sparse_vector<char, bvect, 390> no_planes;
+    {
+        auto inserter = no_planes.get_back_inserter();
+        inserter.add_null(10);
+        inserter.flush();
+    }
+    no_planes.remap();
+    no_planes.optimize();
+    CheckSparseVectorStringStream(no_planes, true, 'C');
+    // Clearing a remap dictionary must reset its allocation capacity too.
+    // Otherwise same-size or smaller resize can return a null backing buffer.
+    bm::dynamic_heap_matrix<unsigned char, bvect::allocator_type> matrix(8, 256);
+    matrix.init(true);
+    for (unsigned rows : {8u, 4u, 16u})
+    {
+        matrix.free();
+        matrix.resize(rows, 256, false);
+        matrix.set_zero();
+        matrix.set(rows-1, 255, 123);
+        if (matrix.get(rows-1, 255) != 123)
+            throw std::runtime_error("Remap matrix reuse failed");
+    }
+    typedef bm::str_sparse_vector<char, bvect, 16> string_vector;
+    string_vector source(bm::use_null);
+    CheckSparseVectorStringStream(source, true);
+    source.set(0, "");
+    source.set(2, "alpha"); source.set(65536, "beta");
+    source.set(65539, std::string(256, 'x').c_str());
+#ifdef BM64ADDR
+    source.set(bm::id64_t(1) << 40, "high address");
+#endif
+    CheckSparseVectorStringStream(source, true, 'N'); // dynamic plane count
+#ifdef BM64ADDR
+    source.resize(65540); // avoid visiting the huge NULL interval during remap construction
+#endif
+    source.remap();
+    CheckSparseVectorStringStream(source, true, 'C'); // sparse remap dictionary
+    string_vector dense;
+    for (unsigned i = 1; i < 256; ++i)
+    {
+        char value[17];
+        std::memset(value, int(i), 16); value[16] = 0;
+        dense.set(i-1, value);
+    }
+    dense.remap();
+    CheckSparseVectorStringStream(dense, true, 'R'); // dense dictionary: flat remap
+    // Reuse both reader and destination across remapped/plain/empty objects.
+    string_vector plain(bm::use_null), empty(bm::use_null), restored(bm::use_null);
+    plain.set(1, "plain");
+    bm::sparse_vector_serializer<string_vector> serializer;
+    bm::streams_sparse_vector_deserializer<string_vector> reader;
+    std::stringstream stream;
+    bm::streams_encoder out(stream);
+    for (const string_vector* sv : {&source, &plain, &empty})
+        if (!serializer.serialize(*sv, out)) throw std::runtime_error("String sequence write failed");
+    if (!out.finish()) throw std::runtime_error("String sequence finish failed");
+    stream.seekg(0);
+    for (const string_vector* sv : {&source, &plain, &empty})
+        if (!reader.deserialize(restored, stream) || !sv->equal(restored))
+            throw std::runtime_error("String sequence restore failed");
+    cout << "String sparse-vector streaming OK" << endl;
+}
+
+template<class SV>
+void CheckSparseVectorFileSerialization(const SV& source)
+{
+    BVectorTestFile fixture("svfileser");
+    bm::sparse_vector_serializer<SV> serializer;
+    for (unsigned xor_mode = 0; xor_mode < 2; ++xor_mode)
+    for (unsigned bookmarks = 0; bookmarks < 2; ++bookmarks)
+    for (unsigned level = 0; level <= 6; ++level)
+    {
+        // The legacy RAM estimate can under-allocate with level 0 plus XOR.
+        // Exercise all levels without XOR, and XOR with its default level.
+        if (xor_mode && level != 6) continue;
+        serializer.get_bv_serializer().set_compression_level(level);
+        serializer.set_xor_ref(bool(xor_mode));
+        serializer.set_bookmarks(bool(bookmarks), 16);
+        bm::sparse_vector_serial_layout<SV> ram;
+        try { serializer.serialize(source, ram); }
+        catch (const std::exception& e)
+        {
+            cerr << "RAM sparse-vector serialization: size=" << source.size()
+                 << " compressed=" << source.is_compressed()
+                 << " level=" << level << " XOR=" << xor_mode
+                 << " bookmarks=" << bookmarks << ": " << e.what() << endl;
+            throw;
+        }
+        // Run identical checks through file-backed and in-memory streambufs.
+        // Reuse the serializer when switching channels as well as objects.
+        for (unsigned memory_stream = 0; memory_stream < 2; ++memory_stream)
+        {
+        std::fstream disk;
+        std::stringstream memory(std::ios::binary | std::ios::in | std::ios::out);
+        if (!memory_stream)
+            disk.open(fixture.path, std::ios::binary | std::ios::in |
+                                   std::ios::out | std::ios::trunc);
+        std::iostream& file = memory_stream ? static_cast<std::iostream&>(memory)
+                                           : static_cast<std::iostream&>(disk);
+        file.write("prefix", 6);
+        bm::streams_encoder out(file);
+        for (unsigned repeat = 0; repeat < 2; ++repeat)
+        {
+            const size_t begin = out.size();
+            if (!serializer.serialize(source, out) || out.size()-begin != ram.size())
+                throw std::runtime_error("Sparse-vector stream serialization failed");
+        }
+        if (!out.finish()) throw std::runtime_error("Sparse-vector finish failed");
+        file.write("sentinel", 8);
+        file.seekg(6);
+        std::vector<unsigned char> bytes(ram.size());
+        for (unsigned repeat = 0; repeat < 2; ++repeat)
+        {
+            file.read(reinterpret_cast<char*>(bytes.data()), std::streamsize(bytes.size()));
+            if (!file || std::memcmp(bytes.data(), ram.buf(), ram.size()))
+                throw std::runtime_error("Sparse-vector file/RAM bytes differ");
+            SV restored(source.get_null_support());
+            bm::sparse_vector_deserializer<SV> deserializer;
+            deserializer.deserialize(restored, bytes.data());
+            if (!source.equal(restored))
+                throw std::runtime_error("Sparse-vector file round trip differs");
+            const std::streampos next = file.tellg();
+            const std::streampos start = next - std::streamoff(ram.size());
+            bm::streams_sparse_vector_deserializer<SV> stream_reader;
+            file.seekg(start);
+            if (!stream_reader.deserialize(restored, file) || !source.equal(restored) ||
+                file.tellg() != next)
+                throw std::runtime_error("Sparse-vector streaming restore differs");
+            typename bm::sparse_vector_deserializer<SV>::deserialization_index_type index;
+            file.seekg(start);
+            if (!stream_reader.construct_deserialization_index(index, file) || file.tellg() != next)
+                throw std::runtime_error("Sparse-vector streaming index construction failed");
+            CycleSparseIndex(index);
+            stream_reader.set_deserialization_index(&index);
+            stream_reader.set_deserialization_index_use();
+            typename bm::sparse_vector_deserializer<SV>::deserialization_index_type ram_index;
+            deserializer.construct_deserialization_index(ram_index, bytes.data());
+            CycleSparseIndex(ram_index);
+            for (unsigned pattern = 0; pattern < 4; ++pattern)
+            {
+                stream_reader.set_deserialization_index(pattern & 1 ? &ram_index : &index);
+                stream_reader.set_deserialization_index_use();
+                typename SV::bvector_type mask;
+                if (source.size())
+                {
+                    if (pattern == 1)
+                    {
+                        // Cover every populated test address without filling the
+                        // enormous empty interval up to 2^40 in the 64-bit suite.
+                        mask.set_range(0, (std::min)(source.size()-1,
+                            typename SV::size_type(1048575)));
+                        mask.set(source.size()-1);
+                    }
+                    if (pattern == 2)
+                    {
+                        mask.set_range(1, 1310);
+                        mask.set_range(65536, 66000);
+                    }
+                    if (pattern == 3) mask.set(source.size()-1);
+                }
+                SV expected(source.get_null_support());
+                deserializer.deserialize(expected, bytes.data(), mask);
+                file.seekg(start);
+                if (!stream_reader.deserialize(restored, file, &mask) ||
+                    !expected.equal(restored) || file.tellg() != next)
+                    throw std::runtime_error("Sparse-vector streaming gather differs");
+            }
+        }
+        char trailer[8];
+        file.read(trailer, 8);
+        if (!file || std::memcmp(trailer, "sentinel", 8))
+            throw std::runtime_error("Sparse-vector trailing payload differs");
+        // Header patching must preserve the prefix and exact total length.
+        if (file.peek() != std::char_traits<char>::eof())
+            throw std::runtime_error("Sparse-vector stream has unexpected trailing bytes");
+        file.clear();
+        file.seekg(0);
+        char prefix[6];
+        file.read(prefix, 6);
+        if (!file || std::memcmp(prefix, "prefix", 6))
+            throw std::runtime_error("Sparse-vector stream prefix differs");
+        }
+    }
+}
+
+void SparseVectorFileSerializationTest()
+{
+    StringSparseVectorStreamTest();
+    bm::str_sparse_vector<char, bvect, 16> strings(bm::use_null);
+    strings.set(0, ""); strings.set(3, "alpha"); strings.set(129, "beta");
+    CheckSparseVectorFileSerialization(strings);
+    strings.remap();
+    CheckSparseVectorFileSerialization(strings);
+    cout << "Sparse-vector file and stringstream serialization" << endl;
+    sparse_vector_u32 source(bm::use_null);
+    CheckSparseVectorFileSerialization(source);
+    rsc_sparse_vector_u32 compressed;
+    CheckSparseVectorFileSerialization(compressed);
+    for (unsigned i = 0; i < 4096; ++i)
+        source.set(i * 131u, (i * 2654435761u) ^ (i >> 3));
+    source.set(65536, 0);
+#ifdef BM64ADDR
+    source.set(bm::id64_t(1) << 40, 123456);
+#endif
+    CheckSparseVectorFileSerialization(source);
+    compressed.load_from(source);
+    CheckSparseVectorFileSerialization(compressed);
+    source.optimize();
+    CheckSparseVectorFileSerialization(source);
+    sparse_vector_u32 dense;
+    for (unsigned i = 0; i < 1024; ++i) dense.set(i, i & 1u);
+    CheckSparseVectorFileSerialization(dense);
+    bm::sparse_vector_serializer<sparse_vector_u32> serializer;
+    for (auto failure : {SerializationFailBuffer::write_failure,
+                         SerializationFailBuffer::seek_failure})
+    for (bool exceptions : {false, true})
+    {
+        SerializationFailBuffer sink;
+        std::ostream stream(&sink);
+        bm::streams_encoder out(stream);
+        sink.fail = failure;
+        if (exceptions) stream.exceptions(std::ios::failbit | std::ios::badbit);
+        bool threw = false, ok = false;
+        try { ok = serializer.serialize(dense, out); }
+        catch (const std::ios_base::failure&) { threw = true; }
+        if (ok || out.is_good() || threw != exceptions)
+            throw std::runtime_error("Sparse-vector I/O failure handling differs");
+    }
+    // Reuse after failure must not leave a borrowed buffer or XOR attachment.
+    std::ostringstream recovered;
+    bm::streams_encoder recovered_out(recovered);
+    if (!serializer.serialize(dense, recovered_out) || !recovered_out.finish())
+        throw std::runtime_error("Sparse-vector serializer recovery failed");
+    const std::string blob = recovered.str();
+    bm::streams_sparse_vector_deserializer<sparse_vector_u32> input_reader;
+    sparse_vector_u32 restored;
+    for (size_t cut : {size_t(1), size_t(32), blob.size()-1})
+    {
+        std::istringstream truncated(blob.substr(0, cut));
+        if (input_reader.deserialize(restored, truncated))
+            throw std::runtime_error("Truncated sparse-vector stream accepted");
+    }
+    for (bool seek_failure : {false, true})
+    for (bool exceptions : {false, true})
+    {
+        DeserializationFailBuffer buffer(blob);
+        buffer.fail_seek = seek_failure;
+        buffer.fail_read = !seek_failure;
+        std::istream input(&buffer);
+        if (exceptions) input.exceptions(std::ios::failbit | std::ios::badbit);
+        bool threw = false, ok = false;
+        try { ok = input_reader.deserialize(restored, input); }
+        catch (const std::ios_base::failure&) { threw = true; }
+        if (ok || threw != exceptions)
+            throw std::runtime_error("Sparse-vector input failure handling differs");
+    }
+    std::istringstream good_input(blob);
+    if (!input_reader.deserialize(restored, good_input) || !dense.equal(restored))
+        throw std::runtime_error("Sparse-vector reader recovery failed");
+    cout << "Sparse-vector file and stringstream serialization OK" << endl;
+}
+
+void BVectorStreamSerializationTest()
+{
+    cout << "BVectorStreamSerializationTest()" << endl;
+    typedef bm::serializer<bvect> serializer_type;
+    std::vector<bvect> cases(9);
+    cases[1].resize(65536 * 520); cases[1].set();
+    cases[2].resize(123456); cases[2].set(17); cases[2].set(123455);
+    cases[3].set_range(65530, 65540);
+    cases[3].set_range(65536 * 3, 65536 * 6 - 1);
+    cases[3].set(65536 * 12 + 1);
+    // Near the sparse-superblock cardinality limit; also tests buffer growth.
+    for (unsigned i = 0; i < 65535; ++i)
+        cases[4].set(i * 256 + (i % 251));
+    unsigned rnd = 1;
+    for (unsigned block = 0; block < 520; ++block)
+        for (unsigned j = 0; j < 512; ++j)
+        {
+            rnd = rnd * 1664525u + 1013904223u;
+            cases[5].set(block * 65536 + (rnd >> 16));
+        }
+    cases[6] = cases[5]; cases[6].resize(65536 * 520); cases[6].invert();
+    cases[7].set(0);
+#ifndef BM64ADDR
+    cases[7].set(bm::id_max - 1);
+#endif
+    cases[8] = cases[3]; cases[8].optimize();
+#ifdef BM64ADDR
+    cases[7].set(bm::id64_t(1) << 40);
+#endif
+    const unsigned intervals[] = {0, 16, 64, 256};
+    BVectorTestFile fixture("fileser");
+    const std::string& path = fixture.path;
+    struct remove_file
+    {
+        std::string path;
+        ~remove_file() { std::remove(path.c_str()); }
+    } cleanup = {path};
+    serializer_type ser; // deliberately reused across objects and channels
+    for (unsigned level = 0; level <= 6; ++level)
+    for (unsigned interval : intervals)
+    {
+        ser.set_compression_level(level);
+        ser.set_bookmarks(interval != 0, interval);
+        ser.gap_length_serialization((level & 1) != 0);
+        ser.byte_order_serialization((level & 2) == 0);
+        std::fstream file(path, std::ios::binary | std::ios::in |
+                               std::ios::out | std::ios::trunc);
+        assert(file.good());
+        file.write("prefix", 6); // channel origin need not be file offset zero
+        bm::streams_encoder out(file);
+        std::vector<unsigned char> expected;
+        std::vector<size_t> offsets;
+        for (const bvect& bv : cases)
+        {
+            bvect::statistics st; bv.calc_stat(&st);
+            serializer_type::buffer ram;
+            ram.resize(st.max_serialize_mem);
+            size_t count = ser.serialize(bv, ram.data(), ram.size());
+            offsets.push_back(expected.size());
+            expected.insert(expected.end(), ram.data(), ram.data() + count);
+            assert(ser.serialize(bv, out));
+            assert(out.size() == expected.size());
+        }
+        assert(out.finish()); assert(out.finish());
+        // Submitting more after finish is explicitly supported.
+        serializer_type::buffer tail;
+        bvect::statistics st; cases[2].calc_stat(&st);
+        tail.resize(st.max_serialize_mem);
+        size_t n = ser.serialize(cases[2], tail.data(), tail.size());
+        assert(ser.serialize_and_finish(cases[2], out));
+        expected.insert(expected.end(), tail.data(), tail.data() + n);
+        file.seekg(0, std::ios::end);
+        assert(size_t(file.tellg()) == expected.size() + 6);
+        file.seekg(0);
+        char prefix[6]; file.read(prefix, 6);
+        assert(!memcmp(prefix, "prefix", 6));
+        std::vector<unsigned char> actual(expected.size());
+        file.read(reinterpret_cast<char*>(actual.data()), std::streamsize(actual.size()));
+        assert(file.good()); assert(actual == expected);
+        for (size_t i = 0; i < cases.size(); ++i)
+        {
+            bvect restored;
+            bm::deserialize(restored, actual.data() + offsets[i]);
+            assert(restored == cases[i]);
+            const size_t blob_size = (i + 1 < offsets.size() ? offsets[i + 1] :
+                                     expected.size() - n) - offsets[i];
+            CheckStreamDeserialization(cases[i], actual.data() + offsets[i],
+                blob_size, path + ".read", level == 6 || (level == 0 && interval == 64));
+            if (level == 6 && interval == 16)
+                CheckFileSerialization(cases[i], ser, actual.data() + offsets[i], blob_size);
+        }
+    }
+    // Logical-operation tests also pass frozen operands. Verification copies
+    // must be writable while the source retains its read-only state.
+    {
+        bvect frozen(cases[2], bm::finalization::READONLY);
+        serializer_type::buffer ram;
+        ser.serialize(frozen, ram);
+        CheckFileSerialization(frozen, ser, ram.data(), ram.size());
+        CheckStreamDeserialization(frozen, ram.data(), ram.size(), path, true);
+        assert(frozen.is_ro()); assert(frozen == cases[2]);
+    }
+    // Reference compression uses the same RAM helpers and patch boundaries.
+    {
+        bvect ref = cases[5], target = ref;
+        target.flip(100); target.set(65536 * 521 + 3);
+        serializer_type::bv_ref_vector_type refs;
+        refs.add(&target, 0); refs.add(&ref, 1);
+        serializer_type::xor_sim_model_type model;
+        serializer_type xs;
+        xs.set_ref_vectors(&refs);
+        bm::xor_sim_params params;
+        xs.compute_sim_model(model, refs, params);
+        xs.set_sim_model(&model);
+        xs.set_curr_ref_idx(0);
+        xs.set_bookmarks(true, 4);
+        serializer_type::buffer ram;
+        xs.serialize(target, ram);
+        std::fstream file(path, std::ios::binary | std::ios::in |
+                               std::ios::out | std::ios::trunc);
+        bm::streams_encoder out(file);
+        assert(xs.serialize_and_finish(target, out));
+        assert(out.size() == ram.size());
+        file.seekg(0);
+        std::vector<unsigned char> bytes(ram.size());
+        file.read(reinterpret_cast<char*>(bytes.data()), std::streamsize(bytes.size()));
+        assert(file.good()); assert(!memcmp(bytes.data(), ram.data(), ram.size()));
+        bvect restored;
+        bm::deserialize(restored, bytes.data(), 0, &refs);
+        assert(restored == target);
+        CheckStreamDeserialization(target, bytes.data(), bytes.size(),
+                                   path + ".read", true, &refs);
+    }
+    // Fail without throwing, and with ostream exceptions enabled.
+    for (bool throwing : {false, true})
+    for (auto failure : {SerializationFailBuffer::write_failure,
+                         SerializationFailBuffer::seek_failure,
+                         SerializationFailBuffer::finish_failure})
+    {
+        SerializationFailBuffer sink;
+        std::ostream os(&sink);
+        if (throwing) os.exceptions(std::ios::badbit | std::ios::failbit);
+        bm::streams_encoder out(os);
+        sink.fail = failure;
+        bool ok = false, caught = false;
+        try
+        {
+            ok = ser.serialize(cases[2], out);
+            if (failure == SerializationFailBuffer::finish_failure)
+            { assert(ok); ok = out.finish(); }
+        }
+        catch (const std::ios_base::failure&) { caught = true; }
+        assert(!ok || caught);
+        assert(!out.is_good());
+        assert(caught == throwing);
+        // Clearing the stream cannot silently clear the channel's sticky error.
+        os.clear();
+        assert(!out.is_good());
+        assert(!ser.serialize(cases[2], out));
+    }
+    BVectorStreamDeserializationFailureTest();
+    cout << "BVectorStreamSerializationTest() OK" << endl;
+}
+
 static
 void SerializationBufferTest()
 {
@@ -18027,6 +19060,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
 
@@ -18068,6 +19102,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_gap_bienc] == 1);
@@ -18104,6 +19139,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_arrgap_egamma] == 1 || cstat[bm::set_block_gap_egamma] == 1 || cstat[bm::set_block_gap_egamma_v3] == 1);
@@ -18139,6 +19175,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_gap_bienc] == 1 );
@@ -18169,6 +19206,7 @@ void SerializationCompressionLevelsTest()
             size_t drange_size = sermem_buf.size();
             bv_ser.set_bic_dynamic_range_reduce(false);
             bv_ser.serialize(bv, sermem_buf, 0);
+            CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
             const bvect::size_type* cstat1 = bv_ser.get_compression_stat();
             assert(cstat1[bm::set_block_arrgap_bienc_v2] == 1);
@@ -18214,6 +19252,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
@@ -18243,6 +19282,7 @@ void SerializationCompressionLevelsTest()
             size_t drange_size = sermem_buf.size();
             bv_ser.set_bic_dynamic_range_reduce(false);
             bv_ser.serialize(bv, sermem_buf, 0);
+            CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
             const bvect::size_type* cstat1 = bv_ser.get_compression_stat();
             assert(cstat1[bm::set_block_arrgap_bienc_inv_v2] >= 1);
@@ -18289,6 +19329,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_gap_egamma_v3] == 1);
@@ -18324,6 +19365,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_bit_1bit] == 1);
@@ -18359,6 +19401,7 @@ void SerializationCompressionLevelsTest()
        bm::serializer<bvect>::buffer sermem_buf;
 
        bv_ser.serialize(bv, sermem_buf, 0);
+       CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        const bvect::size_type* cstat = bv_ser.get_compression_stat();
        assert(cstat[bm::set_sblock_bienc_v3] == 0);
 
@@ -18389,6 +19432,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
@@ -18430,6 +19474,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
@@ -18468,6 +19513,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_sblock_bienc] >= 1 || cstat[bm::set_sblock_bienc_v3] >= 1);
@@ -18513,6 +19559,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
 
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         (void) cstat;
@@ -18950,6 +19997,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_bit_1bit] == 1);
@@ -18981,6 +20029,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[set_block_arrbit_inv] == 1);
@@ -19012,6 +20061,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_bit_0runs] == 1);
@@ -19044,6 +20094,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_bit_0runs] == 1);
@@ -19075,6 +20126,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_arrbit] == 1);
@@ -19107,6 +20159,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_arrgap] == 1);
@@ -19142,6 +20195,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[set_block_gap_egamma_v3] == 1);
@@ -19176,6 +20230,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[set_block_arrgap_egamma_inv] == 1);
@@ -19218,6 +20273,7 @@ void SerializationCompressionLevelsTest()
                 bv_ser.set_compression_level(4);
                 bm::serializer<bvect>::buffer sermem_buf;
                 bv_ser.serialize(bv, sermem_buf, 0);
+                CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
                 //const bvect::size_type* cstat = bv_ser.get_compression_stat();
                 //assert(cstat[bm::set_block_bit_0runs] == 1);
                 l4size= sermem_buf.size();
@@ -19231,6 +20287,7 @@ void SerializationCompressionLevelsTest()
 
             bm::serializer<bvect>::buffer sermem_buf;
             bv_ser.serialize(bv, sermem_buf, 0);
+            CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
             size_t l5size = sermem_buf.size();
             size_t raw_int = bc * sizeof(bm::word_t);
             assert(raw_int > l5size);
@@ -19299,6 +20356,7 @@ void SerializationCompressionLevelsTest()
 
                 bm::serializer<bvect>::buffer sermem_buf;
                 bv_ser.serialize(bv, sermem_buf, 0);
+                CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
                 const bvect::size_type* cstat = bv_ser.get_compression_stat();
                 assert(cstat[bm::set_block_bit_0runs] == 1 || cstat[bm::set_block_bit_digest0]);
                 l4size= sermem_buf.size();
@@ -19312,6 +20370,7 @@ void SerializationCompressionLevelsTest()
 
             bm::serializer<bvect>::buffer sermem_buf;
             bv_ser.serialize(bv, sermem_buf, 0);
+            CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
             size_t l5size = sermem_buf.size();
             size_t raw_int = bc * sizeof(bm::word_t);
             assert(raw_int >= l5size);
@@ -19363,6 +20422,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_gap_bienc] == 1);
@@ -19397,6 +20457,7 @@ void SerializationCompressionLevelsTest()
         bm::serializer<bvect>::buffer sermem_buf;
 
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
        
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_arr_bienc_inv_v3s] == 1);
@@ -19433,6 +20494,7 @@ void SerializationCompressionLevelsTest()
 
         bm::serializer<bvect>::buffer sermem_buf;
         bv_ser.serialize(bv, sermem_buf, 0);
+        CheckFileSerialization(bv, bv_ser, sermem_buf.data(), sermem_buf.size());
  
         const bvect::size_type* cstat = bv_ser.get_compression_stat();
         assert(cstat[bm::set_block_gap_bienc_v3] == 1);
@@ -20540,6 +21602,7 @@ void TestSparseVectorSerialization2()
         }
         sv_serializer.enable_xor_compression();
         sv_serializer.serialize(sv1i, sv_lay1);
+        CheckSparseVectorStringStream(sv1i);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_xor_ref32]>=1);
@@ -20626,16 +21689,19 @@ void TestSparseVectorSerialization2()
             sv_serializer.set_sim_model(&sim_model);
 
             sv_serializer.serialize(sv1i, sv_lay1);
+            CheckSparseVectorStringStream(sv1i);
             {
                 const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
                 assert(cstat[bm::set_block_ref_eq]==0);
             }
             svi_serializer.serialize(sv2i, sv_lay2);
+            CheckSparseVectorStringStream(sv2i);
             {
                 const bvect::size_type* cstat = svi_serializer.get_bv_serializer().get_compression_stat();
                 assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
             }
             sv_serializer.serialize(sv3i, sv_lay3);
+            CheckSparseVectorStringStream(sv3i);
             {
                 const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
                 assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
@@ -20707,6 +21773,7 @@ void TestSparseVectorSerialization2()
             {
                 sv_serializer.set_xor_ref(false); // disable XOR compression
                 sv_serializer.serialize(sv1, sv_lay);
+                CheckSparseVectorStringStream(sv1);
             }
 
             buf = sv_lay.buf();
@@ -20758,6 +21825,7 @@ void TestSparseVectorSerialization2()
         {
             sv_serializer.set_xor_ref(true); // enable XOR compression
             sv_serializer.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
         }
 
         buf = sv_lay.buf();
@@ -28900,6 +29968,7 @@ void TestSparseVectorDeserializationIndexGather()
             {
                 sv_deserializer_type sv_deserial;
                 sv_deserial.construct_deserialization_index(deserialization_index, buf);
+                CycleSparseIndex(deserialization_index);
 
                 unsigned non_empty_rows = 0;
                 size_t index_entry_count = deserialization_index.count_offsets(&non_empty_rows);
@@ -32954,6 +34023,7 @@ void TestSparseVectorSerial()
             } // for k
 
             sv_ser.serialize(sv, sv_lay);
+            CheckSparseVectorStringStream(sv);
             const bvect::size_type* cstat = sv_ser.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_xor_chain]>=1);
             {
@@ -32981,6 +34051,7 @@ void TestSparseVectorSerial()
                 sv1.push_back(i + 1);
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
             sv_ser.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
             const unsigned char* buf = sv_lay.buf();
 
             sparse_vector_u32::bvector_type bv_mask;
@@ -33020,6 +34091,7 @@ void TestSparseVectorSerial()
             }
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
             sv_ser.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
             const unsigned char* buf = sv_lay.buf();
 
             {
@@ -33090,6 +34162,7 @@ void TestSparseVectorSerial()
             sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
 
             sv_ser.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
             const unsigned char* buf = sv_lay.buf();
 
             {
@@ -33288,6 +34361,7 @@ void TestSignedSparseVectorSerial()
             } // for k
 
             sv_ser.serialize(sv, sv_lay);
+            CheckSparseVectorStringStream(sv);
             const bvect::size_type* cstat = sv_ser.get_bv_serializer().get_compression_stat();
             assert(cstat[bm::set_block_xor_chain]>=1);
             {
@@ -33327,6 +34401,7 @@ void TestSignedSparseVectorSerial()
                 sv1.push_back(0-(i + 1));
             sparse_vector_serial_layout<sparse_vector_i32> sv_lay;
             sv_ser.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
             const unsigned char* buf = sv_lay.buf();
 
             sparse_vector_u32::bvector_type bv_mask;
@@ -33359,6 +34434,7 @@ void TestSignedSparseVectorSerial()
             }
             sparse_vector_serial_layout<sparse_vector_i32> sv_lay;
             sv_ser.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
             const unsigned char* buf = sv_lay.buf();
 
             //bm::sparse_vector_deserializer<sparse_vector_u32> sv_deserial;
@@ -33425,6 +34501,7 @@ void TestSignedSparseVectorSerial()
             sparse_vector_serial_layout<sparse_vector_i32> sv_lay;
 
             sv_ser.serialize(sv1, sv_lay);
+            CheckSparseVectorStringStream(sv1);
             const unsigned char* buf = sv_lay.buf();
 
             {
@@ -39070,6 +40147,7 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
+        CheckSparseVectorStringStream(str_sv1);
 
         std::vector<unsigned char> buf_v;
         {
@@ -39081,6 +40159,7 @@ void TestStrSparseVectorSerial()
         {
             sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
             bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
+            CheckSparseVectorStringStream(str_sv1);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -39136,6 +40215,7 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
+        CheckSparseVectorStringStream(str_sv1);
 
         std::vector<unsigned char> buf_v;
         {
@@ -39147,6 +40227,7 @@ void TestStrSparseVectorSerial()
         {
             sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
             bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
+            CheckSparseVectorStringStream(str_sv1);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -39203,10 +40284,12 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
+        CheckSparseVectorStringStream(str_sv1);
 
         {
             sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
             bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
+            CheckSparseVectorStringStream(str_sv1);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -39273,7 +40356,9 @@ void TestStrSparseVectorSerial()
         assert(str_serializer.is_xor_ref());
 
         str_serializer.serialize(vec_A, *layout_a.get());
+        CheckSparseVectorStringStream(vec_A);
         str_serializer.serialize(vec_B, *layout_b.get());  //<-- runs into assertion
+        CheckSparseVectorStringStream(vec_B);
     }
 
     {
@@ -39297,12 +40382,14 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
+        CheckSparseVectorStringStream(str_sv1);
 
         std::vector<unsigned char> buf_v_prev;
         for (unsigned pass = 0; pass < 10; ++pass)
         {
             sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
             bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
+            CheckSparseVectorStringStream(str_sv1);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -39372,6 +40459,7 @@ void TestStrSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay;
         bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay, tb);
+        CheckSparseVectorStringStream(str_sv1);
 
         std::vector<unsigned char> buf_v;
         {
@@ -39382,6 +40470,7 @@ void TestStrSparseVectorSerial()
         {
             sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
             bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
+            CheckSparseVectorStringStream(str_sv1);
             const unsigned char* buf1 = sv_lay.buf();
             const unsigned char* buf2 = sv_lay2.buf();
             auto sz1 = sv_lay.size();
@@ -39543,6 +40632,7 @@ void TestStrSparseVectorSerial()
         sv_serializer.set_bookmarks(true, 6);
 
         sv_serializer.serialize(str_sv1, sv_lay);
+        CheckSparseVectorStringStream(str_sv1);
 
         std::vector<unsigned char> buf_v;
         {
@@ -39672,6 +40762,7 @@ void TestStrSparseVectorSerial()
         assert(sv_serializer.is_xor_ref());
 
         sv_serializer.serialize(sv1i, sv_lay1);
+        CheckSparseVectorStringStream(sv1i);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]);
@@ -39680,6 +40771,7 @@ void TestStrSparseVectorSerial()
 
         }
         sv_serializer.serialize(sv2i, sv_lay2);
+        CheckSparseVectorStringStream(sv2i);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
@@ -39687,6 +40779,7 @@ void TestStrSparseVectorSerial()
             assert(cstat[bm::set_block_ref_eq]>=1 || cstat[bm::set_block_xor_ref32] >= 1);
         }
         sv_serializer.serialize(sv3i, sv_lay3);
+        CheckSparseVectorStringStream(sv3i);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
             //assert(cstat[bm::set_block_ref_eq]>=1);
@@ -46736,6 +47829,7 @@ void TestCompressSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
         bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        CheckSparseVectorStringStream(csv1);
         const unsigned char* buf = sv_lay.buf();
         auto sz = sv_lay.size();
         assert(sz == 2);
@@ -46773,6 +47867,7 @@ void TestCompressSparseVectorSerial()
         BM_DECLARE_TEMP_BLOCK(tb)
         sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
         bm::sparse_vector_serialize<rsc_sparse_vector_u32>(csv1, sv_lay, tb);
+        CheckSparseVectorStringStream(csv1);
         const unsigned char* buf = sv_lay.buf();
 
         sparse_vector_u32::bvector_type bv_mask;
@@ -46869,6 +47964,7 @@ void TestCompressSparseVectorSerial()
         {
             cout << "\nPASS=" << pass << endl;
             sv_serializer.serialize(csv1, sv_lay);
+            CheckSparseVectorStringStream(csv1);
             const unsigned char* buf = sv_lay.buf();
 
             {
@@ -47205,7 +48301,7 @@ void show_help()
         << "-llevel (or -ll)      - low level tests" << endl
         << "-support (or -s)      - support containers " << endl
         << "-bvbasic (or -bvb)    - bit-vector basic " << endl
-        << "-bvser                - bit-vector serialization " << endl
+        << "-bvser (-bvset)       - bit-vector serialization " << endl
         << "-bvops (-bvo, -bvl)   - bit-vector logical operations" << endl
         << "-bvshift (or -bvs)    - bit-vector shifts " << endl
         << "-rankc (or -rc)       - rank-compress " << endl
@@ -47218,6 +48314,11 @@ void show_help()
         << "-csv1a0,-csv1a1,-csv1a2 - compressed sparse-vector GT scan split groups" << endl
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
+        << "-fileser              - test file serialization byte compatibility" << endl
+        << "-svfileser            - sparse-vector file streaming serialization" << endl
+        << "-svindex             - sparse-vector index persistence" << endl
+        << "-svfstream            - float file/stringstream serialization and gather" << endl
+        << "-strsvstream          - disk-free string streaming round trips and gather" << endl
         << "-ser                  - test all serialization" << endl
         << "-allsvser             - test serailization of sparse vectors (all)" << endl
         << "-sort                 - sparse vector sort tests" << endl
@@ -47265,6 +48366,11 @@ bool         is_csv1b = false;
 bool         is_str_sv = false;
 bool         is_c_coll = false;
 bool         is_ser = false;
+bool         is_file_ser = false;
+bool         is_sv_file_ser = false;
+bool         is_str_sv_stream = false;
+bool         is_svf_stream = false;
+bool         is_sv_index = false;
 bool         is_allsvser = false;
 bool         is_sv_sort = false;
 bool         is_svf = false;
@@ -47324,6 +48430,32 @@ int parse_args(int argc, char *argv[])
             is_bvb1 = true;
             continue;
         }
+        if (arg == "-fileser")
+        {
+            is_all = false;
+            is_file_ser = true;
+            continue;
+        }
+        if (arg == "-svfileser")
+        {
+            is_all = false;
+            is_sv_file_ser = true;
+            continue;
+        }
+        if (arg == "-svindex")
+        {
+            is_all = false; is_sv_index = true; continue;
+        }
+        if (arg == "-svfstream")
+        {
+            is_all = false; is_svf_stream = true; continue;
+        }
+        if (arg == "-strsvstream")
+        {
+            is_all = false;
+            is_str_sv_stream = true;
+            continue;
+        }
         if (arg == "-ser")
         {
             is_all = false;
@@ -47336,7 +48468,7 @@ int parse_args(int argc, char *argv[])
             is_allsvser = true;
             continue;
         }
-        if (arg == "-bvser")
+        if (arg == "-bvser" || arg == "-bvset")
         {
             is_all = false;
             is_bvser = true;
@@ -48210,6 +49342,271 @@ void test_str_sv_des_fnc()
     }
 }
 
+// Compare the streaming format and both readers without touching the disk by default.
+template<class SV>
+void CheckFloatStream(const SV& source, bool file = false, bool gather = false,
+                      bm::sparse_vector_float_serializer<SV>* configured = nullptr,
+                      bm::sparse_vector_float_serial_layout<SV>* reference = nullptr)
+{
+    // Configured stress cases retain their XOR/bookmark settings and compare
+    // against the exact RAM BLOB already produced by the surrounding test.
+    assert(bool(configured) == bool(reference));
+    bm::sparse_vector_float_serializer<SV> local_serializer;
+    local_serializer.set_bookmarks(true, 16);
+    auto& serializer = configured ? *configured : local_serializer;
+    for (unsigned mode = 0; mode < ((!configured && gather) ? 2u : 1u); ++mode)
+    {
+        bm::sparse_vector_float_serial_layout<SV> local_ram;
+        if (!configured)
+        {
+            serializer.set_xor_ref(bool(mode));
+            serializer.serialize(source, local_ram);
+        }
+        auto& ram = reference ? *reference : local_ram;
+        std::stringstream memory(std::ios::in | std::ios::out | std::ios::binary);
+        std::fstream disk;
+        std::unique_ptr<BVectorTestFile> fixture;
+        if (file)
+        {
+            fixture.reset(new BVectorTestFile("svfstream"));
+            disk.open(fixture->path, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+        }
+        std::iostream& io = file ? static_cast<std::iostream&>(disk) : memory;
+        io.write("prefix", 6);
+        bm::streams_encoder out(io);
+        for (unsigned repeat = 0; repeat < 2; ++repeat)
+            if (!serializer.serialize(source, out)) throw std::runtime_error("Float stream write failed");
+        if (!out.finish()) throw std::runtime_error("Float stream finish failed");
+        io.write("sentinelPAYLOAD", 15); io.flush();
+        io.seekg(6);
+        std::string bytes(ram.size(), '\0');
+        io.read(&bytes[0], std::streamsize(bytes.size()));
+        if (!io || std::memcmp(bytes.data(), ram.buf(), ram.size()))
+            throw std::runtime_error("Float stream BLOB differs from RAM");
+        bm::streams_sparse_vector_float_deserializer<SV> reader;
+        bm::sparse_vector_float_deserializer<SV> legacy;
+        SV restored(source.get_null_support());
+        legacy.deserialize(restored, reinterpret_cast<const unsigned char*>(bytes.data()));
+        restored.sync(true, true);
+        if (!source.equal(restored)) throw std::runtime_error("Float legacy restore mismatch");
+        io.seekg(6);
+        for (unsigned repeat = 0; repeat < 2; ++repeat)
+        {
+            if (!reader.deserialize(restored, io)) throw std::runtime_error("Float stream read failed");
+            restored.sync(true, true);
+            if (!source.equal(restored) || io.tellg() != std::streampos(std::streamoff(6 + (repeat+1)*ram.size())))
+                throw std::runtime_error("Float stream restore/position mismatch");
+        }
+        char tail[15]; io.read(tail, 15);
+        if (!io || std::memcmp(tail, "sentinelPAYLOAD", 15)) throw std::runtime_error("Float sentinel mismatch");
+        if (!gather) continue;
+        typename bm::streams_sparse_vector_float_deserializer<SV>::deserialization_index_type indexes[2];
+        legacy.construct_deserialization_index(indexes[0], ram.buf());
+        CycleSparseIndex(indexes[0]);
+        io.seekg(6);
+        if (!reader.construct_deserialization_index(indexes[1], io) ||
+            io.tellg() != std::streampos(std::streamoff(6+ram.size()))) throw std::runtime_error("Float index position mismatch");
+        CycleSparseIndex(indexes[1]);
+        for (unsigned pattern = 0; pattern < 6; ++pattern)
+        {
+            typename SV::bvector_type mask;
+            if (source.size())
+            {
+                if (pattern == 1) mask.set(source.size()-1);
+                if (pattern == 2) mask.set_range(0, 128);
+                if (pattern == 3) { mask.set(1); mask.set(65536); mask.set(source.size()-1); }
+                if (pattern == 4) mask.set_range(0, source.size()-1);
+                if (pattern == 5)
+                {
+                    unsigned seed = 12345;
+                    for (unsigned j = 0; j < 64; ++j)
+                    {
+                        seed = seed * 1664525u + 1013904223u;
+                        mask.set(typename SV::size_type(seed) % source.size());
+                    }
+                }
+            }
+            SV expected(source.get_null_support());
+            legacy.deserialize(expected, ram.buf(), mask); expected.sync(true, true);
+            for (unsigned idx = 0; idx < 3; ++idx)
+            {
+                reader.set_deserialization_index(idx ? &indexes[idx-1] : 0);
+                reader.set_deserialization_index_use(true);
+                io.seekg(6);
+                if (!reader.deserialize(restored, io, &mask)) throw std::runtime_error("Float gather failed");
+                restored.sync(true, true);
+                if (!expected.equal(restored) || io.tellg() != std::streampos(std::streamoff(6+ram.size())))
+                    throw std::runtime_error("Float gather mismatch");
+            }
+        }
+        reader.set_deserialization_index(0);
+        for (size_t cut : {size_t(2), size_t(3+sizeof(size_t)), ram.size()-1})
+        {
+            std::stringstream broken(bytes.substr(0, cut));
+            if (reader.deserialize(restored, broken)) throw std::runtime_error("Float truncation accepted");
+        }
+        std::string bad = bytes;
+        size_t oversized = std::numeric_limits<size_t>::max();
+        std::memcpy(&bad[3], &oversized, sizeof(oversized));
+        std::stringstream broken(bad);
+        if (reader.deserialize(restored, broken)) throw std::runtime_error("Float invalid length accepted");
+        std::stringstream failed;
+        failed.setstate(std::ios::badbit);
+        bm::streams_encoder failed_out(failed);
+        if (serializer.serialize(source, failed_out)) throw std::runtime_error("Float failed output accepted");
+        std::stringstream throwing(bytes.substr(0, 2));
+        throwing.exceptions(std::ios::failbit | std::ios::badbit);
+        bool caught = false;
+        try { reader.deserialize(restored, throwing); }
+        catch (const std::ios_base::failure&) { caught = true; }
+        if (!caught) throw std::runtime_error("Float stream exception missing");
+        io.clear(); io.seekg(6);
+        if (!reader.deserialize(restored, io)) throw std::runtime_error("Float reader recovery failed");
+        if (file)
+        {
+            disk.close();
+            std::filesystem::resize_file(fixture->path, 6 + ram.size() - 1);
+            std::ifstream truncated(fixture->path, std::ios::binary);
+            truncated.seekg(6);
+            if (reader.deserialize(restored, truncated)) throw std::runtime_error("Float truncated file accepted");
+        }
+    }
+}
+
+void SparseVectorIndexPersistenceTest()
+{
+    using index_type = bm::sparse_vector_deserialization_index<bvect>;
+    index_type index;
+    CycleSparseIndex(index, true);
+    index.reset(17);
+    // Preserve marker-empty rows carrying only a child BLOB size.
+    index.construct_row(3)->set_serialized_size(123);
+    index.construct_row(8)->set_serialized_size(size_t(1) << 33);
+    CycleSparseIndex(index, true);
+    index_type::plane_offset_vector_type offsets;
+    offsets.resize(17);
+    for (unsigned i = 0; i < 17; ++i) offsets[i] = 0;
+    offsets[3] = 33; offsets[8] = (size_t(1) << 33) + 256;
+    index.set_plane_offsets(offsets, (size_t(1) << 34), (size_t(1) << 33) + 1024);
+    CycleSparseIndex(index, true);
+    auto* row = index.construct_row(12);
+    row->set_serialized_size(size_t(1) << 35);
+    size_t marker = 65537;
+#ifdef BM64ADDR
+    marker += size_t(1) << 33;
+#endif
+    row->add_marker_offset(17); row->add_marker_offset(marker);
+    row->add_bookmark(2, 17);
+    row->add_bookmark_target(2, 5, marker);
+    CycleSparseIndex(index, true);
+    BVectorTestFile fixture("svindex");
+    bm::sparse_vector_deserialization_index_serializer<bvect> serializer;
+    bm::sparse_vector_deserialization_index_deserializer<bvect> deserializer;
+    std::fstream stream(fixture.path, std::ios::in | std::ios::out | std::ios::trunc | std::ios::binary);
+    stream.write("prefix", 6);
+    size_t size = serializer.serialize(index, stream);
+    stream.write("sentinelPAYLOAD", 15); stream.flush(); stream.seekg(6);
+    index_type restored;
+    if (!size || deserializer.deserialize(restored, stream) != size || !index.equal(restored) ||
+        stream.tellg() != std::streampos(std::streamoff(size+6))) throw std::runtime_error("Sparse index file cycle failed");
+    char tail[15]; stream.read(tail, 15);
+    if (!stream || std::memcmp(tail, "sentinelPAYLOAD", 15)) throw std::runtime_error("Sparse index file sentinel mismatch");
+    stream.close();
+    std::filesystem::resize_file(fixture.path, 6 + size - 1);
+    std::ifstream truncated(fixture.path, std::ios::binary); truncated.seekg(6);
+    bool rejected = false;
+    try { deserializer.deserialize(restored, truncated); }
+    catch (const std::logic_error&) { rejected = true; }
+    if (!rejected || !index.equal(restored)) throw std::runtime_error("Sparse index truncated file transaction failed");
+    for (auto failure : {SerializationFailBuffer::write_failure, SerializationFailBuffer::seek_failure})
+    {
+        SerializationFailBuffer buffer; buffer.fail = failure;
+        std::ostream failed(&buffer);
+        if (serializer.serialize(index, failed)) throw std::runtime_error("Sparse index write failure accepted");
+        failed.clear(); failed.exceptions(std::ios::failbit | std::ios::badbit);
+        bool caught = false;
+        try { serializer.serialize(index, failed); }
+        catch (const std::ios_base::failure&) { caught = true; }
+        if (!caught) throw std::runtime_error("Sparse index write exception missing");
+    }
+    bm::sparse_vector<int, bvect> signed_values(bm::use_null);
+    bm::sparse_vector<unsigned, bvect> unsigned_values(bm::use_null);
+    bm::rsc_sparse_vector<unsigned, bm::sparse_vector<unsigned, bvect>> ranked;
+    bm::str_sparse_vector<char, bvect, 16> strings(bm::use_null);
+    for (unsigned i = 0; i < 16; ++i)
+    {
+        bvect::size_type at = 65537 * i;
+#ifdef BM64ADDR
+        at += bvect::size_type(1) << 40;
+#endif
+        signed_values.set(at, -int(i+1)); unsigned_values.set(at, i+1); ranked.set(at, i+1);
+        // Keep dictionary construction bounded in the 64-bit smoke test.
+        strings.set(i * 65537, i & 1 ? "alpha" : "beta");
+    }
+    ranked.sync(); strings.remap();
+    CheckSparseVectorStringStream(signed_values, true);
+    CheckSparseVectorStringStream(unsigned_values, true);
+    CheckSparseVectorStringStream(ranked, true);
+    CheckSparseVectorStringStream(strings, true);
+    using fvector = bm::sparse_vector_float<bm::sparse_vector<unsigned, bvect>>;
+    bm::sparse_vector_float_deserialization_index<fvector> float_index;
+    CycleSparseIndex(float_index, true);
+    fvector floats(bm::use_null);
+    floats.set(7, -1.25f); floats.set(65539, 2.5f);
+    CheckFloatStream(floats, false, true);
+    bm::sparse_vector_float_serial_layout<fvector> layout;
+    bm::sparse_vector_float_serializer<fvector> fserializer;
+    bm::sparse_vector_float_deserializer<fvector> freader;
+    fserializer.serialize(floats, layout);
+    freader.construct_deserialization_index(float_index, layout.buf());
+    CycleSparseIndex(float_index, true);
+    using ranked_float = bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned, bm::sparse_vector<unsigned, bvect>>>;
+    ranked_float rf; rf.set(7, -1.25f); rf.set(65539, 2.5f); rf.sync(true, true);
+    CheckFloatStream(rf, false, true);
+    std::cout << "Sparse-vector index persistence OK" << std::endl;
+}
+
+void FloatSparseVectorStreamTest()
+{
+    using ordinary = bm::sparse_vector_float<bm::sparse_vector<unsigned, bvect>>;
+    using ranked = bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned, bm::sparse_vector<unsigned, bvect>>>;
+    ordinary plain, nullable(bm::use_null);
+    ranked rsc;
+    CheckFloatStream(plain, false, true);
+    CheckFloatStream(nullable, true, true);
+    CheckFloatStream(rsc, false, true);
+    const unsigned bits[] = {0, 0x80000000u, 0x3f800000u, 0xbf800000u,
+        0x7f800000u, 0xff800000u, 1, 0x7fc12345u, 0x00800000u, 0x7f7fffffu};
+    for (unsigned i = 0; i < sizeof(bits)/sizeof(bits[0]); ++i)
+    {
+        float value; std::memcpy(&value, &bits[i], sizeof(value));
+        bvect::size_type pos = i * 65537;
+#ifdef BM64ADDR
+        pos += bvect::size_type(1) << 40;
+#endif
+        plain.set(pos, value); nullable.set(pos, value); rsc.set(pos, value);
+    }
+    rsc.sync(true, true);
+    ordinary all_null(bm::use_null);
+    all_null.set(100, 1.0f); all_null.clear_range(0, 100, true);
+    CheckFloatStream(all_null, false, true);
+    CheckFloatStream(plain, false, true);
+    CheckFloatStream(nullable, true, true);
+    CheckFloatStream(rsc, true, true);
+    // Exercise the same configured-serializer path used by the large stress matrix.
+    bm::sparse_vector_float_serializer<ordinary> configured;
+    for (bool xor_mode : {false, true})
+    for (unsigned bookmarks : {0u, 64u})
+    {
+        configured.set_xor_ref(xor_mode);
+        configured.set_bookmarks(bookmarks != 0, bookmarks ? bookmarks : 64);
+        bm::sparse_vector_float_serial_layout<ordinary> reference;
+        configured.serialize(nullable, reference);
+        CheckFloatStream(nullable, false, true, &configured, &reference);
+    }
+    std::cout << "Float sparse-vector streaming OK" << std::endl;
+}
+
 typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVecFloat;
 typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, bm::sparse_vector<unsigned int, bvect>>> sparseVecFloatRSC;
 
@@ -49061,6 +50458,7 @@ void StrSparseVectorDeserializationIndexGatherTest()
                 deserialization_index_type deserialization_index;
                 sv_deserializer_type index_deserial;
                 index_deserial.construct_deserialization_index(deserialization_index, buf);
+                CycleSparseIndex(deserialization_index);
                 deserialization_index.optimize();
 
                 if (!is_silent)
@@ -49216,6 +50614,7 @@ void SparseVectorFloatDeserializationIndexGatherTest()
 
                 svf_layout_type layout;
                 serializer.serialize(sv, layout);
+                CheckFloatStream(sv, false, true, &serializer, &layout);
                 const unsigned char* buf = layout.buf();
 
                 sparseVecFloat sv_full(sv.get_null_support());
@@ -49233,6 +50632,7 @@ void SparseVectorFloatDeserializationIndexGatherTest()
                 deserialization_index_type deserialization_index;
                 svf_deserializer_type index_deserial;
                 index_deserial.construct_deserialization_index(deserialization_index, buf);
+                CycleSparseIndex(deserialization_index);
                 deserialization_index.optimize();
 
                 if (!is_silent)
@@ -49458,6 +50858,7 @@ void SparseVectorFloatRSCDeserializationIndexGatherTest()
 
             svf_layout_type layout;
             serializer.serialize(sv, layout);
+            CheckFloatStream(sv, false, true, &serializer, &layout);
             const unsigned char* buf = layout.buf();
 
             sparseVecFloatRSC sv_full;
@@ -49475,6 +50876,7 @@ void SparseVectorFloatRSCDeserializationIndexGatherTest()
             deserialization_index_type deserialization_index;
             svf_deserializer_type index_deserial;
             index_deserial.construct_deserialization_index(deserialization_index, buf);
+            CycleSparseIndex(deserialization_index);
             deserialization_index.optimize();
 
             if (!is_silent)
@@ -49972,6 +51374,7 @@ void SparseVecFloatSerializeTest()
     bm::sparse_vector_float_serial_layout<sparseVecFloat> testLayout;
     
     bm::sparse_vector_float_serialize(testSVF, testLayout);
+    CheckFloatStream(testSVF, false, true);
 
     const unsigned char* buf = testLayout.buf();
     bm::sparse_vector_float_deserialize(testSVF, buf);
@@ -49992,6 +51395,7 @@ void SparseVecFloatSerializeTest()
     testSVF2.optimize(tb);
     bm::sparse_vector_float_serial_layout<sparseVecFloat> testLayout2;
     bm::sparse_vector_float_serialize(testSVF2, testLayout2);
+    CheckFloatStream(testSVF2, false, true);
 
     buf = testLayout2.buf();
     bm::sparse_vector_float_deserializer<sparseVecFloat> testDeserializer;
@@ -50340,6 +51744,7 @@ void SparseVecFloatStressTests(){
 
         bm::sparse_vector_float_serial_layout<sparseVecFloat> sv_lay;
         bm::sparse_vector_float_serialize(sv, sv_lay);
+        CheckFloatStream(sv, false, true);
 
         sparseVecFloat sv_restored(bm::use_null);
         const unsigned char* buf = sv_lay.buf();
@@ -50393,6 +51798,7 @@ void SparseVecFloatSerialStressTests()
 
         bm::sparse_vector_float_serial_layout<sparseVecFloat> testLayout;
         bm::sparse_vector_float_serialize(sv, testLayout);
+        CheckFloatStream(sv, false, true);
 
         // deserialize into a fresh vector
         sparseVecFloat sv_restored;
@@ -50429,6 +51835,7 @@ void SparseVecFloatSerialStressTests()
 
         bm::sparse_vector_float_serial_layout<sparseVecFloat> testLayout;
         bm::sparse_vector_float_serialize(sv, testLayout);
+        CheckFloatStream(sv, false, true);
 
         // deserialize into a fresh vector
         sparseVecFloat sv_restored;
@@ -50493,6 +51900,7 @@ void SparseVecFloatSerialStressTests()
 
         bm::sparse_vector_float_serial_layout<sparseVecFloatRSC> testLayout;
         bm::sparse_vector_float_serialize(sv, testLayout);
+        CheckFloatStream(sv, false, true);
         
         sparseVecFloatRSC sv_restored;
         const unsigned char* buf = testLayout.buf();
@@ -52164,6 +53572,7 @@ return 0;
     BVectorDeserializationIndexSerializationTest();
     return 0;
 */
+    
     if (is_all || is_low_level)
     {
         TestNibbleArr();
@@ -52838,6 +54247,37 @@ return 0;
          CheckAllocLeaks(false);
 
          ReportTestBlockDone("-strsv");
+    }
+
+    if (is_sv_index || is_all)
+    {
+        SparseVectorIndexPersistenceTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-svindex");
+    }
+    if (is_svf_stream || is_all)
+    {
+        FloatSparseVectorStreamTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-svfstream");
+    }
+    if (is_str_sv_stream)
+    {
+        StringSparseVectorStreamTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-strsvstream");
+    }
+    if (is_sv_file_ser || is_file_ser || is_ser || is_all || is_allsvser)
+    {
+        SparseVectorFileSerializationTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-svfileser");
+    }
+    if (is_file_ser || is_ser || is_all || is_bvser)
+    {
+        BVectorStreamSerializationTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-fileser");
     }
 
     if (is_ser || is_allsvser)
