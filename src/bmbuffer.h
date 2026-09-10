@@ -780,7 +780,7 @@ public:
      */
     void free() BMNOEXCEPT
     {
-        buffer_.free_buffer();
+        buffer_.release();
         rows_ = 0; cols_ = 0;
     }
 

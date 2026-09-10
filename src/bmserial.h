@@ -44,13 +44,13 @@ For more information please visit:  http://bitmagic.io
 
 
 
+#include "bmdef.h"
 #include "encoding.h"
 #include "bmfunc.h"
 #include "bmtrans.h"
 #include "bmalgo.h"
 #include "bmutil.h"
 #include "bmbuffer.h"
-#include "bmdef.h"
 #include "bmxor.h"
 
 namespace bm
@@ -189,7 +189,7 @@ public:
                    const statistics_type* bv_stat = 0);
     
     /**
-        Bitvector serialization into buffer object (resized automatically)
+        bvector serialization into buffer object (resized automatically)
         Input bit-vector gets optimized and then destroyed, content is
         NOT guaranteed after this operation.
         Effectively it moves data into the buffer.
@@ -295,7 +295,33 @@ public:
     void set_curr_ref_idx(size_type ref_idx) BMNOEXCEPT;
 
 
+    /** Serialize to a buffered output channel. Success means accepted, not
+        completed: the caller must call out.finish() to observe deferred errors.
+        The channel borrows working memory only for this call. flush(), patch()
+        and unbind_buffer() must retain no references to borrowed bytes, even
+        on failure. Storage exceptions propagate outside the RAM coding helpers.
+
+        OUT protocol (see streams_encoder in bmfio.h):
+        - bind_buffer(ptr, capacity), unbind_buffer(): non-throwing borrow/release.
+        - get_encoder(): stable bm::encoder& throughout this call, including
+          after flush/reserve; all ordinary coding takes place in this RAM area.
+        - size(): logical byte offset, including currently buffered bytes.
+        - flush(): accept bytes and make the working buffer immediately reusable.
+        - patch(offset, ptr, count): accept a replacement at a logical offset,
+          retaining no caller memory and preserving append position/write order.
+        - reserve(buffer, capacity): at a safe boundary, flush before growing the
+          serializer-owned BM buffer and rebind the RAM encoder if necessary.
+        - is_good(): no observed channel failure; false/exception stops emission.
+        - finish(): caller-owned completion barrier, never called by serialize().
+        flush, patch and reserve return bool. The serializer does not retry a
+        failed operation. On failure, the destination may contain a partial BLOB.
+    */
+    template<class OUT> bool serialize(const BV& bv, OUT& out);
+    template<class OUT> bool serialize_and_finish(const BV& bv, OUT& out)
+        { return serialize(bv, out) && out.finish(); }
+
 protected:
+    template<class OUT> bool serialize_to(const BV& bv, OUT& out);
 
     /// Allocate serialization temp buffers
     void alloc_temp_buffers();
@@ -455,7 +481,7 @@ protected:
                 bm_type_ = 1; // 24-bit offset
         }
 
-        unsigned char*  ptr_; ///< bookmark pointer
+        size_t          ptr_; ///< absolute channel offset (zero means inactive)
         block_idx_type  nb_;  ///< bookmark block idx
         block_idx_type  nb_range_; ///< target bookmark range in blocks
         unsigned        bm_type_;  ///< 0:32-bit, 1: 24-bit, 2: 16-bit
@@ -468,11 +494,10 @@ protected:
 
        @param nb - block idx
        @param bookm - bookmark state structure
-       @param enc - BLOB encoder
+       @param out - buffered output channel
     */
-    static
-    void process_bookmark(block_idx_type nb, bookmark_state& bookm,
-                          bm::encoder&   enc) BMNOEXCEPT;
+    template<class OUT>
+    static bool process_bookmark(block_idx_type nb, bookmark_state& bookm, OUT& out);
 
     /**
         Compute digest based XOR product, place into tmp XOR block
@@ -494,6 +519,7 @@ private:
     typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
 
 private:
+    buffer             output_buffer_; ///< retained allocator-typed output memory storage
     block_arridx_type  bit_idx_arr_;
     sblock_arridx_type sb_bit_idx_arr_;
     unsigned           scores_[bm::block_waves];
@@ -518,7 +544,6 @@ private:
     allocator_pool_type pool_;
 
 
-    unsigned char* enc_header_pos_; ///< pos of top level header to roll back
     unsigned char header_flag_;     ///< set of masks used to save
 
     // XOR compression
@@ -602,19 +627,19 @@ protected:
                              unsigned*  sb_idx);
 
     /// Read binary interpolated gap blocks into a bitset
-    void read_bic_gap(decoder_type&   decoder, bm::word_t* blk) BMNOEXCEPT;
+    void read_bic_gap(decoder_type&   decoder, bm::word_t* blk) BMDECNOEXCEPT(DEC);
 
     /// Read inverted binary interpolated list into a bit-set
     void read_bic_arr_inv(decoder_type& decoder,
-                          bm::word_t* blk, unsigned block_type) BMNOEXCEPT;
+                          bm::word_t* blk, unsigned block_type) BMDECNOEXCEPT(DEC);
     
     /// Read digest0-type bit-block
-    void read_digest0_block(decoder_type& decoder, bm::word_t* blk) BMNOEXCEPT;
+    void read_digest0_block(decoder_type& decoder, bm::word_t* blk) BMDECNOEXCEPT(DEC);
     
     
     /// read bit-block encoded as runs
     static
-    void read_0runs_block(decoder_type& decoder, bm::word_t* blk) BMNOEXCEPT;
+    void read_0runs_block(decoder_type& decoder, bm::word_t* blk) BMDECNOEXCEPT(DEC);
     
     static
     const char* err_msg() BMNOEXCEPT { return "BM::Invalid serialization format"; }
@@ -753,6 +778,10 @@ protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
 protected:
+    // IN supplies a RAM decoder and explicit, fallible window/seek operations.
+    // All byte offsets in this traversal are relative to the current BLOB.
+    template<class IN> size_t deserialize_from(bvector_type& bv, IN& in);
+
    static bool is_skip_marker(unsigned char btype) BMNOEXCEPT;
    static bool is_bookmark_marker(unsigned char btype) BMNOEXCEPT;
    static bool is_single_block_payload_marker(unsigned char btype) BMNOEXCEPT;
@@ -2714,7 +2743,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   sb_bookmarks_(false),
   sb_range_(0),
   compression_level_(bm::set_compression_default),
-  enc_header_pos_(0), header_flag_(0),
+  header_flag_(0),
   ref_vect_(0),
   sim_model_(0),
   ref_idx_(0),
@@ -2748,7 +2777,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   sb_bookmarks_(false),
   sb_range_(0),
   compression_level_(bm::set_compression_default),
-  enc_header_pos_(0), header_flag_(0),
+  header_flag_(0),
   ref_vect_(0),
   sim_model_(0),
   ref_idx_(0),
@@ -2930,7 +2959,6 @@ void serializer<BV>::encode_header(const BV& bv, bm::encoder& enc) BMNOEXCEPT
         header_flag_ |= BM_HM_HXOR; // XOR compression turned ON
     }
 
-    enc_header_pos_ = enc.get_pos();
     enc.put_8(header_flag_);
 
     if (byte_order_serial_)
@@ -4932,44 +4960,49 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
 
 
 template<class BV>
-void serializer<BV>::process_bookmark(block_idx_type   nb,
+template<class OUT>
+bool serializer<BV>::process_bookmark(block_idx_type   nb,
                                       bookmark_state&  bookm,
-                                      bm::encoder&     enc) BMNOEXCEPT
+                                      OUT&             out)
 {
+    bm::encoder& enc = out.get_encoder();
     BM_ASSERT(bookm.nb_range_);
 
     block_idx_type nb_delta = nb - bookm.nb_;
     if (bookm.ptr_ && nb_delta >= bookm.nb_range_)
     {
-        unsigned char* curr = enc.get_pos();
+        size_t curr = out.size();
         size_t bytes_delta = size_t(curr - bookm.ptr_);
         if (bytes_delta > bookm.min_bytes_range_)
         {
-            enc.set_pos(bookm.ptr_); // rewind back and save the skip
+            unsigned char patch_buf[8];
+            bm::encoder patch_enc(patch_buf, sizeof(patch_buf));
             switch (bookm.bm_type_)
             {
             case 0: // 32-bit mark
                 bytes_delta -= sizeof(unsigned);
                 if (bytes_delta < 0xFFFFFFFF) // range overflow check
-                    enc.put_32(unsigned(bytes_delta));
+                    patch_enc.put_32(unsigned(bytes_delta));
                 // if range is somehow off, bookmark remains 0 (NULL)
                 break;
             case 1: // 24-bit mark
                 bytes_delta -= (sizeof(unsigned)-1);
                 if (bytes_delta < 0xFFFFFF)
-                    enc.put_24(unsigned(bytes_delta));
+                    patch_enc.put_24(unsigned(bytes_delta));
                 break;
             case 2: // 16-bit mark
                 bytes_delta -= sizeof(unsigned short);
                 if (bytes_delta < 0xFFFF)
-                    enc.put_16((unsigned short)bytes_delta);
+                    patch_enc.put_16((unsigned short)bytes_delta);
                 break;
             default:
                 BM_ASSERT(0);
                 break;
             } // switch
 
-            enc.set_pos(curr); // restore and save the sync mark
+            if (patch_enc.size() &&
+                !out.patch(bookm.ptr_, patch_buf, patch_enc.size()))
+                return false;
 
             if (nb_delta < 0xFF)
             {
@@ -5017,7 +5050,7 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
     {
         // bookmarks use VBR to save offset
         bookm.nb_ = nb;
-        bookm.ptr_ = enc.get_pos() + 1;
+        bookm.ptr_ = out.size() + 1;
         switch (bookm.bm_type_)
         {
         case 0: // 32-bit mark
@@ -5037,13 +5070,43 @@ void serializer<BV>::process_bookmark(block_idx_type   nb,
             break;
         } // switch
     }
+    return true;
 }
 
 
 template<class BV>
 typename serializer<BV>::size_type
-serializer<BV>::serialize(const BV& bv,
-                          unsigned char* buf, size_t buf_size)
+serializer<BV>::serialize(const BV& bv, unsigned char* buf, size_t buf_size)
+{
+    bm::memory_serialization_encoder out(buf, buf_size);
+    serialize_to(bv, out);
+    return size_type(out.size());
+}
+
+template<class BV>
+template<class OUT>
+bool serializer<BV>::serialize(const BV& bv, OUT& out)
+{
+    if (!out.is_good())
+        return false;
+    // Eight blocks also cover speculative encodings (the existing trial
+    // encoder uses this capacity), plus marker/XOR metadata headroom.
+    // Retained across calls; not BLOB-sized.
+    const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (output_buffer_.size() < capacity)
+        output_buffer_.resize(capacity, false);
+    out.bind_buffer(output_buffer_.data(), output_buffer_.size());
+    struct binding_guard
+    {
+        OUT& out;
+        ~binding_guard() { out.unbind_buffer(); }
+    } guard = { out };
+    return serialize_to(bv, out);
+}
+
+template<class BV>
+template<class OUT>
+bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
 {
     BM_ASSERT(temp_block_);
 
@@ -5051,8 +5114,8 @@ serializer<BV>::serialize(const BV& bv,
         reset_compression_stats();
     const blocks_manager_type& bman = bv.get_blocks_manager();
 
-    bm::encoder enc(buf, buf_size);  // create the encoder
-    enc_header_pos_ = 0;
+    bm::encoder& enc = out.get_encoder();
+    const size_t header_offset = out.size();
     encode_header(bv, enc);
 
     bookmark_state  sb_bookmark(sb_range_);
@@ -5064,6 +5127,8 @@ serializer<BV>::serialize(const BV& bv,
     block_idx_type i, j;
     for (i = 0; i < bm::set_total_blocks; ++i)
     {
+        if (!out.flush())
+            return false;
         unsigned i0, j0;
         bm::get_block_coord(i, i0, j0);
 
@@ -5074,7 +5139,8 @@ serializer<BV>::serialize(const BV& bv,
             //
             if (sb_bookmarks_)
             {
-                process_bookmark(i, sb_bookmark, enc);
+                if (!process_bookmark(i, sb_bookmark, out))
+                    return false;
             }
 
             // ---------------------------------------------------
@@ -5095,6 +5161,11 @@ serializer<BV>::serialize(const BV& bv,
                     if (is_sparse_sub && sub_stat.bv_count < 65536)
                     {
                         header_flag_ |= BM_HM_SPARSE;
+                        // At most 65535 integers, each using at most 32 bits
+                        // in BIC, plus scalar metadata and word padding.
+                        if (!out.reserve(output_buffer_,
+                                size_t(65536) * sizeof(unsigned) + 1024))
+                            return false;
                         bienc_arr_sblock(bv, i0, enc);
                         i += (bm::set_sub_array_size - j0) - 1;
                         continue;
@@ -5146,12 +5217,8 @@ serializer<BV>::serialize(const BV& bv,
             if (next_nb == bm::set_total_blocks) // no more blocks
             {
                 enc.put_8(set_block_azero);
-                size_type sz = (size_type)enc.size();
-
-                // rewind back to save header flag
-                enc.set_pos(enc_header_pos_);
-                enc.put_8(header_flag_);
-                return sz;
+                return out.flush() &&
+                       out.patch(header_offset, &header_flag_, 1);
             }
             block_idx_type nb = next_nb - i;
             
@@ -5384,13 +5451,7 @@ serializer<BV>::serialize(const BV& bv,
     } // for i
 
     enc.put_8(set_block_end);
-    size_type sz = (size_type)enc.size();
-
-    // rewind back to save header flag
-    enc.set_pos(enc_header_pos_);
-    enc.put_8(header_flag_);
-
-    return sz;
+    return out.flush() && out.patch(header_offset, &header_flag_, 1);
 }
 
 
@@ -6037,7 +6098,7 @@ template<typename DEC, typename BLOCK_IDX>
 void
 deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
                                                    bm::word_t* blk,
-                                                   unsigned block_type) BMNOEXCEPT
+                                                   unsigned block_type) BMDECNOEXCEPT(DEC)
 {
     // TODO: optimization
     bm::bit_block_set(blk, 0);
@@ -6047,7 +6108,7 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
 
 template<typename DEC, typename BLOCK_IDX>
 void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec,
-                                                    bm::word_t*   blk) BMNOEXCEPT
+                                                    bm::word_t*   blk) BMDECNOEXCEPT(DEC)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     
@@ -6071,7 +6132,7 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec,
 template<typename DEC, typename BLOCK_IDX>
 void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(
                                                 decoder_type& dec,
-                                                bm::word_t*   block) BMNOEXCEPT
+                                                bm::word_t*   block) BMDECNOEXCEPT(DEC)
 {
     bm::id64_t d0 = dec.get_64();
     while (d0)
@@ -6111,7 +6172,7 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(
 template<typename DEC, typename BLOCK_IDX>
 void deseriaizer_base<DEC, BLOCK_IDX>::read_0runs_block(
                                             decoder_type& dec,
-                                            bm::word_t* blk) BMNOEXCEPT
+                                            bm::word_t* blk) BMDECNOEXCEPT(DEC)
 {
     //TODO: optimization if block exists and it is OR-ed read
     bm::bit_block_set(blk, 0);
@@ -6141,7 +6202,7 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_0runs_block(
 /// @internal
 template<typename BIN>
 void decode_mins(BIN& bin, unsigned head_v3,
-                 bm::gap_word_t& min0, bm::gap_word_t& min1) BMNOEXCEPT
+                 bm::gap_word_t& min0, bm::gap_word_t& min1) BMDECNOEXCEPT(BIN)
 {
     BM_ASSERT(!min0 && !min1); // pre-init with 0s
     if (head_v3 & bm::h3f_min0_skip)
@@ -6161,7 +6222,7 @@ void decode_mins(BIN& bin, unsigned head_v3,
 /// @internal
 template<typename BIN>
 void decode_min_max(BIN& bin, bm::gap_word_t gap_head, unsigned head_v3,
-                 bm::gap_word_t& min_v, bm::gap_word_t& max_v) BMNOEXCEPT
+                 bm::gap_word_t& min_v, bm::gap_word_t& max_v) BMDECNOEXCEPT(BIN)
 {
     auto min8 = gap_head & bm::h2f_min_v_8bit;
     min_v = (bm::gap_word_t) ((min8) ?
@@ -6948,10 +7009,34 @@ void deserializer<BV, DEC>::decode_arrbit(decoder_type& dec,
 
 
 
+// RAM adapter keeps the historical pointer API and consumed-size semantics.
+template<class DEC> class memory_deserialization_source
+{
+public:
+    enum { streaming = false };
+    explicit memory_deserialization_source(const unsigned char* data)
+        : data_(data), dec_(data) {}
+    DEC& get_decoder() BMNOEXCEPT { return dec_; }
+    bool prepare(size_t) BMNOEXCEPT { return true; }
+    size_t tell() const BMNOEXCEPT { return dec_.size(); }
+    bool seek(size_t pos) BMNOEXCEPT { dec_.set_pos(data_ + pos); return true; }
+private:
+    const unsigned char* data_;
+    DEC dec_;
+};
+
 template<class BV, class DEC>
 size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
                                           const unsigned char* buf,
                                           bm::word_t*          /*temp_block*/)
+{
+    memory_deserialization_source<DEC> in(buf);
+    return deserialize_from(bv, in);
+}
+
+template<class BV, class DEC>
+template<class IN>
+size_t deserializer<BV, DEC>::deserialize_from(bvector_type& bv, IN& in)
 {
     const deserialization_index_type* dindex_in = deserialization_index_in_;
     const bool digest_skip = dindex_in && block_digest_in_;
@@ -6971,7 +7056,12 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     mp_guard_bv.assign_if_not_set(pool_, bv);
 
 
-    decoder_type dec(buf);
+    decoder_type& dec = in.get_decoder();
+    if (!in.prepare(64)) return size_t(-1);
+    bool scan_tail = false;
+    size_t skip_position = 0;
+    this->skip_offset_ = 0;
+    this->bookmark_idx_ = 0;
     if (deserialization_index_out_)
         deserialization_index_out_->clear();
     size_t marker_idx = 0;
@@ -7013,12 +7103,13 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
         }
         for (unsigned cnt = dec.get_32(); cnt; --cnt)
         {
+            if (!in.prepare(4)) return size_t(-1);
             bm::id_t idx = dec.get_32();
             if (!deserialization_index_out_)
                 bv.set(idx);
         } // for
         // -1 for compatibility with other deserialization branches
-        size_t read_size = dec.size()-1;
+        size_t read_size = in.tell() - (IN::streaming ? 0 : 1);
         if (deserialization_index_out_)
             deserialization_index_out_->set_serialized_size(read_size);
         return read_size;
@@ -7075,7 +7166,7 @@ size_t deserializer<BV, DEC>::deserialize(bvector_type&        bv,
     block_idx_type nb;
     unsigned i0, j0;
 #ifdef BM_TRACE_DES
-size_t dec_last_size = dec.size();
+size_t dec_last_size = in.tell();
 std::cout << "size=" << dec_last_size;
 #endif
     block_idx_type nb_i = 0;
@@ -7110,13 +7201,13 @@ std::cout << "size=" << dec_last_size;
                                                 bookmark_pos))
             {
                 this->bookmark_idx_ = bookmark_nb;
-                dec.set_pos(buf + bookmark_pos);
+                if (!in.seek(bookmark_pos)) return size_t(-1);
                 nb_i = bookmark_target_nb;
             }
             else
             if (dindex_in->find_bookmark(target_nb, bookmark_nb, bookmark_pos))
             {
-                dec.set_pos(buf + bookmark_pos);
+                if (!in.seek(bookmark_pos)) return size_t(-1);
                 nb_i = bookmark_nb;
             }
         }
@@ -7124,17 +7215,30 @@ std::cout << "size=" << dec_last_size;
 
     do
     {
-        if (is_range_set_)
+        if (is_range_set_ && !scan_tail)
         {
             block_idx_type nb_to = (idx_to_ >> bm::set_block_shift);
             if (nb_i > nb_to)
             {
                 early_deserialization_exit = true;
-                break; // early exit (out of target range)
+                if (!IN::streaming) break;
+                if (x_ref_d64_) xor_decode(bman);
+                scan_tail = true; // parse to the physical end without storing bits
             }
         }
-        size_t marker_pos = size_t(dec.get_pos() - buf);
+        size_t marker_pos = in.tell();
+        if (!in.prepare(1)) return size_t(-1);
         btype = dec.get_8();
+        // Conservative format bounds, including legacy gamma/array encodings.
+        // A superblock contains at most 65536 unsigned indices; other records
+        // contain at most 65536 16-bit values, with coding and header overhead.
+        size_t record_bound = 8 * bm::set_block_size * sizeof(bm::word_t) + 1024;
+        if (btype == bm::set_sblock_bienc || btype == bm::set_sblock_bienc_v3 ||
+            btype == set_block_arrbit || btype == bm::set_block_arrbit_inv ||
+            btype == set_block_arrgap || btype == set_block_arrgap_inv ||
+            btype == set_block_arrgap_egamma || btype == set_block_arrgap_egamma_inv)
+            record_bound = size_t(65536) * sizeof(unsigned) + 1024;
+        if (!in.prepare(record_bound)) return size_t(-1);
         
         // --------------------------------------------------------------
         // marker index build up here
@@ -7158,7 +7262,7 @@ std::cout << "size=" << dec_last_size;
         
         // here we evaluate if we can skip forward (gather deserialization)
         //
-        bool skip_payload = digest_skip && !is_block_requested(nb_i);
+        bool skip_payload = !scan_tail && digest_skip && !is_block_requested(nb_i);
         if (skip_payload && is_single_block_payload_marker(btype))
         {
             size_type next_requested_nb;
@@ -7176,7 +7280,7 @@ std::cout << "size=" << dec_last_size;
                     if (x_ref_d64_) // flush delayed XOR before seeking forward
                         xor_decode(bman);
                     this->bookmark_idx_ = bookmark_nb;
-                    dec.set_pos(buf + bookmark_pos);
+                    if (!in.seek(bookmark_pos)) return size_t(-1);
                     nb_i = bookmark_target_nb;
                     continue;
                 }
@@ -7186,7 +7290,7 @@ std::cout << "size=" << dec_last_size;
                 {
                     if (x_ref_d64_) // flush delayed XOR before seeking forward
                         xor_decode(bman);
-                    dec.set_pos(buf + bookmark_pos);
+                    if (!in.seek(bookmark_pos)) return size_t(-1);
                     nb_i = bookmark_nb;
                     continue;
                 }
@@ -7194,26 +7298,28 @@ std::cout << "size=" << dec_last_size;
             else
             {
                 early_deserialization_exit = true;
-                break;
+                if (!IN::streaming) break;
+                if (x_ref_d64_) xor_decode(bman);
+                scan_tail = true;
             }
 
             size_t next_marker_pos;
             bool found = dindex_in->find_next_marker_offset(marker_pos,
                                                  marker_idx, next_marker_pos);
-            if (found)
+            if (found && !scan_tail)
             {
-                dec.set_pos(buf + next_marker_pos);
+                if (!in.seek(next_marker_pos)) return size_t(-1);
                 ++nb_i;
                 continue;
             }
         }
 #ifdef BM_TRACE_DES
-auto dec_size = dec.size();
+auto dec_size = in.tell();
 std::cout << "_sz=" << (dec_size - dec_last_size);
 std::cout << "  [" << unsigned(btype) << ", " << nb_i << "]" << std::flush;
 dec_last_size = dec_size;
 #endif
-        if (deserialization_index_out_)
+        if (deserialization_index_out_ || scan_tail)
         {
             switch (btype)
             {
@@ -7647,14 +7753,15 @@ dec_last_size = dec_size;
             this->bookmark_idx_ = nb_i;
             this->skip_offset_ = dec.get_16();
         process_bookmark:
-            this->skip_pos_ = dec.get_pos() + this->skip_offset_;
+            if (this->skip_offset_ > size_t(-1) - in.tell()) return size_t(-1);
+            skip_position = in.tell() + this->skip_offset_;
             if (deserialization_index_out_ && this->skip_offset_)
             {
-                const unsigned char* save_pos = dec.get_pos();
-                const unsigned char* target_pos = this->skip_pos_;
+                const size_t save_pos = in.tell();
+                const size_t target_pos = skip_position;
                 block_idx_type bookmark_sync = 0;
                 bool target_found = true;
-                dec.set_pos(target_pos);
+                if (!in.seek(target_pos) || !in.prepare(9)) return size_t(-1);
                 unsigned char sync_mark = dec.get_8();
                 switch (sync_mark)
                 {
@@ -7690,20 +7797,47 @@ dec_last_size = dec_size;
                     target_found = false;
                     break;
                 } // switch
-                dec.set_pos(save_pos);
+                if (!in.seek(save_pos)) return size_t(-1);
                 if (target_found)
                 {
                     deserialization_index_out_->add_bookmark_target(
                                         nb_i, nb_i + bookmark_sync,
-                                        size_t(target_pos - buf));
+                                        target_pos);
                 }
             }
-            if (is_range_set_)
+            if (!IN::streaming && is_range_set_)
             {
-                block_idx_type nb_from = (idx_from_ >> bm::set_block_shift);
+                // Retain the historical RAM skip behavior and exception contract.
+                this->skip_pos_ = dec.get_pos() + this->skip_offset_;
+                block_idx_type nb_from = idx_from_ >> bm::set_block_shift;
                 nb_from = this->try_skip(dec, nb_i, nb_from);
-                if (nb_from)
-                    nb_i = nb_from;
+                if (nb_from) nb_i = nb_from;
+            }
+            if (IN::streaming && is_range_set_ && !scan_tail && this->skip_offset_)
+            {
+                const size_t save_pos = in.tell();
+                if (!in.seek(skip_position) || !in.prepare(9)) return size_t(-1);
+                block_idx_type delta = 0;
+                switch (dec.get_8())
+                {
+                case set_nb_sync_mark8: delta = dec.get_8(); break;
+                case set_nb_sync_mark16: delta = dec.get_16(); break;
+                case set_nb_sync_mark24: delta = dec.get_24(); break;
+                case set_nb_sync_mark32: delta = dec.get_32(); break;
+#ifdef BM64ADDR
+                case set_nb_sync_mark48: delta = dec.get_48(); break;
+                case set_nb_sync_mark64: delta = dec.get_64(); break;
+#endif
+                default: break;
+                }
+                const block_idx_type nb_from = idx_from_ >> bm::set_block_shift;
+                if (delta && delta <= nb_from && nb_i <= nb_from - delta)
+                {
+                    if (x_ref_d64_) xor_decode(bman);
+                    nb_i += delta;
+                }
+                else if (!in.seek(save_pos)) return size_t(-1);
+                this->skip_offset_ = 0;
             }
             continue; // bypass ++i;
 
@@ -7875,10 +8009,17 @@ dec_last_size = dec_size;
 
     bman.shrink_top_blocks(); // reduce top blocks to necessary size
 
-    size_t read_size = dec.size();
+    // The writer appends END after exhausting the logical block domain.
+    // AZERO already terminates the writer; END is itself the final byte.
+    if (IN::streaming && btype != set_block_azero && btype != set_block_end)
+    {
+        if (!in.prepare(1)) return size_t(-1);
+        if (dec.get_8() != set_block_end) return size_t(-1);
+    }
+    size_t read_size = in.tell();
     if (deserialization_index_out_)
         deserialization_index_out_->set_serialized_size(read_size);
-    if (early_deserialization_exit && dindex_in && dindex_in->serialized_size())
+    if (!IN::streaming && early_deserialization_exit && dindex_in && dindex_in->serialized_size())
         return dindex_in->serialized_size();
     return read_size;
 }

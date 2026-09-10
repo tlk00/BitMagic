@@ -33,6 +33,9 @@ For more information please visit:  http://bitmagic.io
 #include "bmserial.h"
 #include "bmbuffer.h"
 #include "bmdef.h"
+#ifndef BM_NO_STL
+#include <iosfwd>
+#endif
 
 
 namespace bm
@@ -301,6 +304,24 @@ public:
     void serialize(const SV&                        sv,
                    sparse_vector_serial_layout<SV>& sv_layout);
 
+    /** Serialize sparse-vector planes to a buffered output channel.
+        @tparam OUT Output channel implementing the bvector serialization contract.
+        @param sv Integer, rank-select compressed, or string sparse vector.
+        @param out Output channel; the caller owns completion via finish().
+        @return True if all bytes and header patches were accepted.
+        @note Produces the RAM format verbatim. I/O exceptions propagate.
+              Output must be unbound on entry and support patching. On return
+              its buffer is unbound; false leaves an incomplete output object.
+        @code
+        std::ofstream file("values.sv", std::ios::binary);
+        bm::streams_encoder output(file); // include bmfio.h for file I/O
+        bm::sparse_vector_serializer<SV> serializer;
+        bool ok = serializer.serialize(sv, output);
+        if (ok) ok = output.finish();
+        @endcode
+    */
+    template<class OUT> bool serialize(const SV& sv, OUT& out);
+
     /** Get access to the underlying bit-vector serializer
         This access can be used to fine tune compression settings
         @sa bm::serializer::set_compression_level
@@ -322,6 +343,13 @@ protected:
     /// serialize the remap matrix used for SV encoding
     void encode_remap_matrix(bm::encoder& enc, const SV& sv);
 
+    /** Emit string remap metadata with safe flush boundaries.
+        @param sv Source string vector.
+        @param out Unbound output channel, unbound again on success.
+        @return True if all remap bytes were accepted.
+    */
+    template<class OUT> bool encode_remap_stream(const SV& sv, OUT& out);
+
     typedef bm::heap_vector<unsigned, alloc_type, true> u32_vector_type;
     typedef bm::serializer<bvector_type>                serializer_type;
     typedef typename serializer_type::buffer            buffer_type;
@@ -334,6 +362,8 @@ protected:
 
     bvector_type                     plane_digest_bv_; ///< bv.digest of bit-planes
     buffer_type                      plane_digest_buf_; ///< serialization buf
+    buffer_type                      stream_metadata_; ///< retained output metadata buffer
+    bm::heap_vector<bm::id64_t, alloc_type, true> stream_offsets_; ///< BLOB-relative plane offsets
     u32_vector_type                  plane_off_vect_;
 
     u32_vector_type                  remap_rlen_vect_;
@@ -496,6 +526,13 @@ protected:
 
 
     /// deserialize bit-vector planes
+    /** Resize internal storage without translating RSC coordinates.
+        @param sv Destination whose internal serialized size has been read.
+        @param size Serialized internal element count.
+    */
+    static void resize_stream_target(SV& sv, size_type size);
+
+    /// deserialize bit-vector planes
     void deserialize_planes(SV& sv, unsigned planes,
                             const unsigned char* buf,
                             const bvector_type* mask_bv = 0);
@@ -551,7 +588,17 @@ protected:
         { return sv.get_null_bvect(); }
 
     /// load string remap dict
-    void load_remap(SV& sv, const unsigned char* remap_buf_ptr);
+    void load_remap(SV& sv, const unsigned char* remap_buf_ptr,
+                    const unsigned char* blob);
+
+    /** Decode remap metadata from a buffered source using checked primitives.
+        @param sv Target string vector.
+        @param in Bound input channel at the remap marker.
+        @param buffer Input buffer owned by the caller; may grow for row lengths.
+        @return True on successful decoding; stream failures return false.
+    */
+    template<class IN, class Buffer>
+    bool load_remap_stream(SV& sv, IN& in, Buffer& buffer);
 
     /// throw error on incorrect deserialization
     static void raise_invalid_header();
@@ -635,6 +682,12 @@ public:
     typedef bm::heap_vector<size_t, allocator_type, true>     plane_offset_vector_type;
 
 public:
+    /** Compare all stored metadata and child indexes. @param other Reference index. @return Equality. */
+    bool equal(const sparse_vector_deserialization_index& other) const BMNOEXCEPT;
+    /** Exchange complete index state. @param other Index to exchange. */
+    void swap(sparse_vector_deserialization_index& other) BMNOEXCEPT;
+    template<class T> friend class sparse_vector_deserialization_index_serializer;
+    template<class T> friend class sparse_vector_deserialization_index_deserializer;
     /*!
         \brief Reset the index and allocate rows for serialized sparse-vector planes.
 
@@ -740,6 +793,181 @@ protected:
     size_t                   digest_offset_ = 0;
     size_t                   remap_offset_ = 0;
 };
+
+/** @internal Bounded transport and fixed-width framing for composite indexes. */
+namespace sv_di_detail
+{
+/** Require valid composite metadata. @param ok Validity condition. */
+inline void require(bool ok)
+{
+    if (!ok)
+    {
+#ifndef BM_NO_STL
+        throw std::logic_error("BM: sparse-vector index format");
+#else
+        BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+    }
+}
+/** Checked byte-count addition. @param a First count. @param b Second count. @return Sum. */
+inline size_t add(size_t a, size_t b)
+{
+    require(b <= size_t(-1) - a); return a + b;
+}
+/** Decode a portable unsigned field. @param p Eight little-endian bytes. @return Value. */
+inline bm::id64_t get64(const unsigned char* p)
+{
+    bm::id64_t n = 0;
+    for (unsigned i = 0; i < 8; ++i) n |= bm::id64_t(p[i]) << (i * 8);
+    return n;
+}
+/** Encode a portable unsigned field. @param p Eight writable bytes. @param n Value. */
+inline void put64(unsigned char* p, bm::id64_t n)
+{
+    for (unsigned i = 0; i < 8; ++i) p[i] = (unsigned char)(n >> (i * 8));
+}
+/** Bounded memory output. */
+struct memory_output
+{
+    unsigned char* data; ///< Caller storage.
+    size_t capacity; ///< Available bytes.
+    size_t pos = 0; ///< Bytes written.
+    /** Write bytes. @param p Source. @param n Length. @return True on success. */
+    bool write(const unsigned char* p, size_t n)
+    {
+        require(n <= capacity - pos); ::memcpy(data + pos, p, n); pos += n; return true;
+    }
+    /** Patch prior bytes. @param at Offset. @param p Source. @param n Length. @return True on success. */
+    bool patch(size_t at, const unsigned char* p, size_t n)
+    {
+        require(at <= pos && n <= pos - at); ::memcpy(data + at, p, n); return true;
+    }
+};
+/** Bounded memory input. */
+struct memory_input
+{
+    const unsigned char* data; ///< Caller bytes.
+    size_t remaining; ///< Unconsumed extent.
+    size_t pos = 0; ///< Bytes consumed.
+    /** Read bytes. @param p Destination. @param n Length. @return True on success. */
+    bool read(unsigned char* p, size_t n)
+    {
+        require(n <= remaining); ::memcpy(p, data + pos, n); pos += n; remaining -= n; return true;
+    }
+};
+/** Write an unsigned field. @tparam OUT Transport. @param out Output. @param n Value. @return Success. */
+template<class OUT> bool write64(OUT& out, bm::id64_t n)
+{
+    unsigned char b[8]; put64(b, n); return out.write(b, 8);
+}
+/** Read an unsigned size field. @tparam IN Transport. @param in Input. @param n Result. @return Success. */
+template<class IN> bool read_size(IN& in, size_t& n)
+{
+    unsigned char b[8]; if (!in.read(b, 8)) return false;
+    bm::id64_t v = get64(b); require(v <= bm::id64_t(size_t(-1))); n = size_t(v); return true;
+}
+/** Write framing with a size placeholder. @tparam OUT Transport. @param out Output.
+    @param compact Omit signature/version. @param kind Sparse=1, float=2. @return Success. */
+template<class OUT> bool begin(OUT& out, bool compact, unsigned kind)
+{
+    unsigned char b[12] = {'S', 'I', 1, (unsigned char)kind};
+    return out.write(b + (compact ? 4 : 0), compact ? 8 : 12);
+}
+/** Complete framing. @tparam OUT Transport. @param out Output. @param start Record start.
+    @param compact Framing mode. @return Record byte count, or zero on I/O failure. */
+template<class OUT> size_t finish(OUT& out, size_t start, bool compact)
+{
+    size_t n = out.pos - start; unsigned char b[8]; put64(b, n);
+    return out.patch(start + (compact ? 0 : 4), b, 8) ? n : 0;
+}
+/** Read framing and bound the remaining record. @tparam IN Transport. @param in Input.
+    @param compact Framing mode. @param kind Expected kind. @param tail Bytes beyond record.
+    @return True on successful I/O. */
+template<class IN> bool begin_read(IN& in, bool compact, unsigned kind, size_t& tail)
+{
+    const size_t available = in.remaining, h = compact ? 8 : 12;
+    require(available >= h);
+    if (!compact)
+    {
+        unsigned char b[4]; if (!in.read(b, 4)) return false;
+        require(b[0] == 'S' && b[1] == 'I' && b[2] == 1 && b[3] == kind);
+    }
+    size_t n; if (!read_size(in, n)) return false;
+    require(n >= h && n <= available); tail = available - n; in.remaining = n - h; return true;
+}
+} // namespace sv_di_detail
+
+/** Persist a sparse-vector index, including cached offsets and compact bvector rows.
+    Applies to signed/unsigned, RSC and string vectors sharing BV.
+    Version 1 uses little-endian framing and the existing compact bvector index codec.
+    Standalone framing is SI, version=1, kind=1, followed by a 64-bit record size.
+    Compact framing retains only the record size and requires a versioned parent.
+    The payload stores 64-bit row count, cached-offset count, digest and remap
+    offsets, then the cached offsets. Each row has a 64-bit length followed by
+    a compact bvector index record. A zero length denotes a default empty row;
+    marker-empty rows with a source BLOB size still carry a child record.
+    Offsets are relative to their original data BLOBs and are never rebased.
+    Persistence does not establish that an index belongs to a particular BLOB.
+    Stream overloads (bmfio.h) require seekable input/output and buffer only one
+    child index at a time; output stream completion remains caller-owned.
+    @tparam BV Bvector type.
+*/
+template<class BV> class sparse_vector_deserialization_index_serializer
+{
+public:
+    typedef sparse_vector_deserialization_index<BV> index_type; ///< Source index.
+    typedef typename deserialization_index_serializer<BV>::buffer buffer; ///< Allocator-backed bytes.
+    /** Set child compression. @param level Bvector index compression level. */
+    void set_compression_level(unsigned level) { child_.set_compression_level(level); }
+    /** Set framing. @param compact True when embedded in a versioned parent. */
+    void set_compact(bool compact) BMNOEXCEPT { compact_ = compact; }
+    /** Bound output memory. @param index Source. @return Conservative bytes. */
+    size_t max_serialize_mem(const index_type& index) const;
+    /** Encode into caller memory. @param index Source. @param data Output.
+        @param capacity Available bytes. @return Encoded bytes. */
+    size_t serialize(const index_type& index, unsigned char* data, size_t capacity);
+    /** Encode into managed memory. @param index Source. @param data Output. @return Encoded bytes. */
+    size_t serialize(const index_type& index, buffer& data);
+#ifndef BM_NO_STL
+    /** Encode to a seekable stream; definition in bmfio.h. Does not flush the stream.
+        @param index Source. @param stream Output at record start.
+        @return Encoded bytes, or zero on I/O failure; stream exceptions propagate. */
+    size_t serialize(const index_type& index, std::ostream& stream);
+#endif
+    /** @internal Shared transport encoding. @tparam OUT Transport. @param index Source.
+        @param out Output adapter. @return Encoded bytes, or zero on I/O failure. */
+    template<class OUT> size_t serialize_to(const index_type& index, OUT& out);
+private:
+    bool compact_ = false; ///< Omit standalone signature when nested.
+    deserialization_index_serializer<BV> child_; ///< Existing row codec.
+    buffer scratch_; ///< Reused child-record memory.
+};
+
+/** Transactional bounded restore of a sparse-vector index. @tparam BV Bvector type. */
+template<class BV> class sparse_vector_deserialization_index_deserializer
+{
+public:
+    typedef sparse_vector_deserialization_index<BV> index_type; ///< Destination index.
+    /** Set expected framing. @param compact True for an embedded record. */
+    void set_compact(bool compact) BMNOEXCEPT { compact_ = compact; }
+    /** Restore one record; failures preserve index. @param index Destination.
+        @param data Input. @param size Available bytes. @return Consumed bytes. */
+    size_t deserialize(index_type& index, const unsigned char* data, size_t size);
+#ifndef BM_NO_STL
+    /** Restore from a seekable stream; definition in bmfio.h. Success leaves it after the record.
+        @param index Destination, unchanged on failure. @param stream Input at record start.
+        @return Consumed bytes, or zero on I/O failure; format/stream exceptions propagate. */
+    size_t deserialize(index_type& index, std::istream& stream);
+#endif
+    /** @internal Shared transport decoding. @tparam IN Transport. @param index Destination.
+        @param in Input adapter. @return Consumed bytes, or zero on I/O failure. */
+    template<class IN> size_t deserialize_from(index_type& index, IN& in);
+private:
+    bool compact_ = false; ///< Expected framing.
+    deserialization_index_deserializer<BV> child_; ///< Existing row decoder.
+    typename deserialization_index_serializer<BV>::buffer scratch_; ///< Reused child-record memory.
+};
+
 
 
 /*!
@@ -1366,7 +1594,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         plane_digest_bv_.clear_bit_no_check(null_idx);
     plane_digest_bv_.optimize();
 
-//bm::_print_bv(std::cout, plane_digest_bv_);
 
     bvs_.set_ref_vectors(0); // disable possible XOR compression for offs.bv
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
@@ -1586,6 +1813,265 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 // -------------------------------------------------------------------------
 //
 // -------------------------------------------------------------------------
+
+template<typename SV>
+template<class OUT>
+bool sparse_vector_serializer<SV>::serialize(const SV& sv, OUT& out)
+{
+    if (!out.is_good())
+        return false;
+    // Every exit releases borrowed buffers and internal XOR references.
+    struct guard_type
+    {
+        OUT& out;
+        serializer_type& bvs;
+        ~guard_type() { out.unbind_buffer(); bvs.set_ref_vectors(0); }
+    } guard = {out, bvs_};
+    bvs_.allow_stat_reset(false);
+    bvs_.reset_compression_stats();
+    const size_t origin = out.size();
+    const unsigned planes = unsigned(sv.get_bmatrix().rows());
+    // Raw 64-bit offsets bound the integer-vector metadata; BIC uses <=32
+    // bits per offset plus word padding. No source-size estimate is needed.
+    stream_metadata_.resize(size_t(planes) * 8 + 128, false);
+    if (!sv.size())
+    {
+        out.bind_buffer(stream_metadata_.data(), stream_metadata_.size());
+        out.get_encoder().put_8('B'); out.get_encoder().put_8('Z');
+        return out.flush();
+    }
+    const auto& matrix = sv.get_bmatrix();
+    const unsigned null_idx = unsigned(matrix.get_null_idx());
+    const bool skip_null = sv.is_null_external() &&
+                          !serialize_external_null_ && null_idx;
+    matrix.build_plane_digest(plane_digest_bv_);
+    if (skip_null)
+        plane_digest_bv_.clear_bit_no_check(null_idx);
+    plane_digest_bv_.optimize();
+    bvs_.set_ref_vectors(0);
+    bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
+    const unsigned header_size = 33;
+    unsigned char header[header_size] = {};
+    out.bind_buffer(stream_metadata_.data(), stream_metadata_.size());
+    out.get_encoder().memcpy(header, header_size);
+    if (!out.flush()) return false;
+    out.unbind_buffer();
+    if (is_xor_ref())
+    {
+        if (bv_ref_ptr_)
+        {
+            BM_ASSERT(sim_model_ptr_);
+            bvs_.set_ref_vectors(bv_ref_ptr_);
+            bvs_.set_sim_model(sim_model_ptr_);
+        }
+        else
+        {
+            bm::xor_sim_params params;
+            build_xor_ref_vector(sv, skip_null);
+            bvs_.set_ref_vectors(&bv_ref_);
+            if (bvs_.compute_sim_model(sim_model_, bv_ref_, params))
+                bvs_.set_sim_model(&sim_model_);
+        }
+    }
+    stream_offsets_.resize(0);
+    plane_off_vect_.resize(0);
+    bool wide = false;
+    for (unsigned i = 0; i < planes; ++i)
+    {
+        const bvector_type* bv = matrix.row(i);
+        if (!bv || (skip_null && i == null_idx)) continue;
+        const size_t offset = out.size() - origin;
+        stream_offsets_.push_back(bm::id64_t(offset));
+        wide |= offset > bm::id_max32;
+        plane_off_vect_.push_back(unsigned(offset));
+        if (is_xor_ref())
+        {
+            const auto* refs = bv_ref_ptr_ ? bv_ref_ptr_ : &bv_ref_;
+            bvs_.set_curr_ref_idx(unsigned(refs->find_bv(bv)));
+        }
+        if (!bvs_.serialize(*bv, out)) return false;
+    }
+    bvs_.set_ref_vectors(0);
+    if constexpr (SV::is_remap_support::value)
+        if (!encode_remap_stream(sv, out)) return false;
+    const size_t digest_offset = out.size() - origin;
+    // Digest is small metadata already encoded with the legacy RAM encoder.
+    out.bind_buffer(plane_digest_buf_.data(), plane_digest_buf_.size());
+    out.get_encoder().set_pos(plane_digest_buf_.data() + plane_digest_buf_.size());
+    if (!out.flush()) return false;
+    out.unbind_buffer();
+    out.bind_buffer(stream_metadata_.data(), stream_metadata_.size());
+    bm::encoder& enc = out.get_encoder();
+    if (wide || stream_offsets_.size() < 4)
+    {
+        enc.put_8('6');
+        for (size_t i = 0; i < stream_offsets_.size(); ++i)
+            enc.put_64(stream_offsets_[i]);
+    }
+    else
+    {
+        const unsigned count = unsigned(plane_off_vect_.size());
+        const unsigned lo = plane_off_vect_[0], hi = plane_off_vect_[count-1];
+        enc.put_8('3'); enc.put_32(lo); enc.put_32(hi);
+        bm::bit_out<bm::encoder> bits(enc);
+        bits.bic_encode_u32_cm(plane_off_vect_.data()+1, count-2, lo, hi);
+        bits.flush();
+    }
+    if (!out.flush()) return false;
+    bm::encoder hdr(header, header_size);
+    hdr.put_8('B'); hdr.put_8(sv.is_compressed() ? 'C' : 'M');
+    hdr.put_8((unsigned char)bm::globals<true>::byte_order());
+    hdr.put_8(0);
+#ifdef BM64ADDR
+    hdr.put_8(2);
+#else
+    hdr.put_8(1);
+#endif
+    hdr.put_64(bm::id64_t(planes) | (1ull << 63));
+    hdr.put_64(sv.size_internal()); hdr.put_64(bm::id64_t(digest_offset));
+    return out.patch(origin, header, header_size);
+}
+
+template<typename SV>
+template<class OUT>
+bool sparse_vector_serializer<SV>::encode_remap_stream(const SV& sv, OUT& out)
+{
+    const auto* matrix = sv.get_remap_matrix();
+    size_t rows = 0, cols = 0, csr_size = 0;
+    remap_rlen_vect_.resize(0);
+    if (sv.is_remap())
+    {
+        BM_ASSERT(matrix);
+        cols = matrix->cols();
+        for (size_t r = 0; r < matrix->rows(); ++r)
+        {
+            unsigned count = unsigned(bm::count_nz(matrix->row(r), cols));
+            if (!count) break;
+            remap_rlen_vect_.push_back(count);
+            csr_size += sizeof(bm::gap_word_t) + count * 2;
+        }
+        rows = remap_rlen_vect_.size();
+    }
+    // A complete gamma sequence needs at most 17 bits per row (length <=256).
+    // Keep that sequence contiguous; emit the dictionary itself row by row.
+    const size_t capacity = rows * 8 + 1024;
+    if (stream_metadata_.size() < capacity) stream_metadata_.resize(capacity, false);
+    out.bind_buffer(stream_metadata_.data(), stream_metadata_.size());
+    bm::encoder& enc = out.get_encoder();
+    if (!sv.is_remap())
+        enc.put_8('N');
+    else if (sv.remap_size() < csr_size)
+    {
+        enc.put_8('R'); enc.put_64(sv.remap_size());
+        if (!out.flush()) return false;
+        const unsigned char* data = sv.get_remap_buffer();
+        for (size_t pos = 0; pos < sv.remap_size();)
+        {
+            size_t n = sv.remap_size() - pos;
+            if (n >= stream_metadata_.size()) n = stream_metadata_.size()-1;
+            enc.memcpy(data + pos, n);
+            if (!out.flush()) return false;
+            pos += n;
+        }
+        enc.put_8('E');
+    }
+    else
+    {
+        enc.put_8('C'); enc.put_32(unsigned(rows)); enc.put_16(bm::gap_word_t(cols));
+        {
+            bm::bit_out<bm::encoder> bits(enc);
+            for (size_t r = 0; r < rows; ++r) bits.gamma(remap_rlen_vect_[r]);
+        }
+        if (!out.flush()) return false;
+        for (size_t r = 0; r < rows; ++r)
+        {
+            const unsigned char* row = matrix->row(r);
+            for (size_t c = 0; c < cols; ++c)
+                if (row[c]) { enc.put_8((unsigned char)c); enc.put_8(row[c]); }
+            if (!out.flush()) return false;
+        }
+        enc.put_8('E');
+    }
+    if (!out.flush()) return false;
+    out.unbind_buffer();
+    return true;
+}
+
+template<typename SV>
+template<class IN, class Buffer>
+bool sparse_vector_deserializer<SV>::load_remap_stream(SV& sv, IN& in, Buffer& buffer)
+{
+    if (!in.prepare(16)) return false;
+    auto& dec = in.get_decoder();
+    unsigned kind = dec.get_8();
+    if (kind == 'N') return true;
+    if (kind == 'R')
+    {
+        bm::id64_t size = dec.get_64();
+        auto* matrix = sv.get_remap_matrix();
+        if (!matrix || !size || size % 256 || size/256 > sv.get_bmatrix().rows()/8)
+            return false;
+        matrix->resize(size_t(size/256), 256, false);
+        unsigned char* dest = sv.init_remap_buffer();
+        if (!dest || !size || size != sv.remap_size()) return false;
+        for (size_t pos = 0; pos < size;)
+        {
+            size_t n = size_t(size)-pos;
+            if (n > buffer.size()) n = buffer.size();
+            if (!in.prepare(n)) return false;
+            dec.memcpy(dest+pos, n);
+            pos += n;
+        }
+    }
+    else if (kind == 'C')
+    {
+        unsigned rows = dec.get_32(), cols = dec.get_16();
+        auto* matrix = sv.get_remap_matrix();
+        if (!matrix || !cols || cols > 256 || rows > sv.get_bmatrix().rows()/8)
+            return false;
+        matrix->resize(rows, cols, false);
+        if (rows)
+        {
+            matrix->set_zero();
+            remap_rlen_vect_.resize(rows);
+            size_t capacity = size_t(rows)*8 + 128;
+            if (!in.reserve(buffer, capacity) || !in.prepare(capacity)) return false;
+            {
+                typedef typename std::remove_reference<decltype(dec)>::type decoder_type;
+                bm::bit_in<decoder_type> bits(dec);
+                for (unsigned r = 0; r < rows; ++r)
+                {
+                    unsigned count = bits.gamma();
+                    if (!count || count > cols) return false;
+                    remap_rlen_vect_[r] = count;
+                }
+            }
+            for (unsigned r = 0; r < rows; ++r)
+            {
+                unsigned count = remap_rlen_vect_[r];
+                if (!in.reserve(buffer, 512) || !in.prepare(count*2)) return false;
+                unsigned char* row = matrix->row(r);
+                for (unsigned j = 0; j < count; ++j)
+                {
+                    unsigned col = dec.get_8();
+                    unsigned char value = dec.get_8();
+                    if (col >= cols) return false;
+                    row[col] = value;
+                }
+            }
+        }
+    }
+    else return false;
+    if (!in.prepare(1) || dec.get_8() != 'E') return false;
+    sv.set_remap();
+    return true;
+}
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::resize_stream_target(SV& sv, size_type size)
+{
+    sv.resize_internal(size);
+}
 
 template<typename SV>
 sparse_vector_deserializer<SV>::sparse_vector_deserializer()
@@ -1857,7 +2343,7 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
     if (bm::conditional<SV::is_remap_support::value>::test()) // test remap trait
     {
         if (matr_s_ser)
-            load_remap(sv, remap_buf_ptr_);
+            load_remap(sv, remap_buf_ptr_, buf);
     } // if remap traits
 
     sv.sync(true, true); // force sync, recalculate RS index, remap tables, etc
@@ -1969,7 +2455,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
     if (bm::conditional<SV::is_remap_support::value>::test()) // test remap trait
     {
         if (matr_s_ser)
-            load_remap(sv, remap_buf_ptr_);
+            load_remap(sv, remap_buf_ptr_, buf);
     } // if remap traits
     
     sv.sync(true, true); // force sync, recalculate RS index, remap tables, etc
@@ -2524,10 +3010,19 @@ void sparse_vector_deserializer<SV>::load_planes_off_table(
 
 template<typename SV>
 void sparse_vector_deserializer<SV>::load_remap(SV& sv,
-                                         const unsigned char* remap_buf_ptr)
+                                         const unsigned char* remap_buf_ptr,
+                                         const unsigned char* blob)
 {
     if (!remap_buf_ptr)
-        return;
+    {
+        if (!digest_offset_) return;
+        for (size_t i = 0; i < off_vect_.size(); ++i)
+            if (off_vect_[i]) return;
+        // Current digest-table format reserves a 33-byte header. With no
+        // planes, remap metadata follows it directly (there is no last plane
+        // whose consumed size could establish the remap position).
+        remap_buf_ptr = blob + 33;
+    }
 
     bm::decoder dec_m(remap_buf_ptr);
 
@@ -2546,6 +3041,13 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
             std::cout << "SV deserialize remap flat size="
                       << (unsigned long long)remap_size << std::endl;
 #endif
+            // Dynamic string dictionaries have no allocated rows in a fresh
+            // target. Flat coding carries their dimensions as a byte count.
+            typename SV::remap_matrix_type* matrix = sv.get_remap_matrix();
+            if (!matrix || !remap_size || remap_size % 256 ||
+                remap_size/256 > sv.get_bmatrix().rows()/8)
+                raise_invalid_format();
+            matrix->resize(remap_size/256, 256, false);
             unsigned char* remap_buf = sv.init_remap_buffer();
             BM_ASSERT(remap_buf);
             size_t target_remap_size = sv.remap_size();
@@ -2687,6 +3189,114 @@ void sparse_vector_deserializer<SV>::raise_missing_remap_matrix()
 }
 
 // -------------------------------------------------------------------------
+
+// --------------------------------------------
+// Implementations for: sparse_vector_deserialization_index
+// --------------------------------------------
+template<class BV>
+bool sparse_vector_deserialization_index<BV>::equal(const sparse_vector_deserialization_index& other) const BMNOEXCEPT
+{
+    if (rows_.size() != other.rows_.size() || !plane_offsets_.equal(other.plane_offsets_) ||
+        digest_offset_ != other.digest_offset_ || remap_offset_ != other.remap_offset_) return false;
+    for (size_t i = 0; i < rows_.size(); ++i)
+        if (!rows_[i].equal(other.rows_[i])) return false;
+    return true;
+}
+template<class BV>
+void sparse_vector_deserialization_index<BV>::swap(sparse_vector_deserialization_index& other) BMNOEXCEPT
+{
+    rows_.swap(other.rows_); plane_offsets_.swap(other.plane_offsets_);
+    size_t n = digest_offset_; digest_offset_ = other.digest_offset_; other.digest_offset_ = n;
+    n = remap_offset_; remap_offset_ = other.remap_offset_; other.remap_offset_ = n;
+}
+// --------------------------------------------
+// Implementations for: sparse_vector_deserialization_index_serializer
+// --------------------------------------------
+template<class BV>
+size_t sparse_vector_deserialization_index_serializer<BV>::max_serialize_mem(const index_type& index) const
+{
+    size_t n = compact_ ? 8 : 12;
+    n = sv_di_detail::add(n, 32);
+    for (size_t i = 0; i < index.plane_offsets_.size(); ++i) n = sv_di_detail::add(n, 8);
+    typename index_type::row_type empty;
+    for (size_t i = 0; i < index.rows_.size(); ++i)
+    {
+        n = sv_di_detail::add(n, 8);
+        if (!index.rows_[i].equal(empty)) n = sv_di_detail::add(n, child_.max_serialize_mem(index.rows_[i]));
+    }
+    return n;
+}
+template<class BV>
+size_t sparse_vector_deserialization_index_serializer<BV>::serialize(const index_type& index, unsigned char* data, size_t capacity)
+{
+    sv_di_detail::require(data && capacity >= max_serialize_mem(index));
+    sv_di_detail::memory_output out{data, capacity}; return serialize_to(index, out);
+}
+template<class BV>
+size_t sparse_vector_deserialization_index_serializer<BV>::serialize(const index_type& index, buffer& data)
+{
+    data.resize(max_serialize_mem(index));
+    size_t n = serialize(index, data.data(), data.size()); data.resize(n); return n;
+}
+template<class BV>
+template<class OUT>
+size_t sparse_vector_deserialization_index_serializer<BV>::serialize_to(const index_type& index, OUT& out)
+{
+    const size_t start = out.pos;
+    if (!sv_di_detail::begin(out, compact_, 1) ||
+        !sv_di_detail::write64(out, index.rows_.size()) ||
+        !sv_di_detail::write64(out, index.plane_offsets_.size()) ||
+        !sv_di_detail::write64(out, index.digest_offset_) ||
+        !sv_di_detail::write64(out, index.remap_offset_)) return 0;
+    for (size_t i = 0; i < index.plane_offsets_.size(); ++i)
+        if (!sv_di_detail::write64(out, index.plane_offsets_[i])) return 0;
+    child_.set_format(deserialization_index_serializer<BV>::format_compact);
+    typename index_type::row_type empty;
+    for (size_t i = 0; i < index.rows_.size(); ++i)
+    {
+        size_t n = index.rows_[i].equal(empty) ? 0 : child_.serialize(index.rows_[i], scratch_);
+        if (!sv_di_detail::write64(out, n) || (n && !out.write(scratch_.data(), n))) return 0;
+    }
+    return sv_di_detail::finish(out, start, compact_);
+}
+// --------------------------------------------
+// Implementations for: sparse_vector_deserialization_index_deserializer
+// --------------------------------------------
+template<class BV>
+size_t sparse_vector_deserialization_index_deserializer<BV>::deserialize(index_type& index, const unsigned char* data, size_t size)
+{
+    sv_di_detail::require(data != 0);
+    sv_di_detail::memory_input in{data, size}; return deserialize_from(index, in);
+}
+template<class BV>
+template<class IN>
+size_t sparse_vector_deserialization_index_deserializer<BV>::deserialize_from(index_type& index, IN& in)
+{
+    const size_t start = in.pos; size_t tail;
+    if (!sv_di_detail::begin_read(in, compact_, 1, tail)) return 0;
+    size_t rows, offsets, digest, remap;
+    if (!sv_di_detail::read_size(in, rows) || !sv_di_detail::read_size(in, offsets) ||
+        !sv_di_detail::read_size(in, digest) || !sv_di_detail::read_size(in, remap)) return 0;
+    // One length word per row and one word per cached offset must fit before allocation.
+    sv_di_detail::require(rows <= unsigned(-1) && offsets <= unsigned(-1) &&
+                          rows <= in.remaining / 8 && offsets <= in.remaining / 8 - rows);
+    index_type tmp; tmp.reset(unsigned(rows));
+    tmp.plane_offsets_.resize(unsigned(offsets)); tmp.digest_offset_ = digest; tmp.remap_offset_ = remap;
+    for (size_t i = 0; i < offsets; ++i)
+        if (!sv_di_detail::read_size(in, tmp.plane_offsets_[i])) return 0;
+    child_.set_format(deserialization_index_deserializer<BV>::format_compact);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        size_t n; if (!sv_di_detail::read_size(in, n)) return 0;
+        sv_di_detail::require(n <= in.remaining && (rows - i - 1) <= (in.remaining - n) / 8);
+        if (!n) continue;
+        scratch_.resize(n);
+        if (!in.read(scratch_.data(), n)) return 0;
+        sv_di_detail::require(child_.deserialize(tmp.rows_[i], scratch_.data(), n) == n);
+    }
+    sv_di_detail::require(in.remaining == 0);
+    in.remaining = tail; index.swap(tmp); return in.pos - start;
+}
 
 } // namespace bm
 

@@ -191,6 +191,14 @@ public:
                    sparse_vector_float_serial_layout<SV>& sv_layout);
 
 
+    /** Stream the legacy-compatible composite BLOB using retained component buffers.
+        @tparam OUT Buffered encoder supporting size, binding, flush and patch.
+        @param sv Source vector.
+        @param out Seekable output channel; finish remains caller-owned.
+        @return True if all components and the header patch were written.
+    */
+    template<class OUT> bool serialize(const SV& sv, OUT& out);
+
 protected:
     bm::serializer<bvector_type>                     signSerializer_;       ///!< serializer for the sign bvector
     bm::sparse_vector_serializer<sparse_vector_type> exponentSerializer_;   ///!< serializer for the exponent sparse_vector
@@ -221,17 +229,85 @@ public:
     typedef typename sparse_vector_deserializer_type::deserialization_index_type deserialization_index_type;
 
 public:
+    /** Compare both child indexes. @param other Reference. @return Equality. */
+    bool equal(const sparse_vector_float_deserialization_index& other) const BMNOEXCEPT;
+    /** Exchange both child indexes. @param other Index to exchange. */
+    void swap(sparse_vector_float_deserialization_index& other) BMNOEXCEPT;
     void reset();
     void optimize();
     size_t count_offsets() const BMNOEXCEPT;
     size_t memory_used() const BMNOEXCEPT;
 
 private:
+    template<class T> friend class sparse_vector_float_deserialization_index_serializer;
+    template<class T> friend class sparse_vector_float_deserialization_index_deserializer;
     friend class bm::sparse_vector_float_deserializer<SV>;
+    template<class T> friend class streams_sparse_vector_float_deserializer;
 
     deserialization_index_type exponent_index_;
     deserialization_index_type mantissa_index_;
 };
+
+/** Persist exponent and mantissa indexes for a float sparse vector.
+    Version 1 uses little-endian framing and the existing compact bvector index codec.
+    @tparam SV Float sparse-vector type.
+*/
+template<class SV> class sparse_vector_float_deserialization_index_serializer
+{
+public:
+    typedef typename SV::bvector_type BV; ///< Underlying bvector.
+    typedef sparse_vector_float_deserialization_index<SV> index_type; ///< Source index.
+    typedef typename deserialization_index_serializer<BV>::buffer buffer; ///< Allocator-backed bytes.
+    /** Set child compression. @param level Bvector index compression level. */
+    void set_compression_level(unsigned level) { child_.set_compression_level(level); }
+    /** Set framing. @param compact True when embedded in a versioned parent. */
+    void set_compact(bool compact) BMNOEXCEPT { compact_ = compact; }
+    /** Bound output memory. @param index Source. @return Conservative bytes. */
+    size_t max_serialize_mem(const index_type& index) const;
+    /** Encode into caller memory. @param index Source. @param data Output.
+        @param capacity Available bytes. @return Encoded bytes. */
+    size_t serialize(const index_type& index, unsigned char* data, size_t capacity);
+    /** Encode into managed memory. @param index Source. @param data Output. @return Encoded bytes. */
+    size_t serialize(const index_type& index, buffer& data);
+#ifndef BM_NO_STL
+    /** Encode to a seekable stream; definition in bmfio.h. Does not flush the stream.
+        @param index Source. @param stream Output at record start.
+        @return Encoded bytes, or zero on I/O failure; stream exceptions propagate. */
+    size_t serialize(const index_type& index, std::ostream& stream);
+#endif
+    /** @internal Shared transport encoding. @tparam OUT Transport. @param index Source.
+        @param out Output adapter. @return Encoded bytes, or zero on I/O failure. */
+    template<class OUT> size_t serialize_to(const index_type& index, OUT& out);
+private:
+    bool compact_ = false; ///< Omit standalone signature when nested.
+    sparse_vector_deserialization_index_serializer<BV> child_; ///< Existing row codec.
+};
+
+/** Transactional bounded restore of a float sparse-vector index. @tparam SV Float sparse-vector type. */
+template<class SV> class sparse_vector_float_deserialization_index_deserializer
+{
+public:
+    typedef typename SV::bvector_type BV; ///< Underlying bvector.
+    typedef sparse_vector_float_deserialization_index<SV> index_type; ///< Destination index.
+    /** Set expected framing. @param compact True for an embedded record. */
+    void set_compact(bool compact) BMNOEXCEPT { compact_ = compact; }
+    /** Restore one record; failures preserve index. @param index Destination.
+        @param data Input. @param size Available bytes. @return Consumed bytes. */
+    size_t deserialize(index_type& index, const unsigned char* data, size_t size);
+#ifndef BM_NO_STL
+    /** Restore from a seekable stream; definition in bmfio.h. Success leaves it after the record.
+        @param index Destination, unchanged on failure. @param stream Input at record start.
+        @return Consumed bytes, or zero on I/O failure; format/stream exceptions propagate. */
+    size_t deserialize(index_type& index, std::istream& stream);
+#endif
+    /** @internal Shared transport decoding. @tparam IN Transport. @param index Destination.
+        @param in Input adapter. @return Consumed bytes, or zero on I/O failure. */
+    template<class IN> size_t deserialize_from(index_type& index, IN& in);
+private:
+    bool compact_ = false; ///< Expected framing.
+    sparse_vector_deserialization_index_deserializer<BV> child_; ///< Existing row decoder.
+};
+
 
 /**
     \brief Deserializer for bm::sparse_vector_float<> BLOBs.
@@ -575,6 +651,35 @@ void sparse_vector_float_serializer<SV>::serialize(const SV&                    
     std::memcpy(dest, mantLayTemp.buf(), mant_size_);
 }
 
+template<class SV>
+template<class OUT>
+bool sparse_vector_float_serializer<SV>::serialize(const SV& sv, OUT& out)
+{
+    if (!out.is_good()) return false;
+    const size_t origin = out.size();
+    const size_t header_size = 3 + 3 * sizeof(size_t);
+    unsigned char header[header_size + 1] = {};
+    std::memcpy(header, "bf0", 3);
+    out.bind_buffer(header, sizeof(header));
+    try
+    {
+        for (size_t i = 0; i < header_size; ++i) out.get_encoder().put_8(header[i]);
+        if (!out.flush()) { out.unbind_buffer(); return false; }
+    }
+    catch (...) { out.unbind_buffer(); throw; }
+    out.unbind_buffer();
+    size_t start = out.size(), sizes[3];
+    if (!signSerializer_.serialize(sv.signs_, out)) return false;
+    sizes[0] = out.size() - start; start = out.size();
+    if (!exponentSerializer_.serialize(sv.exponents_, out)) return false;
+    sizes[1] = out.size() - start; start = out.size();
+    mantissaSerializer_.set_serialize_external_null(!sv.exponents_.get_null_bvector());
+    if (!mantissaSerializer_.serialize(sv.mantissas_, out)) return false;
+    sizes[2] = out.size() - start;
+    std::memcpy(header + 3, sizes, sizeof(sizes));
+    return out.patch(origin, header, header_size);
+}
+
 //---------------------------------------------------------------------
 // sparse_vector_float_deserialization_index methods
 
@@ -817,6 +922,73 @@ void sparse_vector_float_deserializer<SV>::deserialize(SV& sv,
 
 //---------------------------------------------------------------------
 
+
+// --------------------------------------------
+// Implementations for: sparse_vector_float_deserialization_index
+// --------------------------------------------
+template<class SV>
+bool sparse_vector_float_deserialization_index<SV>::equal(const sparse_vector_float_deserialization_index& other) const BMNOEXCEPT
+{
+    return exponent_index_.equal(other.exponent_index_) && mantissa_index_.equal(other.mantissa_index_);
+}
+template<class SV>
+void sparse_vector_float_deserialization_index<SV>::swap(sparse_vector_float_deserialization_index& other) BMNOEXCEPT
+{
+    exponent_index_.swap(other.exponent_index_); mantissa_index_.swap(other.mantissa_index_);
+}
+// --------------------------------------------
+// Implementations for: sparse_vector_float_deserialization_index_serializer
+// --------------------------------------------
+template<class SV>
+size_t sparse_vector_float_deserialization_index_serializer<SV>::max_serialize_mem(const index_type& index) const
+{
+    return sv_di_detail::add(compact_ ? 8 : 12,
+        sv_di_detail::add(child_.max_serialize_mem(index.exponent_index_), child_.max_serialize_mem(index.mantissa_index_)));
+}
+template<class SV>
+size_t sparse_vector_float_deserialization_index_serializer<SV>::serialize(const index_type& index, unsigned char* data, size_t capacity)
+{
+    sv_di_detail::require(data && capacity >= max_serialize_mem(index));
+    sv_di_detail::memory_output out{data, capacity}; return serialize_to(index, out);
+}
+template<class SV>
+size_t sparse_vector_float_deserialization_index_serializer<SV>::serialize(const index_type& index, buffer& data)
+{
+    data.resize(max_serialize_mem(index));
+    size_t n = serialize(index, data.data(), data.size()); data.resize(n); return n;
+}
+template<class SV>
+template<class OUT>
+size_t sparse_vector_float_deserialization_index_serializer<SV>::serialize_to(const index_type& index, OUT& out)
+{
+    const size_t start = out.pos;
+    child_.set_compact(true);
+    if (!sv_di_detail::begin(out, compact_, 2) ||
+        !child_.serialize_to(index.exponent_index_, out) ||
+        !child_.serialize_to(index.mantissa_index_, out)) return 0;
+    return sv_di_detail::finish(out, start, compact_);
+}
+// --------------------------------------------
+// Implementations for: sparse_vector_float_deserialization_index_deserializer
+// --------------------------------------------
+template<class SV>
+size_t sparse_vector_float_deserialization_index_deserializer<SV>::deserialize(index_type& index, const unsigned char* data, size_t size)
+{
+    sv_di_detail::require(data != 0);
+    sv_di_detail::memory_input in{data, size}; return deserialize_from(index, in);
+}
+template<class SV>
+template<class IN>
+size_t sparse_vector_float_deserialization_index_deserializer<SV>::deserialize_from(index_type& index, IN& in)
+{
+    const size_t start = in.pos; size_t tail;
+    if (!sv_di_detail::begin_read(in, compact_, 2, tail)) return 0;
+    index_type tmp; child_.set_compact(true);
+    if (!child_.deserialize_from(tmp.exponent_index_, in) ||
+        !child_.deserialize_from(tmp.mantissa_index_, in)) return 0;
+    sv_di_detail::require(in.remaining == 0);
+    in.remaining = tail; index.swap(tmp); return in.pos - start;
+}
 
 }//namespace bm
 #endif

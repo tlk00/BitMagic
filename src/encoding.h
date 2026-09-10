@@ -82,6 +82,38 @@ private:
     size_t          size_;
 };
 
+/** Internal memory output channel used by the shared serializer traversal.
+ \ingroup gammacode
+ @internal
+ */
+class memory_serialization_encoder
+{
+public:
+    memory_serialization_encoder(unsigned char* data, size_t capacity) BMNOEXCEPT
+        : data_(data), enc_(data, capacity) {}
+    encoder& get_encoder() BMNOEXCEPT { return enc_; }
+    size_t size() const BMNOEXCEPT { return enc_.size(); }
+    bool is_good() const BMNOEXCEPT { return true; }
+    bool flush() BMNOEXCEPT { return true; }
+    bool finish() BMNOEXCEPT { return true; }
+    bool patch(size_t offset, const unsigned char* data, size_t count) BMNOEXCEPT
+    { ::memcpy(data_ + offset, data, count); return true; }
+    template<class Buffer>
+    bool reserve(Buffer&, size_t) BMNOEXCEPT { return true; }
+private:
+    unsigned char* data_;
+    encoder enc_;
+};
+
+// Checked RAM decoders may report an exhausted input window by exception.
+// Existing decoder instantiations keep their original noexcept contract.
+template<class DEC> struct decoder_noexcept { enum { value = true }; };
+#if defined(BM_NO_CXX11) || (defined(_MSC_VER) && _MSC_VER < 1900)
+# define BMDECNOEXCEPT(T)
+#else
+# define BMDECNOEXCEPT(T) noexcept(bm::decoder_noexcept<T>::value)
+#endif
+
 // ----------------------------------------------------------------
 /**
     Base class for all decoding functionality
@@ -299,58 +331,58 @@ template<class TDecoder>
 class bit_in
 {
 public:
-    bit_in(TDecoder& decoder) BMNOEXCEPT
+    bit_in(TDecoder& decoder) BMDECNOEXCEPT(TDecoder)
         : src_(decoder),
           used_bits_(unsigned(sizeof(accum_) * 8)),
           accum_(0) 
     {}
 
     /// decode unsigned value using Elias Gamma coding
-    unsigned gamma() BMNOEXCEPT;
+    unsigned gamma() BMDECNOEXCEPT(TDecoder);
 
     /// decode unsigned value using Elias Gamma coding
-    unsigned gamma8() BMNOEXCEPT;
+    unsigned gamma8() BMDECNOEXCEPT(TDecoder);
 
     /// Custome variant of delta decoding
-    unsigned delta16() BMNOEXCEPT;
+    unsigned delta16() BMDECNOEXCEPT(TDecoder);
 
     /// Custome variant of delta decoding
-    unsigned delta16s() BMNOEXCEPT;
+    unsigned delta16s() BMDECNOEXCEPT(TDecoder);
 
     /// get 16 bits neutral order from the bit-stream
-    unsigned get_16_no() BMNOEXCEPT;
+    unsigned get_16_no() BMDECNOEXCEPT(TDecoder);
 
     /// get 24 bits neutral order from the bit-stream
-    unsigned get_24_no() BMNOEXCEPT;
+    unsigned get_24_no() BMDECNOEXCEPT(TDecoder);
 
     /// get 32 bits neutral order from the bit-stream
-    unsigned get_32_no() BMNOEXCEPT;
+    unsigned get_32_no() BMDECNOEXCEPT(TDecoder);
 
     // get 64-bit neutral order from the bit-stream
-    unsigned long long get_64_no() BMNOEXCEPT;
+    unsigned long long get_64_no() BMDECNOEXCEPT(TDecoder);
 
     /// read number of bits out of the stream
-    unsigned get_bits(unsigned count) BMNOEXCEPT;
+    unsigned get_bits(unsigned count) BMDECNOEXCEPT(TDecoder);
 
     /// read 1 bit
-    unsigned get_bit() BMNOEXCEPT;
+    unsigned get_bit() BMDECNOEXCEPT(TDecoder);
 
     /// Binary Interpolative array decode
     void bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
-                        bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT
+                        bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
     {
         if (sz)
             bic_decode_u16_cm(arr, sz, lo, hi);
     }
     
     void bic_decode_u16_bitset(bm::word_t* block, unsigned sz,
-                               bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT
+                               bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
     {
         if (sz)
             bic_decode_u16_cm_bitset(block, sz, lo, hi);
     }
     void bic_decode_u16_dry(unsigned sz,
-                            bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT
+                            bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
     {
         if (sz)
             bic_decode_u16_cm_dry(sz, lo, hi);
@@ -359,39 +391,39 @@ public:
 
     /// Binary Interpolative array decode
     void bic_decode_u16_rg(bm::gap_word_t* arr, unsigned sz,
-                           bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT;
+                           bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder);
     /// Binary Interpolative array decode
     void bic_decode_u16_cm(bm::gap_word_t* arr, unsigned sz,
-                           bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT;
+                           bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder);
 
     /// Binary Interpolative array decode (32-bit)
     void bic_decode_u32_cm(bm::word_t* arr, unsigned sz,
-                           bm::word_t lo, bm::word_t hi) BMNOEXCEPT;
+                           bm::word_t lo, bm::word_t hi) BMDECNOEXCEPT(TDecoder);
 
 
     /// Binary Interpolative array decode into bitset (32-bit based)
     void bic_decode_u16_rg_bitset(bm::word_t* block, unsigned sz,
-                                  bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT;
+                                  bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder);
 
     /// Binary Interpolative array decode into /dev/null
     void bic_decode_u16_rg_dry(unsigned sz,
-                               bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT;
+                               bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder);
 
     /// Binary Interpolative array decode into bitset (32-bit based)
     void bic_decode_u16_cm_bitset(bm::word_t* block, unsigned sz,
                                   bm::gap_word_t lo,
-                                  bm::gap_word_t hi) BMNOEXCEPT;
+                                  bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder);
 
     /// Binary Interpolative array decode into /dev/null
     void bic_decode_u16_cm_dry(unsigned sz,
-                               bm::gap_word_t lo, bm::gap_word_t hi) BMNOEXCEPT;
+                               bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder);
 
     /// Selective array decode
     /// @return bit-flag of decoding parameters
     ///
     unsigned decode_array(bm::gap_word_t* arr, bm::word_t* tb_wflags,
                           unsigned* sz,
-                          unsigned default_sz = 0) BMNOEXCEPT;
+                          unsigned default_sz = 0) BMDECNOEXCEPT(TDecoder);
 
 
 private:
@@ -403,6 +435,9 @@ private:
     unsigned            accum_;      ///< read bit accumulator
 };
 
+
+template<class DEC> struct decoder_noexcept<bit_in<DEC> >
+    { enum { value = decoder_noexcept<DEC>::value }; };
 
 /**
     Functor for Elias Gamma encoding
@@ -2123,7 +2158,7 @@ void bit_out<TEncoder>::encode_array(const bm::gap_word_t* arr,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u16_rg(bm::gap_word_t* arr, unsigned sz,
                                          bm::gap_word_t lo,
-                                         bm::gap_word_t hi) BMNOEXCEPT
+                                         bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz);
     do // for (;sz;)
@@ -2167,7 +2202,7 @@ void bit_in<TDecoder>::bic_decode_u16_rg(bm::gap_word_t* arr, unsigned sz,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u32_cm(bm::word_t* arr, unsigned sz,
                                          bm::word_t lo,
-                                         bm::word_t hi) BMNOEXCEPT
+                                         bm::word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz);
     do
@@ -2212,7 +2247,7 @@ void bit_in<TDecoder>::bic_decode_u32_cm(bm::word_t* arr, unsigned sz,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u16_cm(bm::gap_word_t* arr, unsigned sz,
                                          bm::gap_word_t lo,
-                                         bm::gap_word_t hi) BMNOEXCEPT
+                                         bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz);
     do
@@ -2256,7 +2291,7 @@ void bit_in<TDecoder>::bic_decode_u16_cm(bm::gap_word_t* arr, unsigned sz,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u16_cm_bitset(bm::word_t* block, unsigned sz,
                               bm::gap_word_t lo,
-                              bm::gap_word_t hi) BMNOEXCEPT
+                              bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz);
     do
@@ -2305,7 +2340,7 @@ void bit_in<TDecoder>::bic_decode_u16_cm_bitset(bm::word_t* block, unsigned sz,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u16_cm_dry(unsigned sz,
                               bm::gap_word_t lo,
-                              bm::gap_word_t hi) BMNOEXCEPT
+                              bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz);
     do
@@ -2354,7 +2389,7 @@ void bit_in<TDecoder>::bic_decode_u16_cm_dry(unsigned sz,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u16_rg_bitset(bm::word_t* block, unsigned sz,
                                                 bm::gap_word_t lo,
-                                                bm::gap_word_t hi) BMNOEXCEPT
+                                                bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz);
     do //for (;sz;)
@@ -2402,7 +2437,7 @@ void bit_in<TDecoder>::bic_decode_u16_rg_bitset(bm::word_t* block, unsigned sz,
 template<class TDecoder>
 void bit_in<TDecoder>::bic_decode_u16_rg_dry(unsigned sz,
                                    bm::gap_word_t lo,
-                                   bm::gap_word_t hi) BMNOEXCEPT
+                                   bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)
 {
     for (;sz;)
     {
@@ -2438,7 +2473,7 @@ void bit_in<TDecoder>::bic_decode_u16_rg_dry(unsigned sz,
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::gamma8() BMNOEXCEPT
+unsigned bit_in<TDecoder>::gamma8() BMDECNOEXCEPT(TDecoder)
 {
     auto c = gamma();
     switch (c)
@@ -2460,7 +2495,7 @@ unsigned bit_in<TDecoder>::gamma8() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::delta16() BMNOEXCEPT
+unsigned bit_in<TDecoder>::delta16() BMDECNOEXCEPT(TDecoder)
 {
     auto order = gamma();
     unsigned delta;
@@ -2485,7 +2520,7 @@ unsigned bit_in<TDecoder>::delta16() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::delta16s() BMNOEXCEPT
+unsigned bit_in<TDecoder>::delta16s() BMDECNOEXCEPT(TDecoder)
 {
     auto c = get_bit();
     switch (c)
@@ -2503,7 +2538,7 @@ unsigned bit_in<TDecoder>::delta16s() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::gamma() BMNOEXCEPT
+unsigned bit_in<TDecoder>::gamma() BMDECNOEXCEPT(TDecoder)
 {
     unsigned acc = accum_;
     unsigned used = used_bits_;
@@ -2588,7 +2623,7 @@ ret:
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::get_16_no() BMNOEXCEPT
+unsigned bit_in<TDecoder>::get_16_no() BMDECNOEXCEPT(TDecoder)
 {
     unsigned lo = get_bits(8);
     unsigned hi = get_bits(8);
@@ -2599,7 +2634,7 @@ unsigned bit_in<TDecoder>::get_16_no() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::get_24_no() BMNOEXCEPT
+unsigned bit_in<TDecoder>::get_24_no() BMDECNOEXCEPT(TDecoder)
 {
     unsigned v0 = get_bits(8);
     unsigned v1 = get_bits(8);
@@ -2611,7 +2646,7 @@ unsigned bit_in<TDecoder>::get_24_no() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::get_32_no() BMNOEXCEPT
+unsigned bit_in<TDecoder>::get_32_no() BMDECNOEXCEPT(TDecoder)
 {
     unsigned lo = get_bits(8);
     unsigned hi = get_bits(8);
@@ -2625,7 +2660,7 @@ unsigned bit_in<TDecoder>::get_32_no() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned long long bit_in<TDecoder>::get_64_no() BMNOEXCEPT
+unsigned long long bit_in<TDecoder>::get_64_no() BMDECNOEXCEPT(TDecoder)
 {
     unsigned long long lo = get_32_no();
     unsigned long long hi = get_32_no();
@@ -2635,7 +2670,7 @@ unsigned long long bit_in<TDecoder>::get_64_no() BMNOEXCEPT
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::get_bits(unsigned count) BMNOEXCEPT
+unsigned bit_in<TDecoder>::get_bits(unsigned count) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(count);
     const unsigned maskFF = ~0u;
@@ -2672,7 +2707,7 @@ ret:
 // ----------------------------------------------------------------------
 
 template<class TDecoder>
-unsigned bit_in<TDecoder>::get_bit() BMNOEXCEPT
+unsigned bit_in<TDecoder>::get_bit() BMDECNOEXCEPT(TDecoder)
 {
     const unsigned mask = (~0u) >> (32 - 1); // 100000...
     unsigned value = accum_ & mask;
@@ -2698,7 +2733,7 @@ template<class TDecoder>
 unsigned bit_in<TDecoder>::decode_array(bm::gap_word_t* arr,
                                         bm::word_t*     tb_wflags,
                                         unsigned*       sz,
-                                        unsigned        default_sz) BMNOEXCEPT
+                                        unsigned        default_sz) BMDECNOEXCEPT(TDecoder)
 {
     BM_ASSERT(sz && arr);
     unsigned h3_flag = this->get_bits(8);

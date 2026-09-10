@@ -55,6 +55,7 @@ class sparse_vector_float
     template<class SVect, unsigned S_FACTOR> friend class sparse_vector_scanner;
     template<class SVect> friend class sparse_vector_float_serializer;
     template<class SVect> friend class sparse_vector_float_deserializer;
+    template<class SVect> friend class streams_sparse_vector_float_deserializer;
 public:
     //
     typedef float                                   value_type;
