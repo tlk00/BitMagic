@@ -300,6 +300,15 @@ public:
         \param sv                 - sparse vector to serialize
         \param sv_layout  - buffer structure to keep the result
         as defined in bm::serialization_flags
+        @par Sparse-vector header evolution
+        Versions 1/2 identify the original 32-bit/BM64 address models.
+        Versions 3/4 retain these models and the internal value count, but
+        replace the reserved word at byte 29 with a 32-bit extension length.
+        The extension starts at byte 33 with the 64-bit logical size; its
+        current length is 8. Additional optional bytes are skipped through
+        the absolute plane/digest offsets. Bit-plane encoding is unchanged.
+        New readers accept both formats. Writers always emit the current
+        format; reading new BLOBs requires an upgraded library.
     */
     void serialize(const SV&                        sv,
                    sparse_vector_serial_layout<SV>& sv_layout);
@@ -525,12 +534,16 @@ protected:
                         bool clear_sv);
 
 
-    /// deserialize bit-vector planes
-    /** Resize internal storage without translating RSC coordinates.
+    /** Initialize storage using explicit logical extent when available.
         @param sv Destination whose internal serialized size has been read.
         @param size Serialized internal element count.
     */
-    static void resize_stream_target(SV& sv, size_type size);
+    void resize_stream_target(SV& sv, size_type size);
+
+    /** Validate RSC extent and rebuild derived indexes after decoding.
+        @param sv Decoded target, with its complete NULL plane available.
+    */
+    void sync_stream_target(SV& sv);
 
     /// deserialize bit-vector planes
     void deserialize_planes(SV& sv, unsigned planes,
@@ -631,6 +644,9 @@ protected:
 
     bvector_type                     plane_digest_bv_; // digest of bit-planes
     bm::id64_t                       sv_size_;
+    bm::id64_t                       logical_size_ = 0; ///< Explicit logical extent.
+    bool                             has_logical_size_ = false; ///< Header carries logical size.
+    bm::id64_t                       header_size_ = 33; ///< Header plus optional extension bytes.
     bm::id64_t                       digest_offset_;
 
     bm::deserializer<bvector_type, bm::decoder> deserial_;
@@ -1575,14 +1591,6 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     bvs_.allow_stat_reset(false); // stats accumulate mode for all bit-slices
     bvs_.reset_compression_stats();
 
-    if (!sv.size()) // special case of an empty vector
-    {
-        unsigned char* buf = sv_layout.reserve(4);
-        buf[0]='B'; buf[1] = 'Z';
-        sv_layout.resize(2);
-        return;
-    }
-
     const auto& bmatr = sv.get_bmatrix();
     unsigned planes = (unsigned)bmatr.rows();
     const unsigned null_idx = unsigned(bmatr.get_null_idx());
@@ -1605,7 +1613,7 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
     //
     typename SV::statistics sv_stat;
     sv.calc_stat(&sv_stat);
-    sv_stat.max_serialize_mem += plane_digest_buf_.size() + (8 * planes);
+    sv_stat.max_serialize_mem += plane_digest_buf_.size() + (8 * planes) + 8;
     unsigned char* buf = sv_layout.reserve(sv_stat.max_serialize_mem);
 
     // ----------------------------------------------------
@@ -1624,6 +1632,8 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
         h_size += 1 + // version number
                   8;  // number of planes (64-bit)
     }
+
+    h_size += 8; // reserved word becomes extension length
 
     // ----------------------------------------------------
     // Setup XOR reference compression
@@ -1801,13 +1811,15 @@ void sparse_vector_serializer<SV>::serialize(const SV&  sv,
 #endif
     
     enc.put_8(0);              // number of planes == 0 (legacy magic number)
-    enc.put_8(matr_s_ser);     // matrix serialization version
+    enc.put_8(matr_s_ser + 2); // version 3 (32-bit) or 4 (BM64), at byte 4
     {
         bm::id64_t planes_code = planes | (1ull << 63);
         enc.put_64(planes_code);        // number of rows in the bit-matrix
     }
     enc.put_64(sv.size_internal());
     enc.put_64(bm::id64_t(digest_offset));
+    enc.put_32(8); // extension byte length at byte 29
+    enc.put_64(sv.size()); // logical size at byte 33
 }
 
 // -------------------------------------------------------------------------
@@ -1834,12 +1846,6 @@ bool sparse_vector_serializer<SV>::serialize(const SV& sv, OUT& out)
     // Raw 64-bit offsets bound the integer-vector metadata; BIC uses <=32
     // bits per offset plus word padding. No source-size estimate is needed.
     stream_metadata_.resize(size_t(planes) * 8 + 128, false);
-    if (!sv.size())
-    {
-        out.bind_buffer(stream_metadata_.data(), stream_metadata_.size());
-        out.get_encoder().put_8('B'); out.get_encoder().put_8('Z');
-        return out.flush();
-    }
     const auto& matrix = sv.get_bmatrix();
     const unsigned null_idx = unsigned(matrix.get_null_idx());
     const bool skip_null = sv.is_null_external() &&
@@ -1850,8 +1856,8 @@ bool sparse_vector_serializer<SV>::serialize(const SV& sv, OUT& out)
     plane_digest_bv_.optimize();
     bvs_.set_ref_vectors(0);
     bvs_.serialize(plane_digest_bv_, plane_digest_buf_);
-    const unsigned header_size = 33;
-    unsigned char header[header_size] = {};
+    const unsigned header_size = 41;
+    unsigned char header[41] = {};
     out.bind_buffer(stream_metadata_.data(), stream_metadata_.size());
     out.get_encoder().memcpy(header, header_size);
     if (!out.flush()) return false;
@@ -1923,12 +1929,13 @@ bool sparse_vector_serializer<SV>::serialize(const SV& sv, OUT& out)
     hdr.put_8((unsigned char)bm::globals<true>::byte_order());
     hdr.put_8(0);
 #ifdef BM64ADDR
-    hdr.put_8(2);
+    hdr.put_8(4); // BM64 version, at byte 4
 #else
-    hdr.put_8(1);
+    hdr.put_8(3); // 32-bit version, at byte 4
 #endif
     hdr.put_64(bm::id64_t(planes) | (1ull << 63));
     hdr.put_64(sv.size_internal()); hdr.put_64(bm::id64_t(digest_offset));
+    hdr.put_32(8); hdr.put_64(sv.size());
     return out.patch(origin, header, header_size);
 }
 
@@ -2070,7 +2077,21 @@ bool sparse_vector_deserializer<SV>::load_remap_stream(SV& sv, IN& in, Buffer& b
 template<typename SV>
 void sparse_vector_deserializer<SV>::resize_stream_target(SV& sv, size_type size)
 {
-    sv.resize_internal(size);
+    sv.resize_internal(has_logical_size_ ? size_type(logical_size_) : size);
+}
+
+template<typename SV>
+void sparse_vector_deserializer<SV>::sync_stream_target(SV& sv)
+{
+    if (has_logical_size_ && SV::is_rsc_support::value)
+    {
+        const bvector_type* nulls = sv.get_null_bvector();
+        typename bvector_type::size_type last = 0;
+        if (!nulls || (nulls->find_reverse(last) && last >= logical_size_) ||
+            nulls->count() != sv_size_)
+            raise_invalid_header();
+    }
+    sv.sync(true, !has_logical_size_);
 }
 
 template<typename SV>
@@ -2198,7 +2219,7 @@ void sparse_vector_deserializer<SV>::construct_deserialization_index(
     unsigned planes = load_header(dec, sv_tmp, matr_s_ser);
     (void)matr_s_ser;
     matrix.reset(planes);
-    if (!sv_size_)
+    if (!sv_size_ && !logical_size_ && !has_logical_size_)
         return;
 
     sv_tmp.resize_internal(size_type(sv_size_));
@@ -2296,10 +2317,10 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
     unsigned char matr_s_ser = 0;
     unsigned planes = load_header(dec, sv, matr_s_ser);
 
-    if (!sv_size_) // empty vector
+    if (!sv_size_ && !logical_size_ && !has_logical_size_) // legacy empty vector
         return;
 
-    sv.resize_internal(size_type(sv_size_));
+    resize_stream_target(sv, size_type(sv_size_));
     bv_ref_.reset();
 
     if (!load_planes_off_table_from_index(planes))
@@ -2325,6 +2346,12 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
         if (!range_valid)
         {
             sv.clear();
+            if (has_logical_size_)
+            {
+                resize_stream_target(sv, size_type(sv_size_));
+                sv.sync(true, false);
+            }
+            clear_xor_compression();
             idx_range_set_ = false;
             return;
         }
@@ -2346,7 +2373,7 @@ void sparse_vector_deserializer<SV>::deserialize_range(SV& sv,
             load_remap(sv, remap_buf_ptr_, buf);
     } // if remap traits
 
-    sv.sync(true, true); // force sync, recalculate RS index, remap tables, etc
+    sync_stream_target(sv);
 
     remap_buf_ptr_ = 0;
 
@@ -2374,10 +2401,10 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
 
     unsigned char matr_s_ser = 0;
     unsigned planes = load_header(dec, sv, matr_s_ser);
-    if (!sv_size_)
+    if (!sv_size_ && !logical_size_ && !has_logical_size_)
         return;  // empty vector
         
-    sv.resize_internal(size_type(sv_size_));
+    resize_stream_target(sv, size_type(sv_size_));
     bv_ref_.reset();
 
     if (!load_planes_off_table_from_index(planes))
@@ -2458,7 +2485,7 @@ void sparse_vector_deserializer<SV>::deserialize_sv(SV& sv,
             load_remap(sv, remap_buf_ptr_, buf);
     } // if remap traits
     
-    sv.sync(true, true); // force sync, recalculate RS index, remap tables, etc
+    sync_stream_target(sv);
     remap_buf_ptr_ = 0;
 }
 
@@ -2469,6 +2496,9 @@ unsigned sparse_vector_deserializer<SV>::load_header(
         bm::decoder& dec, SV& sv, unsigned char& matr_s_ser)
 {
     (void)sv;
+    has_logical_size_ = false;
+    logical_size_ = 0;
+    header_size_ = 33;
     bm::id64_t planes_code = 0;
     unsigned char h1 = dec.get_8();
     unsigned char h2 = dec.get_8();
@@ -2495,7 +2525,7 @@ unsigned sparse_vector_deserializer<SV>::load_header(
     }
     #ifdef BM64ADDR
     #else
-        if (matr_s_ser == 2) // 64-bit matrix
+        if (matr_s_ser == 2 || matr_s_ser == 4) // 64-bit matrix
             raise_invalid_64bit();
     #endif
 
@@ -2506,12 +2536,27 @@ unsigned sparse_vector_deserializer<SV>::load_header(
             raise_invalid_bitdepth();
     }
 
+    if (matr_s_ser > 4) raise_invalid_header();
     sv_size_ = dec.get_64();
 
     digest_offset_ = 0;
     if (planes_code & (1ull << 63))
     {
         digest_offset_ = dec.get_64();
+    }
+
+    if (matr_s_ser >= 3)
+    {
+        if (!digest_offset_) raise_invalid_header();
+        unsigned ext_size = dec.get_32();
+        if (ext_size < 8 || bm::id64_t(ext_size) + 33 > digest_offset_)
+            raise_invalid_header();
+        logical_size_ = dec.get_64();
+        if (logical_size_ < sv_size_ || logical_size_ > bm::id_max)
+            raise_invalid_header();
+        if (h2 == 'M' && logical_size_ != sv_size_) raise_invalid_header();
+        header_size_ += ext_size;
+        has_logical_size_ = true;
     }
 
 #ifdef BM_TRACE_SV_DESERIAL
@@ -3018,10 +3063,9 @@ void sparse_vector_deserializer<SV>::load_remap(SV& sv,
         if (!digest_offset_) return;
         for (size_t i = 0; i < off_vect_.size(); ++i)
             if (off_vect_[i]) return;
-        // Current digest-table format reserves a 33-byte header. With no
-        // planes, remap metadata follows it directly (there is no last plane
+        // With no planes, remap metadata follows the header directly (no last plane
         // whose consumed size could establish the remap position).
-        remap_buf_ptr = blob + 33;
+        remap_buf_ptr = blob + size_t(header_size_);
     }
 
     bm::decoder dec_m(remap_buf_ptr);

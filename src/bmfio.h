@@ -1264,7 +1264,8 @@ bool streams_sparse_vector_deserializer<SV>::read(
     if (!stream) return false;
     const std::streampos origin = stream.tellg();
     if (origin == std::streampos(-1)) return false;
-    unsigned char header[33] = {};
+    unsigned char header[41] = {};
+    size_t header_size = 33;
     stream.read(reinterpret_cast<char*>(header), 2);
     if (!stream || header[0] != 'B') return false;
     // A subsequent BLOB may switch from remapped strings to plain strings.
@@ -1278,11 +1279,20 @@ bool streams_sparse_vector_deserializer<SV>::read(
     if (header[1] != (sv.is_compressed() ? 'C' : 'M')) return false;
     stream.read(reinterpret_cast<char*>(header)+2, 31);
     if (!stream || header[2] != (unsigned char)globals<true>::byte_order() ||
-        header[3] != 0 || (header[4] != 1 && header[4] != 2)) return false;
+        header[3] != 0 || header[4] < 1 || header[4] > 4) return false;
+    if (header[4] >= 3)
+    {
+        stream.read(reinterpret_cast<char*>(header)+33, 8);
+        if (!stream) return false;
+        bm::decoder ext(header+29);
+        const unsigned length = ext.get_32();
+        if (length < 8) return false;
+        header_size += size_t(length);
+    }
     bm::decoder hdr(header);
     unsigned char version = 0;
     const unsigned planes = this->load_header(hdr, sv, version);
-    if (!this->digest_offset_ || this->digest_offset_ < sizeof(header) ||
+    if (!this->digest_offset_ || this->digest_offset_ < header_size ||
         this->digest_offset_ > (std::numeric_limits<size_t>::max)()) return false;
     if (!seek(stream, origin, size_t(this->digest_offset_))) return false;
     this->plane_digest_bv_.clear();
@@ -1341,7 +1351,7 @@ bool streams_sparse_vector_deserializer<SV>::read(
         if (this->plane_digest_bv_.test(i) && !this->off_vect_[i]) return false;
         if (size_t offset = this->off_vect_[i])
         {
-            if (offset < sizeof(header) || offset <= previous || offset >= this->digest_offset_)
+            if (offset < header_size || offset <= previous || offset >= this->digest_offset_)
                 return false;
             previous = offset;
         }
@@ -1356,7 +1366,7 @@ bool streams_sparse_vector_deserializer<SV>::read(
     reader_.set_ref_vectors(this->bv_ref_ptr_ ? this->bv_ref_ptr_ : &this->bv_ref_);
     const bvector_type* selection = mask;
     bvector_type digest;
-    size_t remap_offset = sizeof(header); // valid even when no planes are present
+    size_t remap_offset = header_size; // valid even when no planes are present
     // RSC masks use logical addresses until the complete NULL plane is loaded.
     for (int row = int(planes)-1; row >= 0; --row)
     {
@@ -1458,7 +1468,7 @@ bool streams_sparse_vector_deserializer<SV>::read(
         }
         if (sv.max_vector_size == 1 && !sv.is_null_external())
             if (sv.get_bmatrix().get_row(sv.sv_value_slices)) sv.mark_null_idx(sv.sv_value_slices);
-        sv.sync(true, true);
+        this->sync_stream_target(sv);
     }
     stream.seekg(end);
     return bool(stream);
