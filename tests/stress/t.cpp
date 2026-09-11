@@ -80,7 +80,13 @@ For more information please visit:  http://bitmagic.io
 #include <fstream>
 #include <sstream>
 #include <chrono>
-#include <filesystem>
+#if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ < 8)
+# include <experimental/filesystem>
+namespace bmtest_fs = std::experimental::filesystem;
+#else
+# include <filesystem>
+namespace bmtest_fs = std::filesystem;
+#endif
 #include <atomic>
 #include <limits.h>
 
@@ -1566,22 +1572,22 @@ class BVectorTestFile
 {
     struct directory
     {
-        std::filesystem::path path;
+        bmtest_fs::path path;
         directory()
         {
-            const std::filesystem::path root("bm-file-tests");
-            std::filesystem::create_directories(root);
+            const bmtest_fs::path root("bm-file-tests");
+            bmtest_fs::create_directories(root);
             const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
             for (unsigned attempt = 0; ; ++attempt)
             {
                 path = root / ("run-" + std::to_string(stamp) + "-" + std::to_string(attempt));
-                if (std::filesystem::create_directory(path)) break;
+                if (bmtest_fs::create_directory(path)) break;
             }
         }
         ~directory()
         {
             std::error_code ec;
-            std::filesystem::remove_all(path, ec);
+            bmtest_fs::remove_all(path, ec);
             if (ec) std::cerr << "File-test directory cleanup failed: " << path << ": " << ec.message() << std::endl;
         }
     };
@@ -1596,7 +1602,7 @@ public:
     ~BVectorTestFile()
     {
         std::error_code ec;
-        std::filesystem::remove(path, ec);
+        bmtest_fs::remove(path, ec);
         if (ec)
         {
             std::cerr << "File-test cleanup failed: " << path << ": " << ec.message() << std::endl;
@@ -18240,8 +18246,8 @@ static void BVectorStreamDeserializationFailureTest()
                 file.seekg(std::streamoff(blob.size() + trailer_bytes));
                 assert(file.good()); cut = size_t(file.tellg());
             }
-            std::filesystem::resize_file(fixture.path, cut);
-            assert(std::filesystem::file_size(fixture.path) == cut);
+            bmtest_fs::resize_file(fixture.path, cut);
+            assert(bmtest_fs::file_size(fixture.path) == cut);
             std::ifstream file(fixture.path, std::ios::binary);
             if (throwing) file.exceptions(std::ios::badbit | std::ios::failbit | std::ios::eofbit);
             bm::streams_decoder in(file);
@@ -49623,7 +49629,7 @@ void CheckFloatStream(const SV& source, bool file = false, bool gather = false,
         if (file)
         {
             disk.close();
-            std::filesystem::resize_file(fixture->path, 6 + ram.size() - 1);
+            bmtest_fs::resize_file(fixture->path, 6 + ram.size() - 1);
             std::ifstream truncated(fixture->path, std::ios::binary);
             truncated.seekg(6);
             if (reader.deserialize(restored, truncated)) throw std::runtime_error("Float truncated file accepted");
@@ -49670,7 +49676,7 @@ void SparseVectorIndexPersistenceTest()
     char tail[15]; stream.read(tail, 15);
     if (!stream || std::memcmp(tail, "sentinelPAYLOAD", 15)) throw std::runtime_error("Sparse index file sentinel mismatch");
     stream.close();
-    std::filesystem::resize_file(fixture.path, 6 + size - 1);
+    bmtest_fs::resize_file(fixture.path, 6 + size - 1);
     std::ifstream truncated(fixture.path, std::ios::binary); truncated.seekg(6);
     bool rejected = false;
     try { deserializer.deserialize(restored, truncated); }

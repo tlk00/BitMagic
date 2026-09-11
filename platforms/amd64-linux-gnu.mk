@@ -67,10 +67,16 @@ endif
 
 SYS_LIBS = -lpthread -ldl -lrt
 
+ifeq ($(COMPILER),GNU_CC)
+    GCC_MAJOR_VERSION := $(shell $(CXX) -dumpversion | cut -d. -f1)
+    ifneq ($(filter 7 8,$(GCC_MAJOR_VERSION)),)
+        SYS_LIBS += -lstdc++fs
+    endif
+endif
+
 COMMON_CXXFLAGS = $(COMMON_DFLAGS) $(PLATFORM_CXXFLAGS)
 COMMON_CFLAGS = $(COMMON_DFLAGS) $(PLATFORM_CFLAGS)
 INSTALL = /usr/bin/install
 INSTALLDIR = /usr/bin/install -d
 AWK = awk
 TEST = /usr/bin/test
-
