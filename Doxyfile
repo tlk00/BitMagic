@@ -59,7 +59,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
                          ./src/bmintervals.h ./src/bm3vl.h ./src/bmbvimport.h \
                          ./src/bmtask.h ./src/bmthreadpool.h ./src/bmsparsevec_parallel.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h ./src/bmaggregator.h \
-                         ./src/bmundef.h ./src/bmserial.h ./src/bmalloc.h ./src/bmrandom.h \                        
+                         ./src/bmundef.h ./src/bmserial.h ./src/bmfio.h ./src/bmalloc.h ./src/bmrandom.h \
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
                          ./src/bmsparsevec_compr.h ./src/bmstrsparsevec.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
 ./samples/bvsample01/sample1.cpp \
@@ -89,6 +89,7 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmxor.h
 ./samples/bvsample24/sample24.cpp \
 ./samples/bvsample25/sample25.cpp \
 ./samples/bvsample26/sample26.cpp \
+./samples/bvsample27/sample27.cpp \
 ./samples/bvsetalgebra/bvsetalgebra.cpp \
 ./samples/bv3vlogic/bv3vlogic.cpp \
 ./samples/xsample01/xsample01.cpp \
