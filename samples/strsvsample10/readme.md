@@ -18,8 +18,8 @@ use the serialized BLOB on disk as the retrieval source.
 The sample is written as two stages.
 
 Stage 1 is preparation. The program constructs a large string sparse vector,
-remaps and optimizes it, serializes it with bookmarks enabled, and saves the
-serialized BLOB to `strsvsample10_data.bm`.
+remaps and optimizes it, serializes it with bookmarks enabled directly into a
+file stream, and saves the serialized BLOB to `strsvsample10_data.bm`.
 
 Stage 2 is retrieval. The program opens the saved file read-only, maps it with
 `mmap()`, constructs a deserialization index from the mapped BLOB, and performs
@@ -27,9 +27,10 @@ several gather deserializations. The original source vector is not used during
 this stage.
 
 In a real application these stages can be separated. Stage 1 can run offline on
-a machine with enough memory to build the vector. Stage 2 can run later in a
-lower-RAM process that only maps the serialized file and retrieves selected
-elements.
+a machine with enough memory to build the vector. File streaming avoids adding
+a second full serialized-layout allocation during this stage. Stage 2 can run
+later in a lower-RAM process that only maps the serialized file and retrieves
+selected elements.
 
 ## Platform requirements
 
@@ -48,21 +49,29 @@ then `remap()` and `optimize()` are called before serialization. Remapping
 reduces the character alphabet in each string plane, and optimization compresses
 the bit-vector planes.
 
-The sample uses `bm::sparse_vector_serializer<>` with bookmarks enabled:
+The sample uses `bm::sparse_vector_serializer<>` with bookmarks enabled and
+`bm::streams_encoder` from `bmfio.h` to write directly to a file:
 
 ```cpp
+std::ofstream file("strsvsample10_data.bm", std::ios::binary);
+bm::streams_encoder output(file);
+
 serializer.set_bookmarks(true, 16);
-serializer.serialize(str_sv, layout);
+bool ok = serializer.serialize(str_sv, output);
+if (ok) ok = output.finish();
 ```
 
 Bookmarks add skip points to the serialized BLOB. They increase serialized size
 slightly, but make later range and gather deserialization more efficient.
 
+The streaming form produces the same RAM-format BLOB as memory-buffer
+serialization, but the sample does not need to keep a
+`sparse_vector_serial_layout<>` copy of the BLOB before writing it to disk.
+
 ## mmap access
 
-After serialization, the sample writes the BLOB to disk and releases the source
-vector and temporary serialization layout. The file is then opened and mapped
-read-only:
+After serialization, the sample releases the source vector. The file is then
+opened and mapped read-only:
 
 ```cpp
 mapped = mmap(0, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -153,7 +162,7 @@ Stage 1: constructing source string sparse vector
   source vector size = 4194304 elements
   plain std::vector<std::string> estimate = 160.70 MB
   optimized str_sparse_vector<> memory = 30.05 MB
-Stage 1: serializing vector with bookmarks
+Stage 1: serializing vector with bookmarks using file streaming
   serialized file = strsvsample10_data.bm
   serialized BLOB size = 17.88 MB
   serialized BLOB is 59.5% of optimized str_sparse_vector<> memory

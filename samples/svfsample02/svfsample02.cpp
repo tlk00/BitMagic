@@ -65,8 +65,10 @@ For more information please visit:  http://bitmagic.io
 #include <fstream>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
 
 #include <bm.h>
+#include <bmfio.h>
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_float.h>
 #include <bmsparsevec_float_serial.h>
@@ -269,6 +271,60 @@ void Demo2(){
 
 }
 
+void Demo3(){
+
+    const char* file_name = "svfsample02_float_stream.bm";
+
+    sparseVecFloat svf1;
+    for (unsigned i = 0; i < 10000; ++i)
+    {
+        float f = static_cast<float>(i) * 0.000123f;
+        if ((i % 127) == 0)
+            f = -f;
+        svf1.push_back(f);
+    }
+
+    BM_DECLARE_TEMP_BLOCK(tb)
+    svf1.optimize(tb);
+
+    std::size_t blob_size = 0;
+    {
+        // File streaming serialization writes the composite float sparse-vector
+        // BLOB directly to a seekable output stream. It avoids keeping an
+        // additional sparse_vector_float_serial_layout buffer in memory.
+        std::ofstream fout(file_name, std::ios::out | std::ios::binary | std::ios::trunc);
+        assert(fout.good());
+
+        bm::sparse_vector_float_serializer<sparseVecFloat> serializer;
+        bm::streams_encoder output(fout);
+        bool ok = serializer.serialize(svf1, output);
+        if (ok)
+            ok = output.finish();
+        assert(ok);
+        blob_size = output.size();
+    }
+
+    sparseVecFloat svf2;
+    {
+        // Stream deserialization reads the same disk BLOB back without first
+        // loading it into a memory layout object.
+        std::ifstream fin(file_name, std::ios::in | std::ios::binary);
+        assert(fin.good());
+
+        bm::streams_sparse_vector_float_deserializer<sparseVecFloat> deserializer;
+        bool ok = deserializer.deserialize(svf2, fin);
+        assert(ok);
+    }
+
+    bool eq = svf1.equal(svf2);
+    std::cout << "stream serialized float-vector BLOB size = "
+              << blob_size << std::endl;
+    std::cout << "file stream round-trip equal = " << eq << std::endl;
+    assert(eq);
+
+    std::remove(file_name);
+}
+
 int main(void){
     try
     {
@@ -279,6 +335,11 @@ int main(void){
 
         //Demo2 for sparse_vector const_iterator methods
         Demo2();
+
+        std::cout << std::endl << std::endl;
+
+        //Demo3 for file streaming serialization and deserialization
+        Demo3();
     }
     catch(std::exception& ex)
     {

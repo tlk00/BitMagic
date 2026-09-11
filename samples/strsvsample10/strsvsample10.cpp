@@ -17,7 +17,7 @@ For more information please visit:  http://bitmagic.io
 */
 
 /** \example strsvsample10.cpp
-  Example of mmap-backed gather deserialization of bm::str_sparse_vector<>.
+  Example of dile serialization of sparse vector and  mmap-backed gather deserialization of bm::str_sparse_vector<>.
 
   \sa bm::str_sparse_vector
   \sa bm::sparse_vector_serializer
@@ -31,7 +31,6 @@ For more information please visit:  http://bitmagic.io
 
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <iomanip>
@@ -52,6 +51,7 @@ For more information please visit:  http://bitmagic.io
 #include "bm.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_serial.h"
+#include "bmfio.h"
 
 #include "bmundef.h" /* clear the pre-proc defines from BM */
 
@@ -61,7 +61,6 @@ typedef bm::bvector<> bvector_type;
 typedef bm::str_sparse_vector<char, bvector_type, 16> str_sv_type;
 typedef bm::sparse_vector_serializer<str_sv_type> serializer_type;
 typedef bm::sparse_vector_deserializer<str_sv_type> deserializer_type;
-typedef bm::sparse_vector_serial_layout<str_sv_type> layout_type;
 typedef deserializer_type::deserialization_index_type deserialization_index_type;
 
 #if BM_SAMPLE_HAS_MMAP
@@ -163,26 +162,13 @@ void build_source_vector(str_sv_type& str_sv, memory_profile& profile)
 
 
 static
-void save_serialized_blob(const char* fname, const unsigned char* buf, size_t size)
-{
-    ofstream fout(fname, ios::out | ios::binary | ios::trunc);
-    if (!fout.good())
-        throw runtime_error("Cannot create serialized BLOB file");
-
-    fout.write(reinterpret_cast<const char*>(buf), streamsize(size));
-    if (!fout.good())
-        throw runtime_error("Cannot write serialized BLOB file");
-}
-
-
-static
 memory_profile serialize_to_file(const char* fname)
 {
     memory_profile profile;
     str_sv_type str_sv(bm::no_null);
     build_source_vector(str_sv, profile);
 
-    cout << "Stage 1: serializing vector with bookmarks" << endl;
+    cout << "Stage 1: serializing vector with bookmarks using file streaming" << endl;
 
     serializer_type serializer;
 
@@ -191,11 +177,17 @@ memory_profile serialize_to_file(const char* fname)
     // sequential scans when only a small fraction of elements is requested.
     serializer.set_bookmarks(true, 16);
 
-    layout_type layout;
-    serializer.serialize(str_sv, layout);
-    profile.serialized_blob_size = layout.size();
+    // Stream serialization writes the RAM-compatible sparse-vector BLOB
+    // directly to the file. This avoids staging the whole serialized layout in
+    // memory before the mmap-backed retrieval stage.
+    ofstream fout(fname, ios::out | ios::binary | ios::trunc);
+    if (!fout.good())
+        throw runtime_error("Cannot create serialized BLOB file");
+    bm::streams_encoder output(fout);
+    if (!serializer.serialize(str_sv, output) || !output.finish())
+        throw runtime_error("Cannot write serialized BLOB file");
+    profile.serialized_blob_size = output.size();
 
-    save_serialized_blob(fname, layout.buf(), layout.size());
     cout << "  serialized file = " << fname << endl;
     print_mb("serialized BLOB size", profile.serialized_blob_size);
     cout << "  serialized BLOB is "
@@ -205,9 +197,9 @@ memory_profile serialize_to_file(const char* fname)
          << "% of optimized str_sparse_vector<> memory"
          << defaultfloat << endl;
 
-    // When this function exits, the source vector and temporary serialized
-    // layout are released. Stage 2 below opens only the file, mirroring a
-    // lower-RAM retrieval process that does not keep the full vector resident.
+    // When this function exits, the source vector is released.
+    // Stage 2 below opens only the file, mirroring a lower-RAM retrieval
+    // process that does not keep the full vector resident.
     return profile;
 }
 

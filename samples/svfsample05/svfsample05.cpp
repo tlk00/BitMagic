@@ -44,6 +44,7 @@ For more information please visit:  http://bitmagic.io
 #include <iostream>
 #include <iomanip>
 #include <limits>
+#include <stdexcept>
 
 #include <bm.h>
 #include <bmserial.h>
@@ -58,6 +59,11 @@ typedef bm::serializer<bvector_type>::buffer bv_blob_type;
 typedef bm::sparse_vector_float_serial_layout<sparseVecFloat> svf_blob_type;
 typedef bm::sparse_vector_float_deserializer<sparseVecFloat> svf_deserializer_type;
 typedef svf_deserializer_type::deserialization_index_type svf_dindex_type;
+typedef bm::sparse_vector_float_deserialization_index_serializer<sparseVecFloat>
+                                                    svf_dindex_serializer_type;
+typedef bm::sparse_vector_float_deserialization_index_deserializer<sparseVecFloat>
+                                                    svf_dindex_deserializer_type;
+typedef svf_dindex_serializer_type::buffer          svf_dindex_blob_type;
 
 const sparseVecFloat::size_type vector_size = 512 * 1024;
 const float positive_threshold = 8.0f;
@@ -69,6 +75,7 @@ struct stage1_data
     bv_blob_type positive_blob;
     bv_blob_type negative_blob;
     bv_blob_type anomaly_blob;
+    svf_dindex_blob_type svf_dindex_blob;
 };
 
 struct aggregate_stats
@@ -79,7 +86,8 @@ struct aggregate_stats
     float max_value = -std::numeric_limits<float>::max();
 };
 
-static float synthetic_value(sparseVecFloat::size_type i)
+static
+float synthetic_value(sparseVecFloat::size_type i)
 {
     // Most values stay close to zero, which is typical for sensor deltas,
     // residuals, normalized scores, or other anomaly-search inputs.
@@ -97,7 +105,8 @@ static float synthetic_value(sparseVecFloat::size_type i)
     return v;
 }
 
-static void serialize_bvector(const bvector_type& bv, bv_blob_type& blob)
+static
+void serialize_bvector(const bvector_type& bv, bv_blob_type& blob)
 {
     // Result sets are ordinary bit-vectors. Serialization turns them into
     // compact BLOBs which can be saved and re-used as gather masks later.
@@ -105,27 +114,29 @@ static void serialize_bvector(const bvector_type& bv, bv_blob_type& blob)
     bvs.serialize(bv, blob);
 }
 
-static void deserialize_bvector(bvector_type& bv, const bv_blob_type& blob)
+static
+void deserialize_bvector(bvector_type& bv, const bv_blob_type& blob)
 {
     bv.clear();
     bm::deserialize(bv, blob.buf());
 }
 
-static void print_result_set(const char* name,
-                             const bvector_type& bv,
-                             const bv_blob_type& blob)
+static
+void print_result_set(const char* name,
+                      const bvector_type& bv,
+                      const bv_blob_type& blob)
 {
     std::cout << "  " << name << ": " << bv.count()
               << " positions, serialized result-set BLOB = "
               << blob.size() << " bytes" << std::endl;
 }
 
-static double bytes_to_mb(size_t bytes)
-{
-    return double(bytes) / (1024.0 * 1024.0);
-}
+static
+double bytes_to_mb(size_t bytes)
+    { return double(bytes) / (1024.0 * 1024.0); }
 
-static void build_search_and_serialize(stage1_data& data)
+static
+void build_search_and_serialize(stage1_data& data)
 {
     std::cout << "Stage 1: build float sparse vector" << std::endl;
 
@@ -175,12 +186,40 @@ static void build_search_and_serialize(stage1_data& data)
     std::cout << "  serialized float-vector BLOB = "
               << data.svf_blob.size() << " bytes" << std::endl;
 
+    std::cout << "Stage 1: build and serialize deserialization index"
+              << std::endl;
+
+    svf_dindex_type dindex;
+    svf_deserializer_type index_builder;
+    index_builder.construct_deserialization_index(dindex, data.svf_blob.buf());
+    dindex.optimize();
+
+    svf_dindex_serializer_type dindex_serializer;
+    size_t dindex_blob_size =
+        dindex_serializer.serialize(dindex, data.svf_dindex_blob);
+
+    svf_dindex_type restored_dindex;
+    svf_dindex_deserializer_type dindex_deserializer;
+    size_t consumed =
+        dindex_deserializer.deserialize(restored_dindex,
+                                       data.svf_dindex_blob.data(),
+                                       data.svf_dindex_blob.size());
+    if (!dindex_blob_size || consumed != dindex_blob_size ||
+        !dindex.equal(restored_dindex))
+        throw std::runtime_error("deserialization index serialization round trip failed");
+
+    std::cout << "  deserialization index memory = "
+              << dindex.memory_used() << " bytes" << std::endl;
+    std::cout << "  serialized deserialization index BLOB = "
+              << dindex_blob_size << " bytes" << std::endl;
+
     // svf leaves scope here. Stage 2 demonstrates the later retrieval phase
     // where only serialized BLOBs remain resident.
 }
 
-static aggregate_stats aggregate_selected_values(const sparseVecFloat& svf,
-                                                 const bvector_type& mask_bv)
+static
+aggregate_stats aggregate_selected_values(const sparseVecFloat& svf,
+                                          const bvector_type& mask_bv)
 {
     aggregate_stats st;
 
@@ -208,10 +247,11 @@ static aggregate_stats aggregate_selected_values(const sparseVecFloat& svf,
     return st;
 }
 
-static void gather_and_report(const char* name,
-                              svf_deserializer_type& deserializer,
-                              const unsigned char* svf_blob,
-                              const bv_blob_type& result_blob)
+static
+void gather_and_report(const char* name,
+                       svf_deserializer_type& deserializer,
+                       const unsigned char*   svf_blob,
+                       const bv_blob_type&    result_blob)
 {
     bvector_type mask_bv;
     deserialize_bvector(mask_bv, result_blob);
@@ -232,20 +272,20 @@ static void gather_and_report(const char* name,
               << std::endl;
 }
 
-static void restore_and_compute(const stage1_data& data)
+static
+void restore_and_compute(const stage1_data& data)
 {
     const unsigned char* svf_blob = data.svf_blob.buf();
 
-    std::cout << "Stage 2: build deserialization index" << std::endl;
+    std::cout << "Stage 2: restore serialized deserialization index" << std::endl;
 
     svf_dindex_type dindex;
-    {
-        // The index is built once for the serialized float-vector BLOB. It is
-        // kept alive while the deserializer uses it for repeated gather reads.
-        svf_deserializer_type index_builder;
-        index_builder.construct_deserialization_index(dindex, svf_blob);
-        dindex.optimize();
-    }
+    svf_dindex_deserializer_type dindex_deserializer;
+    size_t consumed =
+        dindex_deserializer.deserialize(dindex, data.svf_dindex_blob.data(),
+                                       data.svf_dindex_blob.size());
+    if (consumed != data.svf_dindex_blob.size())
+        throw std::runtime_error("cannot restore serialized deserialization index");
 
     std::cout << "Stage 2: gather values from serialized BLOB" << std::endl;
 
