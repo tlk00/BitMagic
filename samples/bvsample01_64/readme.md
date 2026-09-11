@@ -16,3 +16,9 @@ Important constraints shown in the source:
 - the current implementation uses a 48-bit internal address space; and
 - a 32-bit serialized vector can be read in 64-bit mode, but the reverse is
   not supported.
+
+## Related example
+
+[bvsample27](../bvsample27/readme.md) demonstrates buffered file serialization.
+Build it with `-DBM64ADDR` to place the input patterns at `2^40` and optionally
+verify exact bytes and restoration through the existing 64-bit RAM APIs.

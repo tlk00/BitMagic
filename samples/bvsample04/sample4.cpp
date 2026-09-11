@@ -23,6 +23,11 @@ For more information please visit:  http://bmagic.sourceforge.net
 
   \sa bm::serializer
   \sa bm::deserialize
+
+    \par Related serialization examples
+    - \ref sample14.cpp "bvsample14": set algebra and count operations on serialized RAM BLOBs.
+    - \ref sample22.cpp "bvsample22": bookmarks and selective range deserialization.
+    - \ref sample27.cpp "bvsample27": buffered file output, caller-owned finish(), and RAM compatibility checks.
 */
 
 /*! \file sample4.cpp

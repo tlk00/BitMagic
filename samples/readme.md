@@ -31,6 +31,7 @@ serialization APIs, search algorithms and larger end-to-end use cases.
 - [`bvsample24`](./bvsample24) - `bm::rank_range_split()` algorithm to split a bit-vector into equal rank/weight ranges.
 - [`bvsample25`](./bvsample25) - `bm::visit_each_bit()`, `bm::visit_each_bit_range()`, `bm::for_each_bit()` and `bm::for_each_bit_range()` traversal algorithms.
 - [`bvsample26`](./bvsample26) - immutable bit-vectors, construction, measuring memory savings, `bvector<>::freeze()`.
+- [`bvsample27`](./bvsample27) - buffered file serialization with `bm::streams_encoder`, caller-owned completion, and optional RAM byte verification.
 - [`bvsetalgebra`](./bvsetalgebra) - tutorial for Algebra of Sets operations. Tutorial: <http://bitmagic.io/set-algebra.html>
 - [`bv3vlogic`](./bv3vlogic) - three-valued logic (Kleene) implemented on bit-vectors.
 - [`bvsample01_64`](./bvsample01_64) - basic operations with 64-bit bit-vectors and initialization for 48-bit address space.

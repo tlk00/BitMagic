@@ -12,3 +12,13 @@ The program checks that BLOB-based AND reproduces the expected source vector
 and that count-only subtraction matches the count of a fully materialized
 subtraction. This approach is useful when compressed vectors are stored in a
 file, database or network buffer and do not need to be expanded first.
+
+## Related serialization examples
+
+- [bvsample04](../bvsample04/readme.md): RAM serialization, buffer ownership, and ordinary deserialization.
+- [bvsample22](../bvsample22/readme.md): bookmarks and selective range deserialization.
+- [bvsample27](../bvsample27/readme.md): buffered file output, caller-owned finish(), and RAM compatibility checks.
+
+The RAM, operation, and range deserializers consume an in-memory BLOB.
+The file-output example preserves that format; it does not introduce a file
+deserializer or make those readers accept a C++ stream.

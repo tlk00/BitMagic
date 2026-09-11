@@ -18,6 +18,8 @@ For more information please visit:  http://bitmagic.io
 
 /** \example bvsample01_64.cpp
   Example how to use bvector<> in 64-bit mode
+
+  \sa sample27.cpp for buffered file serialization with BM64ADDR enabled.
  */
 
 /*! \file bvsample01_64.cpp

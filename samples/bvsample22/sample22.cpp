@@ -42,6 +42,11 @@ For more information please visit:  http://bitmagic.io
 
   \sa sample23.cpp
   \sa bvintervals
+
+    \par Related serialization examples
+    - \ref sample4.cpp "bvsample04": RAM serialization, buffer ownership, and ordinary deserialization.
+    - \ref sample14.cpp "bvsample14": set algebra and count operations on serialized RAM BLOBs.
+    - \ref sample27.cpp "bvsample27": buffered file output, caller-owned finish(), and RAM compatibility checks.
 */
 
 /*! \file sample22.cpp

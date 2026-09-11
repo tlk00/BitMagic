@@ -22,6 +22,11 @@ For more information please visit:  http://bitmagic.io
  
   \sa bm::serializer
   \sa bm::deserialize
+
+    \par Related serialization examples
+    - \ref sample4.cpp "bvsample04": RAM serialization, buffer ownership, and ordinary deserialization.
+    - \ref sample22.cpp "bvsample22": bookmarks and selective range deserialization.
+    - \ref sample27.cpp "bvsample27": buffered file output, caller-owned finish(), and RAM compatibility checks.
 */
 
 /*! \file sample14.cpp
