@@ -5941,6 +5941,11 @@ void CheckSparseVectorStringStream(const SV& source, bool gather = false,
     bm::sparse_vector_serial_layout<SV> ram;
     serializer.serialize(source, ram);
     std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
+    if (ram.size() < 41 || ram.buf()[4] != 4)
+        throw std::runtime_error("Sparse-vector header version differs");
+    bm::decoder header(ram.buf()+29);
+    if (header.get_32() != 8 || header.get_64() != source.size())
+        throw std::runtime_error("Sparse-vector logical-size metadata differs");
     stream.write("prefix", 6);
     bm::streams_encoder out(stream);
     if (!serializer.serialize(source, out) || !out.finish())
@@ -6198,8 +6203,162 @@ void CheckSparseVectorFileSerialization(const SV& source)
     }
 }
 
+void SparseVectorLogicalSizeTest()
+{
+    // Every content/nullability combination writes the extended header.
+    for (auto nulls : {bm::no_null, bm::use_null})
+    {
+        bm::sparse_vector<int, bvect> integers(nulls);
+        CheckSparseVectorStringStream(integers, true);
+        integers.set(0, -7); integers.resize(18);
+        CheckSparseVectorStringStream(integers, true);
+        bm::str_sparse_vector<char, bvect, 16> strings(nulls);
+        CheckSparseVectorStringStream(strings, true);
+        strings.resize(18); // all NULLs, or empty strings when non-nullable
+        CheckSparseVectorStringStream(strings, true);
+        strings.set(0, "A");
+        CheckSparseVectorStringStream(strings, true);
+        strings.remap();
+        CheckSparseVectorStringStream(strings, true);
+    }
+    // Captured from the pre-extension writer: "A" plus three trailing NULLs.
+    static const unsigned char old_string[] = {
+        66,77,1,0,2,129,0,0,0,0,0,0,128,4,0,0,
+        0,0,0,0,0,52,0,0,0,0,0,0,0,0,0,0,
+        0,49,1,19,0,0,9,49,1,19,0,0,9,49,1,19,
+        0,0,9,78,49,1,62,102,200,223,127,161,120,0,0,9,
+        54,33,0,0,0,0,0,0,0,39,0,0,0,0,0,0,
+        0,45,0,0,0,0,0,0,0,
+    };
+    using string_type = bm::str_sparse_vector<char, bvect, 16>;
+    string_type expected(bm::use_null), restored(bm::use_null);
+    expected.set(0, "A"); expected.resize(4);
+    bm::sparse_vector_deserializer<string_type> reader;
+    reader.deserialize(restored, old_string);
+    if (!expected.equal(restored))
+        throw std::runtime_error("Old string BLOB logical size differs");
+    bm::sparse_vector_deserializer<string_type>::deserialization_index_type index;
+    reader.construct_deserialization_index(index, old_string);
+    CycleSparseIndex(index);
+    reader.set_deserialization_index(&index);
+    reader.set_deserialization_index_use();
+    bvect mask; mask.set_range(0, 3);
+    reader.deserialize(restored, old_string, mask);
+    if (!expected.equal(restored))
+        throw std::runtime_error("Old string indexed gather differs");
+    std::stringstream stream;
+    stream.write(reinterpret_cast<const char*>(old_string), sizeof(old_string));
+    stream.write("BZ", 2); // old empty-vector representation remains readable
+    bm::sparse_vector_serializer<string_type> writer;
+    bm::streams_encoder output(stream);
+    if (!writer.serialize(expected, output) || !output.finish())
+        throw std::runtime_error("New string BLOB write failed");
+    stream.write("sentinel", 8); stream.seekg(0);
+    bm::streams_sparse_vector_deserializer<string_type> stream_reader;
+    if (!stream_reader.deserialize(restored, stream) || !expected.equal(restored) ||
+        !stream_reader.deserialize(restored, stream) || restored.size() ||
+        !stream_reader.deserialize(restored, stream) || !expected.equal(restored))
+        throw std::runtime_error("Mixed string header versions differ");
+    char sentinel[8]; stream.read(sentinel, 8);
+    if (!stream || std::memcmp(sentinel, "sentinel", 8))
+        throw std::runtime_error("Mixed string header positioning differs");
+}
+
+void RscTrailingNullSerializationTest()
+{
+    // Captured version 2 BLOBs: one value (7), and an all-NULL vector.
+    // Keep fixtures independent of the current writer.
+    static const unsigned char legacy_value[] = {
+        66,67,1,0,2,33,0,0,0,0,0,0,128,1,0,0,
+        0,0,0,0,0,62,0,0,0,0,0,0,0,0,0,0,
+        0,49,1,19,0,0,9,49,1,19,0,0,9,49,1,19,
+        0,0,9,49,1,7,0,0,2,0,19,0,0,9,49,1,
+        67,190,212,49,0,9,51,33,0,0,0,51,0,0,0,107,
+        0,0,0,
+    };
+    static const unsigned char legacy_empty[] = {
+        66,67,1,0,2,33,0,0,0,0,0,0,128,0,0,0,
+        0,0,0,0,0,36,0,0,0,0,0,0,0,0,0,0,
+        0,49,1,9,49,1,19,32,0,9,54,33,0,0,0,0,
+        0,0,0,
+    };
+    // Extended RSC headers retain logical extent, including an all-NULL tail.
+    for (unsigned trailing : {1u, 17u})
+    for (bool all_null : {false, true})
+    {
+        rsc_sparse_vector_u32 source;
+        auto bi = source.get_back_inserter();
+        if (!all_null)
+        {
+#ifdef BM64ADDR
+            bi.add_null(bm::id64_t(1) << 33);
+#endif
+            bi.add(7);
+        }
+        bi.add_null(trailing);
+        bi.flush();
+        CheckSparseVectorStringStream(source, true);
+
+        bm::sparse_vector_serializer<rsc_sparse_vector_u32> writer;
+        bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> current;
+        writer.serialize(source, current);
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> range_reader;
+        rsc_sparse_vector_u32 range;
+        range_reader.deserialize_range(range, current.buf(), source.size()-trailing,
+                                       source.size()-1);
+        if (range.size() != source.size() || !range.is_null(source.size()-1))
+            throw std::runtime_error("RSC NULL-only range lost logical extent");
+        // Metadata truncations must fail before a plane is decoded.
+        for (size_t length = 29; length < 41; ++length)
+        {
+            std::istringstream input(std::string(
+                reinterpret_cast<const char*>(current.buf()), length));
+            bm::streams_sparse_vector_deserializer<rsc_sparse_vector_u32> decoder;
+            rsc_sparse_vector_u32 target;
+            if (decoder.deserialize(target, input))
+                throw std::runtime_error("Truncated RSC extension accepted");
+        }
+        // Reject an extension too short to hold its mandatory logical size.
+        std::string bad(reinterpret_cast<const char*>(current.buf()), current.size());
+        bm::encoder bad_header(reinterpret_cast<unsigned char*>(&bad[29]), 12);
+        bad_header.put_32(7);
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> bad_reader;
+        rsc_sparse_vector_u32 target;
+        bool rejected = false;
+        try { bad_reader.deserialize(target, reinterpret_cast<const unsigned char*>(bad.data())); }
+        catch (const std::exception&) { rejected = true; }
+        if (!rejected) throw std::runtime_error("Short RSC extension accepted");
+
+        const unsigned char* blob = all_null ? legacy_empty : legacy_value;
+        const size_t blob_size = all_null ? sizeof(legacy_empty) : sizeof(legacy_value);
+        rsc_sparse_vector_u32 expected(source), restored;
+        expected.sync(true, true); // old format cannot retain trailing NULLs
+        bm::sparse_vector_deserializer<rsc_sparse_vector_u32> reader;
+        reader.deserialize(restored, blob);
+        if (!restored.equal(expected))
+            throw std::runtime_error("Legacy RSC logical extent differs");
+        std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
+        stream.write(reinterpret_cast<const char*>(blob), std::streamsize(blob_size));
+        bm::streams_encoder output(stream);
+        // Reuse the reader across old and extended BLOBs in one stream.
+        if (!writer.serialize(source, output) || !output.finish())
+            throw std::runtime_error("Extended RSC stream write failed");
+        stream.write("sentinel", 8);
+        stream.seekg(0);
+        bm::streams_sparse_vector_deserializer<rsc_sparse_vector_u32> stream_reader;
+        if (!stream_reader.deserialize(restored, stream) || !restored.equal(expected) ||
+            !stream_reader.deserialize(restored, stream) || !restored.equal(source))
+            throw std::runtime_error("Mixed-version RSC stream differs");
+        char sentinel[8]; stream.read(sentinel, 8);
+        if (!stream || std::memcmp(sentinel, "sentinel", 8))
+            throw std::runtime_error("Mixed-version RSC sentinel differs");
+    }
+}
+
 void SparseVectorFileSerializationTest()
 {
+    RscTrailingNullSerializationTest();
+    SparseVectorLogicalSizeTest();
     StringSparseVectorStreamTest();
     bm::str_sparse_vector<char, bvect, 16> strings(bm::use_null);
     strings.set(0, ""); strings.set(3, "alpha"); strings.set(129, "beta");
@@ -17648,7 +17807,8 @@ void TestCompressSparseVectorSerial()
                 assert(csv1.is_null(i0) == csv2.is_null(i0));
             } // for
 
-            cout << "\r" << (j-i) << std::flush;
+            if (!is_silent)
+                cout << "\r" << (j-i) << std::flush;
 
         } // for i
 
@@ -19650,7 +19810,8 @@ void TestCompressSparseVector()
 
             if (i % 4096 == 0)
             {
-                cout << "\r" << pr.first << "/" << max_size << flush;
+                if (!is_silent)
+                    cout << "\r" << pr.first << "/" << max_size << flush;
                 csv.optimize();
             }
 
@@ -19667,7 +19828,7 @@ void TestCompressSparseVector()
             const std::pair<unsigned, unsigned>& pr = vect[i];
             unsigned v = csv[pr.first];
             assert(v == pr.second);
-            if (i % 4096 == 0)
+            if (!is_silent && i % 4096 == 0)
                 cout << "\r" << pr.first << "/" << max_size << flush;
         } // for
 
@@ -19681,7 +19842,8 @@ void TestCompressSparseVector()
             assert(csv.is_null(pr.first));
             if (i % 4096 == 0)
             {
-                cout << "\r" << i << "/" << max_size << flush;
+                if (!is_silent)
+                    cout << "\r" << i << "/" << max_size << flush;
                 csv.optimize();
             }
             ++i;
@@ -19870,14 +20032,14 @@ void TestCompressSparseVector()
             cout << "cmp 1...";
             DetailedCompareSparseVectors(csv1, sv);
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1);
+                DetailedCheckCompressedDecode(csv1, is_silent);
             cout << "ok" << endl;
 
             cout << "cmp 2...";
             csv1.optimize(tb);
             DetailedCompareSparseVectors(csv1, sv);
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1);
+                DetailedCheckCompressedDecode(csv1, is_silent);
             cout << "ok" << endl;
 
             cout << "cmp 3...";
@@ -19889,14 +20051,14 @@ void TestCompressSparseVector()
             DetailedCompareSparseVectors(csv2, sv);
             csv1.sync();
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1);
+                DetailedCheckCompressedDecode(csv1, is_silent);
 
             csv2.optimize(tb);
             csv2.sync();
 
             DetailedCompareSparseVectors(csv2, sv);
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1);
+                DetailedCheckCompressedDecode(csv1, is_silent);
             cout << "ok" << endl;
 
             cout << "cmp 4...";
@@ -20622,13 +20784,13 @@ void TestCompressSparseSignedVector()
 
         cout << "cmp 1...";
         DetailedCompareSparseVectors(csv1, sv);
-        DetailedCheckCompressedDecode(csv1);
+        DetailedCheckCompressedDecode(csv1, is_silent);
         cout << "ok" << endl;
 
         cout << "cmp 2...";
         csv1.optimize(tb);
         DetailedCompareSparseVectors(csv1, sv);
-        DetailedCheckCompressedDecode(csv1);
+        DetailedCheckCompressedDecode(csv1, is_silent);
         cout << "ok" << endl;
 
         cout << "cmp 3...";
@@ -20639,13 +20801,13 @@ void TestCompressSparseSignedVector()
         csv2.load_from(sv);
         DetailedCompareSparseVectors(csv2, sv);
         csv1.sync();
-        DetailedCheckCompressedDecode(csv1);
+        DetailedCheckCompressedDecode(csv1, is_silent);
 
         csv2.optimize(tb);
         csv2.sync();
 
         DetailedCompareSparseVectors(csv2, sv);
-        DetailedCheckCompressedDecode(csv1);
+        DetailedCheckCompressedDecode(csv1, is_silent);
         cout << "ok" << endl;
 
         cout << "cmp 4...";
@@ -20720,10 +20882,12 @@ void TestSparseVector_Stress(unsigned count)
             ++fill_factor;
             if (fill_factor > 2) fill_factor = 0;
 
-            std::cout << "\r" << min << std::flush;
+            if (!is_silent)
+                std::cout << "\r" << min << std::flush;
         } // for min
         
-        cout << "." << flush;
+        if (!is_silent)
+            cout << "." << flush;
         
     } // for i
     cout << endl;
@@ -20807,14 +20971,16 @@ void TestSparseVector_Stress(unsigned count)
                 }
                 
                 
-                cout << "+" << flush;
+                if (!is_silent)
+                    cout << "+" << flush;
                 
             }}
             ++fill_factor;
             if (fill_factor > 2) fill_factor = 0;
         } // for min
         
-        cout << "." << flush;
+        if (!is_silent)
+            cout << "." << flush;
         
     } // for i
     
@@ -25207,8 +25373,9 @@ void TestCompressedSparseVectorAlgo()
                     auto diff = f1 - st;
                     //auto d = std::chrono::duration <double, std::milli> (diff).count();
 
-                    cout << "\r" << k << "/" << sv_size << " " <<
-                            " (" << diff.count() << ")" << flush;
+                    if (!is_silent)
+                        cout << "\r" << k << "/" << sv_size << " " <<
+                                " (" << diff.count() << ")" << flush;
                 }
             } // for
             cout << endl;
@@ -25502,7 +25669,7 @@ void TestCompressedSparseVectorScanGT()
                 assert (!csv.is_null(i));
                 auto v1 = csv.get(i);
                 CheckGTSearch(csv, v1, scanner_csv);
-                if (cnt & 0xF)
+                if (!is_silent && (cnt & 0xF))
                     cout << "\r" << cnt << "/" << sample_size << flush;
             }
 

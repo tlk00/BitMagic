@@ -739,64 +739,74 @@ void CheckCompressedDecode(const CSV& csv,
 }
 
 template<typename CSV>
-void DetailedCheckCompressedDecode(const CSV& csv)
+void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false)
 {
     auto size = csv.size();
-    cout << endl;
+    if (!silent)
+        cout << endl;
 
     {
         typename CSV::size_type size1 = 100;
         for (typename CSV::size_type i = 0; i < size1; )
         {
             CheckCompressedDecode(csv, i, size);
-            if (i % 128 == 0)
+            if (!silent && i % 128 == 0)
                 cout << "\r" << i << "/" << size1 << flush;
             i++;
         }
     }
-    cout << endl;
+    if (!silent)
+        cout << endl;
 
     {
         typename CSV::size_type size1 = 100000;
         for (typename CSV::size_type i = 0; i < size1; )
         {
             CheckCompressedDecode(csv, i, size1);
-            cout << "\r" << i << "/" << size1 << flush;
+            if (!silent)
+                cout << "\r" << i << "/" << size1 << flush;
             i += (unsigned)rand() % 3;
             size1 -= (unsigned)rand() % 5;
         }
     }
-    cout << endl;
+    if (!silent)
+        cout << endl;
 
     {
         typename CSV::size_type size1 = size;
         for (typename CSV::size_type i = size - size / 2; i < size1; )
         {
             CheckCompressedDecode(csv, i, size1);
-            cout << "\r" << i << "/" << size1 << flush;
+            if (!silent)
+                cout << "\r" << i << "/" << size1 << flush;
             i += (1 + i);
         }
     }
-    cout << endl;
+    if (!silent)
+        cout << endl;
 
     for (typename CSV::size_type i = size - size / 2; i < size; )
     {
         CheckCompressedDecode(csv, i, size);
-        cout << "\r" << i << "/" << size << flush;
+        if (!silent)
+            cout << "\r" << i << "/" << size << flush;
         i += (unsigned)rand() % 25000;
     }
-    cout << endl;
+    if (!silent)
+        cout << endl;
 
     for (typename CSV::size_type i = size - size / 2; i < size; )
     {
         if (size <= i)
             break;
         CheckCompressedDecode(csv, i, size);
-        cout << "\r" << i << "/" << size << flush;
+        if (!silent)
+            cout << "\r" << i << "/" << size << flush;
         i += (unsigned)rand() % 25000;
         size -= (unsigned)rand() % 25000;;
     }
-    cout << endl;
+    if (!silent)
+        cout << endl;
 
 }
 
