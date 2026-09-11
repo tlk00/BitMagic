@@ -1367,6 +1367,7 @@ bool streams_sparse_vector_deserializer<SV>::read(
     const bvector_type* selection = mask;
     bvector_type digest;
     size_t remap_offset = header_size; // valid even when no planes are present
+    (void)remap_offset; // used only for remap-capable sparse vector types
     // RSC masks use logical addresses until the complete NULL plane is loaded.
     for (int row = int(planes)-1; row >= 0; --row)
     {
