@@ -18,6 +18,7 @@ For more information please visit:  http://bitmagic.io
 
 #include <bitset>
 #include <iostream>
+#include <fstream>
 #include <time.h>
 #include <stdio.h>
 #include <sstream>
@@ -43,6 +44,16 @@ For more information please visit:  http://bitmagic.io
 #include <memory>
 #include <algorithm>
 
+#ifndef _WIN32
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmintervals.h"
@@ -53,6 +64,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmsparsevec_serial.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_compr.h"
+#include "bmfio.h"
 #include "bmrandom.h"
 
 #include "bmtimer.h"
@@ -78,6 +90,73 @@ std::random_device rand_dev;
 std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
 std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs for [1, vector_max]
 
+struct perf_run_options
+{
+    bool print_timings = true;
+    bool print_space = false;
+    bool silent = false;
+};
+
+perf_run_options g_perf_options;
+
+/// @internal Print command-line usage for the perf driver.
+static
+void PrintUsage(const char* app_name)
+{
+    cout << "Usage: " << app_name << " [options]" << endl
+         << "Options:" << endl
+         << "  -mem       Print memory, serialized-size, and mask statistics." << endl
+         << "  -silent    Run correctness checks without timing or space output." << endl
+         << "  --help     Print this help and exit." << endl;
+}
+
+/// @internal Parse perf-driver command-line options.
+static
+bool ParseCommandLine(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        const char* arg = argv[i];
+        if (::strcmp(arg, "-mem") == 0)
+        {
+            g_perf_options.print_space = true;
+        }
+        else if (::strcmp(arg, "-silent") == 0)
+        {
+            g_perf_options.silent = true;
+            g_perf_options.print_timings = false;
+            g_perf_options.print_space = false;
+        }
+        else if (::strcmp(arg, "--help") == 0 || ::strcmp(arg, "-h") == 0)
+        {
+            PrintUsage(argv[0]);
+            return false;
+        }
+        else
+        {
+            cerr << "Unknown option: " << arg << endl;
+            PrintUsage(argv[0]);
+            exit(1);
+        }
+    }
+    return true;
+}
+
+/// @internal Run a measured section unless timing output is disabled.
+template<class Func>
+void RunTimed(const char* label, unsigned repeats, Func func)
+{
+    if (g_perf_options.print_timings)
+    {
+        bm::chrono_taker<> tt(cout, label, repeats);
+        func();
+    }
+    else
+    {
+        func();
+    }
+}
+
 typedef bm::bvector<> bvect;
 typedef bm::str_sparse_vector<char, bvect, 8> str_svect_type;
 typedef bm::str_sparse_vector<char, bvect, 8> str_sv_type;
@@ -87,6 +166,7 @@ float g_fl_cnt = 0;
 
 // generate pseudo-random bit-vector, mix of compressed/non-compressed blocks
 //
+/// @internal Generate a pseudo-random bit-vector for low-level benchmarks.
 static
 void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize = true)
 {
@@ -118,6 +198,7 @@ void generate_bvector(bvect& bv, unsigned vector_max = 40000000, bool optimize =
 }
 
 
+/// @internal Fill both STL and BitMagic test sets with simple periodic values.
 static
 void SimpleFillSets(test_bitset* bset, 
                        bvect& bv,
@@ -143,6 +224,7 @@ void SimpleFillSets(test_bitset* bset,
 // Interval filling.
 // 111........111111........111111..........11111111.......1111111...
 //
+/// @internal Fill test sets using repeated intervals.
 static
 void FillSetsIntervals(test_bitset* bset,
                        bvect& bv,
@@ -210,6 +292,7 @@ void FillSetsIntervals(test_bitset* bset,
 
 }
 
+/// @internal Generate a sparse random bit-vector.
 static
 void generate_sparse_bvector(bvect& bv,
                              unsigned min = 0,
@@ -230,6 +313,7 @@ void generate_sparse_bvector(bvect& bv,
 }
 
 
+/// @internal Generate a collection of synthetic bit-vectors.
 static
 void GenerateTestCollection(std::vector<bvect>* target,
                             unsigned count = 30,
@@ -266,6 +350,7 @@ void GenerateTestCollection(std::vector<bvect>* target,
     } // for
 }
 
+/// @internal Generate deterministic strings for scanner benchmarks.
 static
 void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
 {
@@ -394,6 +479,7 @@ void BitCountTest()
     }
 }
 
+/// @internal Compare bit-list output produced by different enumeration paths.
 static
 void CheckBitList(const unsigned* bl1, unsigned bl1_cnt,
                   const unsigned* bl2, unsigned bl2_cnt)
@@ -1045,6 +1131,7 @@ void BitCountSparseTest()
     delete bset;
 }
 
+/// @internal Swap two logical bits using a temporary value.
 template<class BV>
 void swap_bits(BV& bv, typename BV::size_type i1, typename BV::size_type i2)
 {
@@ -2883,6 +2970,7 @@ void BitBlockShiftTest()
 }
 
 
+/// @internal Scratch playground for ad-hoc profiling experiments.
 inline
 void ptest()
 {
@@ -2945,6 +3033,7 @@ typedef bm::rsc_sparse_vector<unsigned, sparse_vector_u32> rsc_sparse_vector_u32
 
 // create a benchmark svector with a few dufferent distribution patterns
 //
+/// @internal Fill a sparse vector with interval-like test data.
 template<class SV>
 void FillSparseIntervals(SV& sv)
 {
@@ -2975,6 +3064,7 @@ void FillSparseIntervals(SV& sv)
 }
 
 
+/// @internal Fill a nullable sparse vector with deterministic sparse values.
 template<class SV>
 void FillSparseNullVector(SV& sv, typename SV::size_type size,
                           unsigned data_size, unsigned null_factor)
@@ -2990,6 +3080,7 @@ void FillSparseNullVector(SV& sv, typename SV::size_type size,
     } // for i
 }
 
+/// @internal Fill a nullable sparse vector with pseudo-random sparse values.
 template<class SV>
 void FillRandomSparseNullVector(SV& sv, typename SV::size_type size,
                           unsigned data_size, unsigned null_factor)
@@ -4247,6 +4338,7 @@ void RangeCopyTest()
 /// Reference (naive) interval detector based on population counting 
 /// and boundaries tests
 ///
+/// @internal Validate interval search behavior for one vector type.
 template<typename BV>
 bool test_interval(const BV& bv,
         typename BV::size_type left, typename BV::size_type right) noexcept
@@ -4649,6 +4741,7 @@ void RankCompressionTest()
     
 }
 
+/// @internal Generate sparse-vector data used by serialization benchmarks.
 static
 void generate_serialization_test_set(sparse_vector_u32&   sv,
                                      unsigned vector_max = BSIZE)
@@ -4675,6 +4768,7 @@ void generate_serialization_test_set(sparse_vector_u32&   sv,
 }
 
 
+/// @internal Generate paired STL and sparse-vector scanner data.
 template<typename VECT, typename SVECT>
 void generate_scanner_test_set(VECT&          vect,
                                bvect&         bv_null,
@@ -4711,6 +4805,7 @@ void generate_scanner_test_set(VECT&          vect,
     sv.optimize();
 }
 
+/// @internal Run equality search on a plain STL vector.
 template<typename VECT>
 void vector_search(const VECT&                vect,
                    const bvect&               bv_null,
@@ -4726,6 +4821,7 @@ void vector_search(const VECT&                vect,
     bv_res &= bv_null; // correct results to only include non-NULL values
 }
 
+/// @internal Run greater-than search on a plain STL vector.
 template<typename VECT>
 void vector_search_GT(const VECT& vect,
                       const bvect&                 bv_null,
@@ -4743,6 +4839,7 @@ void vector_search_GT(const VECT& vect,
 }
 
 
+/// @internal Run sorted greater-than search on a plain STL vector.
 template<typename VECT>
 void vector_search_GT_sorted(const VECT& vect,
                              const bvect&                 bv_null,
@@ -4771,6 +4868,7 @@ void vector_search_GT_sorted(const VECT& vect,
 
 
 
+/// @internal Build deterministic search samples for scanner benchmarks.
 template<typename VECT>
 void generate_search_samples(VECT& search_vect,
                              size_t search_size,
@@ -5125,6 +5223,7 @@ void SparseVectorScannerTest()
 
 
 
+/// @internal Generate string data used by pipeline scanner benchmarks.
 inline
 void GeneratePipelineTestData(std::vector<string>& str_coll,
                               str_svect_type&      str_sv,
@@ -5521,6 +5620,7 @@ void SparseVectorRangeDeserializationTest()
 }
 
 
+/// @internal Generate sparse-vector content for AND-deserialization tests.
 static
 void generate_and_deserialization_test_set(sparse_vector_u32& sv,
                                            unsigned vector_max)
@@ -5541,6 +5641,7 @@ void generate_and_deserialization_test_set(sparse_vector_u32& sv,
     sv.optimize();
 }
 
+/// @internal Generate a mask for sparse-vector AND-deserialization tests.
 static
 void generate_and_deserialization_mask(bvect& mask_bv,
                                        unsigned vector_max,
@@ -5574,6 +5675,7 @@ void generate_and_deserialization_mask(bvect& mask_bv,
     //mask_bv.optimize();
 }
 
+/// @internal Validate sparse-vector AND-deserialization results.
 static
 void validate_and_deserialization(const sparse_vector_u32& sv,
                                   const sparse_vector_u32& sv_out,
@@ -5598,12 +5700,14 @@ void validate_and_deserialization(const sparse_vector_u32& sv,
 
 typedef bm::str_sparse_vector<char, bvect, 16> str_gather_svect_type;
 
+/// @internal Return whether a generated string sparse-vector row is NULL.
 static
 bool is_str_gather_null(str_gather_svect_type::size_type idx)
 {
     return (idx % 17 == 0) || ((idx & 0xFFFF) == 13);
 }
 
+/// @internal Build a deterministic string value for gather tests.
 static
 void make_str_gather_value(str_gather_svect_type::size_type idx, string& str)
 {
@@ -5619,6 +5723,7 @@ void make_str_gather_value(str_gather_svect_type::size_type idx, string& str)
         str.append("A");
 }
 
+/// @internal Generate the string sparse-vector used by gather tests.
 static
 void generate_str_gather_test_set(str_gather_svect_type& str_sv,
                                   unsigned vector_max)
@@ -5639,6 +5744,7 @@ void generate_str_gather_test_set(str_gather_svect_type& str_sv,
     str_sv.optimize();
 }
 
+/// @internal Generate masks for string gather-deserialization tests.
 static
 void generate_str_gather_deserialization_masks(std::vector<bvect>& mask_vect,
                                                unsigned vector_max,
@@ -5688,6 +5794,183 @@ void generate_str_gather_deserialization_masks(std::vector<bvect>& mask_vect,
     std::shuffle(mask_vect.begin(), mask_vect.end(), mask_gen);
 }
 
+/// @internal Print detailed string gather mismatch diagnostics.
+static
+void print_str_gather_value_mismatch(const str_gather_svect_type& str_sv,
+                                     const str_gather_svect_type& str_out,
+                                     str_gather_svect_type::size_type idx,
+                                     const string& sv_str,
+                                     const string& out_str,
+                                     const char* variant_name,
+                                     const char* mask_name)
+{
+    cerr << "Error: str_sparse_vector gather value mismatch: "
+         << variant_name << ", " << mask_name
+         << ", idx=" << idx
+         << ", expected=" << sv_str
+         << ", actual=" << out_str << endl;
+
+    size_t len = sv_str.size() < out_str.size() ? sv_str.size() : out_str.size();
+    for (size_t i = 0; i < len; ++i)
+    {
+        unsigned char ec = (unsigned char)sv_str[i];
+        unsigned char ac = (unsigned char)out_str[i];
+        if (ec == ac)
+            continue;
+        unsigned diff = unsigned(ec ^ ac);
+        cerr << "  first byte mismatch: pos=" << i
+             << ", expected_char=" << sv_str[i]
+             << " (" << unsigned(ec) << ")"
+             << ", actual_char=" << out_str[i]
+             << " (" << unsigned(ac) << ")"
+             << ", xor=" << diff << endl;
+        for (unsigned bit = 0; bit < 8; ++bit)
+        {
+            if (!(diff & (1u << bit)))
+                continue;
+            unsigned plane = unsigned(i * 8 + bit);
+            const bvect* src_bv = str_sv.get_bmatrix().get_row(plane);
+            const bvect* out_bv = str_out.get_bmatrix().get_row(plane);
+            bool src_bit = src_bv ? src_bv->test(idx) : false;
+            bool out_bit = out_bv ? out_bv->test(idx) : false;
+            cerr << "    candidate plane=" << plane
+                 << ", bit=" << bit
+                 << ", src_bit=" << src_bit
+                 << ", out_bit=" << out_bit
+                 << ", src_plane=" << (src_bv ? "present" : "null")
+                 << ", out_plane=" << (out_bv ? "present" : "null")
+                 << endl;
+        }
+        return;
+    }
+    if (sv_str.size() != out_str.size())
+    {
+        cerr << "  string length mismatch: expected_len=" << sv_str.size()
+             << ", actual_len=" << out_str.size() << endl;
+    }
+}
+
+/// @internal Diagnose one serialized plane in a string sparse-vector round trip.
+static
+void diagnose_str_plane_roundtrip(const str_gather_svect_type& str_sv,
+                                  str_gather_svect_type::size_type idx,
+                                  unsigned plane)
+{
+    const bvect* src_bv = str_sv.get_bmatrix().get_row(plane);
+    if (!src_bv)
+    {
+        cerr << "  standalone plane roundtrip: plane=" << plane << " is null" << endl;
+        return;
+    }
+
+    bm::serializer<bvect> bv_ser;
+    typename bm::serializer<bvect>::buffer bv_buf;
+    typename bvect::statistics st;
+    src_bv->calc_stat(&st);
+    bv_buf.resize(st.max_serialize_mem);
+    size_t sz = bv_ser.serialize(*src_bv, bv_buf.data(), st.max_serialize_mem);
+    bv_buf.resize(sz);
+
+    bvect out_bv;
+    bm::deserialize(out_bv, bv_buf.buf());
+
+    bool src_bit = src_bv->test(idx);
+    bool out_bit = out_bv.test(idx);
+    bool eq = src_bv->equal(out_bv);
+    cerr << "  standalone plane roundtrip: plane=" << plane
+         << ", serialized_size=" << sz
+         << ", equal=" << eq
+         << ", src_bit=" << src_bit
+         << ", out_bit=" << out_bit << endl;
+}
+
+/// @internal Diagnose full string sparse-vector deserialization mismatch.
+static
+void diagnose_str_full_deserialization_mismatch(const str_gather_svect_type& str_sv,
+                                                const str_gather_svect_type& str_out)
+{
+    cerr << "  full structural state: src_size=" << str_sv.size()
+         << ", out_size=" << str_out.size()
+         << ", src_remap=" << str_sv.is_remap()
+         << ", out_remap=" << str_out.is_remap()
+         << ", src_nullable=" << str_sv.is_nullable()
+         << ", out_nullable=" << str_out.is_nullable()
+         << ", src_planes=" << str_sv.get_bmatrix().rows()
+         << ", out_planes=" << str_out.get_bmatrix().rows()
+         << endl;
+
+    unsigned src_planes = unsigned(str_sv.get_bmatrix().rows());
+    unsigned out_planes = unsigned(str_out.get_bmatrix().rows());
+    unsigned max_planes = src_planes > out_planes ? src_planes : out_planes;
+    for (unsigned plane = 0; plane < max_planes; ++plane)
+    {
+        const bvect* src_bv = plane < src_planes ? str_sv.get_bmatrix().get_row(plane) : 0;
+        const bvect* out_bv = plane < out_planes ? str_out.get_bmatrix().get_row(plane) : 0;
+        if (src_bv == out_bv)
+            continue;
+        if (!src_bv && out_bv)
+        {
+            if (!out_bv->any())
+                continue;
+            bvect::size_type pos = 0;
+            out_bv->find(pos);
+            cerr << "  first unequal plane=" << plane
+                 << ", src_plane=null, out_plane=present, first_out_bit=" << pos
+                 << endl;
+            return;
+        }
+        if (src_bv && !out_bv)
+        {
+            if (!src_bv->any())
+                continue;
+            bvect::size_type pos = 0;
+            src_bv->find(pos);
+            cerr << "  first unequal plane=" << plane
+                 << ", src_plane=present, out_plane=null, first_src_bit=" << pos
+                 << endl;
+            return;
+        }
+        bvect::size_type pos = 0;
+        bool found = src_bv->find_first_mismatch(*out_bv, pos);
+        if (found)
+        {
+            cerr << "  first unequal plane=" << plane
+                 << ", mismatch_bit=" << pos
+                 << ", src_bit=" << src_bv->test(pos)
+                 << ", out_bit=" << out_bv->test(pos)
+                 << endl;
+            diagnose_str_plane_roundtrip(str_sv, pos, plane);
+            break;
+        }
+    }
+
+    string sv_str;
+    string out_str;
+    const str_gather_svect_type::size_type sv_size = str_sv.size();
+    const str_gather_svect_type::size_type stride = 16u * 1024u * 1024u;
+    for (str_gather_svect_type::size_type base = 0; base < sv_size; base += stride)
+    {
+        const str_gather_svect_type::size_type probes[] = { base, base + 1, base + 6, base + stride - 1 };
+        for (unsigned i = 0; i < sizeof(probes)/sizeof(probes[0]); ++i)
+        {
+            str_gather_svect_type::size_type idx = probes[i];
+            if (idx >= sv_size)
+                continue;
+            str_sv.get(idx, sv_str);
+            str_out.get(idx, out_str);
+            if (sv_str != out_str)
+            {
+                print_str_gather_value_mismatch(str_sv, str_out, idx, sv_str, out_str,
+                                                "mmap-perf-full", "sample");
+                diagnose_str_plane_roundtrip(str_sv, idx, 43);
+                return;
+            }
+        }
+    }
+    cerr << "  full deserialize mismatch not found in sampled superblock probes" << endl;
+}
+
+/// @internal Validate selected string gather-deserialization values.
 static
 void validate_str_gather_deserialization(const str_gather_svect_type& str_sv,
                                          const str_gather_svect_type& str_out,
@@ -5731,15 +6014,430 @@ void validate_str_gather_deserialization(const str_gather_svect_type& str_sv,
         bool eq = sv_str == out_str;
         if (!eq)
         {
-            cerr << "Error: str_sparse_vector gather value mismatch: "
-                 << variant_name << ", " << mask_name
-                 << ", idx=" << idx
-                 << ", expected=" << sv_str
-                 << ", actual=" << out_str << endl;
+            print_str_gather_value_mismatch(str_sv, str_out, idx, sv_str, out_str,
+                                            variant_name, mask_name);
             assert(eq); exit(1);
         }
     }
 }
+
+#ifndef _WIN32
+/// @internal Resource counters used by mmap-backed perf diagnostics.
+struct mmap_perf_resource_snapshot
+{
+    long max_rss;
+    long min_faults;
+    long maj_faults;
+};
+
+/// @internal Capture process RSS and page-fault counters.
+static
+mmap_perf_resource_snapshot mmap_perf_get_resource_snapshot()
+{
+    struct rusage ru;
+    ::getrusage(RUSAGE_SELF, &ru);
+
+    mmap_perf_resource_snapshot rs;
+#if defined(__APPLE__)
+    rs.max_rss = long(ru.ru_maxrss);
+#else
+    rs.max_rss = long(ru.ru_maxrss) * 1024L;
+#endif
+    rs.min_faults = long(ru.ru_minflt);
+    rs.maj_faults = long(ru.ru_majflt);
+    return rs;
+}
+
+/// @internal Print resource counters when memory diagnostics are enabled.
+static
+void mmap_perf_print_resource_snapshot(const char* label)
+{
+    if (!g_perf_options.print_space)
+        return;
+    mmap_perf_resource_snapshot rs = mmap_perf_get_resource_snapshot();
+    cout << "  resource snapshot [" << label << "]: peak-rss="
+         << (rs.max_rss / (1024 * 1024)) << " MB"
+         << ", minor-faults=" << rs.min_faults
+         << ", major-faults=" << rs.maj_faults << endl;
+}
+
+/// @internal Print resource-counter deltas when memory diagnostics are enabled.
+static
+void mmap_perf_print_resource_delta(const char* label,
+                                    const mmap_perf_resource_snapshot& rs0,
+                                    const mmap_perf_resource_snapshot& rs1)
+{
+    if (!g_perf_options.print_space)
+        return;
+    cout << "  resource delta [" << label << "]: peak-rss="
+         << (rs1.max_rss / (1024 * 1024)) << " MB"
+         << ", minor-faults=" << (rs1.min_faults - rs0.min_faults)
+         << ", major-faults=" << (rs1.maj_faults - rs0.maj_faults) << endl;
+}
+
+/// @internal Ask the OS for random-access file behavior where supported.
+static
+void mmap_perf_advise_fd(int fd)
+{
+#ifdef F_NOCACHE
+    int no_cache = 1;
+    ::fcntl(fd, F_NOCACHE, no_cache);
+#endif
+#ifdef F_RDAHEAD
+    int no_readahead = 0;
+    ::fcntl(fd, F_RDAHEAD, no_readahead);
+#endif
+#ifdef POSIX_FADV_RANDOM
+    ::posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
+#endif
+}
+
+/// @internal Drop cached mmap/file pages where the platform exposes this hint.
+static
+void mmap_perf_drop_file_cache(int fd, const void* mapped_addr, size_t mapped_size)
+{
+#ifdef MADV_DONTNEED
+    if (mapped_addr && mapped_size)
+        ::madvise(const_cast<void*>(mapped_addr), mapped_size, MADV_DONTNEED);
+#else
+    (void)mapped_addr;
+    (void)mapped_size;
+#endif
+#ifdef POSIX_FADV_DONTNEED
+    ::posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+#else
+    (void)fd;
+#endif
+}
+
+/// @internal Append a fixed-width hexadecimal representation.
+static
+void str_gather_mmap_append_hex32(string& str, unsigned v)
+{
+    static const char hex[] = "0123456789abcdef";
+    for (int shift = 28; shift >= 0; shift -= 4)
+        str.push_back(hex[(v >> shift) & 0xFu]);
+}
+
+/// @internal Build deterministic mmap gather string payload.
+static
+void str_gather_mmap_make_value(str_gather_svect_type::size_type idx, string& str)
+{
+    unsigned v = unsigned(idx * 2654435761u + 0x9E3779B9u);
+    unsigned w = unsigned((idx >> 16) ^ (idx * 1597334677u) ^ 0x85EBCA6Bu);
+
+    str.assign("svm_");
+    str_gather_mmap_append_hex32(str, unsigned(idx));
+    str.push_back('_');
+    str_gather_mmap_append_hex32(str, v);
+    str.push_back('_');
+    str_gather_mmap_append_hex32(str, w);
+    str.push_back('_');
+    str_gather_mmap_append_hex32(str, v ^ (w << 7) ^ unsigned(idx >> 3));
+    str.push_back('_');
+    str_gather_mmap_append_hex32(str, (v << 11) ^ (w >> 5) ^ 0xC2B2AE35u);
+}
+
+/// @internal Build and freeze the mmap gather source vector.
+static
+void str_gather_mmap_make_source(str_gather_svect_type& str_sv,
+                                 str_gather_svect_type::size_type sv_size)
+{
+    string str;
+    str_gather_svect_type::back_insert_iterator bi = str_sv.get_back_inserter();
+    for (str_gather_svect_type::size_type i = 0; i < sv_size; ++i)
+    {
+        str_gather_mmap_make_value(i, str);
+        bi = str;
+    }
+    bi.flush();
+    str_sv.optimize();
+    str_sv.freeze();
+}
+
+/// @internal Generate randomized island starts within an address range.
+static
+void str_gather_mmap_make_island_starts_range(
+        std::vector<str_gather_svect_type::size_type>& starts,
+        str_gather_svect_type::size_type range_from,
+        str_gather_svect_type::size_type range_to,
+        unsigned island_len,
+        unsigned seed,
+        str_gather_svect_type::size_type target_count)
+{
+    typedef str_gather_svect_type::size_type size_type;
+
+    starts.clear();
+    if (range_from > range_to)
+        return;
+    if (!island_len)
+        island_len = 1;
+
+    size_type span = range_to - range_from + 1;
+    if (span <= island_len)
+    {
+        starts.push_back(range_from);
+        return;
+    }
+
+    size_type island_count = target_count / island_len;
+    if (!island_count)
+        island_count = 1;
+
+    std::mt19937 island_gen(seed + island_len * 7919);
+    std::uniform_int_distribution<size_type> dist(range_from,
+                                                  range_to - island_len + 1);
+
+    starts.reserve(size_t(island_count));
+    for (size_type i = 0; i < island_count; ++i)
+        starts.push_back(dist(island_gen));
+    std::shuffle(starts.begin(), starts.end(), island_gen);
+}
+
+/// @internal Convert island starts into a gather mask.
+static
+void str_gather_mmap_set_islands_from_starts(
+        bvect& mask_bv,
+        const std::vector<str_gather_svect_type::size_type>& starts,
+        str_gather_svect_type::size_type range_to,
+        unsigned island_len)
+{
+    typedef str_gather_svect_type::size_type size_type;
+
+    mask_bv.clear();
+    if (!island_len)
+        island_len = 1;
+
+    for (size_t i = 0; i < starts.size(); ++i)
+    {
+        size_type from = starts[i];
+        size_type to = from + island_len - 1;
+        if (to > range_to)
+            to = range_to;
+        mask_bv.set_range(from, to);
+    }
+    mask_bv.optimize();
+}
+
+static
+void StrSparseVectorGatherMMapDeserializationPerfTest()
+{
+    if (g_perf_options.print_space)
+        cout << " ------------------------------ StrSparseVectorGatherMMapDeserializationPerfTest()" << endl;
+
+    typedef bm::sparse_vector_serializer<str_gather_svect_type> sv_serializer_type;
+    typedef bm::sparse_vector_deserializer<str_gather_svect_type> sv_deserializer_type;
+    typedef sv_deserializer_type::deserialization_index_type deserialization_index_type;
+
+    const str_gather_svect_type::size_type sv_size = 128u * 1024u * 1024u;
+    const str_gather_svect_type::size_type target_count = 1024u * 1024u;
+    const unsigned island_lens[] = { 1, 4, 256, 4096 };
+    const unsigned island_len_count = unsigned(sizeof(island_lens) / sizeof(island_lens[0]));
+    const unsigned repeats = 5;
+    const bool profile_island_gather_only = false;
+    const unsigned profile_island_len = 256;
+    const char* fname = "bm_strsv_gather_mmap.tmp";
+
+    mmap_perf_print_resource_snapshot("start");
+
+    str_gather_svect_type str_sv(bm::no_null);
+    RunTimed("bm::str_sparse_vector<> mmap perf source build", 1, [&]()
+    {
+        str_gather_mmap_make_source(str_sv, sv_size);
+    });
+    mmap_perf_print_resource_snapshot("after source build");
+
+    sv_serializer_type sv_serializer;
+    sv_serializer.set_bookmarks(true, 16);
+
+    size_t serialized_blob_size = 0;
+    RunTimed("bm::str_sparse_vector<> mmap perf file streaming serialization", 1, [&]()
+    {
+        ofstream fout(fname, ios::out | ios::binary | ios::trunc);
+        if (!fout.good())
+        {
+            cerr << "Error: failed to create mmap perf temp file: " << fname << endl;
+            assert(0); exit(1);
+        }
+        bm::streams_encoder output(fout);
+        if (!sv_serializer.serialize(str_sv, output) || !output.finish())
+        {
+            cerr << "Error: failed to stream sparse vector BLOB to temp file: "
+                 << fname << endl;
+            assert(0); exit(1);
+        }
+        serialized_blob_size = output.size();
+    });
+    if (g_perf_options.print_space)
+        cout << "  serialized BLOB size = " << serialized_blob_size
+             << " bytes (" << (serialized_blob_size / (1024 * 1024)) << " MB)" << endl;
+    mmap_perf_print_resource_snapshot("after serialization");
+
+    int fd = ::open(fname, O_RDONLY);
+    if (fd < 0)
+    {
+        cerr << "Error: failed to open mmap perf temp file: " << fname << endl;
+        assert(0); exit(1);
+    }
+    if (::unlink(fname) != 0)
+    {
+        cerr << "Error: unlink(" << fname << ") failed: "
+             << ::strerror(errno) << " (errno=" << errno << ")" << endl;
+        ::close(fd);
+        assert(0); exit(1);
+    }
+    mmap_perf_print_resource_snapshot("after temp file streaming");
+
+    mmap_perf_advise_fd(fd);
+    mmap_perf_drop_file_cache(fd, 0, 0);
+
+    void* mapped = ::mmap(0, serialized_blob_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (mapped == MAP_FAILED)
+    {
+        cerr << "Error: mmap failed for temp file: " << fname << endl;
+        ::close(fd);
+        assert(0); exit(1);
+    }
+#ifdef MADV_RANDOM
+    ::madvise(mapped, serialized_blob_size, MADV_RANDOM);
+#endif
+    const unsigned char* mapped_buf = static_cast<const unsigned char*>(mapped);
+    mmap_perf_print_resource_snapshot("after mmap");
+
+    if (!profile_island_gather_only)
+    {
+        str_gather_svect_type str_full(bm::no_null);
+        sv_deserializer_type sv_deserial_full;
+        sv_deserial_full.deserialize(str_full, mapped_buf);
+        bool eq = str_sv.equal(str_full);
+        if (!eq)
+        {
+            cerr << "Error: str_sparse_vector mmap perf full deserialize mismatch" << endl;
+            diagnose_str_full_deserialization_mismatch(str_sv, str_full);
+            assert(eq); exit(1);
+        }
+    }
+
+    deserialization_index_type deserialization_index;
+    RunTimed("bm::str_sparse_vector<> mmap perf deserialization index construction", 1, [&]()
+    {
+        sv_deserializer_type sv_deserial_map;
+        sv_deserial_map.construct_deserialization_index(deserialization_index, mapped_buf);
+    });
+    if (g_perf_options.print_space)
+        cout << "  deserialization index entries = " << deserialization_index.count_offsets()
+             << ", bookmarks = " << deserialization_index.count_bookmarks()
+             << ", memory before optimize = " << deserialization_index.memory_used();
+    deserialization_index.optimize();
+    if (g_perf_options.print_space)
+        cout << ", memory after optimize = " << deserialization_index.memory_used() << endl;
+    mmap_perf_print_resource_snapshot("after deserialization index");
+
+    const char* island_patterns[] = { "global", "tail" };
+    const unsigned island_pattern_count = unsigned(sizeof(island_patterns) /
+                                                   sizeof(island_patterns[0]));
+    const str_gather_svect_type::size_type tail_from = sv_size - (sv_size / 8);
+
+    for (unsigned p = 0; p < island_pattern_count; ++p)
+    {
+        const char* island_pattern = island_patterns[p];
+        for (unsigned i = 0; i < island_len_count; ++i)
+        {
+            unsigned island_len = island_lens[i];
+            if (profile_island_gather_only &&
+                (p != 1 || island_len != profile_island_len))
+                continue;
+            bvect mask_bv;
+            std::vector<str_gather_svect_type::size_type> island_starts;
+            if (p == 0)
+            {
+                str_gather_mmap_make_island_starts_range(island_starts,
+                                                         0, sv_size - 1,
+                                                         island_len,
+                                                         1171 + i * 101,
+                                                         target_count);
+            }
+            else
+            {
+                str_gather_mmap_make_island_starts_range(island_starts,
+                                                         tail_from, sv_size - 1,
+                                                         island_len,
+                                                         3137 + i * 101,
+                                                         target_count);
+            }
+            str_gather_mmap_set_islands_from_starts(mask_bv, island_starts,
+                                                    sv_size - 1, island_len);
+            if (g_perf_options.print_space)
+                cout << "  island pattern = " << island_pattern
+                     << ", island length = " << island_len
+                     << ", mask count = " << mask_bv.count() << endl;
+
+            std::string validation_name("mmap-perf-");
+            validation_name += island_pattern;
+
+            if (!profile_island_gather_only)
+            {
+            {
+                str_gather_svect_type str_check(bm::no_null);
+                sv_deserializer_type sv_deserial_plain;
+                sv_deserial_plain.deserialize(str_check, mapped_buf, mask_bv);
+                validate_str_gather_deserialization(str_sv, str_check, mask_bv,
+                                                    (validation_name + "-mmap-plain").c_str(),
+                                                    "validation");
+            }
+            {
+                str_gather_svect_type str_check(bm::no_null);
+                sv_deserializer_type sv_deserial_assist;
+                sv_deserial_assist.set_deserialization_index(&deserialization_index);
+                sv_deserial_assist.set_deserialization_index_use(true);
+                sv_deserial_assist.deserialize(str_check, mapped_buf, mask_bv);
+                validate_str_gather_deserialization(str_sv, str_check, mask_bv,
+                                                    (validation_name + "-mmap-bookmark-index").c_str(),
+                                                    "validation");
+            }
+            }
+            {
+                mmap_perf_drop_file_cache(fd, mapped, serialized_blob_size);
+                str_gather_svect_type str_out(bm::no_null);
+                sv_deserializer_type sv_deserial_timed;
+                sv_deserial_timed.set_deserialization_index(&deserialization_index);
+                sv_deserial_timed.set_deserialization_index_use(true);
+
+                mmap_perf_resource_snapshot rs0 = mmap_perf_get_resource_snapshot();
+                std::string msg("bm::str_sparse_vector<> gather deserialization bookmark-index mmap BLOB - ");
+                msg += island_pattern;
+                msg += " island ";
+                msg += to_string(island_len);
+                RunTimed(msg.c_str(), repeats, [&]()
+                {
+                    for (unsigned j = 0; j < repeats; ++j)
+                    {
+                        sv_deserial_timed.deserialize(str_out, mapped_buf, mask_bv);
+                        c_acc += str_out.size();
+                        mmap_perf_drop_file_cache(fd, mapped, serialized_blob_size);
+                    }
+                });
+                mmap_perf_resource_snapshot rs1 = mmap_perf_get_resource_snapshot();
+                mmap_perf_print_resource_delta(msg.c_str(), rs0, rs1);
+            }
+        }
+    }
+
+    ::munmap(mapped, serialized_blob_size);
+    ::close(fd);
+
+    mmap_perf_print_resource_snapshot("finish");
+    if (g_perf_options.print_space)
+        cout << " ------------------------------ StrSparseVectorGatherMMapDeserializationPerfTest() OK" << endl;
+}
+#else
+static
+void StrSparseVectorGatherMMapDeserializationPerfTest()
+{
+    if (!g_perf_options.silent)
+        cout << " ------------------------------ StrSparseVectorGatherMMapDeserializationPerfTest() skipped on Windows" << endl;
+}
+#endif
 
 static
 void StrSparseVectorGatherDeserializationTest()
@@ -6390,6 +7088,7 @@ typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bvect>> sparseVe
 typedef bm::sparse_vector<unsigned int, bvect> sparse_vec_u32;
 typedef bm::sparse_vector_float<bm::rsc_sparse_vector<unsigned int, sparse_vec_u32>> sparseVecFloatRSC;
 
+/// @internal Find and report one float sparse-vector AND mismatch.
 static
 bool find_float_and_mismatch(const sparseVecFloat& sv,
                              const sparseVecFloat& sv_out,
@@ -6411,6 +7110,7 @@ bool find_float_and_mismatch(const sparseVecFloat& sv,
     return true;
 }
 
+/// @internal Validate float sparse-vector AND-deserialization output.
 static
 void validate_float_and_deserialization(const sparseVecFloat& sv,
                                         const sparseVecFloat& sv_out,
@@ -6624,6 +7324,7 @@ void SparseVectorFloatANDDeserializationTest()
     cout << " ------------------------------ SparseVectorFloatANDDeserializationTest() OK" << endl;
 }
 
+/// @internal Find and report one RSC float sparse-vector AND mismatch.
 static
 bool find_float_rsc_and_mismatch(const sparseVecFloatRSC& sv,
                                  const sparseVecFloatRSC& sv_out,
@@ -6645,6 +7346,7 @@ bool find_float_rsc_and_mismatch(const sparseVecFloatRSC& sv,
     return true;
 }
 
+/// @internal Validate RSC float sparse-vector AND-deserialization output.
 static
 void validate_float_rsc_and_deserialization(const sparseVecFloatRSC& sv,
                                             sparseVecFloatRSC& sv_out,
@@ -6864,6 +7566,7 @@ void SparseVectorFloatRSCANDDeserializationTest()
 }
 
 //Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
+/// @internal Search a plain float vector and return matching indexes.
 inline
 void in_range_vect(const std::vector<float>& fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
@@ -6876,6 +7579,7 @@ void in_range_vect(const std::vector<float>& fv, float from, float to, sparseVec
 }
 
 //Finds all values in range [from, to] in a given sparse_vector_float using a const_iterator and flips the corresponding bits in bv_out
+/// @internal Search a float sparse-vector through const access.
 inline
 void in_range_const(const sparseVecFloat& sv, float from, float to, sparseVecFloat::bvector_type& bv_out)
 {
@@ -6888,6 +7592,7 @@ void in_range_const(const sparseVecFloat& sv, float from, float to, sparseVecFlo
     }
 }
 
+/// @internal Visitor used by for_each_sparse() float range search.
 struct svf_range_for_each_sparse_func
 {
     typedef sparseVecFloat::size_type size_type;
@@ -6910,6 +7615,7 @@ struct svf_range_for_each_sparse_func
 };
 
 //Finds all values in range [from, to] using bm::for_each_sparse() decode visitor
+/// @internal Search a float sparse-vector through for_each_sparse().
 inline
 void in_range_for_each_sparse(const sparseVecFloat& sv, float from, float to, sparseVecFloat::bvector_type& bv_out)
 {
@@ -6919,6 +7625,7 @@ void in_range_for_each_sparse(const sparseVecFloat& sv, float from, float to, sp
     bm::for_each_sparse(sv, func);
 }
 
+/// @internal Visitor used for filtered float sparse-vector scans.
 struct svf_filtered_visit_func
 {
     typedef sparseVecFloat::size_type size_type;
@@ -7065,6 +7772,7 @@ void TestSVFForEachSparseSearchResults()
     run_case("with Skewed Data", skewData, make_ranges(lower, upper));
 }
 
+/// @internal Visitor used for filtered RSC float sparse-vector scans.
 struct svf_rsc_filtered_visit_func
 {
     typedef sparseVecFloatRSC::size_type size_type;
@@ -7566,6 +8274,7 @@ void TestSVFScanner()
 
 
 //Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
+/// @internal Search a plain vector for RSC comparison baselines.
 inline
 void in_range_vect_rsc(const std::vector<float>& fv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
@@ -7579,6 +8288,7 @@ void in_range_vect_rsc(const std::vector<float>& fv, float from, float to, spars
 
 //Finds all values in range [from, to] in a given sparse_vector_float which uses a rsc sparse vector 
 //using a const_iterator and flips the corresponding bits in bv_out
+/// @internal Search an RSC float sparse-vector through const access.
 inline
 void in_range_const_rsc(const sparseVecFloatRSC& sv, float from, float to, sparseVecFloatRSC::bvector_type &bv_out)
 {
@@ -7591,6 +8301,7 @@ void in_range_const_rsc(const sparseVecFloatRSC& sv, float from, float to, spars
     }
 }
 
+/// @internal Visitor used by RSC for_each_sparse() range search.
 struct svf_rsc_range_for_each_sparse_func
 {
     typedef sparseVecFloatRSC::size_type size_type;
@@ -7613,6 +8324,7 @@ struct svf_rsc_range_for_each_sparse_func
 };
 
 //Finds all values in range [from, to] using bm::for_each_sparse() decode visitor
+/// @internal Search an RSC float sparse-vector through for_each_sparse().
 inline
 void in_range_for_each_sparse_rsc(const sparseVecFloatRSC& sv, float from, float to, sparseVecFloatRSC::bvector_type& bv_out)
 {
@@ -8401,6 +9113,7 @@ void TestSVFScannerSpike()
 }
 
 //Finds all values in range [from, to] in a given std::vector<float> and flipts the corresponding bits in bv_out
+/// @internal Search a plain vector with unbounded float range semantics.
 inline
 void in_range_vect_unbounded(const std::vector<float>& fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
 {
@@ -8413,6 +9126,7 @@ void in_range_vect_unbounded(const std::vector<float>& fv, float from, float to,
 }
 
 //Finds all values in range [from, to] in a given sparse_vector_float using a const_iterator and flips the corresponding bits in bv_out
+/// @internal Search a float sparse-vector with unbounded range semantics.
 inline
 void in_range_const_unbounded(const sparseVecFloat& sv, float from, float to, sparseVecFloat::bvector_type& bv_out)
 {
@@ -8525,6 +9239,7 @@ void TestSVFScannerUnbounded()
 
 
 /// Random numbers test
+/// @internal Generate linear input for interpolative coding microbenchmarks.
 template<typename V>
 unsigned generate_inter_test_linear(V* arr, unsigned inc, unsigned target_size)
 {
@@ -8551,6 +9266,7 @@ unsigned generate_inter_test_linear(V* arr, unsigned inc, unsigned target_size)
 }
 
 /// Random numbers test
+/// @internal Generate non-linear input for interpolative coding microbenchmarks.
 template<typename V>
 unsigned generate_inter_test(V* arr, unsigned inc_factor, unsigned target_size)
 {
@@ -8644,6 +9360,7 @@ void InterpolativeCodingTest()
     cout << "InterpolativeCodingTest() OK" << endl;
 }
 
+/// @internal Scratch comparison experiment kept out of the main perf sequence.
 inline
 void AS_test1()
 {
@@ -8788,6 +9505,7 @@ void AS_test1()
         }
 }
 
+/// @internal Scratch assignment-string experiment kept out of the main perf sequence.
 inline
 void AS_test2()
 {
@@ -8867,6 +9585,7 @@ std::vector<std::string> t1(const std::string& str, char delim)
     return items;
 }
 
+/// @internal Split a string into items for scratch parser experiments.
 void t2(const std::string& str, char delim, std::vector<std::string>& items)
 {
     (void)delim;
@@ -8878,6 +9597,7 @@ void t2(const std::string& str, char delim, std::vector<std::string>& items)
 
 
 
+/// @internal Scratch string-splitting benchmark kept out of the main perf sequence.
 void test_ro()
 {
     {
@@ -8896,24 +9616,31 @@ void test_ro()
 }
 
 
-int main(void)
+int main(int argc, char* argv[])
 {
 //test_ro();
 //return 0;
 
-    cout << bm::_copyright<true>::_p << endl;
-    cout << "SIMD code = " << bm::simd_version() << endl;
-    #if defined (BM64OPT)
-        cout << " 64-bit optimizations: ON" << endl;
-    #else
-        cout << " 64-bit optimizations: OFF" << endl;
-    #endif
+    if (!ParseCommandLine(argc, argv))
+        return 0;
+
+    //if (g_perf_options.print_space)
+    {
+        cout << bm::_copyright<true>::_p << endl;
+        cout << "SIMD code = " << bm::simd_version() << endl;
+        #if defined (BM64OPT)
+            cout << " 64-bit optimizations: ON" << endl;
+        #else
+            cout << " 64-bit optimizations: OFF" << endl;
+        #endif
+    }
 
 //    ptest();
 
-    bm::chrono_taker<> tt(cout, "TOTAL", 1);
     try
     {
+        bm::chrono_taker<> tt(cout, "TOTAL", 1);
+        
         cout << endl;
 
         MemCpyTest();
@@ -9065,6 +9792,9 @@ int main(void)
         cout << endl;
 
         SparseVectorFloatANDDeserializationTest();
+        cout << endl;
+
+        StrSparseVectorGatherMMapDeserializationPerfTest();
         cout << endl;
 
         if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code
