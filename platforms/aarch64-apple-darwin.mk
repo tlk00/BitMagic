@@ -30,7 +30,7 @@ ifeq ($(COMPILER),GNU_CC)
     EXTERN_LIBS = $(EXTERN_LIBS_BASE)/lib
     CXX = g++ $(CXXARCHFLAGS) -Wall -Wc++11-extensions 
     CC = gcc $(CXXARCHFLAGS) -Wall
-    LD = g++ $(COMMON_LDFLAGS)
+    LD = g++
     CC_PIC_FLAGS = -fPIC
     CXX_PIC_FLAGS = -fPIC
     OPT_FLAGS = -g0 -O2
@@ -48,4 +48,3 @@ INSTALL = /usr/bin/install
 INSTALLDIR = /usr/bin/install -d
 AWK = awk
 TEST = /usr/bin/test
-
