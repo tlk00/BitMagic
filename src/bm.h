@@ -4116,15 +4116,16 @@ void bvector<Alloc>::fill_alloc_digest(bvector<Alloc>& bv_blocks) const
 template<typename Alloc>
 void bvector<Alloc>::build_block_digest(bvector<Alloc>& bv_blocks) const
 {
-    bv_blocks.clear(false);
-    bv_blocks.init();
+    bv_blocks.clear();
 
     const unsigned top_size = blockman_.top_block_size();
     bm::word_t*** blk_root = blockman_.top_blocks_root();
     if (!blk_root)
         return;
 
-    typename bvector<Alloc>::bulk_insert_iterator bi(bv_blocks, bm::BM_SORTED);
+    bv_blocks.init();
+    bv_blocks.set_new_blocks_strat(bm::BM_GAP);
+
     for (unsigned i = 0; i < top_size; ++i)
     {
         const bm::word_t* const* blk_blk = blk_root[i];
@@ -4135,17 +4136,16 @@ void bvector<Alloc>::build_block_digest(bvector<Alloc>& bv_blocks) const
         if ((bm::word_t*)blk_blk == FULL_BLOCK_FAKE_ADDR)
         {
             for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
-                bi = nb_from + j;
+                bv_blocks.set_bit_no_check(nb_from + j);
             continue;
         }
 
         for (unsigned j = 0; j < bm::set_sub_array_size; ++j)
         {
             if (blk_blk[j])
-                bi = nb_from + j;
+                bv_blocks.set_bit_no_check(nb_from + j);
         } // for j
     } // for i
-    bi.flush();
 }
 
 

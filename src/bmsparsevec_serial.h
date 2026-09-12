@@ -2101,6 +2101,7 @@ sparse_vector_deserializer<SV>::sparse_vector_deserializer()
     not_null_mask_bv_.set_allocator_pool(&pool_);
     rsc_mask_bv_.set_allocator_pool(&pool_);
     mask_block_digest_bv_.set_allocator_pool(&pool_);
+    mask_block_digest_bv_.set_new_blocks_strat(bm::BM_GAP);
     // The scratch NULL decode target uses the deserializer pool, not master NULL ownership.
     null_decode_scratch_bv_.set_allocator_pool(&pool_);
 }
