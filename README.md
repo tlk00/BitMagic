@@ -1,453 +1,243 @@
-## BitMagic C++ Library
-
-BitMagic was created as a Algebra of Sets toolkit for Information Retrieval but currently evolved into a more general Data Science components library for memory compact structures and algorithms on succinct data vectors. 
-BitMagic implements compressed bit-vectors and containers (vectors) based on ideas of bit-slicing transform, Rank-Select compression and logical computing on memory compressed models. 
+# BitMagic C++ Library
 
-All BitMagic succicnt containers are serializable (with compression using state of art Binary Interpolative Coding) for efficient storage and network transfer. All containers are fast searchable in
-compresed form.
+**Compact data. Searchable representations. Hardware-efficient computation.**
 
-BitMagic offers sets of methods and tools to architect your applications to use HPC techniques to save 
-memory on the fly (thus be able to fit more data in one compute unit), improve storage and traffic patterns when storing data vectors and models in files or object stores (SQL or noSQL), optimize systems bandwidth from low-level (CPU caches) to network and storage exchnage.
-
-BitMagic facilitates two big classes of scenarios:
-- limited RAM applications (WebAssembly, IoT, Edge computing, desktop/workstation apps)
-- Big Data HPC (petabyte problems) where amount of data is astronomical and computation 
-and storage has to be distributed (need for efficient transfer) and optimized for bandwidth.
-
-### Applications and Use Cases 
-
-BitMagic was used as a building blocks for:
-
-- Algebra of Sets for IR, database inverted index construction or index-free columnar DBs
-- Simulation of logical schemes (FPGAs)
-- Data Science of multidimentional binary distances on compressed sets, 
-  building blocks for binary clusterizations, self-organizing maps
-- Construction of memory compressed bioinformatics models 
-  - sequence alignments 
-  - collections of variations and SNPs
-  - compression of sequence reads 
-  - k-mer classification systems
-- Visualization of data-sets in the memory constrained edge configurations
-  (edge comuting, IoT, WebAssembly)
-- Graph and Tree analysis, construction of compressive matrices of association 
-- Web and application logs analytics, systems for reliability automation 
-- Low latency task scheduling (orchestration) systems
-
-Please visit our use-case notes:
-[http://bitmagic.io/use-case.html](http://bitmagic.io/use-case.html)
-
-### Optimizations and SIMD
+BitMagic is a header-only C++17 library for compressed bit-vectors and succinct integer, string, and floating-point vectors. It provides building blocks for information retrieval, data management, data science, and scientific applications that need to search and process large datasets within a practical memory and bandwidth budget.
 
-BitMagic library is a high performance library, implementing optimizations for variety of platforms and build targets:
+BitMagic treats data representation as part of the algorithm. Its containers combine memory efficiency with search-friendly layouts, Boolean operations, rank/select support, and data-parallel processing. Applications can use BitMagic to build indexes, search compact columns without separate secondary indexes, or combine both approaches.
 
-- x86 (platform specific available bit-scan instructions)
-- x86 SIMD: SSE2, SSE4.2(POPCNT, LZCNT), AVX2 (BMI1/BMI2), AVX-512(work in progress)
-- Arm SIMD: Neon
-- WebAssembly (use of WebAsm built-ins and platform specific tricks)
-- WebAssembly SIMD
+The library supports a complete data lifecycle: construct compact containers, search and combine selections, gather values for computation, serialize to storage, and restore selected data when needed.
 
-BitMagic uses a data-parallel vectorized design with a goal not just provide a best single 
-threaded performance but to facilitate highly parallel compute on many-core systems. 
-
-### Compression algorithms
-
-BitMagic uses a suite of compression algorithms, filters and transformations to reduce 
-memory footprint, storage costs and network data transfer.
-[http://bitmagic.io/design.html](http://bitmagic.io/design.html)
-
-- Hierachical compression of bit-vectors
-- D-GAP (RLE) of bit-blocks
-- Binary Inetrpolative Coding (BIC)
-- Elias-Gamma Coding 
-- Bitwise-Tranposition for vectors (also known as Bit Planes coding or bit-slicing)
-- XOR compression filters
-- Frequency based dictionary remapping (similar to Huffman codes)  
-
-
-Please visit our tech.notes:
-[http://bitmagic.io/articles.html](http://bitmagic.io/articles.html)
-
-
-### Main Features (bm::bvector<>)
-
-- compressed bit-vector container 
-- iterator (bm::bvector<>::enumerator to decode the bitset to integers
-- set algebraic operations: AND, OR, XOR, MINUS, NOT on bit-vectors and integer sets
-- fast bit-vector iterator (enumerator) for bit-vector traversal, algorithms for functor-based traversals (similar to std::for_each)
-- fast import (compression) of integer lists (C++ style bulk_insert_iterator or using C array)
-- aggregator: fast vectorized logical AND, OR, AND-MINUS operations on groups of bit-vectors
-- serialization/hybernation of bit-vector containers into compressed BLOBs for persistence (or in-RAM compression)
-- set algebraic operations on compressed BLOBs (on the fly deserialization with set-algebraic function)
-- statistical algorithms to efficiently construct similarity and distance metrics, measure similarity between bit-vectors, 
-integer sets and compressed BLOBs
-- operations with rank: population count distances on bit-vector. 
-Rank-Select operations are often used in succinct data structures, BitMagic implements a 
-compact RS Index accelerated with SIMD and BMI (PDEP)
-
-### Ranges and Intervals (bmintervals.h)
-
-BitMagic supports re-interpretation of bit-vectors as collections of non-overlapping ranges 
-of 1s flanked with 0s (for example: 011110110). Regular set functions provide set intersect / unions
-intreval operations implement interval iterator and searches for interval boundaries.
-Ranges and intervals has great utility in bioinformatics, because genomics data are often annotated as 
-coordinate ranges. BitMagic offers building blocks for effciient oprations on intervals encoded 
-as bit-vectors (find interval start/end, check if range is an inetrval, iterate intervals
-
-### Three-Valued Logic (bm3vl.h)
+- **Searchable data:** evaluate supported predicates on bit-transposed columns using scanners and logical operations.
+- **Compressed sets and indexes:** represent posting lists, row selections, membership information, and binary features with `bm::bvector<>`.
+- **Sparse and dense vectors:** exploit value width, NULL distribution, runs, and other regularities through adaptive representations.
+- **Hardware-aware algorithms:** use SIMD, block-oriented processing, and specialized kernels to reduce memory traffic and improve throughput.
+- **Flexible persistence:** use RAM BLOBs, seekable file streams, memory-mapped files, or application-managed database storage.
 
-BitMagic implements logical operations for 3-valued logic of True/False/Unknown (also trinary logic, trivalent, ternary) in compact two bit-vector representation, supporting Invert, AND, OR operations following Kleene's definitions.
-[https://github.com/tlk00/BitMagic/tree/master/samples/bv3vlogic](https://github.com/tlk00/BitMagic/tree/master/samples/bv3vlogic)
+[Website](https://bitmagic.io) · [Examples](https://github.com/tlk00/BitMagic/tree/master/samples) · [API documentation](https://bitmagic.io/doxygen/html/modules.html) · [Technical articles](https://bitmagic.io/articles.html) · [Releases](https://github.com/tlk00/BitMagic/releases)
 
-### Serialization with compression
-
-BitMagic uses contept of two-stage serialization-deserialization. 
-The focus is on fast deserialization. BitMagic implements API for fast vector range deserialization 
-and gather deserialization of compressed BLOBs. The ultimate feature of BitMagic is ability to work
-with compressed data.
+## Data as an index
 
-#### Stage One: succinct memory 
-This is the main in-RAM operational state, where vectors are kept in memory compact form.
-Succinct is NOT a compression. It is possible to access random elements in containers,
-decode blocks, iterate vectors, make updates, run search algorithms. Stage One offers 
-transparent use, it vectors look much like STL. Succinct is memory compact but not 
-fully compressed. 
+In many systems, data and its search indexes are separate structures. BitMagic offers another option: a representation of the values themselves that is also suitable for efficient searching.
 
-#### Stage Two: compression
-BitMagic can serialize all containers and vectors with additional compression based on block of heuristics 
-and codecs. The workhorse coding techniques are: Binary Interpolative Coding (BIC) and Elias Gamma.
+Integer and string vectors use a bit-transposed layout. Instead of storing every value as an independent machine word or character sequence, the representation organizes bits into planes backed by compressed bit-vectors. Supported searches can evaluate these planes with logical operations and produce a bit-vector of matching positions, without first expanding the entire column into ordinary scalar values.
 
-BitMagic containers are called "sparse" vectors but in fact its compression schemes works well for both 
-sparse and dense data.
+This makes **data as an index** a useful way to design with BitMagic. A compact column can serve both as the stored data and as the searchable structure. `bm::sparse_vector_scanner<>` supplies search operations for supported container types, including equality and comparison operations, ranges, and string searches. The available predicates depend on the container and value type.
 
-BitMagic is tested on Gov2 benchmark set of inverted lists and number of proprietory data sets.
-[http://bitmagic.io/bm5-cmpr.html](http://bitmagic.io/bm5-cmpr.html)
+Applications can choose among complementary approaches:
 
-#### Decompression 
-Deserialization always go back to Stage One, so data are not completely decoded but instead  
-succinct in RAM. Our goal here is to both reduce application memory footprint and improve deserialization 
-latency. Decompression algorithms support deserialization of arbitrary ranges or even gather 
-deserializatin of elements.
+- **Build explicit indexes:** store document IDs or row IDs in bit-vectors and combine posting lists or filter sets.
+- **Search the data representation:** use scanners on succinct columns without maintaining a separate secondary search index for those predicates.
+- **Combine both:** use an index to identify a population, combine it with column-search results, and gather the selected values.
 
+“Without a separate search index” does not mean constant-time access or the absence of all auxiliary structures. Scanners still perform work over the representation; rank/select indexes and other accelerators can support particular operations. The advantage is that searching can operate directly on the compact data layout.
 
-### Succinct vectors 
-BitMagic supports succinct (memory compact) vectors based on bit-transposition transform  
-also known as bit-plane compression (BPC) (aka bit-slicing) plus Rank-Select compression. 
-BitMagic succint vectors somewhat misleadingly labeled "sparse" but they work for dense vectors just fine.
+For the method and experimental background, see [searching bit-transposed integer vectors](https://bitmagic.io/sparse-vector-search) and [searchable scientific dictionaries](https://bitmagic.io/star-search). The latter illustrates combining binary search with logical search over compact string data.
 
-Bit transposition solves two purposes: free unused bit plains and isolate regularity and entropy into
-separate (sparse) bit-vectors. Compression on bit-planes offers both superior memory performance and fast search. One of the design goals to perform index free searches on succinct vectros using fast vectorized logical operations. 
+## Performance beyond operation counts
 
-BitMagic succinct vectors are index-free searchable in memory compressed form. It is fast!
+BitMagic's performance comes from the interaction of algorithms, representation, and implementation. Asymptotic complexity matters, but it does not describe cache misses, bytes transferred, branch behavior, allocation overhead, or how much useful work each CPU instruction performs.
 
-Succinct bit-transposed implementation works well for both integer vectors (signed or unsigned) as well as string vectors. It rivals other succinct schemes like prefix trees. Succinct vectors can be both sorted and unsorted.
-The idea here is similar to Apache Arrow-Parquet, but it takes it farther with bit-plane compression 
-and extensive use of accelerated Rank-Select compression.
+A scan over compact bit-planes can be competitive with a theoretically more selective algorithm that performs scattered memory accesses. Which approach wins depends on data size, selectivity, representation, and hardware. BitMagic is designed to exploit the cases where compact storage and regular, data-parallel work reduce the real cost of computation.
 
-- bit-transposed representation offers best memory footprint for numeric vectors when data 
-uses numbers with limited or variable bit rate. If data needs just 27 bits succinct vector will use 
-just that and not the nearest natural 32-bit type. It is adaptive and completely automatic.
-- If string vector needs just a few bits to represent a char in particular position 
-(DNA strings, chemical compounds as smiles, etc. ) BitMagic has an option to do transparent remapping,
-so DNA string vector would use just 2-3 bits (for ATGCN alphabet), remapping analyses frequencies and
-similar to Huffman. 
-- Rank-Select approach allows to collapse all NULL values and save RAM 
-- For deeper compression BitMagic also implements XOR filter which finds possible correlations 
-between bit-planes to reduce enthropy 
-[http://bitmagic.io/bm-xor.html](http://bitmagic.io/bm-xor.html)
+Important techniques include:
 
+- **SIMD kernels:** process multiple bits or values per instruction using supported x86, Arm NEON, and WebAssembly SIMD paths.
+- **Block-oriented representations:** adapt processing to empty, full, run-compressed, and bitmap blocks.
+- **Memory locality:** organize work around reusable blocks and buffers, and offer immutable layouts that reduce fragmentation.
+- **Bandwidth efficiency:** avoid moving expanded representations when operations can use compact data.
+- **Combined operations:** use aggregators and count-oriented operations to reduce intermediate materialization in supported workflows.
+- **Batched extraction and traversal:** decode or gather values in groups and reuse scratch memory, including with `bm::for_each_sparse()`.
 
+These techniques complement algorithmic complexity analysis. Performance and compression should be measured with representative data, query distributions, and target hardware; high-entropy data and dense extraction have different tradeoffs from highly selective queries over structured columns.
 
-#### Main features
-- sparse vector(s) for native int types using bitwise slicing and separate compression of bit-slices, 
-with support of NULL values (unassigned) for construction of in-memory columnar structures. Bit-transposed
-sparse vectors can be used for on-the fly compression of astronomical, molecular biology or other data,
-efficient store of associations for graphs, etc.
-- search algorithms for sorted and unsorted succinct vectors (vectors of ints or strings)
-- algorithms on sparse vectors: dynamic range clipping, search, group theory image (re-mapping).
-- all containers are serializable with compression (XOR coding, binary interpolative coding, elias gamma coding)
-- support for succinct immutable vectors. Vectors can be turned read-only, sparse memory blocks rearranged to defragment the heap, save memory and facilitate better CPU cache resue
+The [scanner design and benchmark article](https://bitmagic.io/sparse-vector-search) explains how logical operations, early elimination of candidate blocks, cache blocking, and SIMD work together. The [floating-point study](https://bitmagic.io/bm-svf) adds measurements for financial, linear, and random datasets. These studies describe particular versions, datasets, and machines; their results are evidence for the methods, not universal performance guarantees.
 
-#### Serialization and versioning
-BitMagic supports serialization (protocol) evolution - if serialization format changes, 
-old saved data remains readable by the new code. Old code will NOT be able to read new BLOBs.
-BitMagic changes major version number when serialization format changes.
+## Containers for sparse and dense data
 
+| Container | Typical role |
+|---|---|
+| `bm::bvector<>` | Compressed integer sets, posting lists, selection masks, and binary features |
+| `bm::sparse_vector<>` | Bit-transposed integer columns with optional NULL support |
+| `bm::rsc_sparse_vector<>` | Rank-select compressed columns with many unassigned positions |
+| `bm::str_sparse_vector<>` | Compact string collections with search and optional alphabet remapping |
+| `bm::sparse_vector_float<>` | Floating-point columns with search, extraction, and serialization |
 
-### Memory profiling/monitoring
-BitMagic implements memory profiling calls for all vectors. Any vector can be sampled for memory footprint so the top level system can adapt memory managemnet based on the runtime memory profiling.
-Typical use case is memory cache of objects with compression to RAM and then to eviction to disk based
-on resource consumption and costs (dynamic balance of demand and supply).
+The name “sparse vector” does not restrict these containers to mostly empty data. A fully populated column can benefit from limited value width, repeated patterns, or regularity within its bit-planes. Actual memory savings depend on the data and include representation overhead.
 
+**NULL and zero are distinct.** Rank-select compressed vectors use a NOT NULL bit-vector to map logical positions to stored assigned values. Related columns can share NULL information, and supported RSC arrangements can also share rank/select indexing. This is useful for groups of columns describing the same observations or entities.
 
-### 64-bit vs 32-bit
+The [compression design overview](https://bitmagic.io/design) explains the relationships among block compression, bit-transposition, rank/select, and string remapping. For floating-point representation and search, see [Using Sparse Vector Floats on Financial Datasets](https://bitmagic.io/bm-svf).
 
-Yes!
-BitMagic supports 64-bit, can be used with 32-bit address space (less overhead) or full 64-bit address space.
-32-bit address space is the default mode 2^31-1 elements should be a good fit for short to medium range
-IR and data science systems. 64-bit address mode is available using #define BM64ADDR or #include "bm64.h".
-Current 64-bit implementation allows 2^48-1 vector elements for large scale systems.
+## Information retrieval and set processing
 
-### WebAssembly and WebAssembly SIMD
+BitMagic's compressed bit-vectors represent arbitrary sets of integer identifiers or positions and support Boolean set algebra. Applications can use them for membership, relationships, selections, and logical inference, including Boolean retrieval:
 
-BitMagic compiles and work with WebAssmbly (emscripten). Latest versions includes 
-multiple tweaks, specific for the platform. Performance numbers are close to native code 
-without SIMD (sometimes afster). Sample compile line would look like:
+- AND, OR, XOR, MINUS, and NOT operations.
+- Multi-vector aggregation, including combined AND-MINUS operations.
+- Cardinality, intersection counts, rank/select, and enumeration.
+- Binary similarity and distance calculations.
+- Bulk construction, interval traversal, and partitioned processing patterns.
 
-`emcc -std=c++17 -s ALLOW_MEMORY_GROWTH=1 -O2 -s WASM=1 ... `
+BitMagic also supports **Kleene three-valued logic** through [`bm3vl.h`](https://github.com/tlk00/BitMagic/blob/master/src/bm3vl.h). A compact two-bit-vector representation models True, False, and Unknown, with logical NOT, AND, and OR operations. This allows applications to express logical conditions where information may be missing or unknown. See the [three-valued logic example](https://github.com/tlk00/BitMagic/tree/master/samples/bv3vlogic).
 
-WebAssembly SIMD is supported but it is not ON by default.
-Use:
-	`#define BMWASMSIMDOPT`
-to enable it. Emscripten cmd example:
+Applications can use these operations for posting lists, document filters, exclusions, cohort selection, and binary feature comparison. Search results remain bit-vectors, making subsequent filtering and combination natural.
 
-`emcc -std=c++17 -s ALLOW_MEMORY_GROWTH=1 -O2 -msse4.2 -msimd128 -D BMWASMSIMDOPT -s WASM=1 -s DISABLE_EXCEPTION_CATCHING=0 -fno-rtti`
+Start with [set algebra](https://github.com/tlk00/BitMagic/tree/master/samples/bvsetalgebra), [aggregation](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample16), and [rank/select](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample17).
 
-Current implementation uses SSE4.2 trans-compilation (via intrinsics), so `-msse4.2` is necessary.
+## Data science, data management, and scientific computing
 
-### Arm
+BitMagic provides components for compact columnar models and selective processing. A typical workflow searches columns, combines row selections, and gathers only the values needed by the next computation.
 
-BitMagic fully supports ARM CPU. All releases are stress tested with Raspberry Pi 4.
-BitMagic implements some algorithmic tweaks and improvements specific for ARM 
-(like use of LZCNT instruction). BitMagic succinct containers can be very useful on embedded 
-systems for edge computing with limited amount of available memory.
+Examples include:
 
-Arm Neon SIMD support is available (via SSE2NEON library).
+- **Data management:** nullable columns, shared validity information, Boolean row filters, and selective materialization.
+- **Data science:** cohort construction, binary feature comparison, threshold searches, and batch processing of selected observations.
+- **Scientific computing:** genomic intervals and variants, categorical sequences, observation catalogues, and compact associations.
+- **Memory-constrained applications:** compressed working sets for desktop applications, embedded systems, and WebAssembly.
 
+Extracted values can feed application-specific numerical or statistical routines. BitMagic supplies the compact representation, search, selection, and data movement components around those computations.
 
-### C-library interface:
+Explore [integer comparisons](https://github.com/tlk00/BitMagic/tree/master/samples/svsample10), [shared NULL planes](https://github.com/tlk00/BitMagic/tree/master/samples/rscsample07), [float selection and retrieval](https://github.com/tlk00/BitMagic/tree/master/samples/svfsample05), and [genomic interval representation](https://github.com/tlk00/BitMagic/tree/master/samples/xsample08).
 
-- BitMagic library provides C-library wrapper, which builds as a "true C" library.
-For redistribution it does NOT require C++ Runtime, because it compiles without use of
-STL, C++ memory allocation (operator new) or exceptions. Our goal here is to eventually
-provide a bridge to other languiages of data science (Python) and languages of enterprise 
-scale development (Java, Scala) via JNI. 
+The website's [use-case collection](https://bitmagic.io/use-case) provides application studies covering histograms, genomic intervals, variant search, searchable astronomical dictionaries, and scheduling. The [scientific dictionary study](https://bitmagic.io/star-search) and [floating-point data study](https://bitmagic.io/bm-svf) connect these applications to their representation and search methods.
 
-### Features In Progress:
+## Compression for computation and storage
 
-- compressed binary relational and adjacency matrixes and operations on matrixes for 
-Entity-Relationship acceleration, graph operations, social analyticsm materialized RDBMS joins, etc 
+In production information retrieval systems, compression is an architectural decision. It affects how much of an index fits in memory, how much data a query moves, and how efficiently the system uses CPU caches, storage, and network bandwidth.
 
+BitMagic combines complementary compression methods in two layers. The first keeps data compact and operational in memory; the second encodes it more deeply for storage and transfer. Both layers share the same container model, allowing applications to choose a balance among memory footprint, storage size, and processing cost.
 
-### How to start with BitMagic?
----
+| Layer | Techniques | Purpose |
+|---|---|---|
+| **Operational representation** | Bit-slicing, hierarchical block compression, delta-GAP run-length encoding, character remapping, and rank-select compression | Reduce working memory while retaining access, search, and supported logical operations |
+| **Serialized representation** | Adaptive block encoding, Elias-gamma coding, tuned Binary Interpolative Coding, and optional XOR filtering | Reduce persisted size while supporting efficient reconstruction and selective retrieval |
 
-BitMagic C++ is a header only library (easy to build and use in your project) and it comes 
-with a set of examples. It is NOT advised to use tests as a code example to study library usage.
-Tests do not illustate the best usage patterns and models and often intentionally inefficient.
+The techniques cooperate rather than act as interchangeable whole-file codecs. Bit-slicing exposes regularities within individual planes. Hierarchical compression represents empty and full regions efficiently. Delta-GAP encoding captures runs, while remapping can reduce the number of active planes. Rank-select compression removes unassigned positions from the stored value sequence while preserving their logical coordinates.
 
-API documentation and examples:
-[http://www.bitmagic.io/apis.html](http://www.bitmagic.io/apis.html)
+For persistence, serialization selects encoded representations for blocks. Elias-gamma and Binary Interpolative Coding encode integer sequences; XOR filtering can expose similarities between blocks or planes before subsequent encoding. Their effectiveness depends on the distribution and correlations in the data.
 
-Tutorial for Algebra of Sets:
-[http://bitmagic.io/set-algebra.html](http://bitmagic.io/set-algebra.html)
+The [compression design overview](https://bitmagic.io/design) explains how these methods fit together. The [XOR compression article](https://bitmagic.io/bm-xor) develops the method for correlated bit-transposed vectors, using aligned biological sequences as an example.
 
-Use Cases and Application notes:
-[http://bitmagic.io/use-case.html](http://bitmagic.io/use-case.html)
+### Compression that preserves selective access
 
-Technical notes on performance optmization:
-[http://bitmagic.io/articles.html](http://bitmagic.io/articles.html)
+Bookmarks and optional deserialization indexes provide navigation through the serialized representation. They let range and gather deserialization locate relevant blocks and skip unrelated payloads, so applications can retrieve portions of a compressed dataset without restoring the complete container.
 
-Doxygen:
-[http://bitmagic.io/doxygen/html/modules.html](http://bitmagic.io/doxygen/html/modules.html)
+Selective access is a property of the serialization architecture, rather than of each codec in isolation. Retrieval remains block-oriented, and encoding dependencies can require additional decoding. A deserialization index identifies navigation points; it does not map every individual value directly to independent compressed bytes.
 
+### Choosing the compression balance
 
+The API exposes choices such as in-memory optimization, serialization compression levels, XOR filtering, bookmark spacing, and construction or persistence of deserialization indexes. These let applications tune several distinct costs:
 
-### License: 
+- Operational memory footprint.
+- Serialized size.
+- Serialization and deserialization time.
+- Memory and I/O traffic during selective retrieval.
+- Space and preparation costs of navigation metadata.
 
-Apache 2.0. 
+More compact output can improve retrieval by reducing memory traffic or I/O, but may also require more encoding or decoding work. Denser bookmarks improve positioning precision at a storage cost. The appropriate configuration depends on whether the workload favors frequent updates, repeated searches, bulk transfer, sequential restoration, or sparse retrieval.
 
-**Important!** We ask you to explicitly mention BitMagic project in any derived work or our published 
-materials. Proper reference on your product/project page is a REQUIREMENT 
-for using BitMagic Library.
+BitMagic offers a coordinated set of controls within a common API. Compression depth is not a single setting with a fixed size-versus-speed tradeoff: the effects depend on the data and workload.
 
+## Persistence and integration architectures
 
-### Quality Assurance:
+BitMagic separates container representation and serialization from the application's choice of storage system. Serialized containers are binary objects that an application can place in ordinary files, RDBMS BLOB columns, key-value stores, document databases with binary-value support, or object storage.
 
-BitMagic library pays serious attention to code quality and test coverage.  
-As a building blocks library BitMagic needs to be stable and conformant to be useful.
+This permits several integration architectures:
 
-We do not rely on unit tests alone, our tests often use _"chaos testing"_ (aka fuzzing)
-where stress tests are based on randomized, generated sets and randomized operations. 
-We regularly build and run test suits for Release and Debug mode for various combinations of SIMD 
-optimizations. 
+- **File-based persistence:** serialize containers to files and restore them through binary streams or memory mapping.
+- **Database-managed persistence:** store serialized values in a relational or post-relational database, using that system for keys, transactions, metadata, and lifecycle management.
+- **Hybrid storage:** combine database-managed metadata and identifiers with compressed data files, mapped working sets, or application-managed caches.
+- **Custom adapters:** build storage integration around the serialization interfaces and channel hooks, using the open-source implementation as a reference.
 
-All variants of test builds take days to run, so the working master branch is 
-NOT guaranteed to be perfect all the time. For production please use stable 
-github release branches or distributions from SourceForge:
-https://sourceforge.net/projects/bmagic/files/
+Database integration is at the serialized-data boundary: applications supply the database client calls and storage policy. Selective physical I/O depends on the backend's access capabilities; storing a BLOB in a database does not by itself provide block-level remote access.
 
+### Live containers and serialized data
 
+Live containers support compact in-memory access, updates, search, and supported logical operations. Serialization applies additional encoding for storage or transfer. Range and gather deserialization reconstruct selected data into BitMagic containers, avoiding a mandatory expansion of the whole dataset into ordinary arrays.
 
-### If you want to contribute or support BitMagic library:
----
+Search scanners and deserialization indexes have different roles. A scanner evaluates predicates on live compact columns. A deserialization index records navigation information for a particular BLOB and accelerates retrieval of positions already selected by the application.
 
-1. GitHub master accepts patch requests
-Our branching policy is that master cannot be considered fully stable between the releases.
-(for production stability please use release versions)
+### Streaming and selective retrieval
 
-2. Need help with mappings to Python and other languages (BitMagic has C bindings)
+The new [`bmfio.h`](https://github.com/tlk00/BitMagic/blob/master/src/bmfio.h) interfaces support buffered serialization and deserialization through seekable binary C++ streams. Direct serialization avoids constructing a complete temporary RAM BLOB; serializers retain working memory that can be reused across calls.
 
+Bookmarks and optional persistent deserialization indexes help locate relevant encoded blocks. Memory-mapped BLOBs can serve as sources for repeated gathers, allowing applications to keep large datasets on SSD and retrieve subsets on demand. Access is block-oriented, and selected values still require decoding.
 
-### How to build BitMagic C++ library:
----
+The provided stream adapter requires seeking, including header and bookmark patching on output. It is not a forward-only network writer. Custom integrations must honor the channel's positioning, buffering, completion, and error-handling contracts; these are documented alongside the implementation.
 
-BitMagic C++ is a header-only software package and you probably can just take the
-sources and put it into your project directly. All C++ library sources/headers are in src
-directory.
+See [bit-vector file I/O and indexed gather](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample27), [memory-mapped string retrieval](https://github.com/tlk00/BitMagic/tree/master/samples/strsvsample10), and [persistent float retrieval indexes](https://github.com/tlk00/BitMagic/tree/master/samples/svfsample05).
 
-However if you want to use our makefiles you need to follow the next simple
-instructions:
+### Format compatibility
 
+New readers retain support for older serialized data. Older readers are not guaranteed to understand newer format versions. BitMagic 9.3.1 adds explicit sparse-vector logical-size information, preserving trailing NULL positions, using schema versions 3 and 4 for the respective addressing modes.
 
-###### Unix:
----
+Persisted deserialization indexes belong to a specific serialized representation and must be rebuilt when that representation changes.
 
-1. Traditional (in-place build)
+## Getting started
 
-Apply a few environment variables by runing bmenv.sh in the project root directory:
+BitMagic is a header-only C++17 library. Add the [`src`](https://github.com/tlk00/BitMagic/tree/master/src) directory to your compiler's include path and include the headers for the containers and algorithms you use.
 
-	$ source ./bmenv.sh
-	
-(please use "." "./bmenv.sh" to apply root environment variable)
+| Header | Purpose |
+|---|---|
+| `bm.h` | Core bit-vector container |
+| `bmaggregator.h` | Operations over groups of bit-vectors |
+| `bmsparsevec.h` | Integer sparse vectors |
+| `bmsparsevec_compr.h` | Rank-select compressed vectors |
+| `bmstrsparsevec.h` | String vectors |
+| `bmsparsevec_float.h` | Floating-point vectors |
+| `bmsparsevec_algo.h` | Scanners and sparse-vector algorithms |
+| `bmserial.h` | Bit-vector serialization and deserialization indexes |
+| `bmsparsevec_serial.h` | Sparse-vector serialization |
+| `bmsparsevec_float_serial.h` | Floating-point vector serialization |
+| `bmfio.h` | C++ stream I/O |
+| `bmintervals.h` | Interval operations and traversal |
+| `bm3vl.h` | Three-valued logic |
 
-use GNU make (gmake) to build installation.
+To build an example using CMake:
 
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target bvsample27
+```
 
-	$make rebuild
+The [sample catalogue](https://github.com/tlk00/BitMagic/tree/master/samples) is the recommended starting point for learning usage patterns. Stress tests deliberately exercise unusual and inefficient cases and should not be treated as application templates.
 
+## Platforms and configuration
 
-or (DEBUG version)
- 
-	$gmake DEBUG=YES rebuild
+BitMagic is a **header-only C++17 library**: add its headers to your project's include path and use them directly. No separate BitMagic library binary is required. It can be integrated into an existing application, IDE, or build environment without adopting the repository's build system.
 
-The default compiler on Unix and CygWin is g++.
-If you want to change the default you can do that in makefile.in
-(should be pretty easy to do)
+Configure addressing, SIMD, and other supported options through preprocessor definitions in your build environment or in a common configuration header included before BitMagic headers. Keep these settings consistent across translation units.
 
-2. CMake based build
-Project now comes with a set of makefiles for cmake, you can just build it or generate project files for any 
-cmake-supported environment.
+See the [build and configuration guide](docs/build.md) for direct compiler commands, application CMake integration, repository Make/CMake builds, platform settings, and the configuration macro reference.
 
-When targeting `riscv64`, use the default portable build unless you add a dedicated RISC-V SIMD backend. Avoid inheriting host-only `-march=native` settings during cross-target or simulated target builds.
+## Documentation, validation, and releases
 
+The [BitMagic website](https://bitmagic.io) complements the source repository with design explanations, methodology, benchmark studies, and application notes. Choose a starting point according to what you want to understand:
 
-###### Windows:
----
+| Topic | Reading |
+|---|---|
+| How the representations fit together | [Compression design overview](https://bitmagic.io/design) |
+| How data can be searched without a separate secondary index | [Search with sparse vectors](https://bitmagic.io/sparse-vector-search) |
+| Searchable string collections and scientific identifiers | [Dictionary compression and search](https://bitmagic.io/star-search) |
+| Float representation, range search, and measured workloads | [Sparse vector floats on financial datasets](https://bitmagic.io/bm-svf) |
+| Correlated columns and alignment compression | [XOR compression of bit-transposed vectors](https://bitmagic.io/bm-xor) |
+| Application architectures and worked studies | [Use cases and design patterns](https://bitmagic.io/use-case) |
+| Further algorithms and optimization material | [Technical articles](https://bitmagic.io/articles) |
+| Boolean retrieval foundations | [Algebra of sets tutorial](https://bitmagic.io/set-algebra.html) |
+| API details and runnable code | [API documentation](https://bitmagic.io/doxygen/html/modules.html) and [examples](https://github.com/tlk00/BitMagic/tree/master/samples) |
+| Version-specific changes and distributions | [GitHub releases](https://github.com/tlk00/BitMagic/releases) |
 
-If you use cygwin installation please follow general Unix recommendations.
-MSVC - solution and projects are available via CMAKE. 
+Some technical articles document earlier releases. Use them for design rationale and workload-specific benchmark evidence; consult the current headers, examples, and release notes for current API behavior.
 
-###### MacOS
----
+The project includes randomized stress tests and performance tests covering different representations, addressing modes, and build configurations. Use a tagged release for reproducible deployments, and evaluate memory consumption and performance with representative workloads.
 
-Xcode - project files are available via CMAKE.
+## License and contributions
 
----
+BitMagic is distributed under the [Apache License 2.0](https://github.com/tlk00/BitMagic/blob/master/LICENSE).
 
-BitMagic library for C and JNI mappings.
+**Project attribution requirement:** Use of BitMagic requires explicit mention of the BitMagic project in derived materials, including the product or project documentation and published materials that incorporate or describe work based on the library. Include a reference and link to [BitMagic](https://bitmagic.io) on your product or project page.
 
-BitMagic library is available for C language (this is work in progress).
-The main objective of C build is to bridge BitMagic into other programming languages.
-C build is in the subdirectory "lang-maps".
+Contributions to the library, examples, documentation, tests, and language bindings are welcome through the [GitHub project](https://github.com/tlk00/BitMagic).
 
-C build creates versions of BitMagic build for SSE and AVX and adds CPU identification,
-so the upper level system can support dynamic CPU identification and code dispatch.
-
-C build uses C++ compiler, but does not use RTTI, exceptions (simulated with long jump)
-and C++ memory management, so it is C++ language neutral, without runtime dependencies.
-Algorithms and behavior are shared between C and C++.
-
-Current state of development: 
-   - bit-vector functionality is available via C interface
-
-#### Python support
-
-Python support is pending and we need help here.
-If you are enthusiastic about Python and think you can help please contact:
-anatoliy.kuznetsov @ yahoo dot com
-
-
-### Modern C++ (C++17)
-
-BitMagic library requires CXX-11. It uses move semantics, noexept, initalizer lists, threads.
-Next public version will use CXX-17 (constexpr ifs, etc).
-
-
-###Fine tuning and optimizations:
-
-All BitMagic fine tuning parameters are controlled by the preprocessor defines (and 
-target arch. specific compiler keys for code generation). 
-
-| #define      | Description                                       | Width    |
-| ------------ | --------------------------------------------------| ---------
-| BMSSE2OPT    | SSE2 code optimizations                           | 128-bit  |
-| BMSSE42OPT   | SSE4.2 code optimizations plus POPCNT, BSF, etc   | 128-bit  |
-| BMAVX2OPT    | AVX2, POPCNT, LZCNT, BMI1, BMI2 optimizations     | 256-bit  |
-| BMAVX512OPT  | AVX-512, (experimental)                           | 512-bit  |
-| BMWASMSIMDOPT| WebAssembly SIMD optimizations (via SSE4.2)       | 128-bit  |
-| DBMNEONOPT   | Arm Neon SIMD optimizations (via SSE2 translation)| 128-bit  |
-
-####Limitations:
-
-SIMD optimization defines are mutually exclusive, you can NOT have BMSSE42OPT and BMAVX2OPT
-at the same time. Pick just one.
-
-BM library does NOT support multiple code paths and runtime CPU identification.
-You have to build specifically for your target system or use default portable
-build.
-
-
-####Examples:
-
-BitMagic examples and tests can be build with GCC using cmd-line settings: 
-
-	make BMOPTFLAGS=-DBMAVX2OPT rebuild
-or
-
-	make BMOPTFLAGS=-DBMSSE42OPT rebuild
-
-It automatically applies the right set of compiler (GCC) flags for the target 
-build.
-
-	CMAKE
-	
-	cd build
-	cmake -DBMOPTFLAGS:STRING=BMSSE42OPT ..
-	make
-
-OR
-
-	cmake -DBMOPTFLAGS:STRING=BMAVX2OPT ..
-
-
----
-
-BM library supports "restrict" keyword, some compilers 
-(for example Intel C++) generate better
-code (out of order load-stores) when restrict keyword is helping. This option is 
-turned OFF by default since most of the C++ compilers does not support it. 
-To turn it ON please #define BM_HASRESTRICT in your project. Some compilers
-use "__restrict" keyword for this purpose. To correct it define BMRESTRICT macro 
-to correct keyword. 
-
----
-
-If you want to use BM library in a "no-STL project" (like embedded systems) 
-define BM_NO_STL.
-
-This rule only applies to the core bm::bvector<> methods. 
-Auxiliary algorithms, examples, etc would still use STL.
-
----
-
-Follow us on twitter: [https://twitter.com/bitmagicio](https://twitter.com/bitmagicio)
-
-
-Thank you for using BitMagic library!
-
-e-mail:   info@bitmagic.io
-
-WEB site: [http://bitmagic.io](http://bitmagic.io)
-
-GitHub:   [https://github.com/tlk00/BitMagic](https://github.com/tlk00/BitMagic)
-
+Follow [BitMagic on Twitter/X (@bitmagicio)](https://twitter.com/bitmagicio) for project news and updates.
