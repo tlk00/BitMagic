@@ -4,6 +4,10 @@ BitMagic is a **header-only C++17 library**. To use its C++ containers and algor
 
 The repository's Make and CMake builds compile examples, tests, and utilities. They are useful for exploration and validation, but are not prerequisites for integrating the library. Optional language wrappers and tools have their own build requirements.
 
+## Choose a release branch
+
+**The `master` branch is an active development branch and must NOT be considered stable. Always use a release branch for application integration and production builds.** Select the appropriate release from the [GitHub releases page](https://github.com/tlk00/BitMagic/releases) and use its corresponding release branch, such as `release/9.3.1`. For reproducible builds, pin a specific commit on that branch or the corresponding release tag.
+
 ## Minimal integration
 
 Keep the headers together: they include one another. For example, save this as `example.cpp`:
