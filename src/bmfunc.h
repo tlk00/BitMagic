@@ -124,8 +124,10 @@ struct bv_statistics
     /// add serialization correction (sandbox for override)
     void add_scorrection() BMNOEXCEPT
     {
-        // add safety buffer for one full bit-block for "speculative" compression
-        if (bit_blocks)
+        // Allow one full bit-block for speculative compression, including
+        // XOR products of GAP blocks. This is rewind room, not a bound on
+        // cumulative expansion if several XOR products are kept.
+        if (bit_blocks || gap_blocks)
             max_serialize_mem += sizeof(bm::word_t) * bm::set_block_size;
         // 10% increment
         size_t safe_inc = max_serialize_mem / 15;
