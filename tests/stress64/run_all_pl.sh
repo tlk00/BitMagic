@@ -53,7 +53,12 @@ Test selectors verified against t64.cpp:
   -svfstream            Float file/stringstream serialization and gather tests
   -svfsteam             Alias for -svfstream
   -svindex              Sparse-vector index persistence tests
-  -bvl,  -bvo, -bvops   Bit-vector logical operations
+  -bvl,  -bvo, -bvops   All bit-vector logical operations
+  -bvl0, -bvops0        Logical-operation correctness tests
+  -bvl1, -bvops1        OR stress test
+  -bvl2, -bvops2        AND stress test
+  -bvl3, -bvops3        SUB stress test
+  -bvl4, -bvops4        XOR stress test
   -bvs,  -bvshift       Bit-vector shift/insert/erase tests
   -rc,   -rankc         Rank-compression tests
   -agg,  -aggregator    Aggregator tests
@@ -83,7 +88,8 @@ is_valid_test()
     case "$1" in
         -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvser|-bvset|\
         -fileser|-svfileser|-strsvstream|-svfstream|-svindex|\
-        -bvo|-bvops|-bvl|-bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
+        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
+        -bvl3|-bvops3|-bvl4|-bvops4|-bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
         -sv|-csv|-strsv|-svstr|-cc|-svf|-svf0|-svf1)
             return 0
             ;;
@@ -207,14 +213,14 @@ esac
 if [ "${#TESTS[@]}" -eq 0 ]; then
     if [ "$HEAVY_FIRST" -ne 0 ]; then
         TESTS=(
-            -csv -sv -bvl -strsv -svf
+            -csv -sv -bvl1 -bvl2 -bvl3 -bvl4 -strsv -svf
             -bvb -svfileser -strsvstream -svfstream -svindex
-            -agg -bvs -rc -cc
+            -bvl0 -agg -bvs -rc -cc
         )
     else
         TESTS=(
             -bvb -svfileser -strsvstream -svfstream -svindex
-            -bvl -bvs -rc -agg
+            -bvl0 -bvl1 -bvl2 -bvl3 -bvl4 -bvs -rc -agg
             -sv -csv -strsv -cc -svf
         )
     fi

@@ -18498,9 +18498,6 @@ void CheckSparseVectorFileSerialization(const SV& source)
     for (unsigned bookmarks = 0; bookmarks < 2; ++bookmarks)
     for (unsigned level = 0; level <= 6; ++level)
     {
-        // The legacy RAM estimate can under-allocate with level 0 plus XOR.
-        // Exercise all levels without XOR, and XOR with its default level.
-        if (xor_mode && level != 6) continue;
         serializer.get_bv_serializer().set_compression_level(level);
         serializer.set_xor_ref(bool(xor_mode));
         serializer.set_bookmarks(bool(bookmarks), 16);
@@ -18839,6 +18836,224 @@ void SparseVectorFileSerializationTest()
     if (!input_reader.deserialize(restored, good_input) || !dense.equal(restored))
         throw std::runtime_error("Sparse-vector reader recovery failed");
     cout << "Sparse-vector file and stringstream serialization OK" << endl;
+}
+
+// Keep XOR prediction examples within one 64K-bit block. The reference is
+// already available to the decoder; byte counts include the complete target
+// BLOB (including XOR metadata), but not the separately stored reference.
+static void CheckBVectorXorSerializationSize(bool irregular)
+{
+    typedef bm::serializer<bvect> serializer_type;
+    bvect target, reference;
+    for (unsigned i = 0; i < 500; ++i)
+        target.set(i * 131u + (irregular ? (i * 73u) % 97u : 0u));
+    reference = target;
+    for (unsigned i = 0; i < 20; ++i)
+        reference.flip(i * 197u + 1u);
+    target.optimize(); reference.optimize();
+    assert(target.count() == 500);
+    bvect::size_type last;
+    assert(target.find_reverse(last) && last < 65536);
+    assert(reference.find_reverse(last) && last < 65536);
+
+    serializer_type::bv_ref_vector_type refs;
+    refs.add(&target, 0); refs.add(&reference, 1);
+    serializer_type::xor_sim_model_type model;
+    serializer_type xor_ser;
+    xor_ser.set_ref_vectors(&refs);
+    xor_ser.compute_sim_model(model, refs, bm::xor_sim_params());
+    xor_ser.set_sim_model(&model);
+    xor_ser.set_curr_ref_idx(0);
+    // Require a real speculative XOR product, not reference equality or a
+    // manually injected match. Both fixtures reduce 500 source bits to 20.
+    assert(model.bv_blocks.count() == 1 && model.bv_blocks.test(0));
+    const auto match = model.matr.get(0, 0);
+    assert(match.match == bm::e_xor_match_BC);
+    assert(match.chain_size == 1 && match.ref_idx[0] == 1);
+    assert(match.xor_d64[0] == ~0ull);
+    bvect difference = target;
+    difference ^= reference;
+    assert(difference.count() == 20);
+
+    for (unsigned level : {0u, 6u})
+    {
+        size_t sizes[2] = {0, 0};
+        for (unsigned use_xor = 0; use_xor < 2; ++use_xor)
+        {
+            serializer_type plain_ser;
+            serializer_type& ser = use_xor ? xor_ser : plain_ser;
+            ser.set_compression_level(level);
+            std::ostringstream stream(std::ios::binary | std::ios::out);
+            bm::streams_encoder out(stream);
+            assert(ser.serialize(target, out));
+            assert(out.finish());
+            const std::string blob = stream.str();
+            sizes[use_xor] = blob.size();
+            assert(sizes[use_xor] == out.size());
+
+            // Exercise calc_stat()'s speculative block allowance for a
+            // GAP-only vector, without a test-specific oversized buffer.
+            bvect::statistics st;
+            target.calc_stat(&st);
+            assert(st.gap_blocks == 1 && st.bit_blocks == 0);
+            assert(st.max_serialize_mem >=
+                   size_t(bm::set_block_size) * sizeof(bm::word_t));
+            serializer_type::buffer ram;
+            ram.resize(st.max_serialize_mem);
+            const size_t ram_size = ser.serialize(target, ram.data(), ram.size());
+            assert(ram_size == blob.size());
+            assert(!memcmp(ram.data(), blob.data(), ram_size));
+            bvect restored;
+            bm::deserialize(restored, ram.data(), 0, use_xor ? &refs : nullptr);
+            assert(restored == target);
+        }
+        const long long delta = static_cast<long long>(sizes[1]) -
+                                static_cast<long long>(sizes[0]);
+        cout << "XOR " << (irregular ? "irregular" : "regular")
+             << " one-block: level=" << level
+             << " plain=" << sizes[0] << " XOR=" << sizes[1]
+             << " delta=" << delta << " bytes" << endl;
+        // Losing candidates (including metadata) must retain the plain block.
+        if (level == 0 || !irregular)
+            assert(sizes[1] == sizes[0]);
+        else
+            assert(sizes[1] < sizes[0]);
+    }
+}
+
+void BVectorXorExpansionTest()
+{
+    // Periodic source positions compress especially well without XOR at L6.
+    CheckBVectorXorSerializationSize(false);
+}
+
+void BVectorXorBenefitTest()
+{
+    // Break source periodicity while keeping the same small XOR residual.
+    CheckBVectorXorSerializationSize(true);
+}
+
+static void BuildBVectorXorMixedFixture(bvect& target, bvect& reference)
+{
+    for (unsigned block : {0u, 1u, 3u})
+    {
+        const unsigned base = block * 65536u;
+        for (unsigned i = 0; i < 500; ++i)
+        {
+            const unsigned pos = base + i * 131u +
+                                 (block == 1 ? 0u : (i * 73u) % 97u);
+            target.set(pos); reference.set(pos);
+        }
+        for (unsigned i = 0; i < 20; ++i)
+            reference.flip(base + i * 197u + 1u);
+    }
+    // An unrelated dense block uses raw storage; block 8 has an exact ref.
+    unsigned state = 17;
+    for (unsigned i = 0; i < 65536; ++i)
+    {
+        state = state * 1664525u + 1013904223u;
+        if (state & 0x80000000u)
+        {
+            target.set(2u * 65536u + i);
+            target.set(8u * 65536u + i);
+            reference.set(8u * 65536u + i);
+        }
+    }
+    target.set_range(5u * 65536u, 6u * 65536u - 1);
+    // Equality reference costs more than an ordinary single-bit token.
+    target.set(6u * 65536u + 7); reference.set(6u * 65536u + 7);
+    target.optimize(); reference.optimize();
+}
+
+void BVectorXorMixedSerializationTest()
+{
+    typedef bm::serializer<bvect> serializer_type;
+    bvect target, reference;
+    BuildBVectorXorMixedFixture(target, reference);
+    serializer_type::bv_ref_vector_type refs;
+    refs.add(&target, 0); refs.add(&reference, 1);
+    serializer_type::xor_sim_model_type model;
+    serializer_type ser;
+    ser.set_ref_vectors(&refs);
+    ser.compute_sim_model(model, refs, bm::xor_sim_params());
+    ser.set_sim_model(&model); ser.set_curr_ref_idx(0);
+    for (unsigned level : {0u, 6u})
+    for (bool bookmarks : {false, true})
+    {
+        ser.set_compression_level(level);
+        ser.set_bookmarks(bookmarks, 4);
+        serializer_type::buffer ram;
+        ser.serialize(target, ram);
+        const auto* stats = ser.get_compression_stat();
+        assert(stats[bm::set_block_bit]);
+        assert(stats[bm::set_block_ref_eq] == 1); // dense equality only
+        assert(stats[bm::set_block_xor_ref32] == (level == 6 ? 2u : 0u));
+        std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
+        bm::streams_encoder out(stream);
+        assert(ser.serialize(target, out) && out.finish());
+        const std::string bytes = stream.str();
+        assert(bytes.size() == ram.size());
+        assert(!memcmp(bytes.data(), ram.data(), ram.size()));
+        bvect restored;
+        bm::deserialize(restored, ram.data(), 0, &refs);
+        assert(restored == target);
+        bm::streams_deserializer<bvect> reader;
+        reader.set_ref_vectors(&refs);
+        stream.seekg(0);
+        bm::streams_decoder in(stream);
+        restored.clear();
+        assert(reader.deserialize(restored, in));
+        assert(restored == target);
+        // Start/end inside different representations across a bookmark.
+        reader.set_range(65536u + 10, 8u * 65536u + 100);
+        stream.clear(); stream.seekg(0);
+        bm::streams_decoder range_in(stream);
+        restored.clear();
+        assert(reader.deserialize(restored, range_in));
+        restored.keep_range(65536u + 10, 8u * 65536u + 100);
+        bvect expected = target;
+        expected.keep_range(65536u + 10, 8u * 65536u + 100);
+        assert(restored == expected);
+    }
+    cout << "Mixed XOR/BIC/raw block serialization OK" << endl;
+}
+
+void BVectorBicRawFallbackTest()
+{
+    // Force a BIC trial on incompressible data, even when the predictor would
+    // choose raw immediately, and verify the existing raw fallback bytes.
+    struct trial_serializer : bm::serializer<bvect>
+    {
+        void check(const bvect& source)
+        {
+            const auto& bman = source.get_blocks_manager();
+            const bm::word_t* block = bman.get_block(0u, 0u);
+            assert(block && !BM_IS_GAP(block));
+            bm::bv_sub_survey survey;
+            survey.init((void*)&source, 0);
+            bman.is_sparse_sblock(0, 0, survey);
+            find_bit_best_encoding(block, survey, 0);
+            buffer bytes;
+            bytes.resize(size_t(65536) + 1024);
+            bm::encoder enc(bytes.data(), bytes.size());
+            interpolated_arr_bit_block(block, enc, false);
+            assert(enc.size() == 1 + bm::set_block_size * sizeof(bm::word_t));
+            bm::decoder dec(bytes.data());
+            assert(dec.get_8() == bm::set_block_bit);
+            for (unsigned i = 0; i < bm::set_block_size; ++i)
+                assert(dec.get_32() == block[i]);
+        }
+    } ser;
+    bvect source;
+    unsigned state = 17;
+    for (unsigned i = 0; i < 65536; ++i)
+    {
+        state = state * 1664525u + 1013904223u;
+        if (state & 0x80000000u) source.set(i);
+    }
+    ser.set_compression_level(6);
+    ser.check(source);
+    cout << "BIC trial to raw block fallback OK" << endl;
 }
 
 void BVectorStreamSerializationTest()
@@ -19861,7 +20076,15 @@ void SerializationCompressionLevelsTest()
             bms.serialize(bv1, buf);
 
             const bvect::size_type* cstat = bms.get_compression_stat();
-            assert(cstat[bm::set_block_xor_ref32] == 1);
+            assert(cstat[bm::set_block_xor_ref32] == 0);
+            // Alternating source bits already compress better than the XOR
+            // candidate. Compare block encoding, excluding sparse superblocks.
+            bm::serializer<bvect> plain_ser;
+            plain_ser.set_sparse_cutoff(0);
+            plain_ser.set_bookmarks(true);
+            bm::serializer<bvect>::buffer plain_buf;
+            plain_ser.serialize(bv1, plain_buf);
+            assert(buf.size() == plain_buf.size());
 
             bvect bv3;
             bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
@@ -19897,8 +20120,8 @@ void SerializationCompressionLevelsTest()
             assert(eq);
             struct bvect::statistics st1;
             bv7.calc_stat(&st1);
-            assert(!st1.bit_blocks);
-            assert(st1.gap_blocks == 1);
+            // Plain fallback need not perform XOR decoder GAP optimization.
+            assert(st1.bit_blocks + st1.gap_blocks == 1);
 
         } // pass
     }}
@@ -20102,7 +20325,15 @@ void SerializationCompressionLevelsTest()
         bms.serialize(bv1, buf);
 
         const bvect::size_type* cstat = bms.get_compression_stat();
-        assert(cstat[bm::set_block_xor_ref32] == 1);
+        assert(cstat[bm::set_block_xor_ref32] == 0);
+        // Alternating source bits already compress better than the XOR
+        // candidate. Compare block encoding, excluding sparse superblocks.
+        bm::serializer<bvect> plain_ser;
+        plain_ser.set_sparse_cutoff(0);
+        plain_ser.set_bookmarks(true);
+        bm::serializer<bvect>::buffer plain_buf;
+        plain_ser.serialize(bv1, plain_buf);
+        assert(buf.size() == plain_buf.size());
 
 //        assert(cstat[bm::set_block_xor_gap_ref32] == 1);
 
@@ -20140,8 +20371,8 @@ void SerializationCompressionLevelsTest()
         assert(eq);
         struct bvect::statistics st1;
         bv7.calc_stat(&st1);
-        assert(!st1.bit_blocks);
-        assert(st1.gap_blocks == 1);
+        // Plain fallback need not perform XOR decoder GAP optimization.
+        assert(st1.bit_blocks + st1.gap_blocks == 1);
     }}
 
 
@@ -48478,6 +48709,7 @@ void show_help()
         << "-csv1a0,-csv1a1,-csv1a2 - compressed sparse-vector GT scan split groups" << endl
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
+        << "-xorser               - one-block XOR serialization size comparisons" << endl
         << "-fileser              - test file serialization byte compatibility" << endl
         << "-svfileser            - sparse-vector file streaming serialization" << endl
         << "-svindex             - sparse-vector index persistence" << endl
@@ -48530,6 +48762,7 @@ bool         is_csv1b = false;
 bool         is_str_sv = false;
 bool         is_c_coll = false;
 bool         is_ser = false;
+bool         is_xor_ser = false;
 bool         is_file_ser = false;
 bool         is_sv_file_ser = false;
 bool         is_str_sv_stream = false;
@@ -48593,6 +48826,10 @@ int parse_args(int argc, char *argv[])
             is_all = false;
             is_bvb1 = true;
             continue;
+        }
+        if (arg == "-xorser")
+        {
+            is_all = false; is_xor_ser = true; continue;
         }
         if (arg == "-fileser")
         {
@@ -54436,6 +54673,15 @@ return 0;
         SparseVectorFileSerializationTest();
         CheckAllocLeaks(false);
         ReportTestBlockDone("-svfileser");
+    }
+    if (is_xor_ser || is_file_ser || is_ser || is_all || is_bvser)
+    {
+        BVectorXorExpansionTest();
+        BVectorXorBenefitTest();
+        BVectorXorMixedSerializationTest();
+        BVectorBicRawFallbackTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-xorser");
     }
     if (is_file_ser || is_ser || is_all || is_bvser)
     {

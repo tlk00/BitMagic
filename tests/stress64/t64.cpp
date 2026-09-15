@@ -26131,7 +26131,12 @@ void show_help()
         << "-svindex             - sparse-vector index persistence" << endl
         << "-svfstream            - float file/stringstream serialization and gather" << endl
         << "-strsvstream          - disk-free string streaming round trips and gather" << endl
-        << "-bvops (-bvo, -bvl)  - bit-vector logical operations" << endl
+        << "-bvops (-bvo, -bvl)  - all bit-vector logical operations" << endl
+        << "-bvl0 (-bvops0)       - logical-operation correctness tests" << endl
+        << "-bvl1 (-bvops1)       - OR stress test" << endl
+        << "-bvl2 (-bvops2)       - AND stress test" << endl
+        << "-bvl3 (-bvops3)       - SUB stress test" << endl
+        << "-bvl4 (-bvops4)       - XOR stress test" << endl
         << "-bvshift (or -bvs)- bit-vector shifts " << endl
         << "-rankc (or -rc)   - rank-compress " << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
@@ -26157,6 +26162,11 @@ bool         is_str_sv_stream = false;
 bool         is_svf_stream = false;
 bool         is_sv_index = false;
 bool         is_bvops = false;
+bool         is_bvops0 = false;
+bool         is_bvops1 = false;
+bool         is_bvops2 = false;
+bool         is_bvops3 = false;
+bool         is_bvops4 = false;
 bool         is_bvshift = false;
 bool         is_rankc = false;
 bool         is_agg = false;
@@ -26243,6 +26253,26 @@ int parse_args(int argc, char *argv[])
             is_all = false;
             is_bvops = true;
             continue;
+        }
+        if (arg == "-bvl0" || arg == "-bvops0")
+        {
+            is_all = false; is_bvops0 = true; continue;
+        }
+        if (arg == "-bvl1" || arg == "-bvops1")
+        {
+            is_all = false; is_bvops1 = true; continue;
+        }
+        if (arg == "-bvl2" || arg == "-bvops2")
+        {
+            is_all = false; is_bvops2 = true; continue;
+        }
+        if (arg == "-bvl3" || arg == "-bvops3")
+        {
+            is_all = false; is_bvops3 = true; continue;
+        }
+        if (arg == "-bvl4" || arg == "-bvops4")
+        {
+            is_all = false; is_bvops4 = true; continue;
         }
         if (arg == "-bvs" || arg == "-bvshift")
         {
@@ -26708,6 +26738,69 @@ int main(int argc, char *argv[])
 
          ReportTestBlockDone("-rc");
     }
+
+    if (is_bvops0)
+    {
+        if (!is_only_stress)
+        {
+            AndOperationsTest();
+            CheckAllocLeaks(false);
+
+            AndOrOperationsTest(true); // enable detailed check
+            CheckAllocLeaks(false);
+
+            OrOperationsTest();
+            CheckAllocLeaks(false);
+
+            XorOperationsTest();
+            CheckAllocLeaks(false);
+
+            SubOperationsTest();
+            CheckAllocLeaks(false);
+        }
+        ReportTestBlockDone("-bvl0");
+    }
+
+    if (is_bvops1)
+    {
+        if (!is_nostress)
+        {
+            StressTest(20, 0); // OR
+            CheckAllocLeaks(false);
+        }
+        ReportTestBlockDone("-bvl1");
+    }
+
+    if (is_bvops2)
+    {
+        if (!is_nostress)
+        {
+            StressTest(20, 3); // AND
+            CheckAllocLeaks(false);
+        }
+        ReportTestBlockDone("-bvl2");
+    }
+
+    if (is_bvops3)
+    {
+        if (!is_nostress)
+        {
+            StressTest(20, 1); // SUB
+            CheckAllocLeaks(false);
+        }
+        ReportTestBlockDone("-bvl3");
+    }
+
+    if (is_bvops4)
+    {
+        if (!is_nostress)
+        {
+            StressTest(20, 2); // XOR
+            CheckAllocLeaks(false);
+        }
+        ReportTestBlockDone("-bvl4");
+    }
+
     if (is_all || is_bvops)
     {
         if (!is_only_stress)
