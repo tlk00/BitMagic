@@ -447,6 +447,15 @@ protected:
     unsigned char
     find_gap_best_encoding(const bm::gap_word_t* gap_block) BMNOEXCEPT;
     
+    /// Encode one block; return zero/full sentinels for caller-owned run coding.
+    unsigned char encode_block(const bm::word_t* blk,
+                               const bm::bv_sub_survey& sub_stat,
+                               block_idx_type nb, bm::encoder& enc);
+    /// Compare complete ordinary and reference encodings, keeping the smaller.
+    void encode_xor_block(const bm::word_t* blk,
+                         const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+                         const block_match_chain_type& mchain, bm::encoder& enc);
+
     /// Determine best representation for a bit-block
     unsigned char find_bit_best_encoding(
                             const bm::word_t* block,
@@ -519,6 +528,7 @@ private:
     typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
 
 private:
+    buffer             xor_trial_buffer_; ///< reusable block-local XOR trial storage
     buffer             output_buffer_; ///< retained allocator-typed output memory storage
     block_arridx_type  bit_idx_arr_;
     sblock_arridx_type sb_bit_idx_arr_;
@@ -5105,6 +5115,169 @@ bool serializer<BV>::serialize(const BV& bv, OUT& out)
 }
 
 template<class BV>
+unsigned char serializer<BV>::encode_block(const bm::word_t* blk,
+                       const bm::bv_sub_survey& sub_stat,
+                       block_idx_type nb, bm::encoder& enc)
+{
+    if (BM_IS_GAP(blk))
+    {
+        encode_gap_block(BMGAP_PTR(blk), enc);
+    }
+    else // bit-block
+    {
+        // ----------------------------------------------
+        // BIT BLOCK serialization
+        //
+        BM_ASSERT(sub_stat.top_level_idx == (nb >> bm::set_array_shift));
+
+        unsigned char model = find_bit_best_encoding(blk, sub_stat, nb);
+        switch (model)
+        {
+        case bm::set_block_bit:
+            enc.put_prefixed_array_32(bm::set_block_bit, blk, bm::set_block_size);
+            compression_stat_[bm::set_block_bit]++;
+            break;
+        case bm::set_block_bit_1bit:
+        {
+            unsigned bit_idx = 0;
+            bm::bit_block_find(blk, bit_idx, &bit_idx);
+            BM_ASSERT(bit_idx < 65536);
+            enc.put_8(bm::set_block_bit_1bit); enc.put_16(bm::short_t(bit_idx));
+            compression_stat_[bm::set_block_bit_1bit]++;
+            return 0;
+        }
+        break;
+        case bm::set_block_azero: // empty block all of the sudden ?
+            return bm::set_block_azero;
+        case bm::set_block_aone:
+            return bm::set_block_aone;
+        case bm::set_block_arrbit:
+            encode_bit_array(blk, enc, false);
+            break;
+        case bm::set_block_arrbit_inv:
+            encode_bit_array(blk, enc, true);
+            break;
+        case bm::set_block_gap_egamma:
+            gamma_gap_bit_block(blk, enc);
+            break;
+        case bm::set_block_bit_0runs:
+            encode_bit_interval(blk, enc, 0); // TODO: get rid of param 3 (0)
+            break;
+        case bm::set_block_arrgap_egamma:
+            gamma_arr_bit_block(blk, enc, false);
+            break;
+        case bm::set_block_arrgap_egamma_inv:
+            gamma_arr_bit_block(blk, enc, true);
+            break;
+        case bm::set_block_arrgap_bienc:
+            bienc_arr_bit_block(blk, enc, false);
+            break;
+        case bm::set_block_arrgap_bienc_inv:
+            bienc_arr_bit_block(blk, enc, true);
+            break;
+        case bm::set_block_arr_bienc:
+            interpolated_arr_bit_block(blk, enc, false);
+            break;
+        case bm::set_block_arr_bienc_inv:
+            interpolated_arr_bit_block(blk, enc, true); // inverted
+            break;
+        case bm::set_block_gap_bienc:
+            interpolated_gap_bit_block(blk, enc);
+            break;
+        case bm::set_block_bitgap_bienc:
+            interpolated_gap_bit_block(blk, enc);
+            break;
+        case bm::set_block_bit_digest0:
+            encode_bit_digest(blk, enc, bit_stat_.d0);
+            break;
+        default:
+            BM_ASSERT(0); // predictor returned an unknown model
+            enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
+        }
+    } // bit-block processing
+
+    return 0;
+}
+
+template<class BV>
+void serializer<BV>::encode_xor_block(const bm::word_t* blk,
+                        const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+                        const block_match_chain_type& mchain, bm::encoder& enc)
+{
+    // The ordinary encoding is the safe baseline. Never write an expanded
+    // XOR trial into the caller's calc_stat()-sized destination buffer.
+    const size_t trial_capacity =
+        size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (xor_trial_buffer_.size() < trial_capacity)
+        xor_trial_buffer_.resize(trial_capacity, false);
+    size_type stats_before[256], stats_plain[256];
+    ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
+    const auto plain_begin = enc.get_pos();
+    auto encode_single = [this, &sub_stat, nb](const bm::word_t* block,
+                                              bm::encoder& dst)
+    {
+        const unsigned char type = encode_block(block, sub_stat, nb, dst);
+        // A residual is exactly one block, never a run of source blocks.
+        if (type == bm::set_block_azero)
+            dst.put_8(bm::set_block_1zero);
+        else if (type == bm::set_block_aone)
+            dst.put_8(bm::set_block_1one);
+    };
+    encode_single(blk, enc);
+    const size_t plain_size = size_t(enc.get_pos() - plain_begin);
+    ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+    ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+
+    bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
+    BM_ASSERT(mchain.chain_size);
+    if (mchain.match == e_xor_match_EQ)
+    {
+        BM_ASSERT(mchain.chain_size == 1);
+        const size_type ridx = ref_vect_->get_row_idx(mchain.ref_idx[0]);
+        trial.put_8(bm::set_block_ref_eq);
+        trial.put_32(unsigned(ridx));
+        compression_stat_[bm::set_block_ref_eq]++;
+    }
+    else
+    {
+        BM_ASSERT(mchain.match == e_xor_match_GC ||
+                  mchain.match == e_xor_match_BC ||
+                  mchain.match == e_xor_match_iBC);
+        unsigned i0, j0;
+        bm::get_block_coord(nb, i0, j0);
+        xor_tmp_product(blk, mchain, i0, j0);
+        if (mchain.chain_size == 1)
+        {
+            const size_type ridx = ref_vect_->get_row_idx(mchain.ref_idx[0]);
+            const bm::id64_t d64 = mchain.xor_d64[0];
+            if (d64 == ~0ull)
+                trial.put_8_16_32(unsigned(ridx), bm::set_block_xor_ref8_um,
+                                 bm::set_block_xor_ref16_um,
+                                 bm::set_block_xor_ref32_um);
+            else
+            {
+                trial.put_8_16_32(unsigned(ridx), bm::set_block_xor_ref8,
+                                 bm::set_block_xor_ref16,
+                                 bm::set_block_xor_ref32);
+                trial.put_64(d64);
+            }
+            compression_stat_[bm::set_block_xor_ref32]++;
+        }
+        else
+            encode_xor_match_chain(trial, mchain);
+        encode_single(xor_tmp_block_, trial);
+    }
+    // Include all reference/mask/chain bytes; ties keep the original block.
+    if (trial.size() < plain_size)
+    {
+        enc.set_pos(plain_begin);
+        enc.memcpy(xor_trial_buffer_.data(), trial.size());
+    }
+    else
+        ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+}
+
+template<class BV>
 template<class OUT>
 bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
 {
@@ -5285,161 +5458,34 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             }
         }
 
-        if (ref_vect_) // XOR filter
+        if (ref_vect_) // XOR candidates are accepted independently per block
         {
-            // Similarity model must be attached with the ref.vectors
-            // for XOR filter to work
             BM_ASSERT(sim_model_);
-
             bool nb_indexed = sim_model_->bv_blocks.test(i);
-            BM_ASSERT(nb_indexed); // Model is correctly computed from ref-vector
+            BM_ASSERT(nb_indexed);
             if (nb_indexed)
             {
-                // TODO: use rs-index or count blocks
                 size_type rank = sim_model_->bv_blocks.count_range(0, i);
                 BM_ASSERT(rank);
-                --rank;
-                const block_match_chain_type& mchain =
-                    sim_model_->matr.get(ref_idx_, rank);
+                const block_match_chain_type mchain =
+                    sim_model_->matr.get(ref_idx_, rank - 1);
                 BM_ASSERT(mchain.nb == i);
-                switch (mchain.match)
+                if (mchain.match != e_no_xor_match)
                 {
-                case e_no_xor_match:
-                    break;
-                case e_xor_match_EQ:
-                    {
-                        BM_ASSERT(mchain.chain_size == 1);
-                        size_type ridx = mchain.ref_idx[0];
-                        size_type plain_idx = ref_vect_->get_row_idx(ridx);
-                        enc.put_8(bm::set_block_ref_eq);
-                        enc.put_32(unsigned(plain_idx));
-                        compression_stat_[bm::set_block_ref_eq]++;
-                        continue;
-                    }
-                    break;
-                case e_xor_match_GC:
-                case e_xor_match_BC:
-                case e_xor_match_iBC:
-                    {
-                        BM_ASSERT(mchain.chain_size);
-                        xor_tmp_product(blk, mchain, i0, j0);
-                        // TODO: validate xor_tmp_block_
-                        if (mchain.chain_size == 1)
-                        {
-                            size_type ridx = mchain.ref_idx[0];
-                            bm::id64_t d64 = mchain.xor_d64[0];
-                            size_type plain_idx = ref_vect_->get_row_idx(ridx);
-                            if (d64 == ~0ull)
-                            {
-                                enc.put_8_16_32(unsigned(plain_idx),
-                                                bm::set_block_xor_ref8_um,
-                                                bm::set_block_xor_ref16_um,
-                                                bm::set_block_xor_ref32_um);
-                            }
-                            else
-                            {
-                                enc.put_8_16_32(unsigned(plain_idx),
-                                                bm::set_block_xor_ref8,
-                                                bm::set_block_xor_ref16,
-                                                bm::set_block_xor_ref32);
-                                enc.put_64(d64); // xor digest mask
-                            }
-                            compression_stat_[bm::set_block_xor_ref32]++;
-                        }
-                        else // chain
-                        {
-                            encode_xor_match_chain(enc, mchain);
-                        }
-                        blk = xor_tmp_block_; // substitute with XOR product
-                    }
-                    break;
-                default:
-                    BM_ASSERT(0);
-                } // switch xor_match
+                    encode_xor_block(blk, sub_stat, i, mchain, enc);
+                    if (free_)
+                        const_cast<blocks_manager_type&>(bman).zero_block(i);
+                    continue;
+                }
             }
         }
 
-        // --------------------------------------------------
-        // GAP serialization
-        //
-        if (BM_IS_GAP(blk))
-        {
-            encode_gap_block(BMGAP_PTR(blk), enc);
-        }
-        else // bit-block
-        {
-            // ----------------------------------------------
-            // BIT BLOCK serialization
-            //
-            BM_ASSERT(sub_stat.bv_ptr == (void*)&bv &&
-                      sub_stat.top_level_idx == i0);
+        const unsigned char block_type = encode_block(blk, sub_stat, i, enc);
+        if (block_type == bm::set_block_azero)
+            goto zero_block;
+        if (block_type == bm::set_block_aone)
+            goto full_block;
 
-            unsigned char model = find_bit_best_encoding(blk, sub_stat, i);
-            switch (model)
-            {
-            case bm::set_block_bit:
-                enc.put_prefixed_array_32(bm::set_block_bit, blk, bm::set_block_size);
-                compression_stat_[bm::set_block_bit]++;
-                break;
-            case bm::set_block_bit_1bit:
-            {
-                unsigned bit_idx = 0;
-                bm::bit_block_find(blk, bit_idx, &bit_idx);
-                BM_ASSERT(bit_idx < 65536);
-                enc.put_8(bm::set_block_bit_1bit); enc.put_16(bm::short_t(bit_idx));
-                compression_stat_[bm::set_block_bit_1bit]++;
-                continue;
-            }
-            break;
-            case bm::set_block_azero: // empty block all of the sudden ?
-                goto zero_block;
-            case bm::set_block_aone:
-                goto full_block;
-            case bm::set_block_arrbit:
-                encode_bit_array(blk, enc, false);
-                break;
-            case bm::set_block_arrbit_inv:
-                encode_bit_array(blk, enc, true);
-                break;
-            case bm::set_block_gap_egamma:
-                gamma_gap_bit_block(blk, enc);
-                break;
-            case bm::set_block_bit_0runs:
-                encode_bit_interval(blk, enc, 0); // TODO: get rid of param 3 (0)
-                break;
-            case bm::set_block_arrgap_egamma:
-                gamma_arr_bit_block(blk, enc, false);
-                break;
-            case bm::set_block_arrgap_egamma_inv:
-                gamma_arr_bit_block(blk, enc, true);
-                break;
-            case bm::set_block_arrgap_bienc:
-                bienc_arr_bit_block(blk, enc, false);
-                break;
-            case bm::set_block_arrgap_bienc_inv:
-                bienc_arr_bit_block(blk, enc, true);
-                break;
-            case bm::set_block_arr_bienc:
-                interpolated_arr_bit_block(blk, enc, false);
-                break;
-            case bm::set_block_arr_bienc_inv:
-                interpolated_arr_bit_block(blk, enc, true); // inverted
-                break;
-            case bm::set_block_gap_bienc:
-                interpolated_gap_bit_block(blk, enc);
-                break;
-            case bm::set_block_bitgap_bienc:
-                interpolated_gap_bit_block(blk, enc);
-                break;
-            case bm::set_block_bit_digest0:
-                encode_bit_digest(blk, enc, bit_stat_.d0);
-                break;
-            default:
-                BM_ASSERT(0); // predictor returned an unknown model
-                enc.put_prefixed_array_32(set_block_bit, blk, bm::set_block_size);
-            }
-        } // bit-block processing
-        
         // destructive serialization mode
         //
         if (free_)
