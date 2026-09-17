@@ -6,32 +6,33 @@ This FAQ combines questions raised in public discussions with introductory quest
 
 ## Contents
 
-1. [Core concepts and container choices](#core-concepts-and-container-choices)
+1. [Core concepts and container choices](#1-core-concepts-and-container-choices)
    - [What is a succinct data structure?](#what-is-a-succinct-data-structure)
    - [What does “data as an index” mean?](#what-does-data-as-an-index-mean)
    - [Are sparse vectors useful for dense data?](#are-sparse-vectors-useful-for-dense-data)
    - [Does BitMagic support arbitrary sets and unknown logical values?](#does-bitmagic-support-arbitrary-sets-and-unknown-logical-values)
    - [How does BitMagic compare with standard C++ bit containers?](#how-does-bitmagic-compare-with-standard-c-bit-containers)
-2. [Search and performance](#search-and-performance)
+2. [Search and performance](#2-search-and-performance)
    - [How can I implement Boolean document or record retrieval?](#how-can-i-implement-boolean-document-or-record-retrieval)
    - [How does BitMagic implement rank and select, and are they fast?](#how-does-bitmagic-implement-rank-and-select-and-are-they-fast)
    - [How should I evaluate counting, iteration, and set-operation performance?](#how-should-i-evaluate-counting-iteration-and-set-operation-performance)
-3. [Compression and persistence](#compression-and-persistence)
+3. [Compression and persistence](#3-compression-and-persistence)
    - [What is the difference between compact memory and serialized compression?](#what-is-the-difference-between-compact-memory-and-serialized-compression)
    - [Can I store BitMagic data in a database or a hybrid storage system?](#can-i-store-bitmagic-data-in-a-database-or-a-hybrid-storage-system)
    - [Can I retrieve a few values without restoring the whole container?](#can-i-retrieve-a-few-values-without-restoring-the-whole-container)
    - [Is a deserialization index the same as a search index?](#is-a-deserialization-index-the-same-as-a-search-index)
    - [Does serialization require a complete temporary RAM BLOB, or can it stream to disk?](#does-serialization-require-a-complete-temporary-ram-blob-or-can-it-stream-to-disk)
-4. [Integration and configuration](#integration-and-configuration)
+4. [Integration and configuration](#4-integration-and-configuration)
    - [How do I start using BitMagic as a library?](#how-do-i-start-using-bitmagic-as-a-library)
    - [Why is BitMagic 32-bit by default?](#why-is-bitmagic-32-bit-by-default)
    - [Can I use BitMagic from Python, Rust, or other languages?](#can-i-use-bitmagic-from-python-rust-or-other-languages)
-5. [Memory control and detailed API behavior](#memory-control-and-detailed-api-behavior)
+5. [Memory control and detailed API behavior](#5-memory-control-and-detailed-api-behavior)
+   - [What is the best runtime allocator for BitMagic?](#what-is-the-best-runtime-allocator-for-bitmagic)
    - [Can I prevent all allocations after initialization?](#can-i-prevent-all-allocations-after-initialization)
    - [Why does flipping a bit-vector produce so many set bits?](#why-does-flipping-a-bit-vector-produce-so-many-set-bits)
-6. [Further questions and reporting problems](#further-questions-and-reporting-problems)
+6. [Further questions and reporting problems](#6-further-questions-and-reporting-problems)
 
-## Core concepts and container choices
+## 1. Core concepts and container choices
 
 ### What is a succinct data structure?
 
@@ -75,7 +76,9 @@ BitMagic adds compressed set representations, enumeration, aggregation, rank/sel
 
 Sample references: [bvsample03 — memory statistics and block strategies](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample03), [bvsample08 — STL interoperability](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample08). These illustrate capabilities and integration, rather than a direct performance comparison with standard containers.
 
-## Search and performance
+---
+
+## 2. Search and performance
 
 ### How can I implement Boolean document or record retrieval?
 
@@ -99,7 +102,9 @@ Compare memory footprint and throughput on representative densities, runs, ID ra
 
 See [counting](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample11), [traversal](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample25), and [SIMD configuration](build.md#simd-and-cpu-configuration).
 
-## Compression and persistence
+---
+
+## 3. Compression and persistence
 
 ### What is the difference between compact memory and serialized compression?
 
@@ -137,7 +142,9 @@ The supplied adapter requires **seekable binary streams**: serialization may pat
 
 See the [file I/O example](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample27) and [streaming string-vector example](https://github.com/tlk00/BitMagic/tree/master/samples/strsvsample10). When consulting older examples or comparisons, check the BitMagic version and which API they use.
 
-## Integration and configuration
+---
+
+## 4. Integration and configuration
 
 ### How do I start using BitMagic as a library?
 
@@ -185,7 +192,15 @@ Community bindings include the historical [Python `bitmagic` package on PyPI](ht
 
 Code reference: [libbmtest.c — C API test calls](https://github.com/tlk00/BitMagic/blob/master/lang-maps/test/libbmtest.c). This is test code for the C wrapper, not a complete Python or Rust binding tutorial.
 
-## Memory control and detailed API behavior
+---
+
+## 5. Memory control and detailed API behavior
+
+### What is the best runtime allocator for BitMagic?
+
+BitMagic is compatible with standard runtime allocators and has also been tested successfully with third-party allocators. Its containers support C++-style allocator customization, allowing an application to integrate its own allocation policy. Custom allocators must preserve the alignment required by the selected SIMD configuration. See [bvsample06 — custom allocator integration](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample06).
+
+Among third-party allocators, we recommend **[jemalloc](https://jemalloc.net/)** based on successful experience with BitMagic workloads. BitMagic commonly allocates fixed-size 8 KiB bitmap blocks and compressed GAP blocks from a small family of sizes. This predictable pattern works well with jemalloc's size classes and block reuse, helping control fragmentation. Its decay and purging mechanisms can also return unused physical memory to the operating system as BitMagic containers release blocks. The timing and extent of reclamation still depend on the platform, allocator configuration, and workload.
 
 ### Can I prevent all allocations after initialization?
 
@@ -207,7 +222,9 @@ The distinction arose in [the `flip()` report (#73)](https://github.com/tlk00/Bi
 
 Sample references: [bvsample02 — set difference for universe-minus-selection](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample02), [bvsample01_64 — full vectors and address boundaries](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample01_64).
 
-## Further questions and reporting problems
+---
+
+## 6. Further questions and reporting problems
 
 For a reproducible report, include the release or commit, compiler and platform, addressing/SIMD definitions, a minimal example, and expected versus observed behavior. Performance reports should also describe the data distribution, measured operation, and whether allocation and serialization are included in timing.
 
