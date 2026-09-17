@@ -14,13 +14,17 @@ The library supports a complete data lifecycle: construct compact containers, se
 - **Hardware-aware algorithms:** use SIMD, block-oriented processing, and specialized kernels to reduce memory traffic and improve throughput.
 - **Flexible persistence:** use RAM BLOBs, seekable file streams, memory-mapped files, or application-managed database storage.
 
-[Website](https://bitmagic.io) · [Examples](https://github.com/tlk00/BitMagic/tree/master/samples) · [API documentation](https://bitmagic.io/doxygen/html/modules.html) · [Technical articles](https://bitmagic.io/articles.html) · [Releases](https://github.com/tlk00/BitMagic/releases)
+[Website](https://bitmagic.io) · [FAQ](docs/faq.md) · [Examples](https://github.com/tlk00/BitMagic/tree/master/samples) · [API documentation](https://bitmagic.io/doxygen/html/modules.html) · [Technical articles](https://bitmagic.io/articles.html) · [Releases](https://github.com/tlk00/BitMagic/releases)
 
 ## Data as an index
 
-In many systems, data and its search indexes are separate structures. BitMagic offers another option: a representation of the values themselves that is also suitable for efficient searching.
+Succinct data structures combine compact storage with efficient access and query operations on that representation. BitMagic applies this principle to search: the way values are represented both saves memory and exposes opportunities to eliminate candidates without reconstructing each value. This is the connection between succinct storage and **data as an index**.
 
 Integer and string vectors use a bit-transposed layout. Instead of storing every value as an independent machine word or character sequence, the representation organizes bits into planes backed by compressed bit-vectors. Supported searches can evaluate these planes with logical operations and produce a bit-vector of matching positions, without first expanding the entire column into ordinary scalar values.
+
+This layout enables aggressive **search-space pruning**. For example, an equality search can intersect candidates with planes corresponding to required one-bits and exclude candidates using planes corresponding to required zero-bits. As these logical operations eliminate candidates, a candidate block can become empty. Once no candidates remain in that block, subsequent conditions need no further evaluation there. Optimized search kernels exploit this reduction to skip work on eliminated regions, while processing surviving candidates in groups with bitwise and SIMD operations.
+
+Search efficiency therefore comes from both compactness and the structure of the computation: fewer bytes need to move, and progressive pruning can reduce the amount of data that later stages inspect. The benefit depends on the predicate, value distribution, and how quickly candidates are eliminated; queries that retain most candidates offer less opportunity to skip work.
 
 This makes **data as an index** a useful way to design with BitMagic. A compact column can serve both as the stored data and as the searchable structure. `bm::sparse_vector_scanner<>` supplies search operations for supported container types, including equality and comparison operations, ranges, and string searches. The available predicates depend on the container and value type.
 

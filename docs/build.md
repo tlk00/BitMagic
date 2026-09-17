@@ -99,9 +99,9 @@ Select one intended BitMagic SIMD backend and supply the compiler flags it requi
 | Definition | Backend | Configuration notes |
 |---|---|---|
 | `BMSSE2OPT` | x86 SSE2 | Use an SSE2-capable target |
-| `BMSSE42OPT` | x86 SSE4.2 and associated optimized operations | Use matching target flags; the repository provides a CMake preset value |
-| `BMAVX2OPT` | x86 AVX2 and associated optimized operations | Match the full target feature set, including supporting bit-manipulation instructions |
-| `BMAVX512OPT` | x86 AVX-512 | Specialized configuration; inspect target requirements and validate on the deployment CPU |
+| `BMSSE42OPT` | x86 SSE4.2 with hardware POPCNT | POPCNT population counting is critical for performance. Use matching target flags; the repository provides a CMake preset value |
+| `BMAVX2OPT` | x86 AVX2 with POPCNT and BMI instructions | Highly recommended for rank/select acceleration on supported CPUs. Match the full target feature set in the compiler settings |
+| `BMAVX512OPT` | Experimental x86 AVX-512 | Use at your own risk; inspect target requirements and validate on the deployment CPU |
 | `BMNEONOPT` | Arm NEON through SSE-to-NEON translation | Uses the bundled `src/sse2neon.h` header |
 | `BMWASMSIMDOPT` | WebAssembly SIMD through translated intrinsics | Use an Emscripten build with SIMD and the required SSE compatibility flags |
 
