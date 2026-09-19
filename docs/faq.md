@@ -16,6 +16,7 @@ This FAQ combines questions raised in public discussions with introductory quest
    - [How can I implement Boolean document or record retrieval?](#how-can-i-implement-boolean-document-or-record-retrieval)
    - [How does BitMagic implement rank and select, and are they fast?](#how-does-bitmagic-implement-rank-and-select-and-are-they-fast)
    - [How should I evaluate counting, iteration, and set-operation performance?](#how-should-i-evaluate-counting-iteration-and-set-operation-performance)
+   - [How is `bvector<>` serialization benchmarked on GOV2 and ClueWeb?](#how-is-bvector-serialization-benchmarked-on-gov2-and-clueweb)
 3. [Compression and persistence](#3-compression-and-persistence)
    - [What is the difference between compact memory and serialized compression?](#what-is-the-difference-between-compact-memory-and-serialized-compression)
    - [Can I store BitMagic data in a database or a hybrid storage system?](#can-i-store-bitmagic-data-in-a-database-or-a-hybrid-storage-system)
@@ -24,6 +25,7 @@ This FAQ combines questions raised in public discussions with introductory quest
    - [Does serialization require a complete temporary RAM BLOB, or can it stream to disk?](#does-serialization-require-a-complete-temporary-ram-blob-or-can-it-stream-to-disk)
 4. [Integration and configuration](#4-integration-and-configuration)
    - [How do I start using BitMagic as a library?](#how-do-i-start-using-bitmagic-as-a-library)
+   - [Does BitMagic benefit from `-O3` compiler optimization?](#does-bitmagic-benefit-from--o3-compiler-optimization)
    - [Why is BitMagic 32-bit by default?](#why-is-bitmagic-32-bit-by-default)
    - [Can I use BitMagic from Python, Rust, or other languages?](#can-i-use-bitmagic-from-python-rust-or-other-languages)
 5. [Memory control and detailed API behavior](#5-memory-control-and-detailed-api-behavior)
@@ -102,6 +104,16 @@ Compare memory footprint and throughput on representative densities, runs, ID ra
 
 See [counting](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample11), [traversal](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample25), and [SIMD configuration](build.md#simd-and-cpu-configuration).
 
+### How is `bvector<>` serialization benchmarked on GOV2 and ClueWeb?
+
+BitMagic includes an [inverted-list compression benchmark](https://github.com/tlk00/BitMagic/tree/master/utils/inv_list) for document-identifier collections derived from the GOV2 and ClueWeb09 Category B web corpora. The dataset was prepared for research on compression and intersection of posting lists. Each posting list contains the ordered 32-bit document identifiers associated with one term—the standard representation used by an inverted text index.
+
+Both collections have `sorted` and `unsorted` variants. In both variants, every individual posting list is sorted in increasing document-ID order. The names describe how identifiers were assigned to documents: `sorted` uses documents ordered by URL before assigning IDs, while `unsorted` retains the default document identifiers. URL-based reordering can place related documents closer together and change the clustering and compressibility of the resulting posting lists.
+
+The BitMagic utility converts every posting list to a `bvector<>`, optimizes it, and serializes it as a separate BLOB with a 32-bit length prefix. It reports the total output size and bits per stored document ID. It can time collection conversion, verify every restored bit-vector against the source list, and measure sequential deserialization. The supplied runs exercise different serializer compression levels and CPU builds.
+
+This benchmark is useful for studying `bvector<>` serialization on large, realistic information-retrieval data. It is not a complete benchmark of BitMagic query execution, Boolean intersections, live-container memory use, or every data distribution. Results also depend on the BitMagic version, compiler, CPU, serializer settings, and document-ID assignment. See the original [document-identifier dataset description](https://lemire.me/data/integercompression2014.html) and the associated [SIMD compression and intersection paper](https://arxiv.org/abs/1401.6399).
+
 ---
 
 ## 3. Compression and persistence
@@ -169,6 +181,12 @@ For basic use, `#include "bm.h"` provides `bm::bvector<>`; other containers and 
 Choose one SIMD backend, match its compiler target flags to the deployment CPU, and keep definitions consistent across translation units. The core C++ library does not automatically dispatch among CPU variants. See the [detailed configuration guide](build.md) for commands, dependencies, and limitations.
 
 Sample references: [bvsample01 — bit-vector basics](https://github.com/tlk00/BitMagic/tree/master/samples/bvsample01), [svsample01 — integer-vector basics](https://github.com/tlk00/BitMagic/tree/master/samples/svsample01).
+
+### Does BitMagic benefit from `-O3` compiler optimization?
+
+In general, BitMagic does not gain much from changing an optimized `-O2` build to `-O3`. Performance-critical loops and kernels are already explicitly structured, unrolled, and specialized, so the compiler has less additional loop transformation work to discover. `-O3` can also increase code size without producing a measurable improvement.
+
+Selecting the appropriate BitMagic SIMD backend often has a more significant effect. On a compatible CPU, enable one of the supported SIMD definitions—such as `BMSSE42OPT`, `BMAVX2OPT`, or `BMNEONOPT`—and supply its matching compiler target flags. The result depends on the compiler, CPU, operation, and data distribution, so confirm with the application's representative workload. See [SIMD and CPU configuration](build.md#simd-and-cpu-configuration).
 
 ### Why is BitMagic 32-bit by default?
 
