@@ -21,6 +21,7 @@ For more information please visit:  http://bitmagic.io
 #include <cassert>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <bm.h>
 #include "bmstrsparsevec.h"
@@ -96,7 +97,7 @@ unsigned int fillSparseVecs(sparseVecString &sv_day,
             //Percent change is the easiest way to see a simultaneous change in value
             if (dataIdx == 0)
             {
-                sv_pct_change.push_back(0.0f);
+                sv_pct_change.push_back(0);
             }
             else
             {

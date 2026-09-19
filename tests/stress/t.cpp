@@ -23967,7 +23967,7 @@ void CheckBvectorDeserializeSkipDigest()
 
     const bvect::size_type block_bits = bm::gap_max_bits;
 
-    auto build_bit_mask = [](const bvect& block_digest)
+    auto build_bit_mask = [block_bits](const bvect& block_digest)
     {
         bvect bv_mask;
         for (bvect::enumerator en = block_digest.first(); en.valid(); ++en)
@@ -30290,7 +30290,7 @@ void TestSparseVectorDeserializationIndexGather()
         sv.optimize();
     };
 
-    auto build_random_mask = [](bvect& mask_bv, unsigned count,
+    auto build_random_mask = [sv_size](bvect& mask_bv, unsigned count,
                                        unsigned seed)
     {
         std::mt19937 gen(seed);
