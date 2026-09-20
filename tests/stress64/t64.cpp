@@ -1013,6 +1013,11 @@ void CheckBvectorDeserializeSkipDigest()
 
     const bvect::size_type block_bits = bm::gap_max_bits;
 
+#ifdef __clang__
+// Keep explicit captures for MSVC compatibility.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-lambda-capture"
+#endif
     auto build_bit_mask = [block_bits](const bvect& block_digest)
     {
         bvect bv_mask;
@@ -1023,6 +1028,9 @@ void CheckBvectorDeserializeSkipDigest()
         }
         return bv_mask;
     };
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
     auto check = [&](const bvect& bv_src, const bvect& block_digest)
     {
@@ -1302,6 +1310,11 @@ void TestSparseVectorDeserializationIndexGather()
         sv.optimize();
     };
 
+#ifdef __clang__
+// Keep explicit captures for MSVC compatibility.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-lambda-capture"
+#endif
     auto build_random_mask = [sv_size](bvect& mask_bv, unsigned count,
                                        unsigned seed)
     {
@@ -1312,6 +1325,9 @@ void TestSparseVectorDeserializationIndexGather()
             mask_bv.set(dist(gen));
         mask_bv.optimize();
     };
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
     auto check_mask = [&](const sparse_vector_u32& sv, const unsigned char* buf,
                           deserialization_index_type& deserialization_index,
