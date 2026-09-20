@@ -185,7 +185,7 @@ void generate_DNA_vector(svector_u32& sv, vector_char_type& vect, unsigned sz)
     svector_u32::back_insert_iterator bi = sv.get_back_inserter();
     for (unsigned i = 0; i < sz; ++i)
     {
-        unsigned code = rand() % 4; // generate code between 0 and 3
+        unsigned code = unsigned(rand()) % 4; // generate code between 0 and 3
         char bp = int2DNA(code);
         assert(bp == 'A' || bp == 'T' || bp == 'G' || bp == 'C');
         vect.push_back(bp);
@@ -254,7 +254,7 @@ void generate_mismatches(vector_pairs_type& vect_m,
     for (vector_char_type::size_type i = 0; i < sz; i += delta)
     {
         vector_char_type::value_type v1 = vect[i];
-        unsigned code = rand() % 4;
+        unsigned code = unsigned(rand()) % 4;
         vector_char_type::value_type v2 = int2DNA(code);
         if (v2 == v1)
             continue;
@@ -263,10 +263,10 @@ void generate_mismatches(vector_pairs_type& vect_m,
 
     // add some extra with a distrubution skewed to the beginning
     //
-    for (vector_char_type::size_type i = 1; i < sz / 4; i += (rand()%(1024 * 10)))
+    for (vector_char_type::size_type i = 1; i < sz / 4; i += (unsigned(rand()) % (1024 * 10)))
     {
         vector_char_type::value_type v1 = vect[i];
-        unsigned code = rand() % 4;
+        unsigned code = unsigned(rand()) % 4;
         vector_char_type::value_type v2 = int2DNA(code);
         if (v2 == v1)
             continue;

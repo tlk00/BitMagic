@@ -138,8 +138,8 @@ int main(void)
             str_sv_type::const_iterator it = str_sv2.begin();
             for (; it.valid(); ++it)
             {
-                const char* s = *it;
-                if (!s) // we should expect it returns nullptr for NULL values ion vectors
+                const char* str = *it;
+                if (!str) // we should expect it returns nullptr for NULL values ion vectors
                     cout << "NULL, ";
                 else
                     cout << *it << ", ";

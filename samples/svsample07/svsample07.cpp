@@ -53,7 +53,7 @@ void generate_set(vector<unsigned>& vec)
     const unsigned max_coll = 50000;
    
     vec.resize(0);
-    for (unsigned i = 10; i < max_coll; i += rand() % 3)
+    for (unsigned i = 10; i < max_coll; i += unsigned(rand()) % 3)
     {
         vec.emplace_back(i);
     } // for i

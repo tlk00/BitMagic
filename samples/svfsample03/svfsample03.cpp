@@ -50,7 +50,7 @@ For more information please visit:  http://bitmagic.io
 typedef bm::sparse_vector_float<bm::sparse_vector<unsigned int, bm::bvector<>>> sparseVecFloat;
 
 void Demo1(){
-    float toAdd[] = {1.0123, -2.468, 340000.56, -7008.0, 0.900102};
+    float toAdd[] = {1.0123f, -2.468f, 340000.56f, -7008.0f, 0.900102f};
 
     sparseVecFloat svf1;
     svf1.import(toAdd, 5);
@@ -67,7 +67,7 @@ void Demo1(){
     //clear_range(left, right) sets all values between left and right inclusive to 0
     svf1.clear_range(1, 3);
     std::cout << "svf1.size() = " << svf1.size();
-    for(int i = 0; i < 5; i++){
+    for(sparseVecFloat::size_type i = 0; i < 5; i++){
         std::cout << "svf1.get(" << i << ") = " << svf1.get(i) << std::endl;
         std::cout << "toAdd[" << i << "] = " << toAdd[i] << std::endl;
     }
@@ -87,16 +87,16 @@ void Demo1(){
     //A -1 means the given float is larger than the index float
     //A 0 means the two are equal, or within the margin of error of equality given (by default epsilon)
     //A 1 means the given float is smaller than the index float
-    std::cout << "svf1.compare(1, 2.468) = " << svf1.compare(1, 2.468) << std::endl;
-    std::cout << "svf1.compare(1, -2.468) = " << svf1.compare(1, -2.468) << std::endl;
+    std::cout << "svf1.compare(1, 2.468) = " << svf1.compare(1, 2.468f) << std::endl;
+    std::cout << "svf1.compare(1, -2.468) = " << svf1.compare(1, -2.468f) << std::endl;
     std::cout << "svf1.compare(1, -3) = " << svf1.compare(1, -3) << std::endl;
 }
 
 void Demo2(){
     sparseVecFloat svf1;
     sparseVecFloat svf2;
-    float toAdd1[] = {1.0123, -2.468, 0.0, 0.0, 0.0, 1.5};
-    float toAdd2[] = {0.0, 0.0, 0.0, -7008.0, 0.900102, 2.5};
+    float toAdd1[] = {1.0123f, -2.468f, 0.0f, 0.0f, 0.0f, 1.5f};
+    float toAdd2[] = {0.0f, 0.0f, 0.0f, -7008.0f, 0.900102f, 2.5f};
     svf1.import(toAdd1, 6);
     svf2.import(toAdd2, 6);
     BM_DECLARE_TEMP_BLOCK(tb)

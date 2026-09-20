@@ -123,7 +123,7 @@ endif
 BASICINCDIR:=$(addprefix -I$(PROJECT_DIR)/, $(ADDLIBDIR)) $(addprefix -I$(PROJECT_DIR)/, $(BASICINCS))
 #BASICINCDIR:=$(addprefix -I$(PROJECT_DIR)/, $(ADDLIBDIR)) $(addprefix -I$(PROJECT_DIR)/, $(BASICLIBS))
 #BASICLIBS:=$(addprefix -l, $(ADDLIBS)) $(addprefix -l, $(BASICLIBS))
-BASICLIBS:=-L$(PROJECT_DIR)/src/$(BUILDDIR) 
+BASICLIBS:=$(addprefix -L,$(wildcard $(PROJECT_DIR)/src/$(BUILDDIR)))
 
 # --------------------------------------------------
 ifeq ($(DEBUG), YES)

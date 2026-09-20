@@ -1122,7 +1122,7 @@ void compute_group(CSeqGroup& seq_group,
 
     auto i_cnt = bv.count();
     // approximate number of k-mers we consider similar
-    float similarity_target = float(i_cnt * float(similarity_cut_off));
+    float similarity_target = float(i_cnt) * float(similarity_cut_off);
 
 
     bm::operation_deserializer<bm::bvector<> > od;

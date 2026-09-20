@@ -329,8 +329,8 @@ int main(int argc, char *argv[]){
                 unsigned int idx = *parser;
                 
                 std::string timestamp = eur_day[idx].get();
-                float eur_change     = eur_pct_change.get(idx)/1000.0f;
-                float jpy_change     = jpy_pct_change.get(idx)/1000.0f;
+                float eur_change     = float(eur_pct_change.get(idx))/1000.0f;
+                float jpy_change     = float(jpy_pct_change.get(idx))/1000.0f;
                 
                 std::cout << "Row [" << idx << "] | Time: " << timestamp << "\n"
                 << " ├─ EUR Pct: " << std::setw(w) << std::left << (std::to_string(eur_change) + "%")

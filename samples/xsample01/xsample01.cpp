@@ -218,7 +218,7 @@ void sparse_vect_index::get_vector(unsigned id, std::vector<unsigned>& vect) con
 static
 void generate_random_vector(TBVector* bv)
 {
-    unsigned method = rand() % 5; // pick a generation method
+    unsigned method = unsigned(rand()) % 5; // pick a generation method
     if (method == 0) // generate a incremental linear sequence at random location
     {
         unsigned seed_id = unsigned(rand()) % max_size;
@@ -239,7 +239,7 @@ void generate_random_vector(TBVector* bv)
             if (id >= max_size)
                 break;
             bv->set_bit(id);
-            id += (rand() % 10);
+            id += (unsigned(rand()) % 10);
             if (id >= max_size)
                 id = unsigned(rand()) % max_size;
         } // for i

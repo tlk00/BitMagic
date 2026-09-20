@@ -53,16 +53,16 @@ void Demo1(){
         return std::fabs(a - b) < 0.001f;
     };
 
-    int N = 128000;
+    const sparseVecFloat::size_type N = 128000;
     float m = 0.5f;
     sparseVecFloat svf1;
     std::vector<float> temp(N*2);
 
-    for(int i = 0; i < N; i++){
-        temp[i] = (i * 0.001) * m;
+    for(sparseVecFloat::size_type i = 0; i < N; i++){
+        temp[i] = float((i * 0.001) * m);
     }
-    for(int i = N; i < N*2; i++){
-        temp[i] = -1*(i * 0.001) * m;
+    for(sparseVecFloat::size_type i = N; i < N*2; i++){
+        temp[i] = float(-1*(i * 0.001) * m);
     }
     BM_DECLARE_TEMP_BLOCK(tb)
     svf1.import(temp.data(), N*2);
@@ -77,7 +77,7 @@ void Demo1(){
     svf1.decode(svfExtract.data(), 0, N*2, true);
 
     int errorCount = 0;
-    for (int i = 0; i < N*2; i++) {
+    for (sparseVecFloat::size_type i = 0; i < N*2; i++) {
         if (!floatEq(svfExtract[i], temp[i])){
             errorCount++;
         }
@@ -90,7 +90,7 @@ void Demo1(){
     svf1.extract_range(svfExtractRange.data(), 48000, 16000);
 
     errorCount = 0;
-    for (int i = 16000; i < 64000; i++) {
+    for (sparseVecFloat::size_type i = 16000; i < 64000; i++) {
         if (!floatEq(svfExtractRange[i-16000], temp[i])){
             errorCount++;
         }
@@ -99,8 +99,8 @@ void Demo1(){
 
 
     bm::id_t gatherIndeces[1024];
-    for(int i = 0; i < 1024; i++){
-        gatherIndeces[i] = rand() % 128000;
+    for(sparseVecFloat::size_type i = 0; i < 1024; i++){
+        gatherIndeces[i] = bm::id_t(rand()) % 128000;
     }
 
     //The last way to extract data into an array is to use gather, which takes in an array of which indeces to
@@ -110,7 +110,7 @@ void Demo1(){
     svf1.gather(svfGather.data(), gatherIndeces, 1024, bm::BM_UNKNOWN);
 
     errorCount = 0;
-    for (int i = 0; i < 1024; i++) {
+    for (sparseVecFloat::size_type i = 0; i < 1024; i++) {
         if (!floatEq(svfGather[i], temp[gatherIndeces[i]])){
             errorCount++;
         }
@@ -127,9 +127,9 @@ void Demo2(){
 
     //You can add elements to the sparse_vector using add or the = operator
     //This calles push_back on the svf
-    testBI.add(1.0023);
-    testBI.add(400005.6);
-    testBI=78.9;
+    testBI.add(1.0023f);
+    testBI.add(400005.6f);
+    testBI=78.9f;
 
     std::cout << "svf1.size() = " << svf1.size() << std::endl;
     std::cout << "svf1.get(0) = " << svf1.get(0) << std::endl;
@@ -140,7 +140,7 @@ void Demo2(){
     sparseVecFloat::back_insert_iterator testBI2(testBI);
     sparseVecFloat::back_insert_iterator testBI3(std::move(testBI));
     testBI2=100;
-    testBI3=12345.6789;
+    testBI3=12345.6789f;
     std::cout << "svf1.size() = " << svf1.size() << std::endl;
     std::cout << "svf1.get(3) = " << svf1.get(3) << std::endl;
     std::cout << "svf1.get(4) = " << svf1.get(4) << std::endl;

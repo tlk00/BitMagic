@@ -55,7 +55,7 @@ void Demo1(){
     //initially the sparse_vector_float is empty
     std::cout << "svf1.empty() = " << svf1.empty() << std::endl;
 
-    float toAdd[] = {1.0123, 2.468, 340000.56};
+    float toAdd[] = {1.0123f, 2.468f, 340000.56f};
     
     //you can add to the end of the svf with push_back
     svf1.push_back(toAdd[0]);
@@ -86,8 +86,8 @@ void Demo2(){
 
     sparseVecFloat svf1;
     sparseVecFloat svf2;
-    float toAdd1[] = {1.0123, 2.468, 340000.56};
-    float toAdd2[] = {7.000, 89000.01, 324.5006};
+    float toAdd1[] = {1.0123f, 2.468f, 340000.56f};
+    float toAdd2[] = {7.000f, 89000.01f, 324.5006f};
 
     //you can import entire arrays into svfs
     svf1.import(toAdd1, 3);

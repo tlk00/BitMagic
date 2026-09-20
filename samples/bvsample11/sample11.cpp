@@ -71,7 +71,7 @@ void generate_bvector(bm::bvector<>& bv)
         // generate GAP (compressed) blocks
         for (j = 0; j < 65535; i += 120, j++)
         {
-            unsigned len = rand() % 64;
+            unsigned len = unsigned(rand()) % 64;
             bv.set_range(i, i + len);
             i += len;
             if (i > vector_max)
