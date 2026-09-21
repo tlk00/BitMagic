@@ -40,6 +40,7 @@ For more information please visit:  http://bitmagic.io
 #include <iterator>
 #include <stdarg.h>
 #include <vector>
+#include <map>
 #include <chrono>
 #if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ < 8)
 # include <experimental/filesystem>
@@ -61,6 +62,7 @@ namespace bmtest_fs = std::filesystem;
 #include <bmdbg.h>
 #include <bmalgo.h>
 #include <bmintervals.h>
+#include <bmcomplexity.h>
 #include <bmbvimport.h>
 #include <bmsparsevec_util.h>
 #include <bmtimer.h>
@@ -2641,6 +2643,297 @@ void EnumeratorTest()
     }
 }
 
+
+struct ComplexityBlockOracle64
+{
+    unsigned population = 0;
+    unsigned one_runs = 0;
+    bool first = false;
+    bool last = false;
+};
+
+// Independent sparse oracle for the 48-bit universe. Only blocks touched by
+// interval enumeration are retained; allocating one entry per physical block
+// would require 2^32 entries in a BM64 build.
+static bm::bvector_complexity_statistics
+ComplexityOracle64(const bvect& bv, const bvect* a = nullptr,
+                   const bvect* b = nullptr)
+{
+    using block_idx_type = bvect::block_idx_type;
+    const bm::id64_t block_count = (bm::id64_t(bm::id_max) >> 16) + 1;
+    map<block_idx_type, ComplexityBlockOracle64> touched;
+    bm::bvector_complexity_statistics out;
+    bvect rebuilt(bm::BM_BIT);
+    for (bm::interval_enumerator<bvect> en(bv); en.valid(); ++en)
+    {
+        ++out.runs;
+        out.count += en.end() - en.start() + 1;
+        rebuilt.set_range(en.start(), en.end());
+        block_idx_type lo = block_idx_type(en.start() >> 16);
+        block_idx_type hi = block_idx_type(en.end() >> 16);
+        // Test fixtures deliberately keep intervals short. The sparse map
+        // handles arbitrary coordinates without universe-sized allocation.
+        for (block_idx_type nb = lo; ; ++nb)
+        {
+            unsigned left = (nb == lo) ? unsigned(en.start() & 65535) : 0;
+            unsigned right = (nb == hi) ? unsigned(en.end() & 65535) : 65535;
+            ComplexityBlockOracle64& bo = touched[nb];
+            bo.population += right - left + 1;
+            ++bo.one_runs;
+            bo.first |= (left == 0);
+            bo.last |= (right == 65535);
+            if (nb == hi)
+                break; // also prevents wrap at the final BM64 block index
+        }
+    }
+    assert(rebuilt == bv);
+    assert(out.count == bv.count());
+
+    bm::id64_t zero_blocks = 0, cursor = 0;
+    unsigned previous_kind = 2;
+    for (const auto& entry : touched)
+    {
+        const bm::id64_t nb = entry.first;
+        const ComplexityBlockOracle64& bo = entry.second;
+        if (nb > cursor)
+        {
+            zero_blocks += nb - cursor;
+            ++out.zero_spans;
+            previous_kind = 0;
+        }
+        out.block_runs += bo.one_runs;
+        unsigned kind = bo.population == 65536 ? 1 : 2;
+        if (kind == 1)
+        {
+            ++out.full_blocks;
+            out.full_spans += (previous_kind != kind);
+        }
+        else
+        {
+            unsigned zero_runs = bo.one_runs - 1 + !bo.first + !bo.last;
+            bool gap = bo.one_runs + zero_runs < bm::gap_max_buff_len - 4;
+            if (gap) ++out.gap_blocks; else ++out.bit_blocks;
+            if (gap && a && b)
+            {
+                unsigned i, j;
+                bm::get_block_coord(block_idx_type(nb), i, j);
+                const bm::word_t* ap = a->get_blocks_manager().get_block_ptr(i, j);
+                const bm::word_t* bp = b->get_blocks_manager().get_block_ptr(i, j);
+                bool abit = ap && !IS_FULL_BLOCK(ap) && !BM_IS_GAP(ap);
+                bool bbit = bp && !IS_FULL_BLOCK(bp) && !BM_IS_GAP(bp);
+                out.bit_to_gap_blocks += abit || bbit;
+            }
+        }
+        previous_kind = kind;
+        cursor = nb + 1;
+    }
+    if (cursor < block_count)
+    {
+        zero_blocks += block_count - cursor;
+        ++out.zero_spans;
+    }
+    out.zero_blocks = zero_blocks;
+
+    rebuilt.optimize();
+    bvect::statistics actual;
+    rebuilt.calc_stat(&actual);
+    assert(out.gap_blocks == actual.gap_blocks);
+    assert(out.bit_blocks == actual.bit_blocks);
+    return out;
+}
+
+static void CheckComplexity64(const bm::bvector_complexity_statistics& got,
+                              const bm::bvector_complexity_statistics& expected)
+{
+    assert(got.count == expected.count);
+    assert(got.runs == expected.runs);
+    assert(got.block_runs == expected.block_runs);
+    assert(got.zero_blocks == expected.zero_blocks);
+    assert(got.full_blocks == expected.full_blocks);
+    assert(got.gap_blocks == expected.gap_blocks);
+    assert(got.bit_blocks == expected.bit_blocks);
+    assert(got.zero_spans == expected.zero_spans);
+    assert(got.full_spans == expected.full_spans);
+    assert(got.bit_to_gap_blocks == expected.bit_to_gap_blocks);
+}
+
+static void BVectorComplexityTest64()
+{
+    cout << "----------------------------- BVectorComplexityTest64()" << endl;
+    using size_type = bvect::size_type;
+    const size_type B = bm::gap_max_bits, S = B * 256;
+    const size_type end = bm::id_max - 1;
+    vector<unique_ptr<bvect> > cases;
+    vector<string> names;
+    auto add = [&cases, &names](const bvect& value, const string& name)
+    {
+        cases.emplace_back(new bvect(value));
+        names.push_back(name + "/raw");
+        cases.emplace_back(new bvect(value));
+        cases.back()->optimize();
+        names.push_back(name + "/optimized");
+    };
+
+    bvect v(bm::BM_BIT);
+    add(v, "empty");
+    const size_type positions[] = {0, 1, 31, 32, 63, 64, B-1, B, B+1,
+                                  S-1, S, S+1, 2*S+B-1};
+    for (size_type pos : positions)
+    {
+        v.clear(); v.set(pos);
+        add(v, "singleton-" + to_string(pos));
+    }
+    const std::pair<size_type, size_type> ranges[] = {
+        {0, B-1}, {B, 2*B-1}, {B-1, B}, {B-3, 2*B+3},
+        {S-1, S}, {S-3, S+B+3}, {2*S+B-2, 2*S+B+2}
+    };
+    for (const auto& range : ranges)
+    {
+        v.clear(); v.set_range(range.first, range.second);
+        add(v, "range-" + to_string(range.first) + "-" + to_string(range.second));
+    }
+    for (unsigned pattern = 0; pattern < 16; ++pattern)
+    {
+        v.clear();
+        for (unsigned bit = 0; bit < 4; ++bit)
+            if (pattern & (1u << bit)) v.set(B-2+bit);
+        add(v, "boundary-pattern-" + to_string(pattern));
+    }
+    v.clear();
+    for (size_type bit = 0; bit < B; bit += 2) v.set(bit);
+    add(v, "alternating-even");
+    bvect alternating(v);
+    v.clear(); v.set_range(0, B-1); v ^= alternating;
+    add(v, "alternating-complement");
+    v = alternating; v.flip(B+7); add(v, "dense-near-peer");
+    for (unsigned n : {636u, 637u, 638u, 639u})
+    {
+        v.clear();
+        for (unsigned k = 0; k < n; ++k) v.set(2*k+1);
+        add(v, "gap-cutoff-" + to_string(n));
+    }
+    std::mt19937 rng(20260921);
+    for (unsigned pass = 0; pass < 2; ++pass)
+    {
+        v.clear();
+        for (unsigned k = 0; k < 1024; ++k)
+        {
+            size_type left = size_type(rng() % (3*B));
+            v.set_range(left, left + size_type(rng() % 97));
+        }
+        add(v, "random-ranges-" + to_string(pass));
+    }
+    const bm::gap_word_t small_levels[] = {32, 64, 128, 256};
+    bvect custom(bm::BM_GAP, small_levels);
+    for (unsigned k = 0; k < 200; ++k) custom.set(2*k+1);
+    add(custom, "custom-gap-levels");
+
+    vector<bvect::statistics> storage(cases.size());
+    bool saw_input_bit = false, saw_input_gap = false;
+    for (size_t i = 0; i < cases.size(); ++i)
+    {
+        cases[i]->calc_stat(&storage[i]);
+        saw_input_bit |= storage[i].bit_blocks != 0;
+        saw_input_gap |= storage[i].gap_blocks != 0;
+        if (!is_silent)
+            cout << "\rComplexity64 single " << i+1 << "/" << cases.size()
+                 << " [" << names[i] << "]                              " << flush;
+        CheckComplexity64(bm::calc_complexity(*cases[i]),
+                          ComplexityOracle64(*cases[i]));
+    }
+    if (!is_silent) cout << endl;
+    assert(saw_input_bit && saw_input_gap);
+
+    bool saw_bit_to_gap = false, saw_zero = false;
+    const size_t total_pairs = cases.size() * cases.size();
+    for (size_t i = 0; i < cases.size(); ++i)
+    for (size_t j = 0; j < cases.size(); ++j)
+    {
+        if (!is_silent)
+        {
+            size_t completed = i * cases.size() + j;
+            cout << "\rComplexity64 pairs " << completed << "/" << total_pairs
+                 << " (" << completed * 100 / total_pairs << "%) ["
+                 << i << "," << j << "] " << names[i] << " ^ " << names[j]
+                 << "                              " << flush;
+        }
+        const bvect& a = *cases[i];
+        const bvect& b = *cases[j];
+        bvect materialized(a); materialized ^= b;
+        bvect reverse(b); reverse ^= a;
+        assert(materialized == reverse);
+        bvect::statistics residual_storage;
+        materialized.calc_stat(&residual_storage);
+        auto ab = bm::calc_complexity_xor(a, b);
+        auto ba = bm::calc_complexity_xor(b, a);
+        CheckComplexity64(ab, ba);
+        CheckComplexity64(ab, ComplexityOracle64(materialized, &a, &b));
+        assert(ab.count == bm::count_xor(a, b));
+        auto single = bm::calc_complexity(materialized);
+        auto content = ab; content.bit_to_gap_blocks = 0;
+        CheckComplexity64(single, content);
+        if (i == j) assert(ab.count == 0 && ab.runs == 0);
+        saw_bit_to_gap |= ab.bit_to_gap_blocks != 0;
+        saw_zero |= ab.count == 0;
+        bvect::statistics after_a, after_b;
+        a.calc_stat(&after_a); b.calc_stat(&after_b);
+        assert(after_a.bit_blocks == storage[i].bit_blocks);
+        assert(after_a.gap_blocks == storage[i].gap_blocks);
+        assert(after_a.memory_used == storage[i].memory_used);
+        assert(after_b.bit_blocks == storage[j].bit_blocks);
+        assert(after_b.gap_blocks == storage[j].gap_blocks);
+        assert(after_b.memory_used == storage[j].memory_used);
+    }
+    if (!is_silent)
+        cout << "\rComplexity64 pairs " << total_pairs << "/" << total_pairs
+             << " (100%)                                      " << endl;
+    assert(saw_bit_to_gap && saw_zero);
+
+    // Upper-universe boundary coverage is kept outside the N x N corpus to
+    // avoid repeating traversal of BM64's 16M-entry top-level address table.
+    v.clear(); v.set(end-1);
+    {
+        bm::interval_enumerator<bvect> en(v);
+        assert(en.valid() && en.start() == end-1 && en.end() == end-1);
+        assert(!en.advance() && !en.valid());
+    }
+    CheckComplexity64(bm::calc_complexity(v), ComplexityOracle64(v));
+
+    // Super-sparse tail vectors exercise the last block, its predecessor and
+    // the preceding 256-block superblock while leaving almost the entire
+    // 48-bit universe empty. Both raw and optimized forms are checked.
+    bvect tail_a(bm::BM_BIT), tail_b(bm::BM_BIT);
+    tail_a.set(end);       // final valid coordinate
+    tail_a.set(end-2);
+    tail_a.set(end-B+5);   // final physical block
+    tail_a.set(end-B-1);   // preceding physical block
+    tail_a.set(end-S-7);   // preceding superblock
+    tail_b.set(end);
+    tail_b.set(end-3);
+    tail_b.set(end-B+5);   // cancellation inside final block
+    tail_b.set(end-B-2);
+    tail_b.set(end-S-8);
+    tail_b.set(end-2*S-11);
+    bvect tail_a_opt(tail_a), tail_b_opt(tail_b);
+    tail_a_opt.optimize(); tail_b_opt.optimize();
+    const bvect* tail_cases[] = {&tail_a, &tail_a_opt, &tail_b, &tail_b_opt};
+    for (const bvect* tail : tail_cases)
+        CheckComplexity64(bm::calc_complexity(*tail), ComplexityOracle64(*tail));
+    for (const bvect* left : tail_cases)
+    for (const bvect* right : tail_cases)
+    {
+        auto lr = bm::calc_complexity_xor(*left, *right);
+        auto rl = bm::calc_complexity_xor(*right, *left);
+        CheckComplexity64(lr, rl);
+        bvect tail_product(*left); tail_product ^= *right;
+        CheckComplexity64(lr, ComplexityOracle64(tail_product, left, right));
+        assert(lr.count == bm::count_xor(*left, *right));
+    }
+
+    cout << cases.size() << " fixtures; " << total_pairs
+         << " ordered pairs validated" << endl;
+    cout << "----------------------------- BVectorComplexityTest64() OK" << endl;
+}
 
 static
 void IntervalEnumeratorTest()
@@ -26141,6 +26434,7 @@ void show_help()
         << "-llevel (or -ll)  - low level tests" << endl
         << "-support (or -s)  - support containers " << endl
         << "-bvbasic (or -bvb - bit-vector basic " << endl
+        << "-complexity           - vector/XOR complexity, all-pairs interval oracle" << endl
         << "-bvser (-bvset)       - bit-vector serialization " << endl
         << "-fileser              - file serialization beyond 32-bit space" << endl
         << "-svfileser            - sparse-vector file streaming serialization" << endl
@@ -26171,6 +26465,7 @@ bool         is_all = true;
 bool         is_low_level = false;
 bool         is_support = false;
 bool         is_bvbasic = false;
+bool         is_complexity = false;
 bool         is_bvser = false;
 bool         is_file_ser = false;
 bool         is_sv_file_ser = false;
@@ -26230,6 +26525,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_bvbasic = true;
+            continue;
+        }
+        if (arg == "-complexity")
+        {
+            is_all = false;
+            is_complexity = true;
             continue;
         }
         if (arg == "-fileser")
@@ -26678,6 +26979,12 @@ int main(int argc, char *argv[])
         CheckAllocLeaks(false);
 
         ReportTestBlockDone("-bvb");
+    }
+    if (is_complexity || is_all)
+    {
+        BVectorComplexityTest64();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-complexity");
     }
     
     if (is_sv_index || is_all)

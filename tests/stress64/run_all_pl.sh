@@ -46,6 +46,7 @@ Runner options:
 
 Test selectors verified against t64.cpp:
   -bvb,  -bvbasic       Bit-vector basic tests (includes bvector serialization)
+  -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization tests
   -fileser              File serialization tests
   -svfileser            Sparse-vector file and stringstream tests
@@ -86,7 +87,7 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvser|-bvset|\
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-complexity|-bvser|-bvset|\
         -fileser|-svfileser|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvl3|-bvops3|-bvl4|-bvops4|-bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
@@ -214,12 +215,12 @@ if [ "${#TESTS[@]}" -eq 0 ]; then
     if [ "$HEAVY_FIRST" -ne 0 ]; then
         TESTS=(
             -csv -sv -bvl1 -bvl2 -bvl3 -bvl4 -strsv -svf
-            -bvb -svfileser -strsvstream -svfstream -svindex
+            -bvb -complexity -svfileser -strsvstream -svfstream -svindex
             -bvl0 -agg -bvs -rc -cc
         )
     else
         TESTS=(
-            -bvb -svfileser -strsvstream -svfstream -svindex
+            -bvb -complexity -svfileser -strsvstream -svfstream -svindex
             -bvl0 -bvl1 -bvl2 -bvl3 -bvl4 -bvs -rc -agg
             -sv -csv -strsv -cc -svf
         )
