@@ -42,6 +42,7 @@ Test selectors from t.cpp:
   -s,   -support        Support-container tests
   -bvb0                 Bit-vector basic tests, part 0
   -bvb1                 Bit-vector basic tests, part 1
+  -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization tests
   -fileser              File serialization/deserialization and corruption tests
   -svfileser            Sparse-vector file and stringstream tests
@@ -102,7 +103,7 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvser|-bvset|-fileser|-svfileser|-strsvstream|-svfstream|-svindex|\
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-complexity|-bvser|-bvset|-fileser|-svfileser|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
         -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1c|-sort|--sort|\
@@ -218,13 +219,13 @@ if [ "${#TESTS[@]}" -eq 0 ]; then
             -bvs -sv1b -ser -bvl0
             -strsv -bvl2 -svf0c1 -svf0c2 -svf0c3
             -svf0b -svf1 -bvl1 -sv1a -sv1c -csv0b
-            -ll -sv0 -bvb0 -bvser -fileser -svfileser -strsvstream -svfstream -svindex
+            -ll -sv0 -bvb0 -complexity -bvser -fileser -svfileser -strsvstream -svfstream -svindex
             -agg -s -csv1a0 -csv1b -sort -csv0c -cc -rc
         )
     else
         TESTS=(
             -ll -s
-            -bvb0 -bvb1 -bvser -fileser -svfileser -strsvstream -svfstream -svindex
+            -bvb0 -bvb1 -complexity -bvser -fileser -svfileser -strsvstream -svfstream -svindex
             -bvl0 -bvl1 -bvl2
             -bvs -rc -agg
             -sv0 -sv1a -sv1b -sv1c -sort

@@ -56,6 +56,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmvmin.h>
 #include <bmbmatrix.h>
 #include <bmintervals.h>
+#include <bmcomplexity.h>
 #include <bmsparsevec.h>
 #include <bmsparsevec_algo.h>
 #include <bmsparsevec_serial.h>
@@ -23161,6 +23162,286 @@ void BVImportTest()
 }
 
 
+
+// Independent oracle: materialized content is enumerated as closed one-ranges.
+// Deliberately uses heap arrays and a rebuilt temporary vector. No production
+// complexity helpers or word-transition formulas are used for run counting.
+static bm::bvector_complexity_statistics
+ComplexityOracle(const bvect& bv, const bvect* a = nullptr,
+                 const bvect* b = nullptr)
+{
+    const size_t block_count = size_t((bm::id64_t(bm::id_max) >> 16) + 1);
+    vector<unsigned> populations(block_count, 0), one_runs(block_count, 0);
+    vector<unsigned char> first(block_count, 0), last(block_count, 0);
+    bm::bvector_complexity_statistics out;
+    bvect rebuilt(bm::BM_BIT);
+    for (bm::interval_enumerator<bvect> en(bv); en.valid(); ++en)
+    {
+        ++out.runs;
+        out.count += bm::id64_t(en.end()) - en.start() + 1;
+        rebuilt.set_range(en.start(), en.end());
+        size_t lo = size_t(en.start() >> 16), hi = size_t(en.end() >> 16);
+        for (size_t nb = lo; nb <= hi; ++nb)
+        {
+            unsigned left = (nb == lo) ? unsigned(en.start() & 65535) : 0;
+            unsigned right = (nb == hi) ? unsigned(en.end() & 65535) : 65535;
+            populations[nb] += right - left + 1;
+            ++one_runs[nb];
+            first[nb] |= (left == 0);
+            last[nb] |= (right == 65535);
+        }
+    }
+    assert(rebuilt == bv);
+    assert(out.count == bv.count());
+    unsigned previous_kind = 2;
+    for (size_t nb = 0; nb < block_count; ++nb)
+    {
+        out.block_runs += one_runs[nb];
+        unsigned kind = populations[nb] == 0 ? 0 :
+                        populations[nb] == 65536 ? 1 : 2;
+        if (kind == 0)
+        {
+            ++out.zero_blocks;
+            out.zero_spans += (previous_kind != kind);
+        }
+        else if (kind == 1)
+        {
+            ++out.full_blocks;
+            out.full_spans += (previous_kind != kind);
+        }
+        else
+        {
+            // Count zero-runs separately: gaps between successive one-runs,
+            // plus a leading and/or trailing zero-run when applicable.
+            unsigned zero_runs = one_runs[nb] - 1 + !first[nb] + !last[nb];
+            bool gap = one_runs[nb] + zero_runs < bm::gap_max_buff_len - 4;
+            if (gap) ++out.gap_blocks; else ++out.bit_blocks;
+            if (gap && a && b)
+            {
+                unsigned i = unsigned(nb / 256), j = unsigned(nb % 256);
+                const bm::word_t* ap = a->get_blocks_manager().get_block_ptr(i, j);
+                const bm::word_t* bp = b->get_blocks_manager().get_block_ptr(i, j);
+                bool abit = ap && !IS_FULL_BLOCK(ap) && !BM_IS_GAP(ap);
+                bool bbit = bp && !IS_FULL_BLOCK(bp) && !BM_IS_GAP(bp);
+                out.bit_to_gap_blocks += abit || bbit;
+            }
+        }
+        previous_kind = kind;
+    }
+    // calc_stat() describes actual storage. Rebuild from ranges into BM_BIT
+    // before optimization so pre-existing GAP capacities cannot bias this
+    // independent check of the default predicted representation.
+    rebuilt.optimize();
+    bvect::statistics actual;
+    rebuilt.calc_stat(&actual);
+    assert(out.gap_blocks == actual.gap_blocks);
+    assert(out.bit_blocks == actual.bit_blocks);
+    return out;
+}
+
+static void CheckComplexity(const bm::bvector_complexity_statistics& got,
+                            const bm::bvector_complexity_statistics& expected)
+{
+    assert(got.count == expected.count);
+    assert(got.runs == expected.runs);
+    assert(got.block_runs == expected.block_runs);
+    assert(got.zero_blocks == expected.zero_blocks);
+    assert(got.full_blocks == expected.full_blocks);
+    assert(got.gap_blocks == expected.gap_blocks);
+    assert(got.bit_blocks == expected.bit_blocks);
+    assert(got.zero_spans == expected.zero_spans);
+    assert(got.full_spans == expected.full_spans);
+    assert(got.bit_to_gap_blocks == expected.bit_to_gap_blocks);
+}
+
+/*! All ordered pairs, including self-pairs, are checked against materialized
+    XOR plus the interval oracle. Fixtures and their optimized copies live on
+    the heap for the entire test. Representation duplicates deliberately test
+    BIT/BIT, BIT/GAP, GAP/BIT and GAP/GAP dispatch with identical contents.
+*/
+static void BVectorComplexityTest()
+{
+    cout << "----------------------------- BVectorComplexityTest()" << endl;
+    using size_type = bvect::size_type;
+    const size_type B = bm::gap_max_bits, S = B * 256;
+    const size_type end = bm::id_max - 1;
+    vector<unique_ptr<bvect> > cases;
+    vector<string> names;
+    auto add = [&cases, &names](const bvect& v, const string& name)
+    {
+        cases.emplace_back(new bvect(v));
+        names.push_back(name + "/raw");
+        cases.emplace_back(new bvect(v));
+        cases.back()->optimize();
+        names.push_back(name + "/optimized");
+    };
+    bvect v(bm::BM_BIT);
+    const bm::id64_t universe_blocks = (bm::id64_t(bm::id_max) >> 16) + 1;
+    auto empty_stat = bm::calc_complexity(v);
+    assert(empty_stat.count == 0 && empty_stat.runs == 0);
+    assert(empty_stat.zero_blocks == universe_blocks && empty_stat.zero_spans == 1);
+    add(v, "empty");
+    v.set(); add(v, "full-universe");
+    auto full_stat = bm::calc_complexity(v);
+    assert(full_stat.count == bm::id_max && full_stat.runs == 1);
+    assert(full_stat.block_runs == universe_blocks);
+    assert(full_stat.full_blocks == universe_blocks-1 && full_stat.full_spans == 1);
+    assert(full_stat.gap_blocks == 1 && full_stat.zero_blocks == 0);
+    v.clear(); v.set_range(B-1, B);
+    auto crossing = bm::calc_complexity(v);
+    assert(crossing.count == 2 && crossing.runs == 1 && crossing.block_runs == 2);
+    // Regression: advancing past a singleton at id_max-2 used to wrap the
+    // next block coordinate to zero and rediscover the same interval forever.
+    v.clear(); v.set(end-1);
+    {
+        bm::interval_enumerator<bvect> en(v);
+        assert(en.valid() && en.start() == end-1 && en.end() == end-1);
+        assert(!en.advance() && !en.valid());
+    }
+    v.clear(); v.resize(1); add(v, "empty-resized");
+    v.resize(bm::id_max);
+    const size_type positions[] = {0, 1, 31, 32, 63, 64, B-1, B, B+1,
+                                  S-1, S, S+1, end-1, end};
+    for (size_type pos : positions)
+    {
+        v.clear(); v.set(pos);
+        add(v, "singleton-" + to_string(pos));
+    }
+    const std::pair<size_type, size_type> ranges[] = {
+        {0, B-1}, {B, 2*B-1}, {B-1, B}, {B-3, 2*B+3},
+        {S-1, S}, {S-3, S+B+3}, {0, S-1}, {S, 2*S-1},
+        {end-B, end}, {end-1, end}, {1, end-1}
+    };
+    for (const auto& r : ranges)
+    {
+        v.clear(); v.set_range(r.first, r.second);
+        add(v, "range-" + to_string(r.first) + "-" + to_string(r.second));
+    }
+    // Every four-bit pattern straddles a block boundary; the alternating
+    // variants also exercise word boundaries and singleton run separation.
+    for (unsigned pattern = 0; pattern < 16; ++pattern)
+    {
+        v.clear();
+        for (unsigned bit = 0; bit < 4; ++bit)
+            if (pattern & (1u << bit)) v.set(B-2+bit);
+        add(v, "boundary-pattern-" + to_string(pattern));
+    }
+    v.clear();
+    for (size_type bit = 0; bit < B; bit += 2) v.set(bit);
+    add(v, "alternating-even");
+    bvect alternating(v);
+    v.flip(); add(v, "alternating-complement");
+    v = alternating; v.flip(B+7);
+    add(v, "dense-near-peer"); // XOR collapses dense blocks and leaves a GAP.
+    v.clear();
+    v.set_range(0, B-1); v.set_range(2*B, 4*B-1);
+    v.set_range(S, S+B-1); v.set(end);
+    add(v, "separated-full-spans");
+    v.flip(); add(v, "separated-full-spans-complement");
+    v.clear(); v.set_range(0, end);
+    for (size_type pos : positions) v.set(pos, false);
+    add(v, "full-with-boundary-holes");
+    // Around the strict default GAP eligibility cutoff (1276 zero/one runs).
+    for (unsigned n : {636u, 637u, 638u, 639u})
+    {
+        v.clear();
+        for (unsigned k = 0; k < n; ++k) v.set(2*k+1);
+        add(v, "gap-cutoff-" + to_string(n));
+    }
+    std::mt19937 rng(20260921);
+    for (unsigned pass = 0; pass < 3; ++pass)
+    {
+        v.clear();
+        for (unsigned k = 0; k < 2048; ++k)
+        {
+            size_type left = size_type(rng() % (3*B));
+            v.set_range(left, left + size_type(rng() % 97));
+        }
+        add(v, "random-ranges-" + to_string(pass));
+    }
+    // A physically allocated all-zero block and a physically full BIT block
+    // are intentionally retained in their unoptimized versions where possible.
+    v.clear(); v.set(7); v.set(7, false); add(v, "allocated-zero");
+    // Operand-specific GAP policies must not change the symmetric prediction.
+    const bm::gap_word_t small_levels[] = {32, 64, 128, 256};
+    bvect custom(bm::BM_GAP, small_levels);
+    for (unsigned k = 0; k < 200; ++k) custom.set(2*k+1);
+    add(custom, "custom-gap-levels");
+
+    vector<bvect::statistics> storage(cases.size());
+    bool saw_input_bit = false, saw_input_gap = false;
+    for (size_t i = 0; i < cases.size(); ++i)
+    {
+        cases[i]->calc_stat(&storage[i]);
+        saw_input_bit |= storage[i].bit_blocks != 0;
+        saw_input_gap |= storage[i].gap_blocks != 0;
+        if (!is_silent)
+            cout << "\rComplexity single " << i+1 << "/" << cases.size()
+                 << " [" << names[i] << "]                                        "
+                 << flush;
+        CheckComplexity(bm::calc_complexity(*cases[i]), ComplexityOracle(*cases[i]));
+    }
+    if (!is_silent) cout << endl;
+    assert(saw_input_bit && saw_input_gap);
+    bool saw_bit_to_gap = false, saw_zero = false, saw_full = false;
+    const size_t total_pairs = cases.size() * cases.size();
+    for (size_t i = 0; i < cases.size(); ++i)
+    for (size_t j = 0; j < cases.size(); ++j)
+    {
+        // Report completed work and the next pair before entering its oracle.
+        // Flush so long cases and assertion failures retain their context.
+        if (!is_silent)
+        {
+            const size_t completed = i * cases.size() + j;
+            cout << "\rComplexity pairs " << completed << "/" << total_pairs
+                 << " (" << completed * 100 / total_pairs << "%) ["
+                 << i << "," << j << "] " << names[i] << " ^ " << names[j]
+                 << "                                        " << flush;
+        }
+        const bvect& a = *cases[i];
+        const bvect& b = *cases[j];
+        bvect materialized(a); materialized ^= b;
+        bvect reverse(b); reverse ^= a;
+        assert(materialized == reverse);
+        bvect::statistics residual_storage;
+        materialized.calc_stat(&residual_storage);
+        auto ab = bm::calc_complexity_xor(a, b);
+        auto ba = bm::calc_complexity_xor(b, a);
+        CheckComplexity(ab, ba);
+        CheckComplexity(ab, ComplexityOracle(materialized, &a, &b));
+        assert(ab.count == bm::count_xor(a, b));
+        auto single = bm::calc_complexity(materialized);
+        auto content = ab; content.bit_to_gap_blocks = 0;
+        CheckComplexity(single, content);
+        bvect::statistics residual_after;
+        materialized.calc_stat(&residual_after);
+        assert(residual_after.bit_blocks == residual_storage.bit_blocks);
+        assert(residual_after.gap_blocks == residual_storage.gap_blocks);
+        assert(residual_after.memory_used == residual_storage.memory_used);
+        if (i == j) assert(ab.count == 0 && ab.runs == 0);
+        saw_bit_to_gap |= ab.bit_to_gap_blocks != 0;
+        saw_zero |= ab.count == 0;
+        saw_full |= ab.count == bm::id_max;
+        // Confirm input storage is unchanged, including physically redundant
+        // blocks; the immutable heap fixtures are reused by all later pairs.
+        bvect::statistics after_a, after_b;
+        a.calc_stat(&after_a); b.calc_stat(&after_b);
+        assert(after_a.bit_blocks == storage[i].bit_blocks);
+        assert(after_a.gap_blocks == storage[i].gap_blocks);
+        assert(after_a.memory_used == storage[i].memory_used);
+        assert(after_b.bit_blocks == storage[j].bit_blocks);
+        assert(after_b.gap_blocks == storage[j].gap_blocks);
+        assert(after_b.memory_used == storage[j].memory_used);
+    }
+    if (!is_silent)
+        cout << "\rComplexity pairs " << total_pairs << "/" << total_pairs
+             << " (100%)                                                                                                    "
+             << endl;
+    assert(saw_bit_to_gap && saw_zero && saw_full);
+    cout << cases.size() << " fixtures; " << cases.size()*cases.size()
+         << " ordered pairs validated" << endl;
+    cout << "----------------------------- BVectorComplexityTest() OK" << endl;
+}
 
 static
 void IntervalEnumeratorTest()
@@ -48726,6 +49007,7 @@ void show_help()
         << "-strsv                - test sparse vectors" << endl
         << "-cc                   - test compresses collections" << endl
         << "-xorser               - one-block XOR serialization size comparisons" << endl
+        << "-complexity           - vector/XOR complexity, all-pairs interval oracle" << endl
         << "-fileser              - test file serialization byte compatibility" << endl
         << "-svfileser            - sparse-vector file streaming serialization" << endl
         << "-svindex             - sparse-vector index persistence" << endl
@@ -48779,6 +49061,7 @@ bool         is_str_sv = false;
 bool         is_c_coll = false;
 bool         is_ser = false;
 bool         is_xor_ser = false;
+bool         is_complexity = false;
 bool         is_file_ser = false;
 bool         is_sv_file_ser = false;
 bool         is_str_sv_stream = false;
@@ -48846,6 +49129,10 @@ int parse_args(int argc, char *argv[])
         if (arg == "-xorser")
         {
             is_all = false; is_xor_ser = true; continue;
+        }
+        if (arg == "-complexity")
+        {
+            is_all = false; is_complexity = true; continue;
         }
         if (arg == "-fileser")
         {
@@ -54689,6 +54976,12 @@ return 0;
         SparseVectorFileSerializationTest();
         CheckAllocLeaks(false);
         ReportTestBlockDone("-svfileser");
+    }
+    if (is_complexity || is_all || is_bvbasic)
+    {
+        BVectorComplexityTest();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-complexity");
     }
     if (is_xor_ser || is_file_ser || is_ser || is_all || is_bvser)
     {
