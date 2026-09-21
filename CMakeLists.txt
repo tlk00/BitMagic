@@ -6,6 +6,11 @@ project("bm" VERSION 9.3.2
 
 set( CMAKE_VERBOSE_MAKEFILE on )
 
+# Keep CMake's ZERO_CHECK auto-regeneration target usable in Xcode.
+# Recent Xcode versions can sandbox script phases by default, which blocks
+# ZERO_CHECK from reading CMakeScripts/ReRunCMake.make in generated projects.
+set(CMAKE_XCODE_ATTRIBUTE_ENABLE_USER_SCRIPT_SANDBOXING NO)
+
 # SET(BMOPTFLAGS "BMSSE42OPT" CACHE STRING "User-specified optimization flag")
 
 find_package(Threads REQUIRED)
@@ -176,6 +181,7 @@ add_executable(bvsample24 ${PROJECT_SOURCE_DIR}/samples/bvsample24/sample24.cpp 
 add_executable(bvsample25 ${PROJECT_SOURCE_DIR}/samples/bvsample25/sample25.cpp ${BM_HEADERS})
 add_executable(bvsample26 ${PROJECT_SOURCE_DIR}/samples/bvsample26/sample26.cpp ${BM_HEADERS})
 add_executable(bvsample27 ${PROJECT_SOURCE_DIR}/samples/bvsample27/sample27.cpp ${BM_HEADERS})
+add_executable(bvsample28 ${PROJECT_SOURCE_DIR}/samples/bvsample28/sample28.cpp ${BM_HEADERS})
 
 add_executable(bvsetalgebra ${PROJECT_SOURCE_DIR}/samples/bvsetalgebra/bvsetalgebra.cpp ${BM_HEADERS})
 add_executable(bv3vlogic ${PROJECT_SOURCE_DIR}/samples/bv3vlogic/bv3vlogic.cpp ${BM_HEADERS})

@@ -57,6 +57,7 @@ SAMPLES = \
     bvsample25 \
     bvsample26 \
     bvsample27 \
+    bvsample28 \
     bvsample01_64 \
     bvsetalgebra \
     bv3vlogic \
