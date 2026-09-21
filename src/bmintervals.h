@@ -718,7 +718,11 @@ bool interval_enumerator<BV>::advance()
 {
     BM_ASSERT(valid());
 
-    if (interval_.second == bm::id_max-1)
+    // id_max is outside the addressable universe. If a run ends at
+    // id_max-2, the last valid bit (id_max-1) is necessarily zero, so there
+    // cannot be another interval. This also prevents (nb+1)*gap_max_bits
+    // below from wrapping to zero in a 32-bit address build.
+    if (interval_.second >= bm::id_max-2)
     {
         invalidate();
         return false;
