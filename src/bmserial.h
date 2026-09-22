@@ -8311,7 +8311,9 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
                                             tmp_buf,
                                             res_len);
                 BM_ASSERT(res == tmp_buf);
-                bman.assign_gap_check(i0, j0, res, ++res_len, blk, tmp_buf);
+                // res_len already indexes the terminal GAP boundary.
+                BM_ASSERT(res[res_len] == 65535);
+                bman.assign_gap_check(i0, j0, res, res_len, blk, tmp_buf);
 
                 xor_reset();
                 return;
