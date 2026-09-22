@@ -1,5 +1,5 @@
 /*
-Copyright(c) 2002-2020 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,6 +31,11 @@ For more information please visit:  http://bitmagic.io
 #include <time.h>
 #include <stdio.h>
 #include <cstdlib>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <iomanip>
+#include <exception>
 
 
 #ifdef _MSC_VER
@@ -41,15 +46,19 @@ For more information please visit:  http://bitmagic.io
 #include <vector>
 #include <chrono>
 #include <map>
+#include <memory>
 
 #include "bm.h"
 #include "bmalgo.h"
+#include "bmcomplexity.h"
 #include "bmserial.h"
+#include "bmfio.h"
 #include "bmsparsevec.h"
 #include "bmsparsevec_compr.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
 #include "bmalgo_similarity.h"
+#include "bmthreadpool.h"
 
 
 #include "bmdbg.h"
@@ -71,6 +80,13 @@ void show_help()
         << "-level N                    -- compression level to use (up to 5)"     << std::endl
         << "-silent (-s)                -- no progress print or messages"          << std::endl
         << "-verify                     -- verify compressed version "             << std::endl
+        << "-pair-search -bvin FILE -csv FILE -- analyze XOR pairs" << std::endl
+        << "-pair-limit N              -- first N vectors (0 = all; default all)" << std::endl
+        << "-pair-min-gain N           -- minimum structural gain (default 256)" << std::endl
+        << "-pair-min-pct P            -- minimum target gain percent (default 10)" << std::endl
+        << "-pair-max-ratio R          -- maximum serialized size ratio (0 = off; otherwise >= 1)" << std::endl
+        << "-pair-threads N            -- pair evaluation threads (default 1; maximum 256)" << std::endl
+        << "-pair-inspect              -- serialize best candidates for inspection" << std::endl
         << "-decode                     -- run decode test (in-memory)"            << std::endl
         << "-diag (-d)                  -- print statistics/diagnostics info"      << std::endl
         << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
@@ -96,6 +112,12 @@ bool         is_verify = false;
 bool         is_silent = false;
 bool         is_decode = false;
 
+bool pair_search = false, pair_inspect = false;
+std::string pair_csv;
+bm::id64_t pair_limit = 0, pair_min_gain = 256;
+double pair_min_pct = 10.0, pair_max_ratio = 0.0;
+unsigned pair_threads = 1;
+
 unsigned     c_level = bm::set_compression_default;
 
 
@@ -111,6 +133,47 @@ int parse_args(int argc, char *argv[])
             return 0;
         }
         
+        if (arg == "-pair-search") { pair_search = true; continue; }
+        if (arg == "-pair-inspect") { pair_inspect = true; continue; }
+        if (arg == "-csv" || arg == "-pair-limit" ||
+            arg == "-pair-min-gain" || arg == "-pair-min-pct" ||
+            arg == "-pair-max-ratio" || arg == "-pair-threads")
+        {
+            if (++i == argc)
+                throw std::runtime_error(arg + " requires a value");
+            const std::string value(argv[i]);
+            if (arg == "-csv") { pair_csv = value; continue; }
+            std::size_t pos = 0;
+            if (arg == "-pair-max-ratio")
+            {
+                pair_max_ratio = std::stod(value, &pos);
+                if (pos != value.size() || !std::isfinite(pair_max_ratio) ||
+                    (pair_max_ratio != 0 && pair_max_ratio < 1))
+                    throw std::runtime_error("Pair maximum ratio must be 0 (off) or at least 1");
+            }
+            else if (arg == "-pair-min-pct")
+            {
+                pair_min_pct = std::stod(value, &pos);
+                if (pos != value.size() || !std::isfinite(pair_min_pct) ||
+                    pair_min_pct < 0 || pair_min_pct > 100)
+                    throw std::runtime_error("Invalid pair minimum percentage");
+            }
+            else
+            {
+                if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+                    throw std::runtime_error("Invalid nonnegative integer for " + arg);
+                auto n = std::stoull(value, &pos);
+                if (arg == "-pair-limit") pair_limit = n;
+                else if (arg == "-pair-threads")
+                {
+                    if (!n || n > 256)
+                        throw std::runtime_error("Pair thread count must be from 1 to 256");
+                    pair_threads = unsigned(n);
+                }
+                else pair_min_gain = n;
+            }
+            continue;
+        }
         if (arg == "-v" || arg == "-verify")
         {
             if (i + 1 < argc)
@@ -340,22 +403,16 @@ bool is_super_sparse(const BV& bv)
 /// @return true if vector was detected as very low cardinality
 ///
 template<typename VT>
-bool write_as_bvector(std::ofstream& bv_file,
+bool write_as_bvector(bm::streams_encoder& bv_output,
                      const VT& vec,
-                     bm::serializer<bm::bvector<> >& bvs,
-                     bm::serializer<bm::bvector<> >::buffer& sbuf)
+                     bm::serializer<bm::bvector<> >& bvs)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
     bm::bvector<> bv;
     bv.set(&vec[0], bm::bvector<>::size_type(vec.size()), bm::BM_SORTED);
 
     bv.optimize(tb);
-    bvs.serialize(bv, sbuf);
-
-    unsigned bv_size = (unsigned)sbuf.size();
-    bv_file.write((char*)&bv_size, sizeof(bv_size));
-    bv_file.write((char*)sbuf.data(), (std::streamsize)sbuf.size());
-    if (!bv_file.good())
+    if (!bvs.serialize(bv, bv_output))
         throw std::runtime_error("Error write to bvect out file");
     return false;
 }
@@ -492,11 +549,15 @@ void compress_inv_dump_file(const std::string& fname,
     }
     
     std::ofstream bv_file;
+    std::unique_ptr<bm::streams_encoder> bv_output;
     if (!bv_out_fname.empty())
     {
         bv_file.open(bv_out_fname, std::ios::out | std::ios::binary);
         if (!bv_file.good())
             throw std::runtime_error("Cannot open bvect out file");
+        bv_output.reset(new bm::streams_encoder(bv_file));
+        if (!bv_output->is_good())
+            throw std::runtime_error("Cannot initialize bvect out stream");
     }
     std::ofstream sv_file;
     if (!sv_out_fname.empty())
@@ -523,8 +584,6 @@ void compress_inv_dump_file(const std::string& fname,
     bm::sparse_vector_serial_layout<sparse_vector_u32> sv_lay;
     bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> csv_lay;
     
-    bm::serializer<bm::bvector<> >::buffer sbuf; // resizable memory buffer
-
     // main loop to read sample vectors
     //
     bm::id64_t i;
@@ -546,15 +605,18 @@ void compress_inv_dump_file(const std::string& fname,
         }
         total_ints += vec.size(); // remember the total size of the collection
         
-        // serialize and save as a bit-vector size0:<BLOB0>, size1:<BLOB1>...N
+        // Serialize consecutive self-delimiting bit-vector BLOBs.
         //
         bool is_low_card = false;
+        size_t bv_blob_size = 0;
         if (!bv_out_fname.empty())
         {
-            is_low_card = write_as_bvector(bv_file, vec, bvs, sbuf);
+            const size_t bv_start = bv_output->size();
+            is_low_card = write_as_bvector(*bv_output, vec, bvs);
+            bv_blob_size = bv_output->size() - bv_start;
             if (is_low_card)
             {
-                total_low_card_size += sbuf.size();
+                total_low_card_size += bv_blob_size;
                 ++total_low_card;
             }
         }
@@ -575,9 +637,9 @@ void compress_inv_dump_file(const std::string& fname,
                 csv.optimize(tb);
                 bm::sparse_vector_serial_layout<rsc_sparse_vector_u32> sv_lay;
                 bm::sparse_vector_serialize(csv, sv_lay, tb);
-                if (sv_lay.size() < sbuf.size())
+                if (sv_lay.size() < bv_blob_size)
                 {
-                    rsc_diff = sbuf.size() - sv_lay.size();
+                    rsc_diff = bv_blob_size - sv_lay.size();
                     rsc_diff_size += rsc_diff;
                     sv_size += sv_lay.size();
                     sv_cnt++;
@@ -600,6 +662,9 @@ void compress_inv_dump_file(const std::string& fname,
         }
 
     } // for i
+
+    if (bv_output && !bv_output->finish())
+        throw std::runtime_error("Error finishing bvect out file");
     
     // print statistics about test set
     
@@ -618,14 +683,14 @@ void compress_inv_dump_file(const std::string& fname,
     }
     if (!bv_out_fname.empty())
     {
-        bm::id64_t bv_size = (bm::id64_t)bv_file.tellp();
+        bm::id64_t bv_size = (bm::id64_t)bv_output->size();
         cout << "BV size = " << bv_size << endl;
-        // calculate bits per int compression ratio corrected not to account
-        // for size/length words prefixing the vectors
-        double bv_bits_per_int = double(bv_size * 8ull - (i*sizeof(unsigned))) / double(total_ints);
+        double bv_bits_per_int = double(bv_size * 8ull) / double(total_ints);
         cout << "BV Bits per/int = " << std::setprecision(3) << bv_bits_per_int << endl;
         
         bv_file.close();
+        if (!bv_file.good())
+            throw std::runtime_error("Error closing bvect out file");
     }
     
     if (!sv_out_fname.empty())
@@ -643,33 +708,6 @@ void compress_inv_dump_file(const std::string& fname,
 }
 
 // ------------------------------------------------------------------------
-
-/// read and desrialize bit-bector from the dump file
-///
-static
-int read_bvector(std::ifstream& bv_file,
-                  bm::bvector<>& bv,
-                  bm::serializer<bm::bvector<> >::buffer& sbuf)
-{
-    if (!bv_file.good())
-        return -1;
-    unsigned len;
-    bv_file.read((char*) &len, std::streamsize(sizeof(len)));
-    if (!bv_file.good())
-        return -1;
-    if (!len)
-        return -2; // 0-len detected (broken file)
-    
-    sbuf.resize(len, false); // resize without content preservation
-    bv_file.read((char*) sbuf.data(), std::streamsize(len));
-    if (!bv_file.good())
-        return -1;
-    
-    bm::deserialize(bv, sbuf.data());
-
-    return 0;
-}
-
 
 /// read the input collection sequence and dump file, verify correctness
 ///
@@ -697,23 +735,22 @@ void verify_inv_dump_file(const std::string& fname,
         throw std::runtime_error("Cannot open input file");
     }
     
-    std::ifstream bv_file;
-    std::streamsize fsize = 0;
-    if (!bv_in_fname.empty())
-    {
-        bv_file.open(bv_in_fname, std::ios::in | std::ios::binary);
-        if (!bv_file.good())
-            throw std::runtime_error("Cannot open bvect dump file");
-        fin.seekg(0, std::ios::end);
-        fsize = fin.tellg();
-        fin.seekg(0, std::ios::beg);
-    }
-    
-    
-    // initialize serializer
-    //
-    
-    bm::serializer<bm::bvector<> >::buffer sbuf; // resizable memory buffer
+    if (bv_in_fname.empty())
+        throw std::runtime_error("No bvect dump file specified");
+    std::ifstream bv_file(bv_in_fname.c_str(), std::ios::in | std::ios::binary);
+    if (!bv_file.good())
+        throw std::runtime_error("Cannot open bvect dump file");
+    fin.seekg(0, std::ios::end);
+    std::streamsize fsize = fin.tellg();
+    fin.seekg(0, std::ios::beg);
+    bv_file.seekg(0, std::ios::end);
+    std::streamsize bv_fsize = bv_file.tellg();
+    bv_file.seekg(0, std::ios::beg);
+    if (!fin.good() || !bv_file.good() || fsize < 0 || bv_fsize < 0)
+        throw std::runtime_error("Error positioning input files");
+
+    bm::streams_decoder bv_input(bv_file);
+    bm::streams_deserializer<bm::bvector<> > bv_reader;
 
     // main loop to read sample vectors
     //
@@ -726,18 +763,11 @@ void verify_inv_dump_file(const std::string& fname,
 
         total_ints += vec.size(); // remember the total size of the collection
         
-        // serialize and save as a bit-vector size0:<BLOB0>, size1:<BLOB1>...N
-        //
-        if (!bv_in_fname.empty())
-        {
-            bm::bvector<> bv;
-            read_bvector(bv_file, bv, sbuf);
-            int cmp = compare_vect(vec, bv);
-            if (cmp != 0)
-            {
-                throw std::runtime_error("Vector comparison failed");
-            }
-        }
+        bm::bvector<> bv;
+        if (!bv_reader.deserialize(bv, bv_input))
+            throw std::runtime_error("Error reading bvect dump file");
+        if (compare_vect(vec, bv) != 0)
+            throw std::runtime_error("Vector comparison failed");
         
         std::streamsize fpos_curr = fin.tellg();
         if (fpos_curr == fsize)
@@ -750,6 +780,9 @@ void verify_inv_dump_file(const std::string& fname,
                  << flush;
         }
     } // for i
+
+    if (bv_file.tellg() != bv_fsize)
+        throw std::runtime_error("Extra data in bvect dump file");
     
     cout << endl;
     cout << "Verification complete." << endl;
@@ -764,41 +797,40 @@ void decode_test_dump_file(const std::string& bv_in_fname)
 {
     bm::chrono_taker tt1(std::cout, "3. Decode collection", 1, &timing_map);
 
-    std::ifstream bv_file;
-    std::streamsize fsize;
-    if (!bv_in_fname.empty())
-    {
-        bv_file.open(bv_in_fname, std::ios::in | std::ios::binary);
-        if (!bv_file.good())
-            throw std::runtime_error("Cannot open bvect dump file");
-        bv_file.seekg(0, std::ios::end);
-        fsize = bv_file.tellg();
-        bv_file.seekg(0, std::ios::beg);
-    }
-    else
-    {
+    if (bv_in_fname.empty())
         throw std::runtime_error("Cannot open bvect dump file");
-    }
-        
+    std::ifstream bv_file(bv_in_fname.c_str(), std::ios::in | std::ios::binary);
+    if (!bv_file.good())
+        throw std::runtime_error("Cannot open bvect dump file");
+    bv_file.seekg(0, std::ios::end);
+    std::streamsize fsize = bv_file.tellg();
+    bv_file.seekg(0, std::ios::beg);
+    if (!bv_file.good() || fsize < 0)
+        throw std::runtime_error("Error positioning bvect dump file");
+    if (!fsize)
+        throw std::runtime_error("Empty bvect dump file");
 
-    bm::serializer<bm::bvector<> >::buffer sbuf; // resizable memory buffer
+    bm::streams_decoder bv_input(bv_file);
+    bm::streams_deserializer<bm::bvector<> > bv_reader;
 
     // main loop to read sample vectors
     //
-    bm::id64_t i;
-    for (i = 0; true; ++i)
+    bm::id64_t i = 0;
+    for (;; ++i)
     {
-        // serialize and save as a bit-vector size0:<BLOB0>, size1:<BLOB1>...N
-        //
-        if (!bv_in_fname.empty())
-        {
-            bm::bvector<> bv;
-            read_bvector(bv_file, bv, sbuf);
-        }
+        std::streamsize bv_start = bv_file.tellg();
+        if (bv_start == fsize)
+            break;
+        if (bv_start < 0 || bv_start > fsize)
+            throw std::runtime_error("Invalid position in bvect dump file");
+
+        bm::bvector<> bv;
+        if (!bv_reader.deserialize(bv, bv_input))
+            throw std::runtime_error("Error reading bvect dump file");
 
         std::streamsize fpos_curr = bv_file.tellg();
-        if (fpos_curr == fsize)
-            break;
+        if (fpos_curr <= bv_start || fpos_curr > fsize)
+            throw std::runtime_error("Invalid position in bvect dump file");
 
         if (!is_silent)
         {
@@ -814,6 +846,8 @@ void decode_test_dump_file(const std::string& bv_in_fname)
 
 
 
+#include "inv_list_pair_search.h"
+
 int main(int argc, char *argv[])
 {
     if (argc < 3)
@@ -828,6 +862,13 @@ int main(int argc, char *argv[])
         if (ret != 0)
             return ret;
         
+        if (pair_search)
+        {
+            if (is_verify || is_decode || !u32_in_file.empty() || !bv_out_file.empty())
+                throw std::runtime_error("Pair search must run separately from compression/verification/decode");
+            analyze_pairs();
+            return 0;
+        }
         if (!u32_in_file.empty())
         {
             if (!is_verify)
@@ -870,6 +911,4 @@ int main(int argc, char *argv[])
 #ifdef _MSC_VER
 #pragma warning( pop )
 #endif
-
-
 
