@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-project("bm" VERSION 9.3.2
+project("bm" VERSION 9.3.4
              DESCRIPTION "BitMagic Library"
              HOMEPAGE_URL "https://github.com/tlk00/BitMagic")
 
