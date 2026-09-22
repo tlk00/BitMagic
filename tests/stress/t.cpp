@@ -23254,6 +23254,78 @@ static void CheckComplexity(const bm::bvector_complexity_statistics& got,
     assert(got.bit_to_gap_blocks == expected.bit_to_gap_blocks);
 }
 
+// Check the SIMD initial carry correction against a bit-by-bit oracle.
+// Use a whole digest wave so all SIMD backends can consume the fixture.
+static void TestXORChangeInitialBit()
+{
+    const unsigned words = bm::set_block_digest_wave_size;
+    const unsigned bits = words * 32;
+    const unsigned positions[] = {0, 1, 31, 32, 63, 64, 127, 128, bits-1};
+    for (unsigned first_a = 0; first_a != 2; ++first_a)
+    for (unsigned first_b = 0; first_b != 2; ++first_b)
+    for (unsigned pos : positions)
+    for (unsigned pattern = 0; pattern != 3; ++pattern)
+    {
+        bm::word_t BM_VECT_ALIGN a[words] BM_VECT_ALIGN_ATTR = {0};
+        bm::word_t BM_VECT_ALIGN b[words] BM_VECT_ALIGN_ATTR = {0};
+        // Zero, one, and alternating backgrounds exercise both error signs,
+        // uniform results, and carries across word and SIMD lane boundaries.
+        for (unsigned i = 0; i < words; ++i)
+            b[i] = pattern == 0 ? 0u :
+                   pattern == 1 ? ~bm::word_t(0) : bm::word_t(0xAAAAAAAAu);
+        a[0] = first_a;
+        b[0] = (b[0] & ~bm::word_t(1)) | first_b;
+        if (pos) // zero selects the unchanged background
+            b[pos / 32] ^= bm::word_t(1) << (pos % 32);
+        for (unsigned order = 0; order != 2; ++order)
+        {
+            const bm::word_t* left = order ? b : a;
+            const bm::word_t* right = order ? a : b;
+            unsigned expected_gc = 1, expected_bc = 0, prev = 0;
+            for (unsigned bit = 0; bit < bits; ++bit)
+            {
+                unsigned value = ((left[bit / 32] >> (bit % 32)) & 1u)
+                               ^ ((right[bit / 32] >> (bit % 32)) & 1u);
+                expected_bc += value;
+                if (bit && value != prev)
+                    ++expected_gc;
+                prev = value;
+            }
+            unsigned gc = 0, bc = 0;
+            bm::bit_block_xor_change(left, right, words, &gc, &bc);
+            if (gc != expected_gc || bc != expected_bc)
+            {
+                cerr << "XOR initial-bit regression: first_a=" << first_a
+                     << " first_b=" << first_b << " pos=" << pos
+                     << " pattern=" << pattern << " order=" << order
+                     << " gc=" << gc << " expected=" << expected_gc
+                     << " bc=" << bc << " expected=" << expected_bc << endl;
+                exit(1);
+            }
+        }
+    }
+
+    // Keep both inputs physically BIT: A={0}, B={0,1}, XOR={1}.
+    bvect a(bm::BM_BIT), b(bm::BM_BIT);
+    a.set(0);
+    b.set(0); b.set(1);
+    for (unsigned order = 0; order != 2; ++order)
+    {
+        auto st = order ? bm::calc_complexity_xor(b, a)
+                        : bm::calc_complexity_xor(a, b);
+        if (st.count != 1 || st.runs != 1 || st.block_runs != 1 ||
+            st.gap_words != 4 || st.gap_blocks != 1 ||
+            st.bit_to_gap_blocks != 1 || st.bit_blocks != 0)
+        {
+            cerr << "XOR initial-bit complexity regression: order=" << order
+                 << " count=" << st.count << " runs=" << st.runs
+                 << " block_runs=" << st.block_runs
+                 << " gap_words=" << st.gap_words << endl;
+            exit(1);
+        }
+    }
+}
+
 /*! All ordered pairs, including self-pairs, are checked against materialized
     XOR plus the interval oracle. Fixtures and their optimized copies live on
     the heap for the entire test. Representation duplicates deliberately test
@@ -23262,6 +23334,7 @@ static void CheckComplexity(const bm::bvector_complexity_statistics& got,
 static void BVectorComplexityTest()
 {
     cout << "----------------------------- BVectorComplexityTest()" << endl;
+    TestXORChangeInitialBit();
     using size_type = bvect::size_type;
     const size_type B = bm::gap_max_bits, S = B * 256;
     const size_type end = bm::id_max - 1;
