@@ -2168,7 +2168,8 @@ void avx2_bit_block_calc_xor_change(const __m256i* BMRESTRICT block,
     __m256i cntAcc = _mm256_setzero_si256();
     __m256i cntAcc2 = _mm256_setzero_si256();
 
-    unsigned w0 = *((bm::word_t*)(block));
+    unsigned w0 = *((const bm::word_t*)block)
+                ^ *((const bm::word_t*)xor_block);
     unsigned bit_count = 0;
     unsigned gap_count = 1;
 

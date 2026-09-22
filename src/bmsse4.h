@@ -1037,7 +1037,8 @@ void sse42_bit_block_calc_xor_change(const __m128i* BMRESTRICT block,
         ( __m128i*)((bm::word_t*)(block) + size);
     __m128i m1COshft, m2COshft;
 
-    unsigned w0 = *((bm::word_t*)(block));
+    unsigned w0 = *((const bm::word_t*)block)
+                ^ *((const bm::word_t*)xor_block);
     unsigned gap_count = 1;
     unsigned bit_count = 0;
 
