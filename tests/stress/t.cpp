@@ -49070,6 +49070,7 @@ void show_help()
         << "-bvops (-bvo, -bvl)   - bit-vector logical operations" << endl
         << "-bvshift (or -bvs)    - bit-vector shifts " << endl
         << "-rankc (or -rc)       - rank-compress " << endl
+        << "-neon                 - native AArch64 kernel tests" << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
         << "-sv1a, -sv1b, -sv1c   - sparse-vector tests, part 1 split groups" << endl
@@ -49097,6 +49098,9 @@ void show_help()
       ;
 }
 
+#include "../neon_test.h"
+
+bool         is_neon = false;
 bool         is_all = true;
 bool         is_low_level = false;
 bool         is_support = false;
@@ -49168,6 +49172,17 @@ int parse_args(int argc, char *argv[])
         {
             show_help();
             return 1;
+        }
+        if (arg == "-neon")
+        {
+#ifdef BMNEONOPT
+            is_all = false;
+            is_neon = true;
+            continue;
+#else
+            cerr << "-neon requires native AArch64 BMNEONOPT" << endl;
+            return 1;
+#endif
         }
         if (arg == "-ll" || arg == "-llevel")
         {
@@ -54350,6 +54365,11 @@ return 0;
     return 0;
 */
     
+#ifdef BMNEONOPT
+    if (is_all || is_low_level || is_neon)
+        TestNEONUtils();
+#endif
+
     if (is_all || is_low_level)
     {
         TestNibbleArr();

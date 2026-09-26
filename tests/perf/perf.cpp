@@ -90,8 +90,12 @@ std::random_device rand_dev;
 std::mt19937 gen(rand_dev()); // mersenne_twister_engine 
 std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs for [1, vector_max]
 
+// Optional, reproducible backend workloads.
+#include "simd_bench.h"
+
 struct perf_run_options
 {
+    simd_bench_options bench;
     bool print_timings = true;
     bool print_space = false;
     bool silent = false;
@@ -105,6 +109,10 @@ void PrintUsage(const char* app_name)
 {
     cout << "Usage: " << app_name << " [options]" << endl
          << "Options:" << endl
+         << "  -bench-kernels / -bench-dense / -bench-gap  Select focused workloads." << endl
+         << "  -bench-repeats N  Sweeps per sample (default 200)." << endl
+         << "  -bench-blocks N   Blocks per input (1..4096; default 64)." << endl
+         << "  -bench-seed N     Reproducible input seed (default 1337)." << endl
          << "  -mem       Print memory, serialized-size, and mask statistics." << endl
          << "  -silent    Run correctness checks without timing or space output." << endl
          << "  --help     Print this help and exit." << endl;
@@ -117,7 +125,34 @@ bool ParseCommandLine(int argc, char* argv[])
     for (int i = 1; i < argc; ++i)
     {
         const char* arg = argv[i];
-        if (::strcmp(arg, "-mem") == 0)
+        if (::strcmp(arg, "-bench-kernels") == 0)
+            g_perf_options.bench.kernels = true;
+        else if (::strcmp(arg, "-bench-dense") == 0)
+            g_perf_options.bench.dense = true;
+        else if (::strcmp(arg, "-bench-gap") == 0)
+            g_perf_options.bench.gap = true;
+        else if (::strcmp(arg, "-bench-repeats") == 0 ||
+                 ::strcmp(arg, "-bench-blocks") == 0 ||
+                 ::strcmp(arg, "-bench-seed") == 0)
+        {
+            if (++i == argc) { cerr << "Missing value for " << arg << endl; exit(1); }
+            char* end = 0;
+            unsigned long n = std::strtoul(argv[i], &end, 10);
+            if (!argv[i][0] || *end || argv[i][0] == '-' || n > 1000000000ul)
+                { cerr << "Invalid value for " << arg << endl; exit(1); }
+            if (::strcmp(arg, "-bench-seed") == 0) g_perf_options.bench.seed = unsigned(n);
+            else if (::strcmp(arg, "-bench-blocks") == 0)
+            {
+                if (!n || n > 4096) { cerr << "Blocks must be 1..4096" << endl; exit(1); }
+                g_perf_options.bench.blocks = unsigned(n);
+            }
+            else
+            {
+                if (!n) { cerr << "Repeats must be positive" << endl; exit(1); }
+                g_perf_options.bench.repeats = unsigned(n);
+            }
+        }
+        else if (::strcmp(arg, "-mem") == 0)
         {
             g_perf_options.print_space = true;
         }
@@ -9640,8 +9675,26 @@ int main(int argc, char* argv[])
     try
     {
         bm::chrono_taker<> tt(cout, "TOTAL", 1);
-        
+
+        if (g_perf_options.bench.selected())
+        {
+            RunSIMDBenchmarks(g_perf_options.bench, g_perf_options.print_timings);
+            return 0;
+        }
+
+        // Include the bounded dense kernel checks in an ordinary perf run.
+        // One summary line keeps the established report easy to scan.
+        simd_bench_options fast_bench;
+        fast_bench.kernels = fast_bench.dense = fast_bench.gap = true;
+        fast_bench.repeats = 20000;
         cout << endl;
+        if (g_perf_options.print_timings)
+        {
+            bm::chrono_taker<> simd_tt(cout, "SIMD fast kernels", 1);
+            RunSIMDBenchmarks(fast_bench, true, false);
+        }
+        else
+            RunSIMDBenchmarks(fast_bench, false, false);
 
         MemCpyTest();
         cout << endl;

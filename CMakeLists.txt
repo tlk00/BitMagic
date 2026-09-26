@@ -28,7 +28,8 @@ target_include_directories(
   INTERFACE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src >
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h 
+set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
+               ${PROJECT_SOURCE_DIR}/src/bm64.h
                ${PROJECT_SOURCE_DIR}/src/bmblocks.h
                ${PROJECT_SOURCE_DIR}/src/bm3vl.h
                ${PROJECT_SOURCE_DIR}/src/bmaggregator.h
@@ -39,6 +40,7 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmalloc.h
                ${PROJECT_SOURCE_DIR}/src/bmbmatrix.h
                ${PROJECT_SOURCE_DIR}/src/bmbuffer.h
+               ${PROJECT_SOURCE_DIR}/src/bmcomplexity.h
                ${PROJECT_SOURCE_DIR}/src/bmconst.h
                ${PROJECT_SOURCE_DIR}/src/bmdbg.h
                ${PROJECT_SOURCE_DIR}/src/bmdef.h
@@ -51,6 +53,7 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmserial.h
                ${PROJECT_SOURCE_DIR}/src/bmfio.h
                ${PROJECT_SOURCE_DIR}/src/bmsimd.h
+               ${PROJECT_SOURCE_DIR}/src/bmneon.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_algo.h
                ${PROJECT_SOURCE_DIR}/src/bmsparsevec_compr.h
@@ -66,6 +69,7 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmtrans.h
                ${PROJECT_SOURCE_DIR}/src/bmundef.h
                ${PROJECT_SOURCE_DIR}/src/bmutil.h
+               ${PROJECT_SOURCE_DIR}/src/bmvmin.h
                ${PROJECT_SOURCE_DIR}/src/bmxor.h
                ${PROJECT_SOURCE_DIR}/src/encoding.h
                ${PROJECT_SOURCE_DIR}/src/bmsse2.h

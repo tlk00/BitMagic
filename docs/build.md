@@ -102,7 +102,7 @@ Select one intended BitMagic SIMD backend and supply the compiler flags it requi
 | `BMSSE42OPT` | x86 SSE4.2 with hardware POPCNT | POPCNT population counting is critical for performance. Use matching target flags; the repository provides a CMake preset value |
 | `BMAVX2OPT` | x86 AVX2 with POPCNT and BMI instructions | Highly recommended for rank/select acceleration on supported CPUs. Match the full target feature set in the compiler settings |
 | `BMAVX512OPT` | Experimental x86 AVX-512 | Use at your own risk; inspect target requirements and validate on the deployment CPU |
-| `BMNEONOPT` | Arm NEON through SSE-to-NEON translation | Uses the bundled `src/sse2neon.h` header |
+| `BMNEONOPT` | Native AArch64 NEON | Uses `src/bmneon.h` directly; ARM32 builds use scalar mode |
 | `BMWASMSIMDOPT` | WebAssembly SIMD through translated intrinsics | Use an Emscripten build with SIMD and the required SSE compatibility flags |
 
 Do not combine backend definitions. The core C++ library does not perform runtime CPU detection and dispatch among separately compiled SIMD variants. For heterogeneous deployments, choose a compatible baseline or implement separately isolated variants and dispatch in the application.
