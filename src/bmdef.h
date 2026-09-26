@@ -80,6 +80,12 @@ For more information please visit:  http://bitmagic.io
 #define BM_x86
 #endif
 
+// Native NEON kernels require AArch64 Advanced SIMD instructions.
+#if defined(BMNEONOPT) && \
+    !(defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64))
+# error "BMNEONOPT requires AArch64; omit BMNEONOPT for scalar ARM32 builds"
+#endif
+
 // cxx11 features
 //
 #if defined(BM_NO_CXX11) || (defined(_MSC_VER)  &&  _MSC_VER < 1900)
@@ -266,10 +272,14 @@ For more information please visit:  http://bitmagic.io
 # endif
 
 
-#if (defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT))
+#if (defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(BMNEONOPT))
 
     # ifndef BM_SET_MMX_GUARD
-    #  define BM_SET_MMX_GUARD  sse_empty_guard  bm_mmx_guard_;
+    #  ifdef BMNEONOPT
+    #   define BM_SET_MMX_GUARD
+    #  else
+    #   define BM_SET_MMX_GUARD  sse_empty_guard  bm_mmx_guard_;
+    #  endif
     # endif
 
     #ifdef _MSC_VER

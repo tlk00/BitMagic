@@ -45,6 +45,13 @@ For more information please visit:  http://bitmagic.io
 #undef BM_FALLTHROUGH
 
 #undef BMVECTOPT
+#undef VECT_AND_BLOCK
+#undef VECT_BIT_BLOCK_XOR_2WAY
+#undef VECT_INVERT_BLOCK
+#undef VECT_IS_DIGEST_ZERO
+#undef VECT_OR_BLOCK
+#undef VECT_SHIFT_L1
+#undef VECT_SUB_DIGEST_3WAY
 #undef VECT_XOR_ARR_2_MASK
 #undef VECT_ANDNOT_ARR_2_MASK
 

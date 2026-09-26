@@ -1089,7 +1089,11 @@ bool decoder::get_32_OR(bm::word_t* w, unsigned count) BMNOEXCEPT
         seek(int(count * sizeof(bm::word_t)));
         return false;
     }
-#if defined(BMAVX2OPT)
+#if defined(BMNEONOPT) && !defined(__AARCH64EB__)
+        const unsigned char* src = reinterpret_cast<const unsigned char*>(buf_);
+        seek(int(count * sizeof(bm::word_t)));
+        return bm::neon_decode_arr<true>(w, src, count);
+#elif defined(BMAVX2OPT)
         __m256i* buf_start = (__m256i*)buf_;
         seek(int(count * sizeof(bm::word_t)));
         __m256i* buf_end = (__m256i*)buf_;
@@ -1130,7 +1134,11 @@ void decoder::get_32_AND(bm::word_t* w, unsigned count) BMNOEXCEPT
         seek(int(count * sizeof(bm::word_t)));
         return;
     }
-#if defined(BMAVX2OPT)
+#if defined(BMNEONOPT) && !defined(__AARCH64EB__)
+        const unsigned char* src = reinterpret_cast<const unsigned char*>(buf_);
+        seek(int(count * sizeof(bm::word_t)));
+        bm::neon_decode_arr<false>(w, src, count);
+#elif defined(BMAVX2OPT)
         __m256i* buf_start = (__m256i*)buf_;
         seek(int(count * sizeof(bm::word_t)));
         __m256i* buf_end = (__m256i*)buf_;

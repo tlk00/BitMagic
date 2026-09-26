@@ -28,14 +28,15 @@ For more information please visit:  http://bitmagic.io
 namespace bm
 {
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
-#define BM_ALLOC_ALIGN 16
-#endif
-#if defined(BMAVX2OPT)
-#define BM_ALLOC_ALIGN 32
-#endif
-#if defined(BMAVX512OPT)
+// NEON allocations use 128-byte boundaries (also satisfying 64-byte alignment).
+#if defined(BMNEONOPT)
+#define BM_ALLOC_ALIGN 128
+#elif defined(BMAVX512OPT)
 #define BM_ALLOC_ALIGN 64
+#elif defined(BMAVX2OPT)
+#define BM_ALLOC_ALIGN 32
+#elif defined(BMSSE2OPT) || defined(BMSSE42OPT)
+#define BM_ALLOC_ALIGN 16
 #endif
 
 
@@ -47,6 +48,42 @@ namespace bm
  
     @{
  */
+
+#ifdef BMNEONOPT
+/**
+    @brief Allocate NEON storage aligned to BM_ALLOC_ALIGN bytes.
+    @param size Requested byte count; need not be a multiple of the alignment.
+    @return Aligned storage, or null on allocation failure.
+    @ingroup alloc
+    @internal
+*/
+inline void* neon_aligned_malloc(size_t size) BMNOEXCEPT
+{
+#ifdef _MSC_VER
+    return ::_aligned_malloc(size, BM_ALLOC_ALIGN);
+#else
+    void* ptr = 0;
+    if (::posix_memalign(&ptr, BM_ALLOC_ALIGN, size) != 0)
+        return 0;
+    return ptr;
+#endif
+}
+
+/**
+    @brief Release storage returned by neon_aligned_malloc.
+    @param ptr Allocation base address, or null.
+    @ingroup alloc
+    @internal
+*/
+inline void neon_aligned_free(void* ptr) BMNOEXCEPT
+{
+#ifdef _MSC_VER
+    ::_aligned_free(ptr);
+#else
+    ::free(ptr);
+#endif
+}
+#endif // BMNEONOPT
 
 /*! 
   @brief Default malloc based bitblock allocator class.
@@ -66,7 +103,9 @@ public:
     {
         bm::word_t* ptr;
 
-#if defined(BM_ALLOC_ALIGN)
+#if defined(BMNEONOPT)
+        ptr = static_cast<bm::word_t*>(neon_aligned_malloc(n * sizeof(bm::word_t)));
+#elif defined(BM_ALLOC_ALIGN)
     #ifdef _MSC_VER
         ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(bm::word_t), BM_ALLOC_ALIGN);
     #else
@@ -86,7 +125,9 @@ public:
     */
     static void deallocate(bm::word_t* p, size_t) BMNOEXCEPT
     {
-#ifdef BM_ALLOC_ALIGN
+#if defined(BMNEONOPT)
+        neon_aligned_free(p);
+#elif defined(BM_ALLOC_ALIGN)
     # ifdef _MSC_VER
             ::_aligned_free(p);
     #else
@@ -116,7 +157,9 @@ public:
     static void* allocate(size_t n, const void *)
     {
         void* ptr;
-#if defined(BM_ALLOC_ALIGN)
+#if defined(BMNEONOPT)
+        ptr = neon_aligned_malloc(n * sizeof(void*));
+#elif defined(BM_ALLOC_ALIGN)
     #ifdef _MSC_VER
         ptr = (bm::word_t*) ::_aligned_malloc(n * sizeof(void*), BM_ALLOC_ALIGN);
     #else
@@ -136,7 +179,9 @@ public:
     */
     static void deallocate(void* p, size_t) BMNOEXCEPT
     {
-#ifdef BM_ALLOC_ALIGN
+#if defined(BMNEONOPT)
+        neon_aligned_free(p);
+#elif defined(BM_ALLOC_ALIGN)
     # ifdef _MSC_VER
             ::_aligned_free(p);
     #else
@@ -201,14 +246,22 @@ private:
     void allocate_pool(size_t pool_size)
     {
         BM_ASSERT(!pool_ptr_);
+#ifdef BMNEONOPT
+        pool_ptr_ = static_cast<void**>(neon_aligned_malloc(sizeof(void*) * pool_size));
+#else
         pool_ptr_ = (void**)::malloc(sizeof(void*) * pool_size);
+#endif
         if (!pool_ptr_)
             throw std::bad_alloc();
     }
 
     void free_pool() BMNOEXCEPT
     {
+#ifdef BMNEONOPT
+        neon_aligned_free(pool_ptr_);
+#else
         ::free(pool_ptr_);
+#endif
     }
 private:
     void**     pool_ptr_;  ///< array of pointers in the pool
@@ -437,7 +490,9 @@ void* aligned_new_malloc(size_t size)
 {
     void* ptr;
 
-#ifdef BM_ALLOC_ALIGN
+#if defined(BMNEONOPT)
+    ptr = neon_aligned_malloc(size);
+#elif defined(BM_ALLOC_ALIGN)
 #ifdef _MSC_VER
     ptr = ::_aligned_malloc(size, BM_ALLOC_ALIGN);
 #else
@@ -465,7 +520,9 @@ void aligned_free(void* ptr) BMNOEXCEPT
 {
     if (!ptr)
         return;
-#ifdef BM_ALLOC_ALIGN
+#if defined(BMNEONOPT)
+    neon_aligned_free(ptr);
+#elif defined(BM_ALLOC_ALIGN)
 # ifdef _MSC_VER
     ::_aligned_free(ptr);
 #else

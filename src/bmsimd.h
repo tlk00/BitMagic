@@ -21,12 +21,9 @@ For more information please visit:  http://bitmagic.io
     \brief SIMD target version definitions
 */
 
-#ifdef BMNEONOPT
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstrict-aliasing"
-#include "sse2neon.h"
-#pragma GCC diagnostic pop
-#define BMSSE2OPT
+#if defined(BMNEONOPT)
+#define BMVECTOPT
+#include "bmneon.h"
 #endif
 
 

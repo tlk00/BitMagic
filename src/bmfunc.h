@@ -2910,7 +2910,7 @@ bool gap_split(const T* buf, unsigned len,
             {
                 new_len = bm::gap_set_value(false, tbuf, ex1_arr[k]);
             }
-//bm::_PrintGap(std::cout, tbuf);
+
 
             BM_ASSERT(dsize >= new_len); (void) new_len;
             dsize = new_len;
@@ -3127,6 +3127,12 @@ unsigned gap_bit_count_unr(const T* buf) BMNOEXCEPT
         const unsigned unr_factor = 32;
         unsigned waves = (dsize-2) / unr_factor;
         pcurr = avx2_gap_sum_arr(pcurr, waves, &cnt);
+    }
+    #elif defined(BMNEONOPT)
+    if (dsize > 18)
+    {
+        unsigned waves = (dsize - 2) / 16;
+        pcurr = neon_gap_sum_arr(pcurr, waves, &cnt);
     }
     #elif defined(BMSSE42OPT) || defined(BMSSE2OPT)
     if (dsize > 18)

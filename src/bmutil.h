@@ -27,7 +27,6 @@ For more information please visit:  http://bitmagic.io
 #include "bmconst.h"
 
 #if defined(__arm64__) || defined(__arm__)
-//#include "sse2neon.h"
 #else
     #if defined(_M_AMD64) || defined(_M_X64)
     #include <intrin.h>
@@ -638,7 +637,7 @@ template< typename T >
 bool is_aligned(T* p) BMNOEXCEPT
 {
 #if defined (BM_ALLOC_ALIGN)
-    return !(reinterpret_cast<unsigned int*>(p) % BM_ALLOC_ALIGN);
+    return !(reinterpret_cast<size_t>(p) % BM_ALLOC_ALIGN);
 #else
     (void)p;
     return true;
