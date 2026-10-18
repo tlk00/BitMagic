@@ -120,7 +120,7 @@ The resulting executable requires a compatible CPU. Avoid `-march=native` for bi
 
 ### Arm and Apple Silicon
 
-Start with the default implementation, or select `BMNEONOPT`; the required SSE2NEON header is bundled in `src`. Use the compiler's appropriate Arm target settings. Selecting an Arm CPU does not itself select the BitMagic NEON backend.
+Start with the default implementation, or define `BMNEONOPT` on AArch64 to select the native backend in `src/bmneon.h`. It uses baseline AArch64 NEON intrinsics and does not require SSE2NEON. Use the compiler's appropriate Arm target settings. Selecting an Arm CPU does not itself select the BitMagic NEON backend. See the [NEON testing and benchmarking guide](../tests/neon.md) for validation commands.
 
 ### WebAssembly
 
