@@ -1725,12 +1725,17 @@ public:
     }
 
     /**
-        Bit count all blocks to determine if it is very sparse
+        Bit count all blocks to determine if it is very sparse.
+        gap_tolerance=100 groups all count-eligible superblocks; 14 restores
+        the former GAP-length rejection rule.
     */
     bool is_sparse_sblock(unsigned i, unsigned sparse_cut_off,
-                          bm::bv_sub_survey& sub_stat) const BMNOEXCEPT
+                          bm::bv_sub_survey& sub_stat,
+                          unsigned gap_tolerance = 100) const BMNOEXCEPT
     {
-        BM_ASSERT(sparse_cut_off);
+        // A zero cutoff disables sparse grouping, but the survey must still
+        // populate block statistics used by ordinary block serialization.
+        BM_ASSERT(gap_tolerance >= 14 && gap_tolerance <= 100);
         const unsigned non_sparse_cut_off = sparse_cut_off * bm::set_sub_array_size;
 
         BM_ASSERT(i < top_block_size());
@@ -1788,7 +1793,7 @@ public:
                   sub_stat.empty_blocks +
                   sub_stat.full_blocks == bm::set_sub_array_size);
 
-        if (cnt_sum > non_sparse_cut_off /*|| sub_stat.full_blocks*/) // too many bits set
+        if (!sparse_cut_off || cnt_sum > non_sparse_cut_off) // disabled or too many bits set
             return false;
 
         if (effective_blocks > 1)
@@ -1803,10 +1808,15 @@ public:
                 if (gap_len_sum < cnt_sum) // lens are smaller than BC
                 {
                     unsigned diff = cnt_sum - gap_len_sum;
-                    float cut_off = float(cnt_sum) * 0.14f;
-                    if (float(diff) < cut_off)
+                    if (gap_tolerance == 100)
+                    {
                         return true;
-                    return false;
+                    }
+                    const float legacy_cut_off = float(cnt_sum) * 0.14f;
+                    const float cut_off = gap_tolerance == 14 ? legacy_cut_off :
+                        float(cnt_sum) * (float(gap_tolerance) / 100.0f);
+                    if (float(diff) >= cut_off)
+                        return false;
                 }
             }
             return true;
@@ -2977,4 +2987,3 @@ private:
 #endif
 
 #endif
-

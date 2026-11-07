@@ -34,9 +34,12 @@ For more information please visit:  http://bitmagic.io
 #include <fstream>
 #include <iomanip>
 #include <vector>
+#include <map>
+#include <algorithm>
 
 #include "bmalgo_similarity.h"
 #include "bmsparsevec_serial.h"
+#include "bmserial_profile.h"
 #include "bmdef.h"
 
 
@@ -48,6 +51,458 @@ For more information please visit:  http://bitmagic.io
 
 namespace bm
 {
+
+/**
+    \brief Write GAP-route totals and source GAP size distributions as text.
+    \ingroup bvserial
+    \internal
+    \tparam OUT Output sink supporting stream insertion of text and integers.
+    \tparam Statistics Statistics exposing the fields of bm::gap_route_statistics.
+    \param out Destination stream; no flushing is performed.
+    \param s Measurements containing superblock/direct totals, four source
+        allocation-level buckets, and six additional level-zero length buckets.
+    \note GAP word counts describe source storage, not compressed bytes.
+        Grouped GAP bytes cannot be attributed individually; their combined
+        record size is reported as superblock_bytes.
+*/
+template<class OUT, class Statistics>
+inline
+void gap_route_report(OUT& out, const Statistics& s)
+{
+    out << "GAP route superblocks=" << s.superblocks
+        << " superblock_bytes=" << s.superblock_bytes
+        << " grouped_bit=" << s.grouped_bit
+        << " grouped_full=" << s.grouped_full
+        << " grouped_empty=" << s.grouped_empty
+        << " direct_bit=" << s.direct_bit
+        << " direct_bit_bytes=" << s.direct_bit_bytes
+        << " folded_gap=" << s.folded_gap << '\n';
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        out << "GAP route level=" << i
+            << " direct_blocks=" << s.direct[i].blocks
+            << " direct_words=" << s.direct[i].words
+            << " direct_bytes=" << s.direct[i].bytes
+            << " grouped_blocks=" << s.grouped[i].blocks
+            << " grouped_words=" << s.grouped[i].words << '\n';
+    } // for i
+    static const char* names[] = { "1-4", "5-8", "9-16", "17-32", "33-64", "65+" };
+    for (unsigned i = 0; i < 6; ++i)
+    {
+        out << "GAP route level0_words=" << names[i]
+            << " direct_blocks=" << s.direct_l0[i].blocks
+            << " direct_words=" << s.direct_l0[i].words
+            << " direct_bytes=" << s.direct_l0[i].bytes
+            << " grouped_blocks=" << s.grouped_l0[i].blocks
+            << " grouped_words=" << s.grouped_l0[i].words << '\n';
+    } // for i
+}
+
+/**
+    \brief Write aggregate and per-block selection diagnostics as text.
+    \ingroup bvserial
+    \internal
+    \tparam OUT Output sink supporting stream insertion of text and integers.
+    \tparam Statistics Statistics exposing the fields of bm::block_selection_statistics<BV>.
+    \param out Destination stream; no flushing is performed.
+    \param s Measurements to report, including optional candidate families
+        indicated by the composed, multistep, step2, and bwt_min_gain fields.
+*/
+template<class OUT, class Statistics>
+inline
+void block_selection_report(OUT& out, const Statistics& s)
+{
+    bm::id64_t block_count = 0;
+    for (unsigned i = 0; i < 6; ++i)
+    {
+        block_count += s.chosen[i];
+    } // for i
+    out << "Selection summary blocks=" << block_count
+        << " ordinary=" << s.chosen[0] << " periodic=" << s.chosen[1]
+        << " bwt=" << s.chosen[2];
+    if (s.composed) out << " composed=" << s.chosen[3];
+    if (s.multistep) out << " multistep=" << s.chosen[4];
+    if (s.step2) out << " step2=" << s.chosen[4];
+    if (s.chosen[5]) out << " bwt_unpacked=" << s.chosen[5];
+    if (s.bwt_min_gain)
+        out << " bwt_min_gain=" << s.bwt_min_gain
+            << " bwt_rejected=" << s.threshold_rejected
+            << " rejected_gain_bytes=" << s.threshold_lost_bytes;
+    out << " baseline=" << s.baseline_bytes
+        << " selected=" << s.selected_bytes << " saved=" << s.saved
+        << " trials=" << s.trials << '\n';
+    out << "Selection timing periodic_ns=" << s.periodic_ns
+        << " bwt_ns=" << s.bwt_ns;
+    if (s.composed)
+        out << " compose_ns=" << s.compose_ns
+            << " compose_trials=" << s.compose_trials
+            << " previous=" << s.previous_bytes;
+    if (s.multistep)
+        out << " multistep_ns=" << s.multistep_ns
+            << " multistep_trials=" << s.multistep_trials
+            << " fourway=" << s.fourway_bytes;
+    if (s.step2)
+        out << " step2_ns=" << s.step2_ns
+            << " step2_trials=" << s.step2_trials
+            << " fourway=" << s.fourway_bytes;
+    out << '\n';
+    const char* formula_parts[] = {"header", "starts", "lengths", "padding"};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        out << "Selection formula bits kind=" << formula_parts[i]
+            << " trials=" << s.formula_trial_bits[i]
+            << " candidates=" << s.formula_candidate_bits[i] << '\n';
+    } // for i
+    const char* formula_modes[] = {"gamma", "fixed"};
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        out << "Selection formula mode=" << formula_modes[i]
+            << " trials=" << s.formula_trial_modes[i]
+            << " candidates=" << s.formula_candidate_modes[i] << '\n';
+    } // for i
+    for (size_t i = 0; i < s.blocks.size(); ++i)
+    {
+        const auto& b = s.blocks[i];
+        BM_ASSERT(b.kind < 6 && b.prethreshold_kind < 6);
+        BM_ASSERT(b.selected <= b.baseline);
+        out << "Selection block vector=" << b.vector << " block=" << b.block
+            << " baseline=" << b.baseline << " periodic=" << b.periodic
+            << " bwt=" << b.bwt << " selected=" << b.selected
+            << " kind=" << b.kind << " trials=" << b.trials
+            << " bwt_payload=" << b.bwt_payload
+            << " bwt_candidate=" << b.bwt_candidate;
+        if (s.composed)
+            out << " previous=" << b.previous << " composed=" << b.composed
+                << " compose_trials=" << b.compose_trials;
+        if (s.multistep)
+            out << " fourway=" << b.fourway << " multistep=" << b.multistep
+                << " multistep_trials=" << b.multistep_trials
+                << " multistep_groups=" << b.multistep_groups
+                << " multistep_chains=" << b.multistep_chains
+                << " multistep_last_step=" << b.multistep_last_step
+                << " multistep_stop=" << b.multistep_stop
+                << " multistep_formula=" << b.multistep_formula
+                << " multistep_residual=" << b.multistep_residual
+                << " multistep_mask=" << b.multistep_mask;
+        if (s.step2)
+            out << " fourway=" << b.fourway << " step2=" << b.step2
+                << " step2_trials=" << b.step2_trials
+                << " step2_chains=" << b.step2_chains
+                << " step2_formula=" << b.step2_formula
+                << " step2_residual=" << b.step2_residual;
+        if (s.bwt_min_gain)
+            out << " prethreshold_selected=" << b.prethreshold_selected
+                << " prethreshold_kind=" << b.prethreshold_kind;
+        out << '\n';
+    } // for i
+}
+
+/**
+    \brief Write optional per-block BWT diagnostics without flushing the sink.
+    \ingroup bvserial
+    \internal
+    \tparam OUT Output sink supporting stream insertion of text and integers.
+    \tparam Statistics Statistics exposing the fields of bm::bwt_statistics<Alloc>.
+    \param out Destination for aggregate timings and individual block records.
+    \param s Statistics to report; an empty observation list produces no output.
+*/
+template<class OUT, class Statistics>
+inline
+void bwt_report_diagnostics(OUT& out, const Statistics& s)
+{
+    if (s.blocks.empty())
+        return;
+    out << "BWT timing transform_ns=" << s.transform_ns
+        << " payload_ns=" << s.payload_ns << '\n';
+    for (const auto& b : s.blocks)
+    {
+        out << "BWT block vector=" << b.vector << " block=" << b.block
+            << " baseline=" << b.baseline << " payload=" << b.payload
+            << " candidate=" << b.candidate << " selected=" << b.selected
+            << " popcount=" << b.popcount << " gaps_before=" << b.gaps_before
+            << " gaps_after=" << b.gaps_after << " primary=" << b.primary
+            << " baseline_codec=" << b.baseline_codec << " payload_codec=" << b.payload_codec
+            << " baseline_bic=" << unsigned(b.baseline_bic)
+            << " payload_bic=" << unsigned(b.payload_bic) << '\n';
+    } // for b
+}
+
+/**
+    \brief Write periodic-search summary, block observations, and histograms.
+    \ingroup bvserial
+    \internal
+    \tparam OUT Output sink supporting stream insertion of text and integers.
+    \tparam Statistics Statistics exposing the fields of bm::periodic_order_statistics<Alloc>.
+    \param out Destination stream; no flushing is performed.
+    \param s Measurements including block observations, formula costs, length
+        buckets, trial counts, group counts, and progression-step histograms.
+*/
+template<class OUT, class Statistics>
+inline
+void periodic_order_report(OUT& out, const Statistics& s)
+{
+    out << "Periodic order exhausted=" << s.exhausted << " multi_group=" << s.multi_group
+        << " additions=" << s.additions << '\n';
+    for (const auto& b : s.blocks)
+    {
+        out << "Periodic block vector=" << b.vector << " block=" << b.block
+            << " baseline=" << b.baseline << " encoded=" << b.encoded
+            << " trials=" << b.trials << " groups=" << b.groups
+            << " chains=" << b.chains << " popcount=" << b.popcount
+            << " gaps=" << b.gaps << '\n';
+    } // for b
+    const char* names[] = {"header", "starts", "lengths", "padding"};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        out << "Periodic bits kind=" << names[i] << " trials=" << s.trial_bits[i]
+            << " accepted=" << s.selected_bits[i] << '\n';
+    } // for i
+    const char* modes[] = {"gamma", "fixed"};
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        out << "Periodic formula mode=" << modes[i]
+            << " trials=" << s.trial_formula_modes[i]
+            << " accepted=" << s.selected_formula_modes[i] << '\n';
+    } // for i
+    for (unsigned i = 1; i < 44; ++i)
+    {
+        if (s.discovered[i] || s.retained[i] || s.selected[i])
+            out << "Periodic length_bucket=" << i << " discovered=" << s.discovered[i]
+                << " retained=" << s.retained[i] << " accepted=" << s.selected[i] << '\n';
+    } // for i
+    for (unsigned i = 1; i <= 256; ++i)
+    {
+        if (s.trial_counts[i] || s.selected_counts[i])
+            out << "Periodic count=" << i << " trials=" << s.trial_counts[i]
+                << " accepted=" << s.selected_counts[i] << '\n';
+    } // for i
+    for (unsigned i = 1; i <= 128; ++i)
+    {
+        if (s.group_counts[i])
+            out << "Periodic groups=" << i << " accepted=" << s.group_counts[i] << '\n';
+        if (s.step_visits[i])
+            out << "Periodic order_step=" << i << " visits=" << s.step_visits[i]
+                << " additions=" << s.groups_step[i] << " saved=" << s.gain_step[i] << '\n';
+    } // for i
+}
+
+
+/// Human-readable labels and tables for serialization_opcode_profile.
+inline const char* serialization_opcode_name(unsigned code)
+{
+    if (code & 128u) return "packed_zero_run";
+    switch (code)
+    {
+    case bm::set_block_end: return "set_block_end";
+    case bm::set_block_1zero: return "set_block_1zero";
+    case bm::set_block_1one: return "set_block_1one";
+    case bm::set_block_8zero: return "set_block_8zero";
+    case bm::set_block_8one: return "set_block_8one";
+    case bm::set_block_16zero: return "set_block_16zero";
+    case bm::set_block_16one: return "set_block_16one";
+    case bm::set_block_32zero: return "set_block_32zero";
+    case bm::set_block_32one: return "set_block_32one";
+    case bm::set_block_azero: return "set_block_azero";
+    case bm::set_block_aone: return "set_block_aone";
+    case bm::set_block_bit: return "set_block_bit";
+    case bm::set_block_sgapbit: return "set_block_sgapbit";
+    case bm::set_block_sgapgap: return "set_block_sgapgap";
+    case bm::set_block_gap: return "set_block_gap";
+    case bm::set_block_gapbit: return "set_block_gapbit";
+    case bm::set_block_arrbit: return "set_block_arrbit";
+    case bm::set_block_bit_interval: return "set_block_bit_interval";
+    case bm::set_block_arrgap: return "set_block_arrgap";
+    case bm::set_block_bit_1bit: return "set_block_bit_1bit";
+    case bm::set_block_gap_egamma: return "set_block_gap_egamma";
+    case bm::set_block_arrgap_egamma: return "set_block_arrgap_egamma";
+    case bm::set_block_bit_0runs: return "set_block_bit_0runs";
+    case bm::set_block_arrgap_egamma_inv: return "set_block_arrgap_egamma_inv";
+    case bm::set_block_arrgap_inv: return "set_block_arrgap_inv";
+    case bm::set_block_64zero: return "set_block_64zero";
+    case bm::set_block_64one: return "set_block_64one";
+    case bm::set_block_gap_bienc: return "set_block_gap_bienc";
+    case bm::set_block_arrgap_bienc: return "set_block_arrgap_bienc";
+    case bm::set_block_arrgap_bienc_inv: return "set_block_arrgap_bienc_inv";
+    case bm::set_block_arrbit_inv: return "set_block_arrbit_inv";
+    case bm::set_block_arr_bienc: return "set_block_arr_bienc";
+    case bm::set_block_arr_bienc_inv: return "set_block_arr_bienc_inv";
+    case bm::set_block_bitgap_bienc: return "set_block_bitgap_bienc";
+    case bm::set_block_bit_digest0: return "set_block_bit_digest0";
+    case bm::set_block_ref_eq: return "set_block_ref_eq";
+    case bm::set_block_xor_ref8: return "set_block_xor_ref8";
+    case bm::set_block_xor_ref16: return "set_block_xor_ref16";
+    case bm::set_block_xor_ref32: return "set_block_xor_ref32";
+    case bm::set_block_xor_gap_ref8: return "set_block_xor_gap_ref8";
+    case bm::set_block_xor_gap_ref16: return "set_block_xor_gap_ref16";
+    case bm::set_block_xor_gap_ref32: return "set_block_xor_gap_ref32";
+    case bm::set_block_xor_chain: return "set_block_xor_chain";
+    case bm::set_block_gap_bienc_v2: return "set_block_gap_bienc_v2";
+    case bm::set_block_arrgap_bienc_v2: return "set_block_arrgap_bienc_v2";
+    case bm::set_block_arrgap_bienc_inv_v2: return "set_block_arrgap_bienc_inv_v2";
+    case bm::set_block_bitgap_bienc_v2: return "set_block_bitgap_bienc_v2";
+    case bm::set_nb_bookmark16: return "set_nb_bookmark16";
+    case bm::set_nb_bookmark24: return "set_nb_bookmark24";
+    case bm::set_nb_bookmark32: return "set_nb_bookmark32";
+    case bm::set_nb_sync_mark8: return "set_nb_sync_mark8";
+    case bm::set_nb_sync_mark16: return "set_nb_sync_mark16";
+    case bm::set_nb_sync_mark24: return "set_nb_sync_mark24";
+    case bm::set_nb_sync_mark32: return "set_nb_sync_mark32";
+    case bm::set_nb_sync_mark48: return "set_nb_sync_mark48";
+    case bm::set_nb_sync_mark64: return "set_nb_sync_mark64";
+    case bm::set_sblock_bienc: return "set_sblock_bienc";
+    case bm::set_block_arr_bienc_8bh: return "set_block_arr_bienc_8bh";
+    case bm::set_block_xor_ref8_um: return "set_block_xor_ref8_um";
+    case bm::set_block_xor_ref16_um: return "set_block_xor_ref16_um";
+    case bm::set_block_xor_ref32_um: return "set_block_xor_ref32_um";
+    case bm::set_block_gap_bienc_v3: return "set_block_gap_bienc_v3";
+    case bm::set_block_gap_bienc_v3s: return "set_block_gap_bienc_v3s";
+    case bm::set_block_arr_bienc_v3: return "set_block_arr_bienc_v3";
+    case bm::set_block_arr_bienc_inv_v3: return "set_block_arr_bienc_inv_v3";
+    case bm::set_block_arr_bienc_v3s: return "set_block_arr_bienc_v3s";
+    case bm::set_block_arr_bienc_inv_v3s: return "set_block_arr_bienc_inv_v3s";
+    case bm::set_block_gap_egamma_v3: return "set_block_gap_egamma_v3";
+    case bm::set_sblock_bienc_v3: return "set_sblock_bienc_v3";
+    case bm::set_sblock_bienc_gaps_v3: return "set_sblock_bienc_gaps_v3";
+    case bm::set_block_bwt: return "set_block_bwt";
+    case bm::set_block_bwt_unpacked: return "set_block_bwt_unpacked";
+    case bm::set_block_bwt_post: return "set_block_bwt_post";
+    case bm::set_block_bwt_full_post: return "set_block_bwt_full_post";
+    case bm::set_block_periodic_post: return "set_block_periodic_post";
+    case bm::set_block_periodic_groups: return "set_block_periodic_groups";
+    case bm::set_block_bwt_periodic_post: return "set_block_bwt_periodic_post";
+    case bm::set_block_periodic_groups_reduced: return "set_block_periodic_groups_reduced";
+    case bm::set_block_bwt_periodic_reduced: return "set_block_bwt_periodic_reduced";
+    case bm::set_block_periodic_groups_first: return "set_block_periodic_groups_first";
+    case bm::set_block_bwt_periodic_first: return "set_block_bwt_periodic_first";
+    case bm::set_block_periodic_interleaved_fixed: return "set_block_periodic_interleaved_fixed";
+    case bm::set_block_bwt_interleaved_fixed: return "set_block_bwt_interleaved_fixed";
+    case bm::set_block_gap_xor_framed: return "set_block_gap_xor_framed";
+    case bm::set_sblock_bienc_adaptive: return "set_sblock_bienc_adaptive";
+    case bm::set_sblock_bienc_wave_adaptive: return "set_sblock_bienc_wave_adaptive";
+    case bm::set_sblock_bienc_large: return "set_sblock_bienc_large";
+    case bm::set_sblock_bienc_wave1024: return "set_sblock_bienc_wave1024";
+    default: return "unlabelled_opcode";
+    }
+}
+
+inline const char* serialization_opcode_group(unsigned code)
+{
+    if (code & 128u) return "zero/full runs";
+    if (code == bm::set_block_gap_xor_framed) return "GAP-XOR";
+    if (code == bm::set_block_bwt ||
+        code == bm::set_block_bwt_unpacked)
+        return "BIT transforms";
+    if (code == bm::set_sblock_bienc || code == bm::set_sblock_bienc_v3 ||
+        code == bm::set_sblock_bienc_gaps_v3 || code == bm::set_sblock_bienc_adaptive ||
+        code == bm::set_sblock_bienc_large || code == bm::set_sblock_bienc_wave1024 || code == bm::set_sblock_bienc_wave_adaptive)
+        return "superblocks";
+    if (code == bm::set_block_end || code == bm::set_block_azero ||
+        (code >= bm::set_nb_bookmark16 && code <= bm::set_nb_sync_mark64))
+        return "framing";
+    if ((code >= bm::set_block_1zero && code <= bm::set_block_32one) ||
+        code == bm::set_block_64zero || code == bm::set_block_64one)
+        return "zero/full runs";
+    if ((code >= bm::set_block_ref_eq && code <= bm::set_block_xor_chain) ||
+        (code >= bm::set_block_xor_ref8_um && code <= bm::set_block_xor_ref32_um))
+        return "reference XOR";
+    switch (code)
+    {
+    case bm::set_block_gap: case bm::set_block_gapbit:
+    case bm::set_block_arrgap: case bm::set_block_gap_egamma:
+    case bm::set_block_arrgap_egamma: case bm::set_block_arrgap_egamma_inv:
+    case bm::set_block_arrgap_inv: case bm::set_block_gap_bienc:
+    case bm::set_block_arrgap_bienc: case bm::set_block_arrgap_bienc_inv:
+    case bm::set_block_gap_bienc_v2: case bm::set_block_arrgap_bienc_v2:
+    case bm::set_block_arrgap_bienc_inv_v2: case bm::set_block_gap_bienc_v3:
+    case bm::set_block_gap_bienc_v3s: case bm::set_block_gap_egamma_v3:
+        return "GAP";
+    default: return "BIT/arrays";
+    }
+}
+
+template<class Out>
+void print_serialization_opcode_profile(Out& out,
+                                        const bm::serialization_opcode_profile& profile)
+{
+    struct row { unsigned code; std::uint64_t count, bytes; };
+    std::vector<row> rows;
+    std::map<std::string, std::pair<std::uint64_t,std::uint64_t> > groups;
+    std::uint64_t packed_count = 0, packed_bytes = 0;
+    for (unsigned code = 0; code < 256; ++code)
+    {
+        const auto& e = profile.opcode[code];
+        if (!e.count) continue;
+        auto& group = groups[serialization_opcode_group(code)];
+        group.first += e.count; group.second += e.bytes;
+        if (code & 128u) { packed_count += e.count; packed_bytes += e.bytes; }
+        else rows.push_back({code,e.count,e.bytes});
+    }
+    if (packed_count) rows.push_back({128u,packed_count,packed_bytes});
+    std::sort(rows.begin(),rows.end(),[](const row& a,const row& b)
+              { return a.bytes != b.bytes ? a.bytes > b.bytes : a.code < b.code; });
+    out << "Opcode profile blobs=" << profile.blobs << " bytes=" << profile.bytes
+        << " header_bytes=" << profile.header_bytes
+        << " id_list_bytes=" << profile.id_list_bytes
+        << " records=" << profile.records
+        << " opcode_bytes=" << profile.records
+        << " payload_bytes=" << (profile.record_bytes()-profile.records)
+        << " reconciled=" << unsigned(profile.reconciles()) << '\n';
+    out << "Opcode group                 Records     Marker bytes    Payload bytes      Total bytes   Percent\n";
+    for (const auto& group : groups)
+    {
+        const auto& e = group.second;
+        out << std::left << std::setw(27) << group.first << std::right
+            << std::setw(12) << e.first << std::setw(17) << e.first
+            << std::setw(17) << e.second-e.first << std::setw(17) << e.second
+            << std::setw(10) << std::fixed << std::setprecision(3)
+            << (profile.bytes ? 100.0*double(e.second)/double(profile.bytes) : 0.0)
+            << '\n';
+    }
+    out << "Opcode ID  Name                               Records     Marker bytes    Payload bytes      Total bytes   Percent\n";
+    for (const auto& r : rows)
+        out << std::setw(9) << r.code << "  " << std::left << std::setw(34)
+            << serialization_opcode_name(r.code) << std::right
+            << std::setw(12) << r.count << std::setw(17) << r.count
+            << std::setw(17) << r.bytes-r.count << std::setw(17) << r.bytes
+            << std::setw(10) << std::fixed << std::setprecision(3)
+            << (profile.bytes ? 100.0*double(r.bytes)/double(profile.bytes) : 0.0)
+            << '\n';
+    out << "Opcode profile scope=top_level embedded_formula_bytes=in_parent_payload\n";
+    if (profile.cardinality_blobs)
+    {
+        out << "Opcode cardinality ids=" << profile.ids
+            << " id_list_ids=" << profile.id_list_ids
+            << " blobs=" << profile.cardinality_blobs
+            << " reconciled=" << unsigned(profile.cardinalities_reconcile()) << '\n';
+        out << "Opcode efficiency: original IDs; total includes marker, metadata and padding.\n"
+            << "Opcode ID       Original IDs  Total bits/int  Payload bits/int\n";
+        for (const auto& r : rows)
+        {
+            std::uint64_t ids = profile.opcode[r.code].ids;
+            if (r.code == 128)
+                for (unsigned c = 129; c < 256; ++c) ids += profile.opcode[c].ids;
+            out << std::setw(9) << r.code << std::setw(19) << ids;
+            if (ids)
+                out << std::setw(16) << std::setprecision(6) << 8.0*double(r.bytes)/double(ids)
+                    << std::setw(18) << 8.0*double(r.bytes-r.count)/double(ids);
+            else out << std::setw(16) << "n/a" << std::setw(18) << "n/a";
+            out << '\n';
+        }
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 template<class TOut>
 void PrintGap(TOut& tout, const bm::gap_word_t* gap_buf)

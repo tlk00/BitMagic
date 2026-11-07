@@ -117,6 +117,21 @@ public:
     /// @brief constructor
     sparse_vector_float_serializer() {}
 
+    /** Select one preset for sign, exponent and mantissa serialization.
+        @param level Bvector compression level (0 through 10).
+        Invalid levels leave all component presets unchanged.
+    */
+    void set_compression_level(unsigned level) BMNOEXCEPT
+    {
+        signSerializer_.set_compression_level(level);
+        exponentSerializer_.set_compression_level(level);
+        mantissaSerializer_.set_compression_level(level);
+    }
+
+    /// Return the shared component compression preset.
+    unsigned get_compression_level() const BMNOEXCEPT
+        { return signSerializer_.get_compression_level(); }
+
     /**
         Add skip-markers for faster range deserialization
 
@@ -236,6 +251,13 @@ public:
     void reset();
     void optimize();
     size_t count_offsets() const BMNOEXCEPT;
+    /**
+        \brief Count serialized bookmarks collected in the float child indexes.
+        \ingroup bvserial
+        \return Total bookmark entries across exponent and mantissa planes.
+        \note The sign bit-vector is not stored in this gather index.
+    */
+    size_t count_bookmarks() const BMNOEXCEPT;
     size_t memory_used() const BMNOEXCEPT;
 
 private:
@@ -710,6 +732,15 @@ size_t sparse_vector_float_deserialization_index<SV>::count_offsets() const BMNO
 //---------------------------------------------------------------------
 
 template<class SV>
+inline
+size_t sparse_vector_float_deserialization_index<SV>::count_bookmarks() const BMNOEXCEPT
+{
+    return exponent_index_.count_bookmarks() + mantissa_index_.count_bookmarks();
+}
+
+//---------------------------------------------------------------------
+
+template<class SV>
 size_t sparse_vector_float_deserialization_index<SV>::memory_used() const BMNOEXCEPT
 {
     return exponent_index_.memory_used() + mantissa_index_.memory_used();
@@ -968,9 +999,10 @@ size_t sparse_vector_float_deserialization_index_serializer<SV>::serialize_to(co
         !child_.serialize_to(index.mantissa_index_, out)) return 0;
     return sv_di_detail::finish(out, start, compact_);
 }
-// --------------------------------------------
+// ----------------------------------------------------------------------------
 // Implementations for: sparse_vector_float_deserialization_index_deserializer
-// --------------------------------------------
+// ----------------------------------------------------------------------------
+
 template<class SV>
 size_t sparse_vector_float_deserialization_index_deserializer<SV>::deserialize(index_type& index, const unsigned char* data, size_t size)
 {

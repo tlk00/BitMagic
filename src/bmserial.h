@@ -52,12 +52,40 @@ For more information please visit:  http://bitmagic.io
 #include "bmutil.h"
 #include "bmbuffer.h"
 #include "bmxor.h"
+#include "bmbwt.h"
+#include "bmblockselection.h"
+#include "bmperiodic.h"
+#include "bmgaproute.h"
+#include "bmgapxor.h"
+#include "bmsblockwave.h"
+#include "bmadaptivedelta.h"
+
+// Development-only histories and timing. Define consistently in all translation
+// units before including BM headers; applies to bvector and every sparse-vector
+// serializer built on it. Aggregate counters used by codec policy remain available.
+#ifndef BM_SERIALIZATION_DIAGNOSTICS
+# define BM_SERIALIZATION_DIAGNOSTICS 0
+#else
+// Measure compression trial timings for development diagnostics only.
+# include <chrono>
+#endif
+
 
 namespace bm
 {
 
-const unsigned set_compression_max = 6;     ///< Maximum supported compression level
+const unsigned set_compression_max = 10;     ///< Maximum supported compression level
 const unsigned set_compression_default = 6; ///< Default compression level
+
+/// Internal lazily constructed large-superblock selection storage.
+template<class BV> struct large_sblock_workspace;
+
+/// Optional diagnostic for BIC sparse-superblock records during decoding.
+struct sblock_bic_record
+{
+    unsigned length; ///< Number of set-bit positions in the BIC array.
+    unsigned bytes;  ///< Complete encoded record, including its opcode.
+};
 
 /**
     Bit-vector serialization class.
@@ -66,8 +94,16 @@ const unsigned set_compression_default = 6; ///< Default compression level
     ready for file or database storage or network transfer.
     
     Reuse of this class for multiple serializations (but not across threads).
-    Class resue offers some performance advantage (helps with temp memory
-    reallocations).
+    Scratch retains its peak capacity across calls; it does not accumulate
+    encoded vectors. Large-vector scratch is released with the serializer.
+    Codec storage is allocated lazily. For workloads known to use a codec on
+    most blocks, speculative reservation (for example 64K positions) can avoid
+    initial growth; the ordinary block-position buffer already follows this rule.
+
+    BM_SERIALIZATION_DIAGNOSTICS defaults to 0 for all serializers, including
+    sparse-vector wrappers. Set it to 1 consistently before including BM headers
+    to collect development histories and timings. Such histories accumulate
+    intentionally; aggregate counters required by codec selection remain enabled.
     
     @ingroup bvserial 
 */
@@ -82,6 +118,11 @@ public:
     typedef typename bvector_type::block_idx_type           block_idx_type;
     typedef typename bvector_type::size_type                size_type;
 
+    typedef bm::bwt_statistics<allocator_type> bwt_statistics_type; ///< BWT observations using the application allocator.
+    typedef bm::periodic_statistics<allocator_type> periodic_statistics_type; ///< Periodic observations using the application allocator.
+    typedef bm::periodic_candidate<allocator_type> periodic_candidate_type; ///< Owned periodic chain description.
+    typedef bm::heap_vector<periodic_candidate_type, allocator_type, false> periodic_candidates_type; ///< Candidate groups with owned chain storage.
+    typedef bm::block_selection_statistics<BV> block_selection_statistics_type; ///< Selection diagnostics using the application allocator.
     typedef byte_buffer<allocator_type>                buffer;
     typedef bm::bv_ref_vector<BV>                      bv_ref_vector_type;
     typedef bm::xor_sim_model<BV>                      xor_sim_model_type;
@@ -113,19 +154,206 @@ public:
 
     // --------------------------------------------------------------------
     /**
-        Set compression level. Higher compression takes more time to process.
-        @param clevel - compression level (0-6)
-        0 - take as is
-        1, 2 - apply light weight RLE/GAP encodings, limited depth hierarchical
-               compression, intervals encoding
-        3 - variant of 2 with different cut-offs
-        4 - delta transforms plus Elias Gamma encoding where possible legacy)
-        5 - Binary Interpolative Coding (BIC) - light settings
-        6 - Binary Interpolative Coding (BIC) - harder settings (tries different laternative strategies)
+        Set the compression preset (0 through 10). Default is 6.
 
-        @sa get_compression_level
+        Level | Policy
+        ----- | ------
+        0 | Store without compression.
+        1-2 | Lightweight RLE/GAP, hierarchical and interval encodings.
+        3 | Lightweight encodings with different cutoffs.
+        4 | Legacy delta transforms and Elias gamma coding.
+        5 | Binary interpolative coding (BIC), light settings.
+        6 | Balanced BIC settings; released wire formats only.
+        7 | Level 6 plus complete-record endpoint and superblock correction selection; released formats only.
+        8 | Level 7 plus GAP-XOR and adaptive, fixed/adaptive-wave, large-count and inverse superblocks.
+        9 | Level 8 plus shared whole-block BWT and retained chain competition; minimum BWT saving 16 bytes.
+        10 | Same candidates as 9; accept any positive BWT saving (one byte).
+
+        Savings include complete record framing, metadata and padding. BWT is
+        compared against the best non-BWT candidate; ties favor non-BWT.
+        Chains are part of the BWT selection at levels 9 and 10.
+        Levels 8-10 may emit formats unsupported by older library readers.
+        Higher levels increase search effort; decoding time is data dependent.
+
+        Calling this function resets codec selectors and their preset parameters,
+        including previous explicit overrides. Call individual option setters
+        afterwards to customize a preset (for example the BWT minimum gain).
+        Invalid levels are ignored. Level 6 remains the default.
+        Reference-XOR supports the block codecs at every level.
+        Superblock selection is disabled while references are attached.
+        Large-count selection falls back to ordinary routing when bookmarks
+        or destructive serialization are enabled.
+
+        @param clevel Compression level in [0, 10].
+        @sa get_compression_level, set_block_selection_bwt_min_gain
     */
     void set_compression_level(unsigned clevel) BMNOEXCEPT;
+
+    /// GAP-XOR decomposition, enabled by presets 8..10. Ordinary records
+    /// remain the complete-size fallback, including with reference XOR.
+    void set_gap_xor_options(bool enabled)
+    {
+        gap_xor_enabled_ = enabled;
+    }
+
+    void set_gap_route_diagnostics(bool enabled) BMNOEXCEPT
+        { gap_route_diagnostics_ = enabled; }
+    const bm::gap_route_statistics& get_gap_route_statistics() const BMNOEXCEPT
+        { return gap_route_stats_; }
+
+    void set_sblock_correction_selection(bool enabled) BMNOEXCEPT
+        { sblock_correction_selection_ = enabled; }
+    /// Large-count/inverse groups, enabled by presets 8..10. Ordinary routing
+    /// is used with bookmarks, reference XOR or destructive serialization.
+    void set_sblock_large_options(bool enabled) BMNOEXCEPT { sblock_large_enabled_=enabled; }
+    void set_sblock_large_inverse_limit(unsigned limit)
+    { bm::serialization_require(limit<bm::set_sub_total_bits/2);sblock_large_inverse_limit_=limit; }
+
+    void set_sblock_adaptive_options(bool enabled) BMNOEXCEPT
+        { sblock_adaptive_enabled_ = enabled; }
+    /// Exactly score both opcode-65 layouts; ties keep the heuristic.
+    void set_block_endpoint_selection(bool enabled) BMNOEXCEPT
+        { block_endpoint_selection_ = enabled; }
+    /// Reuse original-polarity whole-block BWT for 72/96 selection.
+    /// Requires whole-block composed selection; the caller retains its policy.
+    void set_bwt_shared_options(bool enabled=true) BMNOEXCEPT
+    {
+        BM_ASSERT(!enabled || (selection_compose_enabled_ &&
+                              bwt_options_.whole_block));
+        bwt_shared_enabled_=enabled;
+    }
+
+
+    void set_sblock_wave_adaptive_options(bool enabled) BMNOEXCEPT
+        { sblock_wave_adaptive_enabled_=enabled;
+          if (enabled) sblock_wave1024_enabled_=true; }
+
+    void set_sblock_wave1024_options(bool enabled) BMNOEXCEPT
+        { sblock_wave1024_enabled_ = enabled; }
+
+
+
+
+    // GAP-length tolerance for sparse-superblock grouping; 14 restores legacy routing.
+    void set_sblock_gap_tolerance(unsigned percent) BMNOEXCEPT
+        { BM_ASSERT(percent >= 14 && percent <= 100);
+          sblock_gap_tolerance_ = percent; }
+
+
+    /// Exhaustive choice: ordinary, independent periodic step 1, whole-block BWT.
+    void set_block_selection_options()
+    {
+        bm::serialization_require(!bwt_enabled_ && !periodic_enabled_);
+        periodic_options_ = bm::periodic_options();
+        periodic_options_.min_step = periodic_options_.max_step = 1;
+        periodic_options_.order = 1; periodic_options_.sample = 1;
+        periodic_options_.min_length = 4; periodic_options_.max_holes = 1;
+        periodic_options_.max_chains = periodic_options_.formula_chains = 256;
+        periodic_options_.trial_budget = 2304;
+        bwt_options_ = bm::bwt_options();
+        bwt_options_.whole_block = bwt_options_.diagnostics = true;
+        selection_enabled_ = periodic_enabled_ = bwt_enabled_ = true;
+        selection_bwt_min_gain_ = selection_stats_.bwt_min_gain = 16;
+    }
+    void set_block_selection_compose_options()
+    {
+        set_block_selection_options();
+        selection_compose_enabled_ = selection_stats_.composed = true;
+    }
+    void set_block_selection_multistep_options(unsigned max_step = 64,
+                                               unsigned min_gain = 2,
+                                               unsigned streak = 4,
+                                               unsigned min_stop_step = 8)
+    {
+        bm::serialization_require(max_step >= 1 && max_step <= 64 &&
+                               min_gain >= 1 && min_gain <= 65535 && streak <= 64 &&
+                               min_stop_step >= 1 && min_stop_step <= max_step);
+        set_block_selection_compose_options();
+        multistep_options_ = periodic_options_;
+        multistep_options_.order = 2;
+        multistep_options_.max_step = max_step;
+        multistep_options_.min_step_gain = min_gain;
+        multistep_options_.marginal_streak = streak;
+        multistep_options_.min_stop_step = min_stop_step;
+        selection_multistep_enabled_ = selection_stats_.multistep = true;
+    }
+    void set_block_selection_step2_options()
+    {
+        set_block_selection_compose_options();
+        step2_options_ = periodic_options_;
+        step2_options_.min_step = step2_options_.max_step = 2;
+        selection_step2_enabled_ = selection_stats_.step2 = true;
+    }
+    /// Override the complete-record BWT saving threshold after selecting
+    /// level 9/10 or enabling block selection. Zero still requires a strict win.
+    void set_block_selection_bwt_min_gain(unsigned bytes)
+    {
+        bm::serialization_require(selection_enabled_ && bytes <= 65535);
+        selection_bwt_min_gain_ = selection_stats_.bwt_min_gain = bytes;
+    }
+    /// Experimental step-1 formula start reduction; changes only opt-in records.
+    void set_periodic_step1_start_reduction(bool enabled) BMNOEXCEPT
+        { periodic_step1_start_reduction_ = enabled; }
+    /// Experimental first-start metadata and bounded BIC for the remainder.
+    void set_periodic_step1_first_start(bool enabled) BMNOEXCEPT
+    {
+        periodic_step1_first_start_ = enabled;
+        if (enabled) periodic_step1_start_reduction_ = true;
+    }
+    /// Experimental BIC of interleaved step-1 starts and ends.
+    /// 1=fixed interleaving, 4=choose gamma or fixed per formula.
+    void set_periodic_step1_interleaved(unsigned mode)
+    {
+        bm::serialization_require(mode == 0 || mode == 1 || mode == 4);
+        periodic_step1_interleaved_ = mode;
+        if (mode) set_periodic_step1_first_start(true);
+    }
+    const block_selection_statistics_type& get_block_selection_statistics() const BMNOEXCEPT
+        { return selection_stats_; }
+
+    /// Experimental independent binary BWT of the 64 BIT-block waves.
+    void set_bwt_options(const bm::bwt_options& options)
+    {
+        bm::serialization_require(options.sample && !periodic_enabled_);
+        bwt_options_ = options;
+        bwt_options_.whole_block = false;
+        bwt_enabled_ = true;
+    }
+    /// One binary BWT across the complete BIT block, with byte-size fallback.
+    void set_bwt_full_options(const bm::bwt_options& options)
+    {
+        bm::serialization_require(options.sample &&
+                               !bwt_enabled_ && !periodic_enabled_);
+        bwt_options_ = options;
+        bwt_options_.whole_block = true;
+        bwt_enabled_ = true;
+    }
+    void set_bwt_vector_index(bm::id64_t index) BMNOEXCEPT
+        { bwt_vector_index_ = index; }
+    const bwt_statistics_type& get_bwt_statistics() const BMNOEXCEPT
+        { return bwt_stats_; }
+
+    /// Experimental periodic-chain predictor; ordinary block wins ties.
+    void set_periodic_options(const bm::periodic_options& options)
+    {
+        bm::serialization_require(!bwt_enabled_ &&
+              options.min_step >= 1 &&
+              options.min_step <= options.max_step &&
+              options.max_step <= (options.order ? 128u : 64u) && options.max_variants >= 1 &&
+              options.max_variants <= 64 && options.min_length >= 4 &&
+              options.max_chains >= 1 && options.max_chains <= 256 &&
+              options.max_holes <= 1 && options.sample >= 1 &&
+              options.order <= 4 && options.trial_budget >= 1 &&
+              options.trial_budget <= 65535 && options.formula_chains >= 1 &&
+              options.formula_chains <= 256 &&
+              (!options.diagnostics || options.max_variants >= 2));
+        periodic_options_ = options;
+        periodic_enabled_ = true;
+    }
+    void set_periodic_vector_index(bm::id64_t index) BMNOEXCEPT
+        { periodic_vector_index_ = index; }
+    const periodic_statistics_type& get_periodic_statistics() const BMNOEXCEPT
+        { return periodic_stats_; }
 
     /**
         Get current compression level.
@@ -256,6 +484,8 @@ public:
         If super block (group of 256 blocks) is very sparse it applies 
         block size expansion (for the compression purposes) to 
         improve compression rates.
+        Zero disables count-based sparse grouping while retaining the block
+        statistics survey (independent large-superblock selection is unchanged).
     */
     void set_sparse_cutoff(unsigned cutoff) BMNOEXCEPT;
 
@@ -333,6 +563,12 @@ protected:
     
     /*! Encode GAP block */
     void encode_gap_block(const bm::gap_word_t* gap_block, bm::encoder& enc);
+    void encode_gap_xor_block(const bm::gap_word_t* gap_block, bm::encoder& enc);
+    /// Apply block transforms; try_gap also scores BIT-to-GAP for both sides
+    /// of a reference-XOR comparison, whose residual has no stored GAP form.
+    unsigned char encode_selected_block(const bm::word_t* blk,
+        const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc,
+        bool try_gap = false);
 
     /*! Encode GAP block with Elias Gamma coder */
     void gamma_gap_block(const bm::gap_word_t* gap_block,
@@ -360,7 +596,12 @@ protected:
                              bm::encoder& enc, bool inverted) BMNOEXCEPT;
 
     void bienc_arr_sblock(const BV& bv, unsigned sb,
-                          bm::encoder& enc) BMNOEXCEPT;
+                          bm::encoder& enc, int correction_mode = -1);
+    void prepare_sblock_wave1024(unsigned sb, unsigned len);
+    bool try_sblock_wave(unsigned sb, unsigned len, bm::encoder& enc,
+                         unsigned char* begin, size_t rival_bytes);
+    void bienc_arr_sblock_select(const BV& bv, unsigned sb,
+                                 bm::encoder& enc);
 
     void bienc_gaps_sblock(const BV& bv, unsigned sb,
                            const bm::bv_sub_survey& sub_stat,
@@ -456,6 +697,20 @@ protected:
                          const bm::bv_sub_survey& sub_stat, block_idx_type nb,
                          const block_match_chain_type& mchain, bm::encoder& enc);
 
+    unsigned char encode_bwt_block(const bm::word_t* blk,
+                         const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+                         bm::encoder& enc, bm::word_t* transformed_out = 0,
+                         unsigned short* primary_out = 0);
+    unsigned char encode_periodic_block(const bm::word_t* blk,
+                         const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+                         bm::encoder& enc,
+                         const bm::periodic_options* override_options = nullptr);
+
+    unsigned char encode_selection_block(const bm::word_t* blk,
+                         const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+                         bm::encoder& enc);
+    size_t encode_bwt_shared_candidate(const bm::word_t* transformed, unsigned short primary,
+                         bm::encoder& enc, size_t comparison_size, size_t nonbwt_size);
     /// Determine best representation for a bit-block
     unsigned char find_bit_best_encoding(
                             const bm::word_t* block,
@@ -517,6 +772,39 @@ protected:
                     unsigned i, unsigned j) BMNOEXCEPT;
 
 private:
+    buffer large_sblock_storage_; ///< Allocator-owned storage for the lazy selection workspace.
+    bm::large_sblock_workspace<BV>* large_sblock_workspace_ = nullptr; ///< Constructed workspace, or null.
+    /// Lazily construct and return exclusive large-superblock selection scratch.
+    bm::large_sblock_workspace<BV>& large_sblock_scratch();
+    bool sblock_large_enabled_ = false;
+    unsigned sblock_large_inverse_limit_ = 196607;
+    void select_large_sblocks(const BV& bv, buffer& baseline, buffer& selected);
+    bool block_endpoint_selection_ = false;
+    bool sblock_correction_selection_ = false;
+    bm::heap_vector<unsigned char, allocator_type, true> sblock_correction_record_;
+    bool sblock_adaptive_enabled_ = false;
+    bool sblock_wave1024_enabled_ = false;
+    bool sblock_wave_adaptive_enabled_ = false;
+    bm::sblock_wave_adaptive_model<allocator_type> sblock_wave_adaptive_model_;
+    bm::sblock_wave_record sblock_wave1024_pending_;
+    bm::sblock_wave1024_model<allocator_type> sblock_wave1024_model_;
+    buffer sblock_wave1024_buffer_;
+    buffer sblock_wave1024_best_buffer_;
+    bm::heap_vector<unsigned, allocator_type, true> sblock_original_values_;
+    unsigned sblock_gap_tolerance_ = 100;
+    buffer sblock_adaptive_buffer_;
+    buffer sblock_adaptive_best_buffer_;
+    bm::heap_vector<unsigned, allocator_type, true> sblock_adaptive_values_;
+    bm::heap_vector<unsigned, allocator_type, true> sblock_adaptive_corrections_;
+    bool gap_route_diagnostics_ = false;
+    bm::gap_route_statistics gap_route_stats_;
+    // Fixed block bounds permit an optional speculative reservation at startup.
+    // Lazy allocation keeps unused codecs cheap; subsequent calls retain capacity.
+    bm::heap_vector<bm::gap_word_t, allocator_type, true> gap_xor_cleaned_; ///< Cleaned GAP scratch.
+    bm::heap_vector<bm::gap_word_t, allocator_type, true> gap_xor_positions_; ///< Exception positions.
+    bm::heap_vector<bm::gap_word_t, allocator_type, true> gap_xor_corrected_; ///< Delta-corrected positions.
+    bool gap_xor_enabled_ = false;
+    buffer gap_xor_best_buffer_;
     serializer(const serializer&);
     serializer& operator=(const serializer&);
     
@@ -528,9 +816,41 @@ private:
     typedef typename allocator_type::allocator_pool_type    allocator_pool_type;
 
 private:
-    buffer             xor_trial_buffer_; ///< reusable block-local XOR trial storage
+    bool               selection_enabled_ = false;
+    bool bwt_shared_enabled_ = false;
+    bm::id64_t bwt_full_transforms_ = 0;
+    buffer bwt_unpacked_trial_buffer_;
+    bool               selection_compose_enabled_ = false;
+    bool               selection_multistep_enabled_ = false;
+    bool               selection_step2_enabled_ = false;
+    unsigned           selection_bwt_min_gain_ = 0;
+    bm::periodic_options multistep_options_;
+    bm::periodic_options step2_options_;
+    block_selection_statistics_type selection_stats_;
+    bm::bwt_block_observation last_bwt_observation_; ///< Current candidate metadata, not a history.
+    bm::periodic_order_block last_periodic_observation_; ///< Current periodic candidate metadata.
+    buffer             selection_best_buffer_;
+    buffer             selection_nonbwt_buffer_;
+    bool               bwt_enabled_ = false;
+    bool               periodic_enabled_ = false;
+    bool               periodic_step1_start_reduction_ = false;
+    bool               periodic_step1_first_start_ = false;
+    unsigned           periodic_step1_interleaved_ = 0;
+    bm::periodic_options periodic_options_;
+    periodic_statistics_type periodic_stats_;
+    bm::periodic_search_workspace<allocator_type> periodic_workspace_; ///< Retained bounded search scratch.
+    bm::id64_t periodic_vector_index_ = 0;
+    bm::bwt_options    bwt_options_;
+    bwt_statistics_type bwt_stats_;
+    bm::id64_t bwt_vector_index_ = 0;
+    buffer             bwt_matrix_buffer_;
+    bm::bwt_full_workspace<allocator_type> bwt_full_workspace_;
+    buffer             transform_best_buffer_; ///< Retained best periodic/transform candidate.
+    buffer             xor_trial_buffer_; ///< inner codec trial storage
+    buffer             ref_xor_trial_buffer_; ///< outer reference prefix and residual
+    buffer             gap_candidate_buffer_; ///< BIT-to-GAP candidate output
     buffer             output_buffer_; ///< retained allocator-typed output memory storage
-    block_arridx_type  bit_idx_arr_;
+    block_arridx_type  block_positions_; ///< Shared block positions / GAP endpoints; exclusive codec scratch.
     sblock_arridx_type sb_bit_idx_arr_;
     unsigned           scores_[bm::block_waves];
     unsigned char      models_[bm::block_waves];
@@ -596,10 +916,14 @@ private:
 
 /**
     Base deserialization class
+    \tparam DEC Decoder type.
+    \tparam BLOCK_IDX Block index type.
+    \tparam Alloc Application bvector allocator for owned scratch storage.
+        BV-based deserializers pass BV::allocator_type explicitly.
     \ingroup bvserial
     @internal
 */
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc = bm::standard_allocator>
 class deseriaizer_base
 {
 protected:
@@ -647,6 +971,11 @@ protected:
     void read_digest0_block(decoder_type& decoder, bm::word_t* blk) BMDECNOEXCEPT(DEC);
     
     
+    /// Read a framed BWT/periodic residual and restore it before merging.
+    void read_bwt_block(decoder_type& decoder, bm::word_t* blk);
+    void read_bwt_unpacked_block(decoder_type& decoder, bm::word_t* blk)
+        { bm::bwt_bic_decoder<Alloc>::decode(decoder, blk, *bwt_decode_workspace_); }
+
     /// read bit-block encoded as runs
     static
     void read_0runs_block(decoder_type& decoder, bm::word_t* blk) BMDECNOEXCEPT(DEC);
@@ -664,8 +993,17 @@ protected:
 protected:
     BM_DECLARE_TEMP_BLOCK(tb_wflags_) ///< temp flags for sub-block DR compression
 
+    bm::bwt_full_workspace<Alloc> bwt_decode_storage_; ///< Lazy inverse scratch for owned decoding.
+    bm::bwt_full_workspace<Alloc>* bwt_decode_workspace_ = &bwt_decode_storage_; ///< Owned or borrowed inverse scratch.
+    bm::heap_vector<unsigned, Alloc, true> wave_map_; ///< Reusable encoded wave map.
+    bm::heap_vector<unsigned, Alloc, true> wave_occupied_; ///< Reusable expanded occupied waves.
     bm::gap_word_t*   id_array_ = 0; ///< ptr to idx array for temp decode use
     unsigned*         sb_id_array_=0; ///< ptr to super-block idx array (temp)
+    bool large_sb_inverse_=false;
+    bm::heap_vector<unsigned, Alloc, true> large_sb_ids_; ///< dynamically sized high-count scratch
+    /// Lazily reserved opcode-92 scratch, reused across superblocks.
+    bm::heap_vector<unsigned, Alloc, true> sblock_adaptive_corrections_;
+    bm::heap_vector<unsigned char, Alloc, true> sblock_adaptive_flags_;
 
     block_idx_type       bookmark_idx_=0;///< last bookmark block index
     unsigned             skip_offset_=0; ///< bookmark to skip 256 encoded blocks
@@ -684,14 +1022,16 @@ class deserialization_index;
 */
 template<class BV, class DEC>
 class deserializer :
-            protected deseriaizer_base<DEC, typename BV::block_idx_type>
+            protected deseriaizer_base<DEC, typename BV::block_idx_type, typename BV::allocator_type>
 {
 public:
     typedef BV                                             bvector_type;
     typedef typename bvector_type::allocator_type          allocator_type;
     typedef typename BV::size_type                         size_type;
     typedef typename bvector_type::block_idx_type          block_idx_type;
-    typedef deseriaizer_base<DEC, block_idx_type>          parent_type;
+    typedef bm::heap_vector<block_idx_type, allocator_type, true> block_starts_vect_type; ///< Observed record start blocks.
+    typedef bm::heap_vector<bm::sblock_bic_record, allocator_type, true> sblock_records_vect_type; ///< Observed superblock records.
+    typedef deseriaizer_base<DEC, block_idx_type, allocator_type> parent_type;
     typedef typename parent_type::decoder_type             decoder_type;
     typedef bm::bv_ref_vector<BV>                          bv_ref_vector_type;
     typedef bm::deserialization_index<BV>                  deserialization_index_type;
@@ -700,7 +1040,18 @@ public:
     deserializer();
     ~deserializer();
 
+    /// Optional in-memory logical block starts for top-level record profiling.
+    /// Cleared on each traversal; not part of the serialized index or wire format.
+    void set_record_block_starts(block_starts_vect_type* starts) BMNOEXCEPT
+        { record_block_starts_ = starts; }
+
+    /// Collect sparse-superblock BIC lengths and record sizes when requested.
+    void set_sblock_bic_records(sblock_records_vect_type* records) BMNOEXCEPT
+        { sblock_bic_records_ = records; }
+
     /*!  Deserialize bit-vector (equivalent to logical OR)
+        An initially empty destination is normalized to GAP/solid blocks where
+        possible after restoration. Nonempty destinations keep their merge policy.
         @param bv - target bit-vector
         @param buf - BLOB memory pointer
         @param temp_block - temporary buffer [block size] (not used)
@@ -788,6 +1139,9 @@ protected:
    typedef typename BV::blocks_manager_type blocks_manager_type;
 
 protected:
+    void normalize_decoded_blocks(blocks_manager_type& bman,
+                                  block_idx_type first, block_idx_type last);
+
     // IN supplies a RAM decoder and explicit, fallible window/seek operations.
     // All byte offsets in this traversal are relative to the current BLOB.
     template<class IN> size_t deserialize_from(bvector_type& bv, IN& in);
@@ -840,7 +1194,7 @@ protected:
     typedef typename allocator_type::allocator_pool_type allocator_pool_type;
 
 protected:
-    block_arridx_type    bit_idx_arr_;
+    block_arridx_type    block_positions_;
     sblock_arridx_type   sb_bit_idx_arr_;
     block_arridx_type    gap_temp_block_;
     bm::word_t*          temp_block_;
@@ -865,6 +1219,7 @@ protected:
 
     // Range deserialization settings
     //
+    bool                      normalize_gap_ = false; ///< Empty destination at decode entry.
     unsigned                  is_range_set_;
     size_type                 idx_from_;
     size_type                 idx_to_;
@@ -873,6 +1228,8 @@ protected:
     deserialization_index_type*       deserialization_index_out_;
     const deserialization_index_type* deserialization_index_in_;
     const bvector_type*               block_digest_in_;
+    sblock_records_vect_type* sblock_bic_records_ = 0;
+    block_starts_vect_type* record_block_starts_ = 0;
 };
 
 
@@ -1117,17 +1474,19 @@ protected:
     static unsigned vector_codec(const V& v, bool is_block_vector) BMNOEXCEPT;
 
     template<class V>
-    static void validate_and_encode_vector(bm::encoder& enc,
+    void validate_and_encode_vector(bm::encoder& enc,
                                            unsigned field_id,
                                            const V& v,
                                            bool is_block_vector,
                                            size_t serialized_size,
-                                           unsigned compression_level);
+                                           unsigned compression_level) const;
 
     static void throw_bad_index();
     static void require(bool condition);
 
 protected:
+    // Const encoding calls require exclusive access to this reusable workspace.
+    mutable bm::heap_vector<bm::word_t, allocator_type, true> index_values_; ///< Corrected index values.
     unsigned        compression_level_;
     serialization_format format_;
 };
@@ -1180,13 +1539,13 @@ protected:
     static bool validate_vector_order(const V& v) BMNOEXCEPT;
 
     template<class V, class DEC>
-    static void decode_vector(V& v,
+    void decode_vector(V& v,
                               DEC& dec,
                               const unsigned char* section_end,
                               unsigned codec,
                               bm::id64_t count,
                               bool is_block_vector,
-                              size_t serialized_size);
+                              size_t serialized_size) const;
 
     template<class DEC>
     size_t deserialize_impl(index_type& dindex,
@@ -1198,6 +1557,9 @@ protected:
     static void require(bool condition);
 
 protected:
+    // Const decoding calls require exclusive access to retained scratch.
+    mutable bm::heap_vector<bm::word_t, typename BV::allocator_type, true> index_values_; ///< Decoded corrected values.
+    mutable index_type pending_index_; ///< Transactional index, reused after swap.
     serialization_format format_;
 };
 
@@ -1286,7 +1648,7 @@ template<class BV>
 void deserialization_index_serializer<BV>::set_compression_level(
                                                     unsigned clevel) BMNOEXCEPT
 {
-    if (clevel <= bm::set_compression_max)
+    if (clevel <= 6)
         compression_level_ = clevel;
 }
 
@@ -1491,7 +1853,7 @@ void deserialization_index_serializer<BV>::validate_and_encode_vector(
                                            const V& v,
                                            bool is_block_vector,
                                            size_t serialized_size,
-                                           unsigned compression_level)
+                                           unsigned compression_level) const
 {
     require(validate_vector_order(v));
 
@@ -1569,7 +1931,7 @@ void deserialization_index_serializer<BV>::validate_and_encode_vector(
         enc.put_32(max_v);
         enc.put_16((unsigned short)delta);
 
-        bm::heap_vector<bm::word_t, allocator_type, true> wv;
+        auto& wv = index_values_;
         bm::word_t* wv_ptr = wv.resize_no_copy(sz);
         wv_ptr[0] = min_v;
         for (size_t i = 1; i < sz; ++i)
@@ -1657,7 +2019,7 @@ void deserialization_index_deserializer<BV>::decode_vector(
                               unsigned codec,
                               bm::id64_t count,
                               bool is_block_vector,
-                              size_t serialized_size)
+                              size_t serialized_size) const
 {
     require(count <= bm::id64_t(size_t(-1)));
     const size_t sz = size_t(count);
@@ -1719,8 +2081,7 @@ void deserialization_index_deserializer<BV>::decode_vector(
         v[sz-1] = max_value;
         if (sz > 2)
         {
-            bm::heap_vector<bm::word_t,
-                            typename bvector_type::allocator_type, true> wv;
+            auto& wv = index_values_;
             bm::word_t* wv_ptr = wv.resize_no_copy(sz - 2);
             bm::bit_in<DEC> bi(dec);
             bi.bic_decode_u32_cm(wv_ptr, unsigned(sz - 2), min_v, max_v);
@@ -2035,7 +2396,8 @@ size_t deserialization_index_deserializer<BV>::deserialize_impl(
     const size_t source_size = size_t(serialized_size64);
     const unsigned char* record_end = buf + record_size;
 
-    index_type tmp;
+    auto& tmp = pending_index_;
+    tmp.clear();
     tmp.serialized_size_ = source_size;
 
     bool seen[bm::di_format::section_count] = { false };
@@ -2310,24 +2672,48 @@ private:
     size_type                  nb_range_to_ = 0;
 };
 
+/** \brief Retained block scratch lent to short-lived stream iterators.
+    \ingroup bvserial
+    \internal
+    \tparam Alloc Application allocator. One workspace serves one active iterator.
+*/
+template<class Alloc>
+struct serial_iterator_workspace
+{
+    bm::heap_vector<bm::gap_word_t, Alloc, true> positions; ///< Block positions.
+    bm::heap_vector<bm::word_t, Alloc, true> exceptions0; ///< First exception scratch.
+    bm::heap_vector<bm::word_t, Alloc, true> exceptions1; ///< Second exception scratch.
+    bm::bwt_full_workspace<Alloc> inverse; ///< Lazy BWT inverse scratch.
+};
+
 /*!
     @brief Serialization stream iterator
 
     Iterates blocks and control tokens of serialized bit-stream
+    \tparam DEC Decoder type.
+    \tparam BLOCK_IDX Block index type.
+    \tparam Alloc Application bvector allocator, forwarded to decoder scratch.
     \ingroup bvserial
     @internal
 */
-template<class DEC, typename BLOCK_IDX>
-class serial_stream_iterator : protected deseriaizer_base<DEC, BLOCK_IDX>
+template<class DEC, typename BLOCK_IDX, class Alloc = bm::standard_allocator>
+class serial_stream_iterator : protected deseriaizer_base<DEC, BLOCK_IDX, Alloc>
 {
 public:
-    typedef typename deseriaizer_base<DEC, BLOCK_IDX>::decoder_type decoder_type;
+    typedef typename deseriaizer_base<DEC, BLOCK_IDX, Alloc>::decoder_type decoder_type;
     typedef BLOCK_IDX   block_idx_type;
-    typedef deseriaizer_base<DEC, block_idx_type>    parent_type;
+    typedef deseriaizer_base<DEC, block_idx_type, Alloc> parent_type;
 
 public:
-    serial_stream_iterator(const unsigned char* buf);
+    /** \brief Construct a stream cursor, optionally borrowing retained scratch.
+        \param buf Serialized bvector source.
+        \param workspace Exclusive scratch surviving the iterator, or null
+            to use locally owned storage.
+    */
+    serial_stream_iterator(const unsigned char* buf,
+                           bm::serial_iterator_workspace<Alloc>* workspace = nullptr);
     ~serial_stream_iterator();
+
 
     /// serialized bitvector size
     block_idx_type bv_size() const { return bv_size_; }
@@ -2388,7 +2774,7 @@ public:
     /// member function pointer for bitset-bitset get operations
     /// 
     typedef 
-        unsigned (serial_stream_iterator<DEC, BLOCK_IDX>::*get_bit_func_type)
+        unsigned (serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::*get_bit_func_type)
                                                 (bm::word_t*,bm::word_t*);
 
     unsigned 
@@ -2466,6 +2852,7 @@ protected:
 
     gap_word_t         gap_head_;
     gap_word_t*        block_idx_arr_;
+    bm::serial_iterator_workspace<Alloc> owned_workspace_; ///< Fallback scratch for standalone iteration.
 };
 
 /**
@@ -2583,11 +2970,11 @@ private:
     typedef
         typename BV::blocks_manager_type               blocks_manager_type;
     typedef
-        serial_stream_iterator<bm::decoder, block_idx_type> serial_stream_current;
+        serial_stream_iterator<bm::decoder, block_idx_type, allocator_type> serial_stream_current;
     typedef
-        serial_stream_iterator<bm::decoder_big_endian, block_idx_type> serial_stream_be;
+        serial_stream_iterator<bm::decoder_big_endian, block_idx_type, allocator_type> serial_stream_be;
     typedef 
-        serial_stream_iterator<bm::decoder_little_endian, block_idx_type> serial_stream_le;
+        serial_stream_iterator<bm::decoder_little_endian, block_idx_type, allocator_type> serial_stream_le;
     typedef
         bm::deserializer<BV, bm::decoder_little_endian> deserializer_le;
     typedef
@@ -2605,6 +2992,7 @@ private:
     bm::iterator_deserializer<BV, serial_stream_le> it_d_le_;
 
     deserializer<BV, bm::decoder> de_;
+    bm::serial_iterator_workspace<allocator_type> iterator_workspace_; ///< Retained scratch across operation calls.
     deserializer_le de_le_;
     deserializer_be de_be_;
 
@@ -2635,7 +3023,7 @@ enum serialization_header_mask {
     BM_HM_NO_BO   = (1 << 3),  ///< no byte-order
     BM_HM_NO_GAPL = (1 << 4),  ///< no GAP levels
     BM_HM_64_BIT  = (1 << 5),  ///< 64-bit vector
-    BM_HM_HXOR    = (1 << 6),  ///< horizontal XOR compression turned ON
+    BM_HM_HXOR    = (1 << 6),  ///< reference-XOR compression turned ON
     BM_HM_SPARSE  = (1 << 7)   ///< very sparse vector
 };
 
@@ -2722,6 +3110,93 @@ const unsigned char set_block_gap_egamma_v3     = 67; //!< Gamma compressed GAP 
 const unsigned char set_sblock_bienc_v3         = 68; //!< super-block interpolated list v3
 const unsigned char set_sblock_bienc_gaps_v3    = 69; //!< super-block of sparse GAPs
 
+// Released opcode IDs 0..69 above are permanent, including reserved entries.
+// New retained top-level records and inner frame markers share this registry.
+// 70..71 VACANT: retired unreleased horizontal residual/formula formats.
+const unsigned char set_block_bwt              = 72; //!< framed BWT and/or periodic residual
+const unsigned char set_block_bwt_post         = 73; //!< per-wave BWT primary indexes
+const unsigned char set_block_bwt_full_post    = 74; //!< whole-block BWT primary index
+const unsigned char set_block_periodic_post    = 75; //!< single periodic-chain formula
+const unsigned char set_block_periodic_groups  = 76; //!< grouped periodic formula
+const unsigned char set_block_bwt_periodic_post = 77; //!< grouped formula then full BWT inverse
+const unsigned char set_block_periodic_groups_reduced = 78; //!< min-length reduced step-1 starts
+const unsigned char set_block_bwt_periodic_reduced = 79; //!< reduced formula then BWT inverse
+const unsigned char set_block_periodic_groups_first = 80; //!< explicit first step-1 start
+const unsigned char set_block_bwt_periodic_first = 81; //!< explicit first start then BWT inverse
+// 82..83 VACANT: retired unreleased BIC-ends formats.
+const unsigned char set_block_periodic_interleaved_fixed = 84; //!< fixed start/end interleaving
+const unsigned char set_block_bwt_interleaved_fixed = 85; //!< fixed interleaving then BWT inverse
+// 86..89 VACANT: retired unreleased formula variants.
+const unsigned char set_sblock_bienc_wave1024 = 90; //!< fixed 1,024-bit wave map (occupied)
+// 91 VACANT: retired unreleased interleaved correction flags.
+const unsigned char set_sblock_bienc_adaptive = 92; //!< adaptive steps and grouped flags
+// 93 VACANT: retired unreleased adaptive GAP-XOR.
+const unsigned char set_block_gap_xor_framed = 94; //!< GAP base plus global BIC XOR residual
+// 95 VACANT: retired unreleased packed-wave BWT.
+const unsigned char set_block_bwt_unpacked = 96; //!< whole-block BWT with direct BIC payload
+const unsigned char set_sblock_bienc_wave_adaptive = 97; //!< adaptive wave width
+const unsigned char set_sblock_bienc_large = 98; //!< positive/inverse high-count superblock BIC
+// 99..127 VACANT: unassigned.
+// 128..255 are packed zero-run framing, NOT available for ordinary opcodes.
+// Retired experimental streams require their original decoder. In particular,
+// earlier unrelated experiments using 90 do not define the retained 90 format.
+
+/// Compile-time guard for new assignments; do not include vacant IDs here.
+constexpr unsigned char serialization_new_opcodes[] = {
+    set_block_bwt,
+    set_block_bwt_post, set_block_bwt_full_post, set_block_periodic_post,
+    set_block_periodic_groups, set_block_bwt_periodic_post,
+    set_block_periodic_groups_reduced, set_block_bwt_periodic_reduced,
+    set_block_periodic_groups_first, set_block_bwt_periodic_first,
+    set_block_periodic_interleaved_fixed, set_block_bwt_interleaved_fixed,
+    set_sblock_bienc_wave1024, set_sblock_bienc_adaptive,
+    set_block_gap_xor_framed, set_block_bwt_unpacked,
+    set_sblock_bienc_wave_adaptive, set_sblock_bienc_large
+};
+constexpr bool serialization_new_opcode_numbers_valid()
+{
+    bool used[128] = {};
+    for (unsigned code : serialization_new_opcodes)
+    {
+        if (code <= 69 || code >= 128 || used[code]) return false;
+        used[code] = true;
+    }
+    return true;
+}
+static_assert(serialization_new_opcode_numbers_valid(),
+              "New serialization opcodes must be unique and within 70..127");
+
+/// Internal bounds for the retained opcode-92 layout and its scratch buffers.
+constexpr unsigned sblock_adaptive_min_step = 16;
+constexpr unsigned sblock_adaptive_max_entries = bm::gap_max_bits - 1;
+constexpr unsigned sblock_adaptive_max_windows =
+    1 + (sblock_adaptive_max_entries - 1) / sblock_adaptive_min_step;
+
+inline bool bwt_is_bic_marker(unsigned char marker) BMNOEXCEPT
+{
+    switch (marker)
+    {
+    case set_block_arrgap_bienc:
+    case set_block_arrgap_bienc_inv:
+    case set_block_arrgap_bienc_v2:
+    case set_block_arrgap_bienc_inv_v2:
+    case set_block_arr_bienc:
+    case set_block_arr_bienc_inv:
+    case set_block_arr_bienc_8bh:
+    case set_block_arr_bienc_v3:
+    case set_block_arr_bienc_inv_v3:
+    case set_block_arr_bienc_v3s:
+    case set_block_arr_bienc_inv_v3s:
+    case set_block_gap_bienc:
+    case set_block_gap_bienc_v2:
+    case set_block_gap_bienc_v3:
+    case set_block_gap_bienc_v3s:
+    case set_block_bitgap_bienc:
+        return true;
+    default: return false;
+    }
+}
+
 const unsigned sparse_max_l5 = 48;
 const unsigned sparse_max_l6 = 256;
 
@@ -2743,6 +3218,42 @@ const unsigned short h3f_exceptions = (1 << 7); ///< there are exceptopn lists
 const unsigned tmp_buff_alloc_factor = 8; ///< multiplier for alloc_bit_block()
 
 
+/** \brief Retained storage for whole-vector large-superblock selection.
+    \ingroup bvserial
+    \internal
+    \tparam BV Application bvector type supplying the allocator.
+    Buffers retain peak input size, never cumulative history. Codec arrays are
+    bounded by superblock geometry; index and blobs scale with the largest vector.
+*/
+template<class BV>
+struct large_sblock_workspace
+{
+    typedef typename BV::allocator_type allocator_type; ///< Application allocator.
+    bm::byte_buffer<allocator_type> baseline; ///< Ordinary serialized vector.
+    bm::byte_buffer<allocator_type> selected; ///< Selected serialized vector.
+    bm::deserialization_index<BV> index; ///< Reusable baseline record index.
+    typename bm::deserializer<BV, bm::decoder>::block_starts_vect_type starts; ///< Record start blocks.
+    bm::deserializer<BV, bm::decoder> reader; ///< Retained index decoder.
+    BV scratch; ///< Decoder target.
+    BV holes; ///< Inverse candidate scratch.
+    bm::heap_vector<size_t, allocator_type, true> offsets; ///< Baseline record offsets.
+    bm::heap_vector<unsigned, allocator_type, true> values; ///< Original positions.
+    bm::heap_vector<unsigned, allocator_type, true> transformed; ///< Corrected positions.
+    bm::heap_vector<unsigned char, allocator_type, true> trial; ///< Trial record bytes.
+};
+
+template<class BV>
+inline
+bm::large_sblock_workspace<BV>& serializer<BV>::large_sblock_scratch()
+{
+    if (!large_sblock_workspace_)
+    {
+        large_sblock_storage_.resize(sizeof(bm::large_sblock_workspace<BV>), false);
+        large_sblock_workspace_ = new(large_sblock_storage_.data()) bm::large_sblock_workspace<BV>();
+    }
+    return *large_sblock_workspace_;
+}
+
 template<class BV>
 serializer<BV>::serializer(const allocator_type&   alloc,
                            bm::word_t*             temp_block)
@@ -2760,7 +3271,7 @@ serializer<BV>::serializer(const allocator_type&   alloc,
   xor_tmp_block_(0),
   sparse_cutoff_(sparse_max_l6)
 {
-    bit_idx_arr_.resize(bm::gap_max_bits);
+    block_positions_.resize(bm::gap_max_bits);
     if (temp_block == 0)
     {
         temp_block_ = alloc_.alloc_bit_block();
@@ -2794,7 +3305,7 @@ serializer<BV>::serializer(bm::word_t*    temp_block)
   xor_tmp_block_(0),
   sparse_cutoff_(sparse_max_l6)
 {
-    bit_idx_arr_.resize(bm::gap_max_bits);
+    block_positions_.resize(bm::gap_max_bits);
     if (temp_block == 0)
     {
         temp_block_ = alloc_.alloc_bit_block();
@@ -2828,6 +3339,8 @@ void serializer<BV>::alloc_temp_buffers()
 template<class BV>
 serializer<BV>::~serializer()
 {
+    if (large_sblock_workspace_)
+        large_sblock_workspace_->~large_sblock_workspace<BV>();
     if (own_temp_block_)
         alloc_.free_bit_block(temp_block_);
     if (compression_stat_)
@@ -2863,12 +3376,35 @@ void serializer<BV>::reset_compression_stats() BMNOEXCEPT
 template<class BV>
 void serializer<BV>::set_compression_level(unsigned clevel) BMNOEXCEPT
 {
-    if (clevel <= bm::set_compression_max)
-        compression_level_ = clevel;
-    if (compression_level_ == 5)
-        sparse_cutoff_ = sparse_max_l5;
-    else if (compression_level_ == 6)
-        sparse_cutoff_ = sparse_max_l6;
+    if (clevel > bm::set_compression_max)
+        return;
+    compression_level_ = clevel;
+    sparse_cutoff_ = clevel == 5 ? sparse_max_l5 : sparse_max_l6;
+    block_endpoint_selection_ = sblock_correction_selection_ = clevel >= 7;
+    gap_xor_enabled_ = sblock_adaptive_enabled_ = clevel >= 8;
+    sblock_wave1024_enabled_ = sblock_wave_adaptive_enabled_ = clevel >= 8;
+    sblock_large_enabled_ = clevel >= 8;
+    sblock_large_inverse_limit_ = 196607;
+    sblock_gap_tolerance_ = 100;
+    bwt_enabled_ = periodic_enabled_ = false;
+    selection_enabled_ = selection_compose_enabled_ = false;
+    selection_multistep_enabled_ = selection_step2_enabled_ = bwt_shared_enabled_ = false;
+    periodic_step1_start_reduction_ = periodic_step1_first_start_ = false;
+    periodic_step1_interleaved_ = 0;
+    selection_bwt_min_gain_ = 0;
+    bwt_options_ = bm::bwt_options();
+    periodic_options_ = bm::periodic_options();
+    multistep_options_ = step2_options_ = bm::periodic_options();
+    selection_stats_ = block_selection_statistics_type();
+    if (clevel >= 9)
+    {
+        // One original-polarity transform, shared by retained 72/96 candidates.
+        // The chain search stays within the established step-1/step-2 policy.
+        set_block_selection_step2_options();
+        set_periodic_step1_interleaved(4);
+        set_bwt_shared_options(true);
+        set_block_selection_bwt_min_gain(clevel == 9 ? 16 : 1);
+    }
 }
 
 template<class BV>
@@ -4020,6 +4556,80 @@ void serializer<BV>::encode_gap_block(
 }
 
 template<class BV>
+void serializer<BV>::encode_gap_xor_block(
+                        const bm::gap_word_t* gap_block, bm::encoder& enc)
+{
+    const auto begin = enc.get_pos();
+    size_type stats_before[256], stats_plain[256];
+    ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
+    encode_gap_block(gap_block, enc);
+    ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+    const size_t plain_size = size_t(enc.get_pos() - begin);
+    size_t best_size = plain_size;
+
+    const unsigned len = bm::gap_length(gap_block) - 1;
+    if (len < 4) return;
+    const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (xor_trial_buffer_.size() < capacity)
+        xor_trial_buffer_.resize(capacity, false);
+    if (gap_xor_best_buffer_.size() < capacity)
+        gap_xor_best_buffer_.resize(capacity, false);
+
+    auto& cleaned = gap_xor_cleaned_;
+    auto& positions = gap_xor_positions_;
+    auto& corrected = gap_xor_corrected_;
+    cleaned.reserve(len + 1);
+    positions.reserve(len);
+    corrected.reserve(len);
+
+    for (unsigned split = 0; split < 4; ++split)
+    {
+        bm::gap_xor_prepare_candidate(gap_block, split,
+            (bm::gap_word_t*)gap_recalc_tmp_block0_,
+            (bm::gap_word_t*)gap_ex0_tmp_block_,
+            (bm::gap_word_t*)gap_ex1_tmp_block_, cleaned, positions);
+        // The nested GAP encoder cannot represent a uniform cleaned base.
+        if (cleaned.size() < 3 || positions.empty() ||
+            2u * positions.size() + 2u > 8192u)
+            continue;
+        const unsigned n = unsigned(positions.size());
+        if (n < 2) continue;
+        corrected.resize(n);
+        const unsigned correction = bm::gap_xor_correct(positions.data(), n,
+                                                         corrected.data());
+        const unsigned min_delta = correction + 1;
+        bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
+        trial.put_8(bm::set_block_gap_xor_framed);
+        encode_gap_block(cleaned.data(), trial);
+        {
+            bit_out_type bout(trial);
+            bout.gamma(n);
+            bout.gamma(min_delta);
+            const unsigned upper = 65535u - (n - 1u) * correction;
+            bout.bic_encode_u16(corrected.data(), n, 0,
+                                bm::gap_word_t(upper));
+            bout.flush();
+        }
+        if (trial.size() < best_size)
+        {
+            best_size = trial.size();
+            ::memcpy(gap_xor_best_buffer_.data(), xor_trial_buffer_.data(),
+                     best_size);
+        }
+        ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+    }
+    if (best_size < plain_size)
+    {
+        enc.set_pos(begin);
+        enc.memcpy(gap_xor_best_buffer_.data(), best_size);
+        ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+        ++compression_stat_[bm::set_block_gap_xor_framed];
+    }
+    else
+        ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+}
+
+template<class BV>
 void serializer<BV>::encode_bit_interval(const bm::word_t* blk, 
                                          bm::encoder&      enc,
                                          unsigned          //size_control
@@ -4252,13 +4862,13 @@ void serializer<BV>::encode_bit_array(const bm::word_t* block,
                                       bool              inverted) BMNOEXCEPT
 {
     unsigned arr_len =
-        bm::bit_block_convert_to_arr(bit_idx_arr_.data(), block, inverted);
+        bm::bit_block_convert_to_arr(block_positions_.data(), block, inverted);
 
     if (arr_len)
     {
         unsigned char scode =
                     inverted ? bm::set_block_arrbit_inv : bm::set_block_arrbit;
-        enc.put_prefixed_array_16(scode, bit_idx_arr_.data(), arr_len, true);
+        enc.put_prefixed_array_16(scode, block_positions_.data(), arr_len, true);
         compression_stat_[scode]++;
         return;
     }
@@ -4269,9 +4879,9 @@ template<class BV>
 void serializer<BV>::gamma_gap_bit_block(const bm::word_t* block,
                                          bm::encoder&      enc) BMNOEXCEPT
 {
-    unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_equiv_len);
+    unsigned len = bm::bit_to_gap(block_positions_.data(), block, bm::gap_equiv_len);
     BM_ASSERT(len); (void)len;
-    gamma_gap_block(bit_idx_arr_.data(), enc);
+    gamma_gap_block(block_positions_.data(), enc);
 }
 
 template<class BV>
@@ -4280,10 +4890,10 @@ void serializer<BV>::gamma_arr_bit_block(const bm::word_t* block,
                                          bool              inverted) BMNOEXCEPT
 {
     unsigned arr_len = 
-        bm::bit_block_convert_to_arr(bit_idx_arr_.data(), block, inverted);
+        bm::bit_block_convert_to_arr(block_positions_.data(), block, inverted);
     if (arr_len)
     {
-        gamma_gap_array(bit_idx_arr_.data(), arr_len, enc, inverted);
+        gamma_gap_array(block_positions_.data(), arr_len, enc, inverted);
         return;
     }
     enc.put_prefixed_array_32(bm::set_block_bit, block, bm::set_block_size);
@@ -4296,10 +4906,10 @@ void serializer<BV>::bienc_arr_bit_block(const bm::word_t* block,
                                         bool               inverted) BMNOEXCEPT
 {
     unsigned arr_len = 
-        bm::bit_block_convert_to_arr(bit_idx_arr_.data(), block, inverted);
+        bm::bit_block_convert_to_arr(block_positions_.data(), block, inverted);
     if (arr_len)
     {
-        interpolated_gap_array(bit_idx_arr_.data(), arr_len, enc, inverted);
+        interpolated_gap_array(block_positions_.data(), arr_len, enc, inverted);
         return;
     }
     encode_bit_digest(block, enc, bit_stat_.d0);
@@ -4309,7 +4919,7 @@ template<class BV>
 void serializer<BV>::interpolated_gap_bit_block(const bm::word_t* block,
                                                 bm::encoder&      enc) BMNOEXCEPT
 {
-    bm::gap_word_t* gap_block = bit_idx_arr_.data();
+    bm::gap_word_t* gap_block = block_positions_.data();
     unsigned len = bm::bit_to_gap(gap_block, block, bm::gap_max_bits);
     if (len > bm::gap_max_safe_len) // TODO: we need a better way for this
     {
@@ -4328,7 +4938,7 @@ void serializer<BV>::interpolated_gap_bit_block(const bm::word_t* block,
 
     encoder::position_type enc_pos0 = enc.get_pos();
 
-    interpolated_encode_gap_block(bit_idx_arr_.data(), enc, len);
+    interpolated_encode_gap_block(block_positions_.data(), enc, len);
 
     encoder::position_type enc_pos1 = enc.get_pos();
     unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0);
@@ -4345,7 +4955,7 @@ template<class BV>
 void serializer<BV>::bienc_gap_bit_block(const bm::word_t* block,
                                          bm::encoder& enc) BMNOEXCEPT
 {
-    unsigned len = bm::bit_to_gap(bit_idx_arr_.data(), block, bm::gap_max_bits);
+    unsigned len = bm::bit_to_gap(block_positions_.data(), block, bm::gap_max_bits);
     BM_ASSERT(len); (void)len;
 
     bool r = bienc_gap_bit_block_enc(len, enc);
@@ -4365,18 +4975,18 @@ bool serializer<BV>::bienc_gap_bit_block_enc(unsigned len,
     {
         bit_out_type bout(enc);
 
-        bm::gap_word_t head = (bit_idx_arr_[0] & 1); // isolate start flag
-        bm::gap_word_t min_v = bit_idx_arr_[1];
+        bm::gap_word_t head = (block_positions_[0] & 1); // isolate start flag
+        bm::gap_word_t min_v = block_positions_[1];
 
-        BM_ASSERT(bit_idx_arr_[len] == 65535);
-        BM_ASSERT(bit_idx_arr_[len] > min_v);
+        BM_ASSERT(block_positions_[len] == 65535);
+        BM_ASSERT(block_positions_[len] > min_v);
 
         enc.put_8(scode);
 
         enc.put_8((unsigned char)head);
         enc.put_16(bm::gap_word_t(len));
         enc.put_16(min_v);
-        bout.bic_encode_u16(&bit_idx_arr_[2], len-2, min_v, 65535);
+        bout.bic_encode_u16(&block_positions_[2], len-2, min_v, 65535);
         bout.flush();
     }
     encoder::position_type enc_pos1 = enc.get_pos();
@@ -4417,16 +5027,48 @@ const unsigned sblock_flag_dr_min  = (1u << 7); // DR compression of ints
 
 template<class BV>
 void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
-                                      bm::encoder& enc) BMNOEXCEPT
+                                      bm::encoder& enc, int correction_mode)
 {
+    if (sblock_correction_selection_ && correction_mode == -1)
+    {
+        // Mode 2 preserves the historical gate. Trial only its opposite;
+        // both use the existing opcode-68 writer and decoder contract.
+        unsigned char* begin = enc.get_pos();
+        bienc_arr_sblock(bv, sb, enc, 2);
+        unsigned gap = 0;
+        bm::arr_calc_delta_min(sblock_original_values_.data(),
+                              unsigned(sblock_original_values_.size()), gap);
+        const unsigned correction = bm::min_value(gap > 1 ? gap-1 : 0u, 65535u);
+        if (!correction) return;
+        const bool applied = (sblock_original_values_.size()-1)*correction > 250;
+        const size_t old_size = size_t(enc.get_pos()-begin);
+        sblock_correction_record_.resize(old_size);
+        ::memcpy(sblock_correction_record_.data(), begin, old_size);
+        enc.set_pos(begin);
+        bienc_arr_sblock(bv, sb, enc, applied ? 0 : 1);
+        --compression_stat_[bm::set_sblock_bienc_v3]; // one emitted candidate
+        const size_t new_size = size_t(enc.get_pos()-begin);
+        if (new_size >= old_size) {
+            enc.set_pos(begin);
+            enc.memcpy(sblock_correction_record_.data(), old_size);
+        }
+        return;
+    }
     unsigned sb_flag = 0;
-    encoder::position_type pos0 = enc.get_pos();
-
     unsigned char scode = bm::set_sblock_bienc_v3;
 
     bm::convert_sub_to_arr(bv, sb, sb_bit_idx_arr_);
     unsigned len = (unsigned)sb_bit_idx_arr_.size();
     BM_ASSERT(len);
+    if (sblock_wave1024_enabled_ || sblock_adaptive_enabled_ || sblock_correction_selection_)
+    {
+
+        if (sblock_original_values_.capacity() < bm::gap_max_bits)
+            sblock_original_values_.reserve(bm::gap_max_bits);
+        sblock_original_values_.resize(len);
+        ::memcpy(sblock_original_values_.data(), sb_bit_idx_arr_.data(),
+                 size_t(len) * sizeof(unsigned));
+    }
 
     unsigned min0 = 0; unsigned delta_acc = 0; (void) delta_acc;
 
@@ -4437,7 +5079,8 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
         min0 = 65535;
 
     unsigned projected_delta_acc = (len - 1) * min0;
-    if (min0 && projected_delta_acc > 250) // 250
+    if (min0 && correction_mode != 0 &&
+        (correction_mode == 1 || projected_delta_acc > 250))
     {
         const bm::word_t max_v0 = sb_arr[len - 1]; (void)max_v0;
         delta_acc = bm::arr_recalc_min(sb_arr, sb_arr, len, min0);
@@ -4448,6 +5091,7 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
     else
     {
     }
+
 
     // ---------------------------------------------------
 
@@ -4493,6 +5137,7 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
     enc.put_8(scode);
     {
         bit_out_type bout(enc);
+
 
         bout.put_bits(sb_flag, 8);
 
@@ -4582,10 +5227,176 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
                                (unsigned)sb_bit_idx_arr_.size()-2,
                                min_v+1, max_v-1);
     }
-    encoder::position_type pos1 = enc.get_pos();
-    unsigned enc_size = (unsigned)(pos1 - pos0); (void) enc_size;
+
 
     compression_stat_[scode]++;
+}
+
+template<class BV>
+void serializer<BV>::prepare_sblock_wave1024(unsigned sb, unsigned len)
+{
+    auto& r = sblock_wave1024_pending_;
+    if (!sblock_wave1024_model_.prepare(sblock_original_values_.data(), len, r)) return;
+    const size_t capacity = (size_t(len) + bm::sblock_wave1024_model<allocator_type>::wave_count) * 4 + 4096;
+    if (sblock_wave1024_buffer_.size() < capacity) sblock_wave1024_buffer_.resize(capacity, false);
+    for (unsigned mode = 0; mode < 4; ++mode)
+    {
+        auto& c = r.costs[mode];
+        bm::encoder trial(sblock_wave1024_buffer_.data(), sblock_wave1024_buffer_.size());
+        trial.put_8(bm::set_sblock_bienc_wave1024);
+        {
+            bit_out_type out(trial);
+            auto position = [&]() -> bm::id64_t
+                { return bm::id64_t(trial.size()) * 8 + out.pending_bits(); };
+            sblock_wave1024_model_.encode(out, position, sb, mode, c);
+        }
+        c.bytes = trial.size();
+        c.padding = c.bytes * 8 - c.header - c.map - c.bic;
+        BM_ASSERT(c.reconciles());
+        if (mode == 0 || c.bytes < r.costs[r.best].bytes)
+        {
+            r.best = mode;
+            if (sblock_wave1024_enabled_)
+            {
+                if (sblock_wave1024_best_buffer_.size() < capacity)
+                    sblock_wave1024_best_buffer_.resize(capacity, false);
+                ::memcpy(sblock_wave1024_best_buffer_.data(), sblock_wave1024_buffer_.data(), c.bytes);
+            }
+        }
+    }
+}
+
+template<class BV>
+bool serializer<BV>::try_sblock_wave(unsigned sb, unsigned len, bm::encoder& enc,
+                                    unsigned char* begin, size_t rival_bytes)
+{
+    prepare_sblock_wave1024(sb, len);
+    const auto& r = sblock_wave1024_pending_;
+    const size_t fixed_bytes=r.eligible?size_t(r.costs[r.best].bytes):rival_bytes;
+    if(sblock_wave_adaptive_enabled_) {
+        const size_t incumbent=bm::min_value(rival_bytes,fixed_bytes);
+        auto choice=bm::sblock_wave_adaptive_select(sblock_wave_adaptive_model_,
+            sblock_original_values_.data(),len,sb,incumbent);
+        if(choice.bytes<incumbent) {
+            auto& model=sblock_wave_adaptive_model_;
+            model.wave_size=128u<<choice.width;model.wave_count=(1u<<24)/model.wave_size;
+            bm::sblock_wave_record selected;
+            bool ok=model.prepare(sblock_original_values_.data(),len,selected);BM_ASSERT(ok);(void)ok;
+            enc.set_pos(begin);enc.put_8(bm::set_sblock_bienc_wave_adaptive);
+            bm::sblock_wave_cost cost;
+            { bit_out_type out(enc);out.put_bits(choice.width,3);
+              auto position=[&](){return bm::id64_t(enc.get_pos()-begin)*8+out.pending_bits();};
+              model.encode(out,position,sb,choice.mode,cost); }
+            if(size_t(enc.get_pos()-begin)!=choice.bytes)
+                bm::serialization_require(false);
+            --compression_stat_[bm::set_sblock_bienc_v3];
+            ++compression_stat_[bm::set_sblock_bienc_wave_adaptive];
+            return true;
+        }
+    }
+    if (!r.eligible) return false;
+    const size_t wave_bytes = size_t(r.costs[r.best].bytes);
+    if (wave_bytes >= rival_bytes) return false; // ties preserve existing codec
+    enc.set_pos(begin);
+    enc.memcpy(sblock_wave1024_best_buffer_.data(), wave_bytes);
+    BM_ASSERT(compression_stat_[bm::set_sblock_bienc_v3]);
+    --compression_stat_[bm::set_sblock_bienc_v3];
+    ++compression_stat_[bm::set_sblock_bienc_wave1024];
+    return true;
+}
+
+
+
+template<class BV>
+void serializer<BV>::bienc_arr_sblock_select(const BV& bv, unsigned sb,
+                                             bm::encoder& enc)
+{
+    unsigned char* begin = enc.get_pos();
+    bienc_arr_sblock(bv, sb, enc);
+    const size_t ordinary_bytes = size_t(enc.get_pos() - begin);
+    const unsigned len = unsigned(sb_bit_idx_arr_.size());
+    if (!sblock_adaptive_enabled_ ||
+        len < bm::superblock_delta_model::minimum_entries)
+    {
+        if (sblock_wave1024_enabled_ && try_sblock_wave(sb, len, enc, begin,
+                                                      ordinary_bytes))
+            return;
+        return;
+    }
+    BM_ASSERT(len <= bm::sblock_adaptive_max_entries);
+    // Reserve once on first adaptive use; later lengths and step trials reuse it.
+    if (sblock_adaptive_corrections_.capacity() < bm::sblock_adaptive_max_windows)
+        sblock_adaptive_corrections_.reserve(bm::sblock_adaptive_max_windows);
+    const unsigned* values = sblock_original_values_.data();
+    unsigned global_gap = ~0u;
+    for (unsigned i = 1; i < len; ++i)
+    {
+        global_gap = bm::min_value(global_gap, values[i] - values[i-1]);
+    } // for i
+    const unsigned g = global_gap - 1;
+    const size_t capacity = size_t(65536) * 8 + 1024;
+    size_t best_bytes = ordinary_bytes;
+    for (unsigned si = 0; si < 4; ++si)
+    {
+        const unsigned step = bm::sblock_adaptive_min_step << si;
+        if (!bm::superblock_delta_model::eligible(len, step)) continue;
+        auto& corrections = sblock_adaptive_corrections_;
+        bm::id64_t scores[3] = {};
+        const unsigned changes = bm::superblock_delta_model::prepare(
+            values, len, step, g, corrections, scores);
+        if (!changes) continue;
+        const unsigned mode = scores[2] < scores[0] ? 2 : 0;
+        if (sblock_adaptive_values_.capacity() < bm::sblock_adaptive_max_entries)
+            sblock_adaptive_values_.reserve(bm::sblock_adaptive_max_entries);
+        BM_ASSERT(sblock_adaptive_values_.capacity() >= len);
+        sblock_adaptive_values_.resize(len);
+        bm::superblock_delta_model::transform(values, len, step, corrections,
+                                              sblock_adaptive_values_.data());
+        if (sblock_adaptive_buffer_.size() < capacity)
+            sblock_adaptive_buffer_.resize(capacity, false);
+        bm::encoder trial(sblock_adaptive_buffer_.data(), sblock_adaptive_buffer_.size());
+        trial.put_8(bm::set_sblock_bienc_adaptive);
+        {
+            bit_out_type bout(trial);
+            bout.put_32_no(sb);
+            // Retained adaptive step/coder descriptor (marker 1 is mandatory).
+            bout.gamma(1);
+            bout.put_bits(si, 2);
+            bout.put_bits(mode, 2);
+            bout.gamma(len);
+            bout.put_24_no(sblock_adaptive_values_[0]);
+            bout.put_24_no(sblock_adaptive_values_[len-1]);
+            bout.gamma(g + 1);
+            bm::adaptive_delta_encoder::encode_flags(bout, corrections);
+            const auto before_values = bm::id64_t(trial.size())*8+bout.pending_bits();
+            bm::adaptive_delta_encoder::encode_values(bout, corrections, mode);
+            BM_ASSERT(bm::id64_t(trial.size())*8+bout.pending_bits()-before_values == scores[mode]);
+            (void)before_values;
+            bout.flush_if_full();
+            bout.bic_encode_u32_cm(sblock_adaptive_values_.data()+1, len-2,
+                                   sblock_adaptive_values_[0]+1,
+                                   sblock_adaptive_values_[len-1]-1);
+            bout.flush();
+        }
+        if (trial.size() < best_bytes)
+        {
+            if (sblock_adaptive_best_buffer_.size() < capacity)
+                sblock_adaptive_best_buffer_.resize(capacity, false);
+            ::memcpy(sblock_adaptive_best_buffer_.data(), sblock_adaptive_buffer_.data(), trial.size());
+            best_bytes = trial.size();
+        }
+    } // for si
+    if (sblock_wave1024_enabled_ && try_sblock_wave(sb, len, enc, begin,
+                          best_bytes))
+        return;
+    if (best_bytes < ordinary_bytes)
+    {
+        enc.set_pos(begin);
+        enc.memcpy(sblock_adaptive_best_buffer_.data(), best_bytes);
+        BM_ASSERT(compression_stat_[bm::set_sblock_bienc_v3]);
+        --compression_stat_[bm::set_sblock_bienc_v3];
+        ++compression_stat_[bm::set_sblock_bienc_adaptive];
+    }
 }
 
 #if (0)
@@ -4767,51 +5578,73 @@ serializer<BV>::interpolated_arr_bit_block_v3s(bm::encoder& enc,
                                                const bm::word_t* block,
                                                bool inverted)
 {
-    unsigned arr_len = bm::bit_block_convert_to_arr(
-                            bit_idx_arr_.data(), block, inverted);
+    const unsigned arr_len = bm::bit_block_convert_to_arr(
+                            block_positions_.data(), block, inverted);
     BM_ASSERT(arr_len);
     {
-        unsigned char scode =
+        const unsigned char scode =
             inverted ? bm::set_block_arr_bienc_inv_v3s : bm::set_block_arr_bienc_v3s;
 
         encoder::position_type enc_pos0 = enc.get_pos();
+        const bm::gap_word_t first = block_positions_[0];
+        const bm::gap_word_t last = block_positions_[arr_len-1];
+        BM_ASSERT(last > first);
+        const bm::gap_word_t tail_delta = bm::gap_word_t(65536 - last);
+        const bm::gap_word_t dr_reduct = first + tail_delta;
+        const bool heuristic = first && (dr_reduct > (3 * 256) || arr_len < 4);
+
+        auto write_layout = [&](bm::encoder& target, bool explicit_bounds)
         {
-            bit_out_type bout(enc);
-
-            bm::gap_word_t min_v = bit_idx_arr_[0];
-            bm::gap_word_t max_v = bit_idx_arr_[arr_len-1];
-            BM_ASSERT(max_v > min_v);
-            const bm::gap_word_t tail_delta = bm::gap_word_t(65536 - max_v);
-            bm::gap_word_t dr_reduct = min_v + tail_delta;
-            bool need_min_max = min_v && (dr_reduct > (3 * 256) || arr_len < 4);
-
+            bit_out_type bout(target);
             const bm::gap_word_t* arr;
-
-            enc.put_8(scode);
-
+            unsigned count = arr_len;
+            bm::gap_word_t min_v = first, max_v = last;
+            target.put_8(scode);
             bout.delta16s(arr_len);
-            bout.put_bits(need_min_max, 1);
-
-            if (need_min_max)
+            bout.put_bits(explicit_bounds, 1);
+            if (explicit_bounds)
             {
                 bout.delta16s(min_v);
                 bout.delta16s(tail_delta);
-
-                arr_len -= 2;  min_v++; max_v--;
-                arr = &bit_idx_arr_[1];
+                count -= 2; min_v++; max_v--;
+                arr = &block_positions_[1];
             }
             else
             {
-                arr = &bit_idx_arr_[0];
+                arr = &block_positions_[0];
                 min_v = 0; max_v = 65535;
             }
 
             bout.flush_if_full();
-            bout.bic_encode_u16(arr, arr_len, min_v, max_v);
+            bout.bic_encode_u16(arr, count, min_v, max_v);
             bout.flush();
-        }
+        };
+        write_layout(enc, heuristic);
         encoder::position_type enc_pos1 = enc.get_pos();
         unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0);
+        if (block_endpoint_selection_)
+        {
+            // A strict byte win needs one fewer 32-bit accumulator word.
+            // The opcode is outside the accumulator; ties keep the heuristic.
+            const bool explicit_bounds = !heuristic;
+            unsigned header_bits = bm::delta16s_bits(arr_len) + 1;
+            if (explicit_bounds)
+                header_bits += bm::delta16s_bits(first) +
+                               bm::delta16s_bits(tail_delta);
+            bm::bic_u16_bit_counter counter{header_bits, ((enc_size - 2) / 4) * 32};
+            const bm::gap_word_t* arr = block_positions_.data() + (explicit_bounds ? 1 : 0);
+            const unsigned count = arr_len - (explicit_bounds ? 2 : 0);
+            const bm::gap_word_t lo = explicit_bounds ? bm::gap_word_t(first + 1) : 0;
+            const bm::gap_word_t hi = explicit_bounds ? bm::gap_word_t(last - 1) : 65535;
+            if (header_bits <= counter.limit &&
+                bm::bic_encode_u16_cm_sink(counter, arr, count, lo, hi))
+            {
+                enc.set_pos(enc_pos0);
+                write_layout(enc, explicit_bounds);
+                enc_size = unsigned(enc.get_pos() - enc_pos0);
+                BM_ASSERT(enc_size == 1 + ((counter.bits + 31) / 32) * 4);
+            }
+        }
         unsigned raw_size = sizeof(word_t) * bm::set_block_size;
         if (enc_size >= raw_size)
         {
@@ -4888,7 +5721,7 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
     // non-BIC_DR or DR failed to produce good result...
     {
         unsigned arr_len = bm::bit_block_convert_to_arr(
-                                bit_idx_arr_.data(), block, inverted);
+                                block_positions_.data(), block, inverted);
         if (arr_len)
         {
             unsigned char scode =
@@ -4898,8 +5731,8 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
             {
                 bit_out_type bout(enc);
 
-                bm::gap_word_t min_v = bit_idx_arr_[0];
-                bm::gap_word_t max_v = bit_idx_arr_[arr_len-1];
+                bm::gap_word_t min_v = block_positions_[0];
+                bm::gap_word_t max_v = block_positions_[arr_len-1];
                 BM_ASSERT(max_v > min_v);
                 bm::gap_word_t max_delta = bm::gap_word_t(65536 - max_v);
 
@@ -4917,7 +5750,7 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
                 }
                 enc.put_16(bm::gap_word_t(arr_len));
 
-                bout.bic_encode_u16(&bit_idx_arr_[1], arr_len-2, min_v, max_v);
+                bout.bic_encode_u16(&block_positions_[1], arr_len-2, min_v, max_v);
                 bout.flush();
             }
             encoder::position_type enc_pos1 = enc.get_pos();
@@ -5121,7 +5954,10 @@ unsigned char serializer<BV>::encode_block(const bm::word_t* blk,
 {
     if (BM_IS_GAP(blk))
     {
-        encode_gap_block(BMGAP_PTR(blk), enc);
+        if (gap_xor_enabled_)
+            encode_gap_xor_block(BMGAP_PTR(blk), enc);
+        else
+            encode_gap_block(BMGAP_PTR(blk), enc);
     }
     else // bit-block
     {
@@ -5200,6 +6036,875 @@ unsigned char serializer<BV>::encode_block(const bm::word_t* blk,
 }
 
 template<class BV>
+unsigned char serializer<BV>::encode_bwt_block(const bm::word_t* blk,
+                const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc,
+                bm::word_t* transformed_out, unsigned short* primary_out)
+{
+    BM_ASSERT(!BM_IS_GAP(blk));
+    const auto begin = enc.get_pos();
+    size_type stats_before[256], stats_plain[256];
+    ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
+    unsigned char type = encode_block(blk, sub_stat, nb, enc);
+    if (type) return type;
+    ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+    ++bwt_stats_.eligible;
+    if ((bwt_stats_.eligible - 1) % bwt_options_.sample) return 0;
+
+    const size_t plain_size = size_t(enc.get_pos() - begin);
+    ++bwt_stats_.evaluated;
+    bwt_stats_.baseline_bytes += plain_size;
+    const bool baseline_bic = bwt_options_.whole_block && bm::bwt_is_bic_marker(*begin);
+    bwt_stats_.bic_baseline += baseline_bic;
+    if (!bwt_options_.whole_block && bwt_matrix_buffer_.size() < bm::bwt_matrix_bytes)
+        bwt_matrix_buffer_.resize(bm::bwt_matrix_bytes, false);
+    const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (xor_trial_buffer_.size() < capacity) xor_trial_buffer_.resize(capacity, false);
+    BM_DECLARE_TEMP_BLOCK(transformed)
+    unsigned short primary[bm::block_waves];
+    unsigned short full_primary = 0;
+    const bool diagnostics = BM_SERIALIZATION_DIAGNOSTICS &&
+                             bwt_options_.diagnostics && bwt_options_.whole_block;
+#if BM_SERIALIZATION_DIAGNOSTICS
+    typedef std::chrono::steady_clock bwt_clock;
+    bwt_clock::time_point transform_start;
+    if (diagnostics)
+    {
+        transform_start = bwt_clock::now();
+    }
+#endif
+    if (bwt_options_.whole_block)
+    {
+        full_primary = bm::bwt_transform_full(blk, transformed, bwt_full_workspace_);
+        ++bwt_full_transforms_;
+    }
+    else
+        bm::bwt_transform_block(blk, transformed, bwt_matrix_buffer_.data(), primary);
+    if (transformed_out)
+    {
+        BM_ASSERT(bwt_options_.whole_block && primary_out);
+        bm::bit_block_copy(transformed_out, transformed);
+        *primary_out = full_primary;
+    }
+
+#if BM_SERIALIZATION_DIAGNOSTICS
+    if (diagnostics)
+    {
+        bwt_stats_.transform_ns += bm::id64_t(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                bwt_clock::now() - transform_start).count());
+    }
+#endif
+    const unsigned before_gap = bm::bit_block_change32(blk, bm::set_block_size);
+    const unsigned after_gap = bm::bit_block_change32(transformed, bm::set_block_size);
+    bwt_stats_.gap_before += before_gap;
+    bwt_stats_.gap_after += after_gap;
+    if (after_gap < before_gap)
+    {
+        ++bwt_stats_.gap_improved;
+        bwt_stats_.gap_reduction += before_gap - after_gap;
+    }
+    else if (after_gap > before_gap)
+    {
+        ++bwt_stats_.gap_regressed;
+        bwt_stats_.gap_increase += after_gap - before_gap;
+    }
+    else ++bwt_stats_.gap_equal;
+
+    ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+    bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
+    trial.put_8(bm::set_block_bwt);
+    trial.put_16(0); // transformed-block record length
+    const auto payload = trial.get_pos();
+
+#if BM_SERIALIZATION_DIAGNOSTICS
+    bwt_clock::time_point payload_start;
+    if (diagnostics)
+    {
+        payload_start = bwt_clock::now();
+    }
+#endif
+    type = encode_block(transformed, sub_stat, nb, trial);
+#if BM_SERIALIZATION_DIAGNOSTICS
+    if (diagnostics)
+    {
+        bwt_stats_.payload_ns += bm::id64_t(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                bwt_clock::now() - payload_start).count());
+    }
+#endif
+    if (type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
+    if (type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
+    const size_t payload_size = size_t(trial.get_pos() - payload);
+
+    BM_ASSERT(payload_size && payload_size <= 65535);
+    const bool transformed_bic = bwt_options_.whole_block && bm::bwt_is_bic_marker(*payload);
+    bwt_stats_.bic_transformed += transformed_bic;
+    const auto tail = trial.get_pos();
+    trial.set_pos(xor_trial_buffer_.data() + 1);
+    trial.put_16((bm::short_t)payload_size);
+    trial.set_pos(tail);
+    if (bwt_options_.whole_block)
+    {
+        trial.put_8(bm::set_block_bwt_full_post);
+        trial.put_16(full_primary);
+    }
+    else
+    {
+        unsigned char packed[bm::bwt_index_bytes];
+        bm::bwt_pack_indexes(primary, packed);
+        trial.put_8(bm::set_block_bwt_post);
+        trial.memcpy(packed, sizeof(packed));
+    }
+    if (diagnostics || selection_enabled_)
+    {
+        bm::bwt_block_observation b;
+        b.vector = bwt_vector_index_; b.block = nb;
+        b.baseline = unsigned(plain_size); b.payload = unsigned(payload_size);
+        b.candidate = unsigned(trial.size());
+        b.selected = unsigned(bm::min_value(plain_size, trial.size()));
+        b.popcount = bm::bit_block_count(blk);
+        b.gaps_before = before_gap; b.gaps_after = after_gap; b.primary = full_primary;
+        b.baseline_codec = *begin; b.payload_codec = *payload;
+        b.baseline_bic = baseline_bic; b.payload_bic = transformed_bic;
+        last_bwt_observation_ = b;
+#if BM_SERIALIZATION_DIAGNOSTICS
+        if (bwt_stats_.blocks.size() == bwt_stats_.blocks.capacity())
+            bwt_stats_.blocks.reserve(bwt_stats_.blocks.capacity() ? bwt_stats_.blocks.capacity() * 2 : 64);
+        bwt_stats_.blocks.push_back(b);
+#endif
+    }
+    bwt_stats_.transformed_payload_bytes += payload_size;
+    if (payload_size < plain_size)
+    {
+        ++bwt_stats_.payload_improved;
+        bwt_stats_.payload_saved_bytes += plain_size - payload_size;
+    }
+    if (trial.size() < plain_size)
+    {
+        enc.set_pos(begin);
+        enc.memcpy(xor_trial_buffer_.data(), trial.size());
+        ++bwt_stats_.accepted;
+        if (trial.size() < plain_size)
+            bwt_stats_.saved_bytes += plain_size - trial.size();
+        bwt_stats_.bic_to_bic_accepted += baseline_bic && transformed_bic;
+        if (baseline_bic && transformed_bic)
+            bwt_stats_.bic_to_bic_saved_bytes += plain_size - trial.size();
+        ++compression_stat_[bm::set_block_bwt];
+    }
+    else
+        ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+    return 0;
+}
+
+template<class BV>
+unsigned char serializer<BV>::encode_selection_block(
+    const bm::word_t* blk, const bm::bv_sub_survey& sub_stat,
+    block_idx_type nb, bm::encoder& enc)
+{
+    BM_ASSERT(!BM_IS_GAP(blk));
+    const bm::id64_t transforms_before = bwt_full_transforms_;
+    const auto begin = enc.get_pos();
+    size_type before[256], periodic_counters[256];
+    ::memcpy(before, compression_stat_, sizeof(before));
+#if BM_SERIALIZATION_DIAGNOSTICS
+    typedef std::chrono::steady_clock clock_type;
+    auto start = clock_type::now();
+#endif
+    unsigned char type = encode_periodic_block(blk, sub_stat, nb, enc);
+#if BM_SERIALIZATION_DIAGNOSTICS
+    selection_stats_.periodic_ns += bm::id64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            clock_type::now() - start).count());
+#endif
+    if (type) return type; // preserve the ordinary zero/full-block control path
+    const auto& periodic = last_periodic_observation_;
+    bm::block_selection_observation b;
+    b.vector = periodic.vector; b.block = nb; b.baseline = periodic.baseline;
+    b.periodic = unsigned(enc.get_pos() - begin); b.trials = periodic.trials;
+    if (selection_best_buffer_.size() < b.periodic)
+        selection_best_buffer_.resize(b.periodic, false);
+    ::memcpy(selection_best_buffer_.data(), begin, b.periodic);
+    if (selection_bwt_min_gain_)
+    {
+        if (selection_nonbwt_buffer_.size() < b.periodic)
+            selection_nonbwt_buffer_.resize(b.periodic, false);
+        ::memcpy(selection_nonbwt_buffer_.data(), begin, b.periodic);
+    }
+    ::memcpy(periodic_counters, compression_stat_, sizeof(periodic_counters));
+
+    // Both searches see the original block and original codec statistics.
+    enc.set_pos(begin);
+    ::memcpy(compression_stat_, before, sizeof(before));
+#if BM_SERIALIZATION_DIAGNOSTICS
+    start = clock_type::now();
+#endif
+    BM_DECLARE_TEMP_BLOCK(transformed)
+    unsigned short primary = 0;
+    type = encode_bwt_block(blk, sub_stat, nb, enc,
+                 selection_compose_enabled_ ? transformed : 0,
+                 selection_compose_enabled_ ? &primary : 0);
+#if BM_SERIALIZATION_DIAGNOSTICS
+    selection_stats_.bwt_ns += bm::id64_t(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            clock_type::now() - start).count());
+#endif
+    bm::serialization_require(!type);
+    const auto& bwt = last_bwt_observation_;
+    bm::serialization_require(bwt.baseline == b.baseline);
+    b.bwt = unsigned(enc.get_pos() - begin);
+    b.bwt_payload = bwt.payload; b.bwt_candidate = bwt.candidate;
+    b.selected = b.bwt;
+    b.kind = 2;
+    if (b.periodic <= b.bwt)
+    {
+        b.selected = b.periodic;
+        b.kind = b.periodic < b.baseline ? 1u : 0u;
+        enc.set_pos(begin);
+        enc.memcpy(selection_best_buffer_.data(), b.periodic);
+        ::memcpy(compression_stat_, periodic_counters, sizeof(periodic_counters));
+    }
+    if (selection_compose_enabled_)
+    {
+        b.previous = b.selected;
+        b.composed = b.baseline;
+        // Retain the three-way winner while periodic search overwrites enc.
+        if (b.kind == 2)
+        {
+            if (selection_best_buffer_.size() < b.selected)
+                selection_best_buffer_.resize(b.selected, false);
+            ::memcpy(selection_best_buffer_.data(), begin, b.selected);
+        }
+        size_type winner_counters[256];
+        ::memcpy(winner_counters, compression_stat_, sizeof(winner_counters));
+        enc.set_pos(begin);
+        ::memcpy(compression_stat_, before, sizeof(before));
+#if BM_SERIALIZATION_DIAGNOSTICS
+        start = clock_type::now();
+#endif
+        type = encode_periodic_block(transformed, sub_stat, nb, enc);
+#if BM_SERIALIZATION_DIAGNOSTICS
+        selection_stats_.compose_ns += bm::id64_t(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                clock_type::now() - start).count());
+#endif
+        if (!type)
+            b.compose_trials = last_periodic_observation_.trials;
+        if (!type && last_periodic_observation_.groups)
+        {
+            bm::decoder frame(begin);
+            bm::serialization_require(frame.get_8() == bm::set_block_bwt);
+            unsigned payload_size = frame.get_16();
+            unsigned char* post = begin + 3 + payload_size;
+            bm::serialization_require(post < enc.get_pos() &&
+                         (*post == bm::set_block_periodic_groups ||
+                          *post == bm::set_block_periodic_groups_reduced ||
+                          *post == bm::set_block_periodic_groups_first ||
+                          *post == bm::set_block_periodic_interleaved_fixed));
+            *post = *post == bm::set_block_periodic_interleaved_fixed ?
+                static_cast<unsigned char>(*post + 1) :
+                (*post == bm::set_block_periodic_groups_first ?
+                bm::set_block_bwt_periodic_first :
+                (*post == bm::set_block_periodic_groups_reduced ?
+                 bm::set_block_bwt_periodic_reduced : bm::set_block_bwt_periodic_post));
+            enc.put_16(primary);
+            b.composed = unsigned(enc.get_pos() - begin);
+        }
+        b.composed = bm::min_value(b.composed, b.baseline);
+        if (b.composed < b.previous)
+        {
+            b.selected = b.composed; b.kind = 3;
+        }
+        else
+        {
+            enc.set_pos(begin);
+            enc.memcpy(selection_best_buffer_.data(), b.previous);
+            ::memcpy(compression_stat_, winner_counters, sizeof(winner_counters));
+        }
+        selection_stats_.compose_trials += b.compose_trials;
+        selection_stats_.previous_bytes += b.previous;
+    }
+    if (selection_multistep_enabled_ || selection_step2_enabled_)
+    {
+        const bool step2 = selection_step2_enabled_;
+        b.fourway = b.selected;
+        unsigned& candidate_size = step2 ? b.step2 : b.multistep;
+        candidate_size = b.baseline;
+        if (selection_best_buffer_.size() < b.fourway)
+            selection_best_buffer_.resize(b.fourway, false);
+        ::memcpy(selection_best_buffer_.data(), begin, b.fourway);
+        size_type winner_counters[256];
+        ::memcpy(winner_counters, compression_stat_, sizeof(winner_counters));
+        enc.set_pos(begin);
+        ::memcpy(compression_stat_, before, sizeof(before));
+#if BM_SERIALIZATION_DIAGNOSTICS
+        start = clock_type::now();
+#endif
+        type = encode_periodic_block(transformed, sub_stat, nb, enc,
+                                     step2 ? &step2_options_ : &multistep_options_);
+#if BM_SERIALIZATION_DIAGNOSTICS
+        const bm::id64_t elapsed_ns = bm::id64_t(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                clock_type::now() - start).count());
+        if (step2)
+        {
+            selection_stats_.step2_ns += elapsed_ns;
+        }
+        else
+        {
+            selection_stats_.multistep_ns += elapsed_ns;
+        }
+#endif
+        bm::serialization_require(!type);
+        const auto& trial = last_periodic_observation_;
+        if (step2)
+        {
+            b.step2_trials = trial.trials;
+            b.step2_chains = trial.chains;
+            b.step2_formula = trial.formula_bytes;
+            b.step2_residual = trial.residual_bytes;
+            bm::serialization_require(trial.groups <= 1 &&
+                                   (!trial.groups || trial.step_mask == 2));
+        }
+        else
+        {
+            b.multistep_trials = trial.trials;
+            b.multistep_groups = trial.groups;
+            b.multistep_chains = trial.chains;
+            b.multistep_last_step = trial.last_step;
+            b.multistep_stop = trial.stop_reason;
+            b.multistep_formula = trial.formula_bytes;
+            b.multistep_residual = trial.residual_bytes;
+            b.multistep_mask = trial.step_mask;
+        }
+        if (trial.groups)
+        {
+            bm::decoder frame(begin);
+            bm::serialization_require(frame.get_8() == bm::set_block_bwt);
+            unsigned payload_size = frame.get_16();
+            unsigned char* post = begin + 3 + payload_size;
+            bm::serialization_require(post < enc.get_pos() &&
+                         (*post == bm::set_block_periodic_groups ||
+                          *post == bm::set_block_periodic_groups_reduced ||
+                          *post == bm::set_block_periodic_groups_first ||
+                          *post == bm::set_block_periodic_interleaved_fixed));
+            *post = *post == bm::set_block_periodic_interleaved_fixed ?
+                static_cast<unsigned char>(*post + 1) :
+                (*post == bm::set_block_periodic_groups_first ?
+                bm::set_block_bwt_periodic_first :
+                (*post == bm::set_block_periodic_groups_reduced ?
+                 bm::set_block_bwt_periodic_reduced : bm::set_block_bwt_periodic_post));
+            enc.put_16(primary);
+            candidate_size = unsigned(enc.get_pos() - begin);
+        }
+        if (candidate_size < b.fourway)
+        { b.selected = candidate_size; b.kind = 4; }
+        else
+        {
+            enc.set_pos(begin);
+            enc.memcpy(selection_best_buffer_.data(), b.fourway);
+            ::memcpy(compression_stat_, winner_counters, sizeof(winner_counters));
+        }
+        if (step2) selection_stats_.step2_trials += b.step2_trials;
+        else selection_stats_.multistep_trials += b.multistep_trials;
+        selection_stats_.fourway_bytes += b.fourway;
+    }
+    if (selection_bwt_min_gain_)
+    {
+        b.prethreshold_selected = b.selected;
+        b.prethreshold_kind = b.kind;
+        if (b.kind >= 2 && b.periodic - b.selected < selection_bwt_min_gain_)
+        {
+            enc.set_pos(begin);
+            enc.memcpy(selection_nonbwt_buffer_.data(), b.periodic);
+            ::memcpy(compression_stat_, periodic_counters, sizeof(periodic_counters));
+            b.selected = b.periodic;
+            b.kind = b.periodic < b.baseline ? 1u : 0u;
+            ++selection_stats_.threshold_rejected;
+            selection_stats_.threshold_lost_bytes += b.selected - b.prethreshold_selected;
+        }
+    }
+    if (bwt_shared_enabled_)
+    {
+        const size_t shared_size = encode_bwt_shared_candidate(
+                              transformed, primary, enc, b.selected, b.periodic);
+        if (shared_size < b.selected)
+        {
+            b.selected = unsigned(shared_size); b.kind = 5;
+            ::memcpy(compression_stat_, before, sizeof(before));
+            ++compression_stat_[*begin];
+        }
+        bm::serialization_require(bwt_full_transforms_ - transforms_before == 1);
+    }
+    ++selection_stats_.chosen[b.kind];
+    selection_stats_.baseline_bytes += b.baseline;
+    selection_stats_.selected_bytes += b.selected;
+    selection_stats_.saved += b.baseline - b.selected;
+    selection_stats_.trials += b.trials;
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        selection_stats_.formula_trial_bits[i] =
+            periodic_stats_.order_stats.trial_bits[i];
+        selection_stats_.formula_candidate_bits[i] =
+            periodic_stats_.order_stats.selected_bits[i];
+    }
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        selection_stats_.formula_trial_modes[i] =
+            periodic_stats_.order_stats.trial_formula_modes[i];
+        selection_stats_.formula_candidate_modes[i] =
+            periodic_stats_.order_stats.selected_formula_modes[i];
+    }
+#if BM_SERIALIZATION_DIAGNOSTICS
+    selection_stats_.add_block(b);
+#endif
+    return 0;
+}
+
+template<class BV>
+size_t serializer<BV>::encode_bwt_shared_candidate(
+    const bm::word_t* transformed, unsigned short primary,
+    bm::encoder& enc, size_t comparison_size, size_t nonbwt_size)
+{
+    // The selection owner has already computed the original-polarity BWT.
+    // Read it directly: no normalization, wave scan or block copy for opcode 96.
+    const auto begin = enc.get_pos() - comparison_size;
+    const size_t capacity = 65536;
+    if (bwt_unpacked_trial_buffer_.size() < capacity)
+        bwt_unpacked_trial_buffer_.resize(capacity, false);
+    bm::encoder trial(bwt_unpacked_trial_buffer_.data(), capacity);
+    trial.put_8(bm::set_block_bwt_unpacked);
+    bm::bwt_bic_encoder<allocator_type>::encode(trial, transformed, primary, block_positions_);
+    size_t selected = comparison_size;
+    if (trial.size() < selected && nonbwt_size >= trial.size() + selection_bwt_min_gain_)
+    {
+        selected = trial.size();
+        enc.set_pos(begin); enc.memcpy(bwt_unpacked_trial_buffer_.data(), selected);
+    }
+    return selected;
+}
+
+template<class BV>
+unsigned char serializer<BV>::encode_periodic_block(
+    const bm::word_t* blk, const bm::bv_sub_survey& sub_stat,
+    block_idx_type nb, bm::encoder& enc,
+    const bm::periodic_options* override_options)
+{
+    BM_ASSERT(!BM_IS_GAP(blk));
+    const bm::periodic_options& options = override_options ? *override_options : periodic_options_;
+    const auto begin = enc.get_pos();
+    size_type stats_before[256], stats_plain[256];
+    ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
+    unsigned char type = encode_block(blk, sub_stat, nb, enc);
+    if (type) return type;
+    ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+    ++periodic_stats_.eligible;
+    const size_t plain_size = size_t(enc.get_pos() - begin);
+    periodic_stats_.baseline_bytes += plain_size;
+
+    if (!bm::periodic_take_sample(periodic_vector_index_, unsigned(nb),
+                                   options.sample))
+        return 0;
+    ++periodic_stats_.sampled;
+    periodic_stats_.sampled_baseline_bytes += plain_size;
+
+    const unsigned pop = bm::bit_block_count(blk);
+    const bool inverted = pop > 32768;
+    const unsigned density = bm::periodic_density_bucket(
+                                 inverted ? 65536 - pop : pop);
+    ++periodic_stats_.sampled_density[density];
+    if (options.order)
+    {
+        const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+        if (xor_trial_buffer_.size() < capacity) xor_trial_buffer_.resize(capacity, false);
+        if (transform_best_buffer_.size() < capacity) transform_best_buffer_.resize(capacity, false);
+        size_t payload_size = 0, best_payload = 0, best_size = plain_size;
+        bm::periodic_formula_bits bits, best_bits;
+        unsigned formula_choice = 0, best_formula_choice = 0;
+        bool formula_has_step1 = false, best_has_step1 = false;
+        auto evaluate = [&](const bm::word_t* residual,
+                            const auto& groups)
+        {
+            ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+            bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
+            trial.put_8(bm::set_block_bwt); trial.put_16(0);
+            const auto payload = trial.get_pos();
+            unsigned char residual_type = encode_block(residual, sub_stat, nb, trial);
+            if (residual_type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
+            if (residual_type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
+            payload_size = size_t(trial.get_pos() - payload);
+            bm::serialization_require(payload_size && payload_size <= 65535);
+            const auto tail = trial.get_pos();
+            trial.set_pos(xor_trial_buffer_.data() + 1);
+            trial.put_16(bm::short_t(payload_size)); trial.set_pos(tail);
+            formula_has_step1 = false;
+            for (unsigned i = 0; i < groups.size(); ++i)
+            {
+                if (groups[i].step == 1)
+                {
+                    formula_has_step1 = true;
+                    break;
+                }
+            } // for i
+            const bool reduced = periodic_step1_start_reduction_ && formula_has_step1;
+            const bool first = reduced && periodic_step1_first_start_;
+            const bool auto_formula = reduced && periodic_step1_interleaved_ == 4;
+            auto emit_formula = [&](unsigned mode)
+            {
+                trial.set_pos(tail);
+                const unsigned char post = mode ?
+                    bm::set_block_periodic_interleaved_fixed :
+                    (first ? bm::set_block_periodic_groups_first :
+                      (reduced ? bm::set_block_periodic_groups_reduced :
+                                 bm::set_block_periodic_groups));
+                trial.put_8(post);
+                auto formula_bits = bm::periodic_write_groups(trial, groups, inverted,
+                                        reduced, first, mode);
+                BM_ASSERT(trial.size() - payload_size == 4 +
+                    (formula_bits.header + formula_bits.starts +
+                     formula_bits.lengths + formula_bits.padding) / 8);
+                return formula_bits;
+            };
+            if (auto_formula)
+            {
+                unsigned best_mode = 0, best_words = unsigned(-1);
+                bm::periodic_formula_bits best_score;
+                for (unsigned mode = 0; mode <= 1; ++mode)
+                {
+                    const auto score = bm::periodic_score_explicit_groups(groups, mode);
+                    const unsigned words = (score.header + score.starts +
+                                            score.lengths + score.padding) / 32;
+                    if (words < best_words)
+                    {
+                        best_words = words;
+                        best_mode = mode;
+                        best_score = score;
+                    }
+                }
+                bits = emit_formula(best_mode);
+                BM_ASSERT(bits.header == best_score.header &&
+                          bits.starts == best_score.starts &&
+                          bits.lengths == best_score.lengths &&
+                          bits.padding == best_score.padding &&
+                          trial.size() == payload_size + 4 + 4 * best_words);
+                formula_choice = best_mode;
+            }
+            else
+            {
+                const unsigned mode = reduced ? periodic_step1_interleaved_ : 0;
+                bits = emit_formula(mode);
+                formula_choice = mode;
+            }
+            if (formula_has_step1)
+                ++periodic_stats_.order_stats.trial_formula_modes[formula_choice];
+            bm::periodic_accumulate_bits(periodic_stats_.order_stats.trial_bits, bits);
+            return trial.size();
+        };
+        auto save = [&](size_t size)
+        {
+            best_size = size; best_payload = payload_size; best_bits = bits;
+            best_formula_choice = formula_choice;
+            best_has_step1 = formula_has_step1;
+            ::memcpy(transform_best_buffer_.data(), xor_trial_buffer_.data(), size);
+        };
+        const auto trials_before = periodic_stats_.trials;
+        const auto candidates_before = periodic_stats_.raw_candidates;
+        const auto positive_before = periodic_stats_.positive_candidates;
+        bm::periodic_search_trace trace;
+        const auto& groups = bm::periodic_search_order(blk, inverted, plain_size,
+                                  options, periodic_stats_, evaluate, save, periodic_workspace_, &trace);
+        const bool candidates_found = periodic_stats_.raw_candidates != candidates_before;
+        periodic_stats_.candidate_blocks += candidates_found;
+        periodic_stats_.candidate_density[density] += candidates_found;
+        periodic_stats_.positive_blocks += periodic_stats_.positive_candidates != positive_before;
+        periodic_stats_.no_candidates += !candidates_found;
+        bm::periodic_order_block observation;
+        observation.vector = periodic_vector_index_; observation.block = unsigned(nb);
+        observation.baseline = unsigned(plain_size); observation.encoded = unsigned(best_size);
+        observation.trials = unsigned(periodic_stats_.trials - trials_before);
+        observation.groups = unsigned(groups.size());
+        observation.popcount = inverted ? 65536 - pop : pop;
+        observation.gaps = bm::bit_block_calc_change(blk);
+        observation.last_step = trace.last_step;
+        observation.stop_reason = trace.stop_reason;
+        if (!groups.empty())
+        {
+            observation.formula_bytes = unsigned(best_size - best_payload);
+            observation.residual_bytes = unsigned(best_payload);
+        }
+        for (const auto& g : groups)
+        {
+            observation.chains += unsigned(g.chains.size());
+            if (g.step <= 64) observation.step_mask |= bm::id64_t(1) << (g.step - 1);
+        }
+        last_periodic_observation_ = observation;
+#if BM_SERIALIZATION_DIAGNOSTICS
+        if (periodic_stats_.order_stats.blocks.size() == periodic_stats_.order_stats.blocks.capacity())
+            periodic_stats_.order_stats.blocks.reserve(periodic_stats_.order_stats.blocks.capacity() ? periodic_stats_.order_stats.blocks.capacity() * 2 : 64);
+        periodic_stats_.order_stats.blocks.push_back(observation);
+#endif
+        if (!groups.empty())
+        {
+            enc.set_pos(begin); enc.memcpy(transform_best_buffer_.data(), best_size);
+            ++periodic_stats_.accepted;
+            periodic_stats_.saved_bytes += plain_size - best_size;
+            periodic_stats_.residual_bytes += best_payload;
+            periodic_stats_.formula_bytes += best_size - best_payload;
+            periodic_stats_.inverted_accepted += inverted;
+            auto& ds = periodic_stats_.order_stats;
+            bm::periodic_accumulate_bits(ds.selected_bits, best_bits);
+            if (best_has_step1)
+                ++ds.selected_formula_modes[best_formula_choice];
+            ++ds.group_counts[groups.size()]; ds.multi_group += groups.size() > 1;
+            unsigned total = 0; bool approximate = false;
+            for (const auto& g : groups)
+            {
+                total += unsigned(g.chains.size());
+                periodic_stats_.exceptions_accepted += g.exceptions;
+                approximate |= g.max_holes != 0;
+                for (const auto& c : g.chains)
+                    ++ds.selected[bm::periodic_length_bucket(c.length)];
+            }
+            ++ds.selected_counts[total];
+            periodic_stats_.chains_accepted += total;
+            periodic_stats_.approximate_accepted += approximate;
+            ++periodic_stats_.accepted_density[density];
+            ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+            ++compression_stat_[bm::set_block_bwt];
+        }
+        else ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+        return 0;
+    }
+    auto& candidates = periodic_workspace_.candidates;
+    candidates.clear();
+    candidates.reserve((periodic_options_.max_step - periodic_options_.min_step + 1) *
+                       (periodic_options_.max_holes + 1));
+    unsigned raw_candidates = 0, positive_candidates = 0;
+    for (unsigned step = periodic_options_.min_step;
+         step <= periodic_options_.max_step; ++step)
+        for (unsigned holes = 0; holes <= periodic_options_.max_holes; ++holes)
+        {
+            auto& c = periodic_workspace_.pool;
+            ++periodic_stats_.scanned;
+            const bool found = bm::periodic_find(blk, inverted, step, holes,
+                                  periodic_options_.min_length,
+                                  periodic_options_.max_chains, c);
+            periodic_stats_.chain_cap += c.truncated;
+            if (found)
+            {
+                ++raw_candidates;
+                positive_candidates += c.score > 0;
+            }
+            if (found && (periodic_options_.diagnostics || c.score > 0))
+            {
+                candidates.push_back(c);
+            }
+        }
+    periodic_stats_.raw_candidates += raw_candidates;
+    periodic_stats_.positive_candidates += positive_candidates;
+    if (raw_candidates)
+    {
+        ++periodic_stats_.candidate_blocks;
+        ++periodic_stats_.candidate_density[density];
+    }
+    periodic_stats_.positive_blocks += positive_candidates != 0;
+    if (candidates.empty())
+    {
+        ++periodic_stats_.no_candidates;
+        return 0;
+    }
+    // Rank lightweight indexes; candidate chain buffers remain in their slots.
+    auto& order = periodic_workspace_.candidate_order;
+    order.resize(candidates.size());
+    for (unsigned i = 0; i < candidates.size(); ++i)
+    {
+        order[i] = i;
+    } // for i
+    bm::heap_sort(order.data(), order.size(),
+                  [&](unsigned a, unsigned b)
+                  {
+                      // Resolve score ties in discovery order for reproducibility.
+                      return candidates[a].score != candidates[b].score ?
+                          candidates[a].score > candidates[b].score : a < b;
+                  });
+    auto& selected = periodic_workspace_.selected;
+    selected.clear();
+    selected.reserve(periodic_options_.max_variants);
+    if (periodic_options_.diagnostics && candidates[order[0]].score > 0)
+    {
+        selected.push_back(order[0]);
+        for (unsigned i = 1; i < order.size(); ++i)
+        {
+            if (candidates[order[i]].score <= 0)
+            {
+                selected.push_back(order[i]);
+                break;
+            }
+        } // for i
+    }
+    for (unsigned i = 0; i < order.size() &&
+                         selected.size() < periodic_options_.max_variants; ++i)
+    {
+        bool found = false;
+        for (unsigned j = 0; j < selected.size(); ++j)
+        {
+            if (selected[j] == order[i])
+            {
+                found = true;
+                break;
+            }
+        } // for j
+        if (!found)
+        {
+            selected.push_back(order[i]);
+        }
+    } // for i
+    const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (xor_trial_buffer_.size() < capacity)
+        xor_trial_buffer_.resize(capacity, false);
+    if (transform_best_buffer_.size() < capacity)
+        transform_best_buffer_.resize(capacity, false);
+    size_t best_size = plain_size, best_payload = 0, best_formula = 0;
+    const periodic_candidate_type* best = nullptr;
+    periodic_workspace_.prepare_blocks();
+    bm::word_t* residual = periodic_workspace_.blocks.data();
+    size_t best_trial_size = size_t(-1), best_trial_payload = 0;
+    size_t best_trial_formula = 0;
+    const periodic_candidate_type* best_trial = nullptr;
+    for (unsigned i : selected)
+    {
+        const auto& c = candidates[i];
+        bm::bit_block_copy(residual, blk);
+        if (inverted)
+        {
+            bm::bit_invert(residual);
+        }
+        bm::periodic_apply(residual, c);
+        ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+        bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
+        trial.put_8(bm::set_block_bwt);
+        trial.put_16(0);
+        const auto payload = trial.get_pos();
+        type = encode_block(residual, sub_stat, nb, trial);
+        if (type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
+        if (type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
+        const size_t payload_size = size_t(trial.get_pos() - payload);
+        BM_ASSERT(payload_size && payload_size <= 65535);
+        const auto tail = trial.get_pos();
+        trial.set_pos(xor_trial_buffer_.data() + 1);
+        trial.put_16(bm::short_t(payload_size));
+        trial.set_pos(tail);
+        trial.put_8(bm::set_block_periodic_post);
+        bm::periodic_write_formula(trial, c, inverted);
+        ++periodic_stats_.trials;
+        ++periodic_stats_.trial_step[c.step];
+        const unsigned score_bucket = bm::periodic_score_bucket(c.score);
+        ++periodic_stats_.trial_score_bucket[score_bucket];
+        if (c.score > 0) ++periodic_stats_.positive_trials;
+        else ++periodic_stats_.nonpositive_trials;
+        periodic_stats_.payload_improved += payload_size < plain_size;
+        if (trial.size() < plain_size)
+        {
+            ++periodic_stats_.win_score_bucket[score_bucket];
+            if (c.score > 0) ++periodic_stats_.positive_wins;
+            else ++periodic_stats_.nonpositive_wins;
+        }
+        if (trial.size() < best_trial_size)
+        {
+            best_trial_size = trial.size();
+            best_trial_payload = payload_size;
+            best_trial_formula = trial.size() - payload_size;
+            best_trial = &c;
+        }
+        if (trial.size() < best_size)
+        {
+            best_size = trial.size();
+            best_payload = payload_size;
+            best_formula = best_size - payload_size;
+            best = &c;
+            ::memcpy(transform_best_buffer_.data(), xor_trial_buffer_.data(), best_size);
+        }
+    }
+    BM_ASSERT(best_trial);
+    ++periodic_stats_.best_candidate_blocks;
+    periodic_stats_.best_baseline_bytes += plain_size;
+    periodic_stats_.best_residual_bytes += best_trial_payload;
+    periodic_stats_.best_formula_bytes += best_trial_formula;
+    periodic_stats_.best_chains += best_trial->chains.size();
+    periodic_stats_.best_covered += best_trial->covered;
+    periodic_stats_.best_exceptions += best_trial->exceptions;
+    ++periodic_stats_.best_step[best_trial->step];
+    if (best_trial_size >= plain_size)
+    {
+        const size_t miss = best_trial_size - plain_size;
+        periodic_stats_.best_miss_bytes += miss;
+        periodic_stats_.near_miss_32 += miss <= 32;
+        periodic_stats_.near_miss_128 += miss <= 128;
+    }
+    if (best)
+    {
+        enc.set_pos(begin);
+        enc.memcpy(transform_best_buffer_.data(), best_size);
+        ++periodic_stats_.accepted;
+        periodic_stats_.saved_bytes += plain_size - best_size;
+        periodic_stats_.residual_bytes += best_payload;
+        periodic_stats_.formula_bytes += best_formula;
+        periodic_stats_.chains_accepted += best->chains.size();
+        periodic_stats_.exceptions_accepted += best->exceptions;
+        periodic_stats_.inverted_accepted += inverted;
+        periodic_stats_.approximate_accepted += best->max_holes != 0;
+        ++periodic_stats_.accepted_density[density];
+        ++periodic_stats_.accepted_step[best->step];
+        periodic_stats_.saved_step[best->step] += plain_size - best_size;
+        ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+        ++compression_stat_[bm::set_block_bwt];
+    }
+    else ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+    return 0;
+}
+
+template<class BV>
+unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
+    const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc, bool try_gap)
+{
+    const auto begin = enc.get_pos();
+    size_type before[256];
+    if (try_gap && gap_xor_enabled_ && !BM_IS_GAP(blk))
+        ::memcpy(before, compression_stat_, sizeof(before));
+    const unsigned char type = !BM_IS_GAP(blk) && selection_enabled_
+        ? encode_selection_block(blk, sub_stat, nb, enc)
+        : !BM_IS_GAP(blk) && periodic_enabled_
+        ? encode_periodic_block(blk, sub_stat, nb, enc)
+        : !BM_IS_GAP(blk) && bwt_enabled_
+            ? encode_bwt_block(blk, sub_stat, nb, enc)
+            : encode_block(blk, sub_stat, nb, enc);
+    if (type || BM_IS_GAP(blk) || !gap_xor_enabled_ || !try_gap) return type;
+    // XOR products are BIT blocks even when a compact GAP representation is
+    // available. Compare that complete candidate for originals and residuals.
+    unsigned gc, bc;
+    bm::bit_block_change_bc(blk, &gc, &bc);
+    if (gc >= bm::gap_max_safe_len) return 0;
+    bm::gap_word_t gap[8192];
+    if (bm::bit_to_gap(gap, blk, 8192))
+    {
+        size_type chosen[256];
+        ::memcpy(chosen, compression_stat_, sizeof(chosen));
+        const size_t capacity = size_t(bm::set_block_size)*sizeof(bm::word_t)*8+1024;
+        if (gap_candidate_buffer_.size() < capacity)
+            gap_candidate_buffer_.resize(capacity, false);
+        bm::encoder candidate(gap_candidate_buffer_.data(), capacity);
+        ::memcpy(compression_stat_, before, sizeof(before));
+        encode_gap_xor_block(gap, candidate);
+        if (candidate.size() < size_t(enc.get_pos()-begin))
+        {
+            enc.set_pos(begin);
+            enc.memcpy(gap_candidate_buffer_.data(), candidate.size());
+        }
+        else ::memcpy(compression_stat_, chosen, sizeof(chosen));
+    }
+    return 0;
+}
+
+template<class BV>
 void serializer<BV>::encode_xor_block(const bm::word_t* blk,
                         const bm::bv_sub_survey& sub_stat, block_idx_type nb,
                         const block_match_chain_type& mchain, bm::encoder& enc)
@@ -5208,15 +6913,15 @@ void serializer<BV>::encode_xor_block(const bm::word_t* blk,
     // XOR trial into the caller's calc_stat()-sized destination buffer.
     const size_t trial_capacity =
         size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
-    if (xor_trial_buffer_.size() < trial_capacity)
-        xor_trial_buffer_.resize(trial_capacity, false);
+    if (ref_xor_trial_buffer_.size() < trial_capacity)
+        ref_xor_trial_buffer_.resize(trial_capacity, false);
     size_type stats_before[256], stats_plain[256];
     ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
     const auto plain_begin = enc.get_pos();
     auto encode_single = [this, &sub_stat, nb](const bm::word_t* block,
                                               bm::encoder& dst)
     {
-        const unsigned char type = encode_block(block, sub_stat, nb, dst);
+        const unsigned char type = encode_selected_block(block, sub_stat, nb, dst, true);
         // A residual is exactly one block, never a run of source blocks.
         if (type == bm::set_block_azero)
             dst.put_8(bm::set_block_1zero);
@@ -5228,7 +6933,7 @@ void serializer<BV>::encode_xor_block(const bm::word_t* blk,
     ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
     ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
 
-    bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
+    bm::encoder trial(ref_xor_trial_buffer_.data(), ref_xor_trial_buffer_.size());
     BM_ASSERT(mchain.chain_size);
     if (mchain.match == e_xor_match_EQ)
     {
@@ -5271,16 +6976,40 @@ void serializer<BV>::encode_xor_block(const bm::word_t* blk,
     if (trial.size() < plain_size)
     {
         enc.set_pos(plain_begin);
-        enc.memcpy(xor_trial_buffer_.data(), trial.size());
+        enc.memcpy(ref_xor_trial_buffer_.data(), trial.size());
     }
     else
         ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
 }
 
+} // namespace bm
+
+// Large-superblock selection needs the serializer, index and opcode declarations.
+#include "bmsblocklarge.h"
+
+namespace bm
+{
+
 template<class BV>
 template<class OUT>
 bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
 {
+    if (sblock_large_enabled_ && !ref_vect_ && !sb_bookmarks_ && !free_)
+    {
+        bm::serialization_require(!ref_vect_ && !sb_bookmarks_ && !free_ && compression_level_>=5);
+        auto& scratch = large_sblock_scratch();
+        auto& baseline = scratch.baseline;
+        auto& selected = scratch.selected;
+        struct restore_flag { bool& flag; ~restore_flag(){flag=true;} } guard{sblock_large_enabled_};
+        sblock_large_enabled_=false;
+        serialize(bv,baseline);
+        select_large_sblocks(bv,baseline,selected);
+        // encoder::memcpy requires a spare byte. In particular, a stream
+        // workspace grown to exactly selected.size() cannot accept this copy.
+        if (!out.reserve(output_buffer_,selected.size()+1)) return false;
+        out.get_encoder().memcpy(selected.data(),selected.size());
+        return out.flush();
+    }
     BM_ASSERT(temp_block_);
 
     if (allow_stat_reset_)
@@ -5325,8 +7054,8 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                 i_last = i0;
                 sub_stat.init((void*)&bv, i0);
 
-                bool is_sparse_sub =
-                    bman.is_sparse_sblock(i0, sparse_cutoff_, sub_stat);
+                bool is_sparse_sub = bman.is_sparse_sblock(
+                    i0, sparse_cutoff_, sub_stat, sblock_gap_tolerance_);
 
                 // XOR reference compression disables the sparse SUB serial.
                 if ((compression_level_ >= 5) && (ref_vect_ == 0))
@@ -5339,7 +7068,42 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                         if (!out.reserve(output_buffer_,
                                 size_t(65536) * sizeof(unsigned) + 1024))
                             return false;
-                        bienc_arr_sblock(bv, i0, enc);
+                        const unsigned char* route_begin =
+                            gap_route_diagnostics_ ? enc.get_pos() : 0;
+                        if (sblock_adaptive_enabled_ || sblock_wave1024_enabled_)
+                            bienc_arr_sblock_select(bv, i0, enc);
+                        else
+                        {
+                            bienc_arr_sblock(bv, i0, enc);
+                                            }
+                        if (gap_route_diagnostics_)
+                        {
+                            ++gap_route_stats_.superblocks;
+                            gap_route_stats_.superblock_bytes +=
+                                bm::id64_t(enc.get_pos() - route_begin);
+                            gap_route_stats_.grouped_bit += sub_stat.bit_blocks;
+                            gap_route_stats_.grouped_full += sub_stat.full_blocks;
+                            gap_route_stats_.grouped_empty += sub_stat.empty_blocks;
+                            for (unsigned k = 0; k < bm::set_sub_array_size; ++k)
+                            {
+                                const bm::word_t* p = sub_stat.blocks[k];
+                                if (p && p != FULL_BLOCK_FAKE_ADDR && BM_IS_GAP(p))
+                                {
+                                    const bm::gap_word_t* gp = BMGAP_PTR(p);
+                                    const unsigned level = bm::gap_level(gp);
+                                    const unsigned len = bm::gap_length(gp);
+                                    BM_ASSERT(level < 4);
+                                    ++gap_route_stats_.grouped[level].blocks;
+                                    gap_route_stats_.grouped[level].words += len;
+                                    if (!level)
+                                    {
+                                        const unsigned b = bm::gap_route_length_bucket(len);
+                                        ++gap_route_stats_.grouped_l0[b].blocks;
+                                        gap_route_stats_.grouped_l0[b].words += len;
+                                    }
+                                }
+                            }
+                        }
                         i += (bm::set_sub_array_size - j0) - 1;
                         continue;
                     }
@@ -5385,6 +7149,8 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
         if (flag)
         {
         zero_block:
+            if (gap_route_diagnostics_ && blk && BM_IS_GAP(blk))
+                ++gap_route_stats_.folded_gap;
             flag = 1;
             block_idx_type next_nb = bman.find_next_nz_block(i+1, false);
             if (next_nb == bm::set_total_blocks) // no more blocks
@@ -5418,11 +7184,15 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             if (flag)
             {
             full_block:
+                if (gap_route_diagnostics_ && blk && BM_IS_GAP(blk))
+                    ++gap_route_stats_.folded_gap;
                 flag = 1;
                 // Look ahead for similar blocks
                 for(j = i+1; j < bm::set_total_blocks; ++j)
                 {
                     bm::get_block_coord(j, i0, j0);
+                    if (i0 >= bman.top_block_size())
+                        break; // the unallocated suffix contains zero blocks
                     if (!j0) // look ahead if the whole superblock is 0xFF
                     {
                         bm::word_t*** blk_root = bman.top_blocks_root();
@@ -5480,11 +7250,40 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             }
         }
 
-        const unsigned char block_type = encode_block(blk, sub_stat, i, enc);
+        // Use the same block-codec policy as reference-XOR candidates.
+        const unsigned char* route_begin = gap_route_diagnostics_ ? enc.get_pos() : 0;
+        const unsigned char block_type = encode_selected_block(blk, sub_stat, i, enc);
         if (block_type == bm::set_block_azero)
             goto zero_block;
         if (block_type == bm::set_block_aone)
             goto full_block;
+
+        if (gap_route_diagnostics_)
+        {
+            const bm::id64_t bytes = bm::id64_t(enc.get_pos() - route_begin);
+            if (BM_IS_GAP(blk))
+            {
+                const bm::gap_word_t* gp = BMGAP_PTR(blk);
+                const unsigned level = bm::gap_level(gp);
+                const unsigned len = bm::gap_length(gp);
+                BM_ASSERT(level < 4);
+                ++gap_route_stats_.direct[level].blocks;
+                gap_route_stats_.direct[level].words += len;
+                gap_route_stats_.direct[level].bytes += bytes;
+                if (!level)
+                {
+                    const unsigned b = bm::gap_route_length_bucket(len);
+                    ++gap_route_stats_.direct_l0[b].blocks;
+                    gap_route_stats_.direct_l0[b].words += len;
+                    gap_route_stats_.direct_l0[b].bytes += bytes;
+                }
+            }
+            else
+            {
+                ++gap_route_stats_.direct_bit;
+                gap_route_stats_.direct_bit_bytes += bytes;
+            }
+        }
 
         // destructive serialization mode
         //
@@ -5732,8 +7531,8 @@ void deserialize_range(BV& bv,
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
-unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_id_list(
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+unsigned deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_id_list(
                                             decoder_type&   decoder,
 		    							    unsigned        block_type,
 				   					        bm::gap_word_t* dst_arr)
@@ -5812,9 +7611,159 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_id_list(
 	return len;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bwt_block(
+                                      decoder_type& dec, bm::word_t* blk)
+{
+    unsigned length = dec.get_16();
+    bm::serialization_require(length && length <= 65535);
+    const unsigned char* start = dec.get_pos();
+    if (!IS_VALID_ADDR(blk))
+        dec.seek(int(length));
+    else
+    {
+        bm::bit_block_set(blk, 0);
+        unsigned type = dec.get_8();
+        switch (type)
+        {
+        case bm::set_block_1zero: break;
+        case bm::set_block_1one: bm::bit_block_set(blk, ~0u); break;
+        case bm::set_block_bit: dec.get_32(blk, bm::set_block_size); break;
+        case bm::set_block_bit_1bit: bm::set_bit(blk, dec.get_16()); break;
+        case bm::set_block_bit_0runs: this->read_0runs_block(dec, blk); break;
+        case bm::set_block_bit_interval:
+        {
+            unsigned first = dec.get_16(), last = dec.get_16();
+            bm::serialization_require(first <= last && last < bm::set_block_size);
+            dec.get_32(blk + first, last - first + 1);
+            break;
+        }
+        case bm::set_block_arrgap:
+        case bm::set_block_arrgap_inv:
+        case bm::set_block_arrbit:
+        case bm::set_block_arrbit_inv:
+        {
+            bool inv = type == bm::set_block_arrbit_inv || type == bm::set_block_arrgap_inv;
+            if (inv) bm::bit_block_set(blk, ~0u);
+            unsigned count = dec.get_16();
+            for (unsigned i = 0; i < count; ++i)
+            {
+                unsigned bit = dec.get_16();
+                if (inv) bm::clear_bit(blk, bit); else bm::set_bit(blk, bit);
+            }
+            break;
+        }
+        case bm::set_block_arr_bienc:
+        case bm::set_block_arr_bienc_8bh:
+        case bm::set_block_arr_bienc_v3:
+        case bm::set_block_arr_bienc_v3s:
+            this->read_bic_arr(dec, blk, type); break;
+        case bm::set_block_arr_bienc_inv:
+        case bm::set_block_arr_bienc_inv_v3:
+        case bm::set_block_arr_bienc_inv_v3s:
+            this->read_bic_arr_inv(dec, blk, type); break;
+        case bm::set_block_bitgap_bienc:
+            this->read_bic_gap(dec, blk); break;
+        case bm::set_block_bit_digest0:
+            this->read_digest0_block(dec, blk); break;
+        case bm::set_block_arrgap_egamma:
+        case bm::set_block_arrgap_egamma_inv:
+        case bm::set_block_arrgap_bienc:
+        case bm::set_block_arrgap_bienc_inv:
+        case bm::set_block_arrgap_bienc_v2:
+        case bm::set_block_arrgap_bienc_inv_v2:
+        {
+            unsigned count = this->read_id_list(dec, type, id_array_);
+            bool inv = type == bm::set_block_arrgap_egamma_inv ||
+                       type == bm::set_block_arrgap_bienc_inv ||
+                       type == bm::set_block_arrgap_bienc_inv_v2;
+            if (inv) bm::bit_block_set(blk, ~0u);
+            for (unsigned i = 0; i < count; ++i)
+            {
+                if (inv) bm::clear_bit(blk, id_array_[i]);
+                else bm::set_bit(blk, id_array_[i]);
+            }
+            break;
+        }
+        case bm::set_block_gap:
+        case bm::set_block_gap_egamma:
+        case bm::set_block_gap_bienc:
+        case bm::set_block_gap_bienc_v2:
+        case bm::set_block_gap_bienc_v3:
+        case bm::set_block_gap_bienc_v3s:
+        case bm::set_block_gap_egamma_v3:
+        case bm::set_block_gap_xor_framed:
+        {
+            // GAP header carries at most 13 bits of length. This scratch
+            // also covers bit-origin GAP residuals without changing input type.
+            bm::gap_word_t gap[8192 + 8];
+            bm::gap_word_t head = 0;
+            if (type == bm::set_block_gap || type == bm::set_block_gap_egamma ||
+                type == bm::set_block_gap_bienc || type == bm::set_block_gap_bienc_v2)
+                head = dec.get_16();
+            this->read_gap_block(dec, type, gap, head);
+            bm::gap_convert_to_bitset(blk, gap);
+            break;
+        }
+        default: bm::serialization_require(false);
+        } // switch
+        bm::serialization_require(size_t(dec.get_pos() - start) == length);
+    }
+
+    unsigned post = dec.get_8();
+    if (post == bm::set_block_periodic_groups ||
+        post == bm::set_block_periodic_groups_reduced ||
+        post == bm::set_block_periodic_groups_first ||
+        post == bm::set_block_periodic_interleaved_fixed)
+        bm::periodic_read_groups(dec, blk,
+            post != bm::set_block_periodic_groups,
+            post == bm::set_block_periodic_groups_first ||
+            post == bm::set_block_periodic_interleaved_fixed,
+            post == bm::set_block_periodic_interleaved_fixed);
+    else if (post == bm::set_block_periodic_post)
+        bm::periodic_read_formula(dec, blk);
+    else if (post == bm::set_block_bwt_full_post)
+    {
+        unsigned short primary = dec.get_16();
+        if (IS_VALID_ADDR(blk))
+        {
+            bm::bwt_inverse_full(blk, primary, *bwt_decode_workspace_);
+        }
+    }
+    else if (post == bm::set_block_bwt_periodic_post ||
+             post == bm::set_block_bwt_periodic_reduced ||
+             post == bm::set_block_bwt_periodic_first ||
+             post == bm::set_block_bwt_interleaved_fixed)
+    {
+        bm::periodic_read_groups(dec, blk,
+            post != bm::set_block_bwt_periodic_post,
+            post == bm::set_block_bwt_periodic_first ||
+            post == bm::set_block_bwt_interleaved_fixed,
+            post == bm::set_block_bwt_interleaved_fixed);
+        unsigned short primary = dec.get_16();
+        if (IS_VALID_ADDR(blk))
+        {
+            bm::bwt_inverse_full(blk, primary, *bwt_decode_workspace_);
+        }
+    }
+    else
+    {
+        bm::serialization_require(post == bm::set_block_bwt_post);
+        unsigned char packed[bm::bwt_index_bytes];
+        for (unsigned i = 0; i < sizeof(packed); ++i) packed[i] = dec.get_8();
+        if (IS_VALID_ADDR(blk))
+        {
+            unsigned short primary[bm::block_waves];
+            bm::bwt_unpack_indexes(packed, primary);
+            bm::bwt_inverse_block(blk, primary);
+        }
+    }
+
+}
+
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 void
-deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
+deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_arr(decoder_type& dec,
                                                bm::word_t*   blk,
                                                unsigned block_type)
 {
@@ -5952,8 +7901,8 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr(decoder_type& dec,
     bin.bic_decode_u16_bitset(blk, arr_len-2, min_v, max_v);
 }
 
-template<typename DEC, typename BLOCK_IDX>
-unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+unsigned deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_sb_arr(
                          decoder_type&   dec,
                          unsigned  block_type,
                          unsigned*  dst_arr,
@@ -5965,6 +7914,10 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
 
     switch (block_type)
     {
+    case bm::set_sblock_bienc_large:
+        len=bm::sblock_large_decoder<decltype(bin)>::decode(bin,large_sb_ids_,*sb_idx,large_sb_inverse_);
+        sb_id_array_=large_sb_ids_.data();
+        return len;
     case bm::set_sblock_bienc:
         {
             sb_flag = dec.get_8();
@@ -6128,6 +8081,100 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
         }
         break;
 
+    case bm::set_sblock_bienc_wave_adaptive:
+        return bm::sblock_wave_adaptive_model<Alloc>::decode(bin, dst_arr, *sb_idx, wave_map_, wave_occupied_);
+    case bm::set_sblock_bienc_wave1024:
+        return bm::sblock_wave1024_model<Alloc>::decode(bin, dst_arr, *sb_idx, wave_map_, wave_occupied_);
+
+    case bm::set_sblock_bienc_adaptive:
+        {
+            *sb_idx = bin.get_32_no();
+            // Only the retained adaptive-step/grouped-flags layout is valid.
+            // Earlier fixed-step headers and global-relative mode were unreleased.
+            bm::serialization_require(bin.gamma() == 1);
+            const unsigned step = bm::sblock_adaptive_min_step << bin.get_bits(2);
+            const unsigned mode = bin.get_bits(2);
+            bm::serialization_require(mode == 0 || mode == 2);
+            len = bin.gamma();
+            bm::serialization_require(len >= 2 * step &&
+                len >= bm::superblock_delta_model::minimum_entries &&
+                len <= bm::sblock_adaptive_max_entries);
+            const unsigned min_v = bin.get_24_no();
+            const unsigned max_v = bin.get_24_no();
+            const unsigned global_code = bin.gamma();
+            bm::serialization_require(global_code && global_code <= bm::set_sub_total_bits && min_v < max_v &&
+                                        max_v < bm::set_sub_total_bits);
+            const unsigned windows = (len + step - 1) / step;
+            auto& corrections = sblock_adaptive_corrections_;
+            auto& flags = sblock_adaptive_flags_;
+            if (corrections.capacity() < bm::sblock_adaptive_max_windows)
+                corrections.reserve(bm::sblock_adaptive_max_windows);
+            if (flags.capacity() < bm::sblock_adaptive_max_windows)
+                flags.reserve(bm::sblock_adaptive_max_windows);
+            BM_ASSERT(windows <= bm::sblock_adaptive_max_windows);
+            corrections.resize(windows);
+            corrections[0] = global_code - 1;
+            flags.resize(windows);
+            flags[0] = 0; // remaining flags are overwritten below
+            unsigned base = 1;
+            for (; base + 7 < windows; base += 8)
+            {
+                if (bin.get_bit())
+                {
+                    for (unsigned j = 0; j < 8; ++j)
+                    {
+                        flags[base+j] = 1;
+                    } // for j
+                }
+                else
+                {
+                    for (unsigned j = 0; j < 8; ++j)
+                    {
+                        flags[base+j] = static_cast<unsigned char>(bin.get_bit());
+                    } // for j
+                }
+            } // for base
+            for (; base < windows; ++base)
+            {
+                flags[base] = static_cast<unsigned char>(bin.get_bit());
+            } // for base
+            for (unsigned w = 1; w < windows; ++w)
+            {
+                unsigned correction = corrections[w-1];
+                if (flags[w])
+                {
+                    const bool negative = mode == 2 ? bin.get_bit() != 0 : false;
+                    const unsigned code = bin.gamma();
+                    bm::serialization_require(code != 0);
+                    if (mode == 2)
+                    {
+                        bm::serialization_require(negative ? code <= correction :
+                            code < bm::set_sub_total_bits - correction);
+                        correction = negative ? correction - code : correction + code;
+                    }
+                    else correction = code - 1;
+                }
+                bm::serialization_require(correction >= corrections[0] &&
+                                            correction < bm::set_sub_total_bits);
+                corrections[w] = correction;
+            } // for w
+            dst_arr[0] = min_v;
+            dst_arr[len-1] = max_v;
+            bin.bic_decode_u32_cm(&dst_arr[1], len-2, min_v+1, max_v-1);
+            unsigned correction_sum = 0;
+            for (unsigned i = 1; i < len; ++i)
+            {
+                bm::serialization_require(corrections[i / step] < bm::set_sub_total_bits - correction_sum);
+                correction_sum += corrections[i / step];
+                bm::serialization_require(
+                    correction_sum < bm::set_sub_total_bits &&
+                    dst_arr[i] <= bm::set_sub_total_bits - 1 - correction_sum);
+                dst_arr[i] += correction_sum;
+                bm::serialization_require(dst_arr[i] > dst_arr[i-1]);
+            } // for i
+        }
+        break;
+
     default: // TODO: get rid of exception here to classify as "noexept"
         BM_ASSERT(0);
         #ifndef BM_NO_STL
@@ -6140,9 +8187,9 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX>::read_bic_sb_arr(
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 void
-deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
+deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_arr_inv(decoder_type&   decoder,
                                                    bm::word_t* blk,
                                                    unsigned block_type) BMDECNOEXCEPT(DEC)
 {
@@ -6152,8 +8199,8 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_bic_arr_inv(decoder_type&   decoder,
     bm::bit_invert(blk);
 }
 
-template<typename DEC, typename BLOCK_IDX>
-void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec,
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_gap(decoder_type& dec,
                                                     bm::word_t*   blk) BMDECNOEXCEPT(DEC)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
@@ -6175,8 +8222,8 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_bic_gap(decoder_type& dec,
     bm::gap_add_to_bitset(blk, id_array_, arr_len);
 }
 
-template<typename DEC, typename BLOCK_IDX>
-void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_digest0_block(
                                                 decoder_type& dec,
                                                 bm::word_t*   block) BMDECNOEXCEPT(DEC)
 {
@@ -6215,8 +8262,8 @@ void deseriaizer_base<DEC, BLOCK_IDX>::read_digest0_block(
     } // while
 }
 
-template<typename DEC, typename BLOCK_IDX>
-void deseriaizer_base<DEC, BLOCK_IDX>::read_0runs_block(
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_0runs_block(
                                             decoder_type& dec,
                                             bm::word_t* blk) BMDECNOEXCEPT(DEC)
 {
@@ -6288,15 +8335,63 @@ void decode_min_max(BIN& bin, bm::gap_word_t gap_head, unsigned head_v3,
 
 
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 void
-deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
+deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
                                            unsigned        block_type, 
                                            bm::gap_word_t* dst_block,
                                            bm::gap_word_t& gap_head)
 {
     switch (block_type)
     {
+    case set_block_gap_xor_framed:
+        {
+            auto read_component = [&](bm::gap_word_t* dst)
+            {
+                const unsigned type = decoder.get_8();
+                bm::serialization_require(
+                    type == set_block_bit_1bit || type == set_block_gap ||
+                    type == set_block_gap_egamma || type == set_block_gap_bienc ||
+                    type == set_block_gap_bienc_v2 ||
+                    type == set_block_gap_bienc_v3 ||
+                    type == set_block_gap_bienc_v3s ||
+                    type == set_block_gap_egamma_v3);
+                bm::gap_word_t head = 0;
+                if (type == set_block_gap || type == set_block_gap_egamma ||
+                    type == set_block_gap_bienc || type == set_block_gap_bienc_v2)
+                    head = decoder.get_16();
+                read_gap_block(decoder, type, dst, head);
+            };
+            read_component(dst_block);
+            gap_head = dst_block[0];
+            bit_in_type bin(decoder);
+            const unsigned n = bin.gamma();
+            const unsigned min_delta = bin.gamma();
+            bm::serialization_require(n && n <= 4095u &&
+                                   min_delta && min_delta <= bm::gap_max_bits);
+            const unsigned correction = min_delta - 1;
+            bm::serialization_require((n - 1u) * correction <= 65535u);
+            const unsigned upper = 65535u - (n - 1u) * correction;
+            bin.bic_decode_u16(id_array_, n, 0, bm::gap_word_t(upper));
+            unsigned prev = bm::gap_max_bits;
+            for (unsigned i = 0; i < n; ++i)
+            {
+                const unsigned pos = unsigned(id_array_[i]) + i * correction;
+                bm::serialization_require(pos < bm::gap_max_bits &&
+                                       (i == 0 || pos > prev));
+                id_array_[i] = bm::gap_word_t(pos);
+                prev = pos;
+            }
+            bm::gap_word_t* exception_gap = (bm::gap_word_t*)ex1_arr_;
+            bm::gap_word_t* result_gap = (bm::gap_word_t*)ex0_arr_;
+            bm::gap_set_array(exception_gap, id_array_, n);
+            unsigned result_len = 0;
+            bm::gap_operation_xor(dst_block, exception_gap, result_gap, result_len);
+            ::memcpy(dst_block, result_gap,
+                     (result_len + 1u) * sizeof(bm::gap_word_t));
+            gap_head = dst_block[0];
+        }
+        break;
     case set_block_gap:
         {
             unsigned len = gap_length(&gap_head);
@@ -6580,9 +8675,9 @@ deseriaizer_base<DEC, BLOCK_IDX>::read_gap_block(decoder_type&   decoder,
     }
 }
 
-template<typename DEC, typename BLOCK_IDX>
-typename deseriaizer_base<DEC, BLOCK_IDX>::block_idx_type
-deseriaizer_base<DEC, BLOCK_IDX>::try_skip(
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+typename deseriaizer_base<DEC, BLOCK_IDX, Alloc>::block_idx_type
+deseriaizer_base<DEC, BLOCK_IDX, Alloc>::try_skip(
                                         decoder_type&   decoder,
                                         block_idx_type nb,
                                         block_idx_type expect_nb) BMNOEXCEPT
@@ -6669,8 +8764,8 @@ deserializer<BV, DEC>::deserializer()
     this->ex0_arr_ = alloc_.alloc_bit_block(tmp_buff_alloc_factor);
     this->ex1_arr_ = alloc_.alloc_bit_block(tmp_buff_alloc_factor);
 
-    bit_idx_arr_.resize(bm::gap_max_bits);
-    this->id_array_ = bit_idx_arr_.data();
+    block_positions_.resize(bm::gap_max_bits);
+    this->id_array_ = block_positions_.data();
 
     sb_bit_idx_arr_.resize(bm::gap_max_bits);
     this->sb_id_array_ = sb_bit_idx_arr_.data();
@@ -6835,6 +8930,10 @@ deserializer<BV, DEC>::deserialize_gap(unsigned char btype,
         gap_head = 0;
         this->read_gap_block(dec, btype, gap_temp_block, gap_head);
         break;
+    case bm::set_block_gap_xor_framed:
+        gap_head = 0;
+        this->read_gap_block(dec, btype, gap_temp_block, gap_head);
+        break;
     default:
         BM_ASSERT(0);
         #ifndef BM_NO_STL
@@ -6935,6 +9034,28 @@ void deserializer<BV, DEC>::decode_bit_block(unsigned char btype,
     } // switch
 }
 
+// Normalize completed blocks only: pending reference XOR still owns its residual.
+template<class BV, class DEC>
+void deserializer<BV, DEC>::normalize_decoded_blocks(
+    blocks_manager_type& bman, block_idx_type first, block_idx_type last)
+{
+    if (!normalize_gap_) return;
+    if (is_range_set_)
+    {
+        const block_idx_type range_first = idx_from_ >> bm::set_block_shift;
+        first = first < range_first ? range_first : first;
+        last = bm::min_value(last, block_idx_type(idx_to_ >> bm::set_block_shift));
+    }
+    for (block_idx_type nb = first; nb <= last; ++nb)
+    {
+        if (x_ref_d64_ && nb == x_nb_) continue;
+        unsigned i, j;
+        bm::get_block_coord(nb, i, j);
+        bman.optimize_block(i, j, bman.get_block_ptr(i, j), temp_block_,
+                            bvector_type::opt_compress, 0);
+    }
+}
+
 template<class BV, class DEC>
 void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
                                               decoder_type&  dec,
@@ -6943,7 +9064,40 @@ void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
     unsigned sb;
     unsigned* arr = this->sb_id_array_;
 
+    const unsigned char* rec_begin = sblock_bic_records_ ? dec.get_pos() : 0;
     unsigned len = this->read_bic_sb_arr(dec, btype, arr, &sb);
+    if (btype==bm::set_sblock_bienc_large) arr=this->sb_id_array_;
+    if(btype==bm::set_sblock_bienc_large && this->large_sb_inverse_)
+    {
+        const size_type first=size_type(sb)*bm::set_sub_total_bits;
+        const size_type last=bm::min_value(size_type(first+bm::set_sub_total_bits-1),size_type(bm::id_max-1));
+        size_type next=first;
+        auto set_ones = [&](size_type a, size_type b)
+        {
+            if (is_range_set_)
+            {
+                a = a < idx_from_ ? idx_from_ : a;
+                b = bm::min_value(b, idx_to_);
+            }
+            if (a <= b)
+            {
+                bv.set_range(a, b);
+            }
+        };
+        for(unsigned k=0;k<len;++k){size_type zero=first+arr[k];
+            bm::serialization_require(zero<=last);
+            if(next<zero)set_ones(next,zero-1);next=zero+1;}
+        if(next<=last)set_ones(next,last);
+        normalize_decoded_blocks(bv.get_blocks_manager(),
+            block_idx_type(sb) * bm::set_sub_array_size,
+            (block_idx_type(sb) + 1) * bm::set_sub_array_size - 1);
+        if(sblock_bic_records_)sblock_bic_records_->push_back(
+            {unsigned(last-first+1)-len,unsigned(dec.get_pos()-rec_begin)+1});
+        return;
+    }
+    if (sblock_bic_records_)
+        sblock_bic_records_->push_back(
+            {len, unsigned(dec.get_pos() - rec_begin) + 1});
 
     const typename BV::size_type sb_max_bc = bm::set_sub_array_size * bm::gap_max_bits;
     typename BV::size_type from = sb * sb_max_bc;
@@ -6967,6 +9121,9 @@ void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
             bv.set_bit_no_check(idx);
         } // for
     }
+    normalize_decoded_blocks(bv.get_blocks_manager(),
+        block_idx_type(sb) * bm::set_sub_array_size,
+        (block_idx_type(sb) + 1) * bm::set_sub_array_size - 1);
 }
 
 
@@ -7089,6 +9246,7 @@ size_t deserializer<BV, DEC>::deserialize_from(bvector_type& bv, IN& in)
     if (digest_skip && bv.is_ro())
         bv.clear(true);
 
+    normalize_gap_ = bv.empty();
     blocks_manager_type& bman = bv.get_blocks_manager();
     if (!bman.is_init())
     {
@@ -7111,6 +9269,7 @@ size_t deserializer<BV, DEC>::deserialize_from(bvector_type& bv, IN& in)
     if (deserialization_index_out_)
         deserialization_index_out_->clear();
     size_t marker_idx = 0;
+    if (record_block_starts_) record_block_starts_->clear();
 
     // Reading the serialization header
     //
@@ -7154,6 +9313,8 @@ size_t deserializer<BV, DEC>::deserialize_from(bvector_type& bv, IN& in)
             if (!deserialization_index_out_)
                 bv.set(idx);
         } // for
+        if (normalize_gap_ && !deserialization_index_out_)
+            bv.optimize(temp_block_, bvector_type::opt_compress);
         // -1 for compatibility with other deserialization branches
         size_t read_size = in.tell() - (IN::streaming ? 0 : 1);
         if (deserialization_index_out_)
@@ -7280,14 +9441,28 @@ std::cout << "size=" << dec_last_size;
         // contain at most 65536 16-bit values, with coding and header overhead.
         size_t record_bound = 8 * bm::set_block_size * sizeof(bm::word_t) + 1024;
         if (btype == bm::set_sblock_bienc || btype == bm::set_sblock_bienc_v3 ||
+            btype == bm::set_sblock_bienc_adaptive ||
+            btype == bm::set_sblock_bienc_wave1024 || btype == bm::set_sblock_bienc_wave_adaptive ||
             btype == set_block_arrbit || btype == bm::set_block_arrbit_inv ||
             btype == set_block_arrgap || btype == set_block_arrgap_inv ||
             btype == set_block_arrgap_egamma || btype == set_block_arrgap_egamma_inv)
             record_bound = size_t(65536) * sizeof(unsigned) + 1024;
+        if (btype==bm::set_sblock_bienc_large)
+        {
+            // Peek only the fixed prefix to size the bounded stream window to
+            // the actual list, rather than reserving the 24-bit maximum.
+            if(!in.prepare(8))return size_t(-1);
+            decoder_type probe=dec;bm::bit_in<decoder_type> prefix(probe);
+            bool inverse=bool(prefix.get_bits(1));unsigned flags=prefix.get_bits(8);
+            unsigned count=inverse?((flags&bm::sblock_large_format::range3)?prefix.get_24_no():prefix.get_16_no()):bm::sblock_large_format::minimum+
+                ((flags&bm::sblock_large_format::range3)?bm::sblock_large_format::minimum:0)+prefix.get_16_no();
+            record_bound=size_t(count)*sizeof(unsigned)+1024;
+        }
         if (!in.prepare(record_bound)) return size_t(-1);
         
         // --------------------------------------------------------------
         // marker index build up here
+        if (record_block_starts_) record_block_starts_->push_back(nb_i);
         if (deserialization_index_out_)
         {
             if (is_skip_marker(btype))
@@ -7491,6 +9666,7 @@ dec_last_size = dec_size;
             case bm::set_block_gap_bienc_v3:
             case bm::set_block_gap_bienc_v3s:
             case bm::set_block_gap_egamma_v3:
+            case bm::set_block_gap_xor_framed:
             {
                 gap_word_t gap_head = 0;
                 this->read_gap_block(dec, btype,
@@ -7525,11 +9701,20 @@ dec_last_size = dec_size;
             case bm::set_block_bitgap_bienc:
                 this->read_bic_gap(dec, 0);
                 break;
+            case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+                if (btype == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(dec, 0);
+                else this->read_bwt_block(dec, 0);
+                break;
             case bm::set_block_bit_digest0:
                 this->read_digest0_block(dec, 0);
                 break;
             case bm::set_sblock_bienc:
             case bm::set_sblock_bienc_v3:
+            case bm::set_sblock_bienc_adaptive:
+            case bm::set_sblock_bienc_wave_adaptive:
+            case bm::set_sblock_bienc_wave1024:
+            case bm::set_sblock_bienc_large:
             {
                 unsigned sb = 0;
                 this->read_bic_sb_arr(dec, btype, this->sb_id_array_, &sb);
@@ -7754,6 +9939,7 @@ dec_last_size = dec_size;
         case set_block_gap_bienc_v3:
         case set_block_gap_bienc_v3s:
         case set_block_gap_egamma_v3:
+        case set_block_gap_xor_framed:
             deserialize_gap(btype, dec, bv, bman, nb_i, blk);
             break;
         case set_block_arrbit:
@@ -7770,6 +9956,27 @@ dec_last_size = dec_size;
         case bm::set_block_arr_bienc_inv_v3s:
             decode_bit_block(btype, dec, bman, nb_i, blk);
             break;
+        case bm::set_block_bwt:
+        case bm::set_block_bwt_unpacked:
+        {
+            if (btype == bm::set_block_bwt_unpacked && !blk &&
+                !skip_payload && !x_ref_d64_)
+            {
+                // No existing bits to merge: restore directly into an owned,
+                // initialized target block. The reader validates before writing.
+                blk = bman.make_bit_block(nb_i);
+                this->read_bwt_unpacked_block(dec, blk);
+                break;
+            }
+            // FULL OR source is unchanged. Pending reference-XOR must first
+            // reconstruct its residual, so only ordinary OR can take this path.
+            const bool dry_payload = skip_payload || (IS_FULL_BLOCK(blk) && !x_ref_d64_);
+            if (btype == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(dec, dry_payload ? 0 : temp_block);
+            else this->read_bwt_block(dec, dry_payload ? 0 : temp_block);
+            if (!dry_payload)
+                bv.combine_operation_with_block(nb_i, temp_block, 0, BM_OR);
+            break;
+        }
         case bm::set_block_bit_digest0:
             decode_bit_block(btype, dec, bman, nb_i, blk);
             break;
@@ -7777,6 +9984,10 @@ dec_last_size = dec_size;
         // --------------------------------------- super-block encodings
         case bm::set_sblock_bienc:
         case bm::set_sblock_bienc_v3:
+        case bm::set_sblock_bienc_adaptive:
+        case bm::set_sblock_bienc_wave_adaptive:
+        case bm::set_sblock_bienc_wave1024:
+        case bm::set_sblock_bienc_large:
             decode_arr_sblock(btype, dec, bv);
             nb_i += (bm::set_sub_array_size - j0);
             continue; // bypass ++i;
@@ -8043,6 +10254,8 @@ dec_last_size = dec_size;
             #endif
         } // switch
 
+        if (!skip_payload && is_single_block_payload_marker(btype))
+            normalize_decoded_blocks(bman, nb_i, nb_i);
         ++nb_i;
     } while (nb_i < bm::set_total_blocks);
 
@@ -8055,6 +10268,21 @@ dec_last_size = dec_size;
 
     bman.shrink_top_blocks(); // reduce top blocks to necessary size
 
+    // Every superblock format can consume the final address-space group.
+    // Consume and index its trailing END identically in RAM and streams.
+    if (nb_i == bm::set_total_blocks &&
+        (btype == set_sblock_bienc || btype == set_sblock_bienc_v3 ||
+         btype == set_sblock_bienc_wave1024 ||
+         btype == set_sblock_bienc_adaptive ||
+         btype == set_sblock_bienc_wave_adaptive ||
+         btype == set_sblock_bienc_large))
+    {
+        const size_t end_pos=in.tell();
+        if (!in.prepare(1) || dec.get_8()!=set_block_end) return size_t(-1);
+        if (deserialization_index_out_) deserialization_index_out_->add_marker_offset(end_pos);
+        if (record_block_starts_) record_block_starts_->push_back(nb_i);
+        btype=set_block_end;
+    }
     // The writer appends END after exhausting the logical block domain.
     // AZERO already terminates the writer; END is itself the final byte.
     if (IN::streaming && btype != set_block_azero && btype != set_block_end)
@@ -8178,6 +10406,7 @@ bool deserializer<BV, DEC>::is_single_block_payload_marker(
     case bm::set_block_gap_bienc_v3:
     case bm::set_block_gap_bienc_v3s:
     case bm::set_block_gap_egamma_v3:
+    case bm::set_block_gap_xor_framed:
     case bm::set_block_arrbit:
     case bm::set_block_arr_bienc:
     case bm::set_block_arrbit_inv:
@@ -8189,6 +10418,8 @@ bool deserializer<BV, DEC>::is_single_block_payload_marker(
     case bm::set_block_arr_bienc_v3s:
     case bm::set_block_arr_bienc_inv_v3s:
     case bm::set_block_bit_digest0:
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
         return true;
     default:
         return false;
@@ -8289,6 +10520,9 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
             bm::word_t* blk = bman.deoptimize_block(i0, j0, true);
             xor_decode_chain(blk);
         }
+        if (normalize_gap_)
+            bman.optimize_block(i0, j0, bman.get_block_ptr(i0, j0), temp_block_,
+                                bvector_type::opt_compress, 0);
         xor_reset();
         return;
     }
@@ -8355,6 +10589,12 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
     //
     // check if we range setting overrides the need for block optimization
     //
+    if (normalize_gap_)
+    {
+        bman.optimize_block(i0, j0, bman.get_block_ptr(i0, j0), temp_block_,
+                            bvector_type::opt_compress, 0);
+        return;
+    }
     if (is_range_set_)
     {
         block_idx_type nb_from = (idx_from_ >> bm::set_block_shift);
@@ -8376,8 +10616,9 @@ void deserializer<BV, DEC>::xor_reset() BMNOEXCEPT
 
 // ---------------------------------------------------------------------------
 
-template<typename DEC, typename BLOCK_IDX>
-serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned char* buf)
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::serial_stream_iterator(
+    const unsigned char* buf, bm::serial_iterator_workspace<Alloc>* workspace)
   : header_flag_(0),
     decoder_(buf),
     end_of_stream_(false),
@@ -8391,32 +10632,32 @@ serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned ch
     ::memset(bit_func_table_, 0, sizeof(bit_func_table_));
 
     bit_func_table_[bm::set_AND] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_AND;
 
     bit_func_table_[bm::set_ASSIGN] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_ASSIGN;
     bit_func_table_[bm::set_OR]     = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_OR;
     bit_func_table_[bm::set_SUB] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_SUB;
     bit_func_table_[bm::set_XOR] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_XOR;
     bit_func_table_[bm::set_COUNT] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT;
     bit_func_table_[bm::set_COUNT_AND] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_AND;
     bit_func_table_[bm::set_COUNT_XOR] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_XOR;
     bit_func_table_[bm::set_COUNT_OR] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_OR;
     bit_func_table_[bm::set_COUNT_SUB_AB] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_AB;
     bit_func_table_[bm::set_COUNT_SUB_BA] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_BA;
     bit_func_table_[bm::set_COUNT_A] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_A;
     bit_func_table_[bm::set_COUNT_B] = 
-        &serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT;
+        &serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT;
 
 
     // reading stream header
@@ -8465,45 +10706,26 @@ serial_stream_iterator<DEC, BLOCK_IDX>::serial_stream_iterator(const unsigned ch
         }
         state_ = e_blocks;
     }
-    block_idx_arr_=(gap_word_t*)::malloc(sizeof(gap_word_t) * bm::gap_max_bits);
-    if (!block_idx_arr_)
-    {
-        #ifndef BM_NO_STL
-            throw std::bad_alloc();
-        #else
-            BM_THROW(BM_ERR_BADALLOC);
-        #endif
-    }
-    this->ex0_arr_ =
-        (bm::word_t*)::malloc(sizeof(bm::word_t) * bm::set_block_size * 8);
-    this->ex1_arr_ =
-        (bm::word_t*)::malloc(sizeof(bm::word_t) * bm::set_block_size * 4);
-    if (!this->ex0_arr_ || !this->ex1_arr_)
-    {
-        #ifndef BM_NO_STL
-            throw std::bad_alloc();
-        #else
-            BM_THROW(BM_ERR_BADALLOC);
-        #endif
-    }
+    if (!workspace) workspace = &owned_workspace_;
+    workspace->positions.resize(bm::gap_max_bits);
+    workspace->exceptions0.resize(bm::set_block_size * 8);
+    workspace->exceptions1.resize(bm::set_block_size * 4);
+    block_idx_arr_ = workspace->positions.data();
+    this->ex0_arr_ = workspace->exceptions0.data();
+    this->ex1_arr_ = workspace->exceptions1.data();
+    this->bwt_decode_workspace_ = &workspace->inverse;
 
     this->id_array_ = block_idx_arr_;
 }
 
-template<typename DEC, typename BLOCK_IDX>
-serial_stream_iterator<DEC, BLOCK_IDX>::~serial_stream_iterator()
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::~serial_stream_iterator()
 {
-    if (block_idx_arr_)
-        ::free(block_idx_arr_);
-    if (this->ex0_arr_)
-        ::free(this->ex0_arr_);
-    if (this->ex1_arr_)
-        ::free(this->ex1_arr_);
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
-void serial_stream_iterator<DEC, BLOCK_IDX>::next()
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+void serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::next()
 {
     if (is_eof())
     {
@@ -8606,6 +10828,8 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
         case bm::set_block_arr_bienc_inv_v3s:
         case bm::set_block_bitgap_bienc:
         case bm::set_block_bit_digest0:
+        case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
             state_ = e_bit_block;
             break;
         case set_block_gap:
@@ -8642,6 +10866,8 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
         case set_block_gap_bienc_v3:
             BM_FALLTHROUGH;
         case set_block_gap_egamma_v3:
+            BM_FALLTHROUGH;
+        case set_block_gap_xor_framed:
             gap_head_ = 0;
             state_ = e_gap_block;
             break;
@@ -8713,6 +10939,10 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
             // fall through
         case set_sblock_bienc:
         case set_sblock_bienc_v3:
+        case set_sblock_bienc_adaptive:
+        case set_sblock_bienc_wave_adaptive:
+        case set_sblock_bienc_wave1024:
+        case set_sblock_bienc_large:
             BM_ASSERT(0); 
             BM_FALLTHROUGH;
             // fall through
@@ -8749,9 +10979,9 @@ void serial_stream_iterator<DEC, BLOCK_IDX>::next()
     } // switch
 }
 
-template<typename DEC, typename BLOCK_IDX>
-typename serial_stream_iterator<DEC, BLOCK_IDX>::block_idx_type
-serial_stream_iterator<DEC, BLOCK_IDX>::skip_mono_blocks() BMNOEXCEPT
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+typename serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::block_idx_type
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::skip_mono_blocks() BMNOEXCEPT
 {
 	BM_ASSERT(state_ == e_zero_blocks || state_ == e_one_blocks);
     if (!mono_block_cnt_)
@@ -8765,9 +10995,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::skip_mono_blocks() BMNOEXCEPT
     return block_idx_;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 void
-serial_stream_iterator<DEC, BLOCK_IDX>::get_inv_arr(bm::word_t* block) BMNOEXCEPT
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_inv_arr(bm::word_t* block) BMNOEXCEPT
 {
     gap_word_t len = decoder_.get_16();
     if (block)
@@ -8787,9 +11017,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_inv_arr(bm::word_t* block) BMNOEXCEP
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_ASSIGN(
                                             bm::word_t*  dst_block,
                                             bm::word_t*  tmp_block)
 {
@@ -8800,6 +11030,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN(
 
     switch (this->block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, dst_block);
+        else this->read_bwt_block(decoder_, dst_block);
+        break;
     case set_block_bit:
         decoder_.get_32(dst_block, bm::set_block_size);
         break;
@@ -8891,9 +11126,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_ASSIGN(
     return count;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_OR(
                                                 bm::word_t*  dst_block,
                                                 bm::word_t*  tmp_block)
 {
@@ -8901,6 +11136,13 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR(
     unsigned count = 0;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        bm::bit_block_or(dst_block, tmp_block);
+        break;
+
     case set_block_bit:
         decoder_.get_32_OR(dst_block, bm::set_block_size);
         break;
@@ -8971,9 +11213,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_OR(
     return count;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_AND(
                                         bm::word_t* BMRESTRICT dst_block,
                                         bm::word_t* BMRESTRICT tmp_block)
 {
@@ -8982,6 +11224,12 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND(
     unsigned count = 0;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, dst_block ? tmp_block : 0);
+        else this->read_bwt_block(decoder_, dst_block ? tmp_block : 0);
+        if (dst_block) bm::bit_block_and(dst_block, tmp_block);
+        break;
     case set_block_bit:
         decoder_.get_32_AND(dst_block, bm::set_block_size);
         break;
@@ -9089,9 +11337,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_AND(
     return count;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_XOR(
                                                 bm::word_t*  dst_block,
                                                 bm::word_t*  tmp_block)
 {
@@ -9101,6 +11349,12 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR(
     unsigned count = 0;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        bm::bit_block_xor(dst_block, tmp_block);
+        break;
     case set_block_bit:
         for (unsigned i = 0; i < bm::set_block_size; ++i)
             dst_block[i] ^= decoder_.get_32();
@@ -9199,9 +11453,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_XOR(
     return count;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_SUB(
                                                 bm::word_t*  dst_block,
                                                 bm::word_t*  tmp_block)
 {
@@ -9211,6 +11465,12 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB(
     unsigned count = 0;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        bm::bit_block_sub(dst_block, tmp_block);
+        break;
     case set_block_bit:
         for (unsigned i = 0; i < bm::set_block_size; ++i)
             dst_block[i] &= ~decoder_.get_32();
@@ -9307,9 +11567,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_SUB(
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT(
                                                  bm::word_t*  /*dst_block*/,
                                                  bm::word_t*  tmp_block)
 {
@@ -9318,6 +11578,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT(
     unsigned count = 0;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        goto count_tmp;
     case set_block_bit:
         for (unsigned i = 0; i < bm::set_block_size; ++i)
             count += bm::word_bitcount(decoder_.get_32());
@@ -9396,9 +11661,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT(
     return count;
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_A(
                                                     bm::word_t*  dst_block,
                                                     bm::word_t*  tmp_block)
 {
@@ -9412,6 +11677,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A(
 
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, 0);
+        else this->read_bwt_block(decoder_, 0);
+        break;
     case set_block_bit:
         decoder_.get_32(0, bm::set_block_size);
         break;
@@ -9484,9 +11754,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_A(
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_AND(
                                                     bm::word_t*  dst_block,
                                                     bm::word_t*  tmp_block)
 {
@@ -9496,6 +11766,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND(
     unsigned count = 0;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        goto count_tmp;
     case set_block_bit:
         for (unsigned i = 0; i < bm::set_block_size; ++i)
             count += word_bitcount(dst_block[i] & decoder_.get_32());
@@ -9574,9 +11849,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_AND(
     return count;
 }
 
-template<typename DEC,typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_OR(
                                                     bm::word_t*  dst_block,
                                                     bm::word_t*  tmp_block)
 {
@@ -9586,6 +11861,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR(
     bitblock_sum_adapter count_adapter;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        goto count_tmp;
     case set_block_bit:
         {
         bitblock_get_adapter ga(dst_block);
@@ -9680,9 +11960,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_OR(
     return count_adapter.sum();
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_XOR(
                                                     bm::word_t*  dst_block,
                                                     bm::word_t*  tmp_block)
 {
@@ -9692,6 +11972,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR(
     bitblock_sum_adapter count_adapter;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        goto count_tmp;
     case set_block_bit:
         {
         bitblock_get_adapter ga(dst_block);
@@ -9787,9 +12072,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_XOR(
     return count_adapter.sum();
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_AB(
                                                     bm::word_t*  dst_block,
                                                     bm::word_t*  tmp_block)
 {
@@ -9799,6 +12084,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB(
     bitblock_sum_adapter count_adapter;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        goto count_tmp;
     case set_block_bit:
         {
         bitblock_get_adapter ga(dst_block);
@@ -9894,9 +12184,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_AB(
     return count_adapter.sum();
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_BA(
                                                         bm::word_t*  dst_block,
                                                         bm::word_t*  tmp_block)
 {
@@ -9906,6 +12196,11 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA(
     bitblock_sum_adapter count_adapter;
     switch (block_type_)
     {
+    case bm::set_block_bwt:
+    case bm::set_block_bwt_unpacked:
+        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
+        else this->read_bwt_block(decoder_, tmp_block);
+        goto count_tmp;
     case set_block_bit:
         {
         bitblock_get_adapter ga(dst_block);
@@ -9994,8 +12289,8 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block_COUNT_SUB_BA(
 
 
 
-template<typename DEC, typename BLOCK_IDX>
-unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_arr_bit(
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+unsigned serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_arr_bit(
                                           bm::word_t* dst_block,
                                           bool        clear_target) BMNOEXCEPT
 {
@@ -10032,8 +12327,8 @@ unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_arr_bit(
     return len;
 }
 
-template<typename DEC, typename BLOCK_IDX>
-unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_bit() BMNOEXCEPT
+template<typename DEC, typename BLOCK_IDX, class Alloc>
+unsigned serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit() BMNOEXCEPT
 {
     BM_ASSERT(this->block_type_ == set_block_bit_1bit);
     ++(this->block_idx_);
@@ -10042,9 +12337,9 @@ unsigned serial_stream_iterator<DEC, BLOCK_IDX>::get_bit() BMNOEXCEPT
 	return decoder_.get_16(); // 1bit_idx	
 }
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 void 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_gap_block(bm::gap_word_t* dst_block)
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_gap_block(bm::gap_word_t* dst_block)
 {
     BM_ASSERT(this->state_ == e_gap_block || 
               this->block_type_ == set_block_bit_1bit);
@@ -10057,9 +12352,9 @@ serial_stream_iterator<DEC, BLOCK_IDX>::get_gap_block(bm::gap_word_t* dst_block)
 }
 
 
-template<typename DEC, typename BLOCK_IDX>
+template<typename DEC, typename BLOCK_IDX, class Alloc>
 unsigned 
-serial_stream_iterator<DEC, BLOCK_IDX>::get_bit_block(
+serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block(
                                             bm::word_t*    dst_block,
                                             bm::word_t*    tmp_block,
                                             set_operation  op)
@@ -10339,19 +12634,19 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
 
     if (bo_current == bo)
     {
-        serial_stream_current ss(buf);
+        serial_stream_current ss(buf, &iterator_workspace_);
         return it_d_.deserialize(bv, ss, temp_block_, op, exit_on_one);
     }
     switch (bo_current) 
     {
     case BigEndian:
         {
-            serial_stream_be ss(buf);
+            serial_stream_be ss(buf, &iterator_workspace_);
             return it_d_be_.deserialize(bv, ss, temp_block_, op, exit_on_one);
         }
     case LittleEndian:
         {
-            serial_stream_le ss(buf);
+            serial_stream_le ss(buf, &iterator_workspace_);
             return it_d_le_.deserialize(bv, ss, temp_block_, op, exit_on_one);
         }
     default:
@@ -10436,7 +12731,7 @@ void operation_deserializer<BV>::deserialize_range(
 
     if (bo_current == bo)
     {
-        serial_stream_current ss(buf);
+        serial_stream_current ss(buf, &iterator_workspace_);
         it_d_.set_range(idx_from, idx_to);
         it_d_.deserialize(bv, ss, temp_block_, op, false);
         it_d_.unset_range();
@@ -10446,7 +12741,7 @@ void operation_deserializer<BV>::deserialize_range(
     {
     case BigEndian:
         {
-            serial_stream_be ss(buf);
+            serial_stream_be ss(buf, &iterator_workspace_);
             it_d_be_.set_range(idx_from, idx_to);
             it_d_be_.deserialize(bv, ss, temp_block_, op, false);
             it_d_be_.unset_range();
@@ -10454,7 +12749,7 @@ void operation_deserializer<BV>::deserialize_range(
         }
     case LittleEndian:
         {
-            serial_stream_le ss(buf);
+            serial_stream_le ss(buf, &iterator_workspace_);
             it_d_le_.set_range(idx_from, idx_to);
             it_d_le_.deserialize(bv, ss, temp_block_, op, false);
             it_d_le_.unset_range();
@@ -10754,6 +13049,14 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             unsigned i0, j0;
             bm::get_block_coord(bv_block_idx, i0, j0);
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
+            if (IS_FULL_BLOCK(blk) && op == bm::set_OR &&
+                (sit.get_block_type() == bm::set_block_bwt ||
+                 sit.get_block_type() == bm::set_block_bwt_unpacked))
+            {
+                // Consume and validate without deoptimizing FULL or running BWT.
+                sit.get_bit_block(nullptr, temp_block, bm::set_ASSIGN);
+                break;
+            }
             if (!blk)
             {
                 switch (op)

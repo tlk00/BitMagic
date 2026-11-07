@@ -352,31 +352,60 @@ public:
     heap_vector(const heap_vector<Val, BVAlloc, trivial_type>& hv)
         : buffer_()
     {
-        size_type v_size = value_size();
-        size_type new_size = hv.size();
-        buffer_.resize(new_size * v_size);
-        unsigned char* this_data = buffer_.data();
-        for (size_type i = 0; i < new_size; ++i)
+        // Commit only fully constructed elements. The temporary owns them if
+        // an element copy throws before this object's construction completes.
+        heap_vector tmp;
+        tmp.buffer_.reserve(hv.size() * value_size());
+        for (size_type i = 0; i < hv.size(); ++i)
         {
-            unsigned char *p = this_data + (i * v_size);
-            new(p) value_type(hv[i]);
-        }
+            new(tmp.data() + i) value_type(hv[i]);
+            tmp.buffer_.resize_no_check((i + 1) * value_size());
+        } // for i
+        swap(tmp);
     }
 
-    heap_vector& operator=(const heap_vector<Val, BVAlloc, trivial_type>& hv)
+    /// Transfer ownership without copying nested element buffers.
+    heap_vector(heap_vector&& hv) BMNOEXCEPT : buffer_()
     {
-        if (this == &hv)
-            return *this;
-        resize(0);
+        swap(hv);
+    }
 
-        size_type v_size = value_size();
-        size_type new_size = hv.size();
-        buffer_.resize(new_size * v_size);
-        unsigned char* this_data = buffer_.data();
-        for (size_type i = 0; i < new_size; ++i)
+    /// Copy assignment; owning elements are copied before replacing the destination.
+    heap_vector& operator=(const heap_vector& hv)
+    {
+        if (this != &hv)
         {
-            unsigned char *p = this_data + (i * v_size);
-            new(p) value_type(hv[i]);
+            if constexpr (trivial_type)
+            {
+                buffer_.resize(hv.size() * value_size(), false);
+                for (size_type i = 0; i < hv.size(); ++i)
+                {
+                    new(data() + i) value_type(hv[i]);
+                } // for i
+            }
+            else
+            {
+                heap_vector tmp;
+                const size_type new_capacity = capacity() > hv.size() ? capacity() : hv.size();
+                tmp.buffer_.reserve(new_capacity * value_size());
+                for (size_type i = 0; i < hv.size(); ++i)
+                {
+                    new(tmp.data() + i) value_type(hv[i]);
+                    tmp.buffer_.resize_no_check((i + 1) * value_size());
+                } // for i
+                swap(tmp);
+            }
+        }
+        return *this;
+    }
+
+    /// Transfer ownership; the source becomes empty.
+    heap_vector& operator=(heap_vector&& hv) BMNOEXCEPT
+    {
+        if (this != &hv)
+        {
+            clear();
+            swap(hv);
         }
         return *this;
     }
@@ -449,6 +478,26 @@ public:
         return (const value_type*) buffer_.buf();
     }
 
+    /// Mutable contiguous range start.
+    value_type* begin() BMNOEXCEPT { return data(); }
+    /// One past the last element (null for unallocated empty storage).
+    value_type* end() BMNOEXCEPT { return size() ? data() + size() : data(); }
+    /// Const contiguous range end.
+    const value_type* end() const BMNOEXCEPT
+        { return size() ? data() + size() : data(); }
+    /// First element; the vector must not be empty.
+    value_type& front() BMNOEXCEPT { BM_ASSERT(!empty()); return (*this)[0]; }
+    const value_type& front() const BMNOEXCEPT
+        { BM_ASSERT(!empty()); return (*this)[0]; }
+    /// Last element; the vector must not be empty.
+    value_type& back() BMNOEXCEPT { BM_ASSERT(!empty()); return (*this)[size()-1]; }
+    const value_type& back() const BMNOEXCEPT
+        { BM_ASSERT(!empty()); return (*this)[size()-1]; }
+    /// Destroy elements while retaining allocated capacity.
+    void clear() BMNOEXCEPT { reset(); }
+    /// Destroy the last element while retaining capacity.
+    void pop_back() { BM_ASSERT(!empty()); resize(size()-1); }
+
     size_type size() const BMNOEXCEPT
     {
         return buffer_.size() / value_size();
@@ -466,11 +515,21 @@ public:
 
     void reserve(size_type new_size)
     {
-        size_type sz = size();
-        if (new_size <= sz)
+        if (new_size <= capacity())
             return;
-        size_type v_size = value_size();
-        buffer_.reserve(new_size * v_size);
+        if constexpr (trivial_type)
+            buffer_.reserve(new_size * value_size());
+        else
+        {
+            heap_vector tmp;
+            tmp.buffer_.reserve(new_size * value_size());
+            for (size_type i = 0; i < size(); ++i)
+            {
+                new(tmp.data() + i) value_type((*this)[i]);
+                tmp.buffer_.resize_no_check((i + 1) * value_size());
+            } // for i
+            swap(tmp);
+        }
     }
 
     /**
@@ -564,11 +623,19 @@ public:
      */
     void push_back(const value_type& v)
     {
-        size_type v_size = value_size();
-        size_type sz = size();
-        resize_internal(sz + 1);
-        unsigned char *p = buffer_.data() + (sz * v_size);
-        new(p) value_type(v);
+        const size_type sz = size();
+        if constexpr (trivial_type)
+        {
+            resize_internal(sz + 1);
+            new(data() + sz) value_type(v);
+        }
+        else
+        {
+            if (sz == capacity())
+                reserve(sz + 1024);
+            new(data() + sz) value_type(v);
+            buffer_.resize_no_check((sz + 1) * value_size());
+        }
     }
 
     /**

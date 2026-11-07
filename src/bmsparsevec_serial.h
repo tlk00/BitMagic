@@ -207,6 +207,17 @@ public:
     /*! @name Compression settings                               */
     ///@{
 
+    /** Select the compression preset for the plane digest and all bit planes.
+        @param level Bvector compression level (0 through 10).
+        @note Apply any custom bvector options after selecting the preset.
+    */
+    void set_compression_level(unsigned level) BMNOEXCEPT
+        { bvs_.set_compression_level(level); }
+
+    /// Return the active plane compression preset.
+    unsigned get_compression_level() const BMNOEXCEPT
+        { return bvs_.get_compression_level(); }
+
     /**
         Add skip-markers for faster range deserialization
 
@@ -2658,7 +2669,12 @@ void sparse_vector_deserializer<SV>::deserialize_planes_nomask(
             bv->keep_range(idx_range_from_, idx_range_to_);
         else
         if (!bm::conditional<SV::is_rsc_support::value>::test())
-            bv->keep_range(0, size_type(sv_size_ - 1));
+        {
+            if (sv_size_)
+                bv->keep_range(0, size_type(sv_size_ - 1));
+            else
+                bv->clear(true);
+        }
 
         switch (is_final_)
         {
@@ -2766,11 +2782,9 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
     size_t offset = off_vect_[unsigned(i)];
     if (!offset)
     {
-        // A nullable target vector expects the serialized stream to carry a
-        // NULL/not-NULL plane as its last plane. If this assert fires, check
-        // that the deserialization target was constructed with the same
-        // NULL support mode as the serialized source vector.
-        BM_ASSERT(sv.is_null_external());
+        // An omitted NULL plane requires a target attached to an external
+        // NULL plane. Reject a mismatched target through the format-error
+        // path, including builds with internal assertions enabled.
         if (!sv.is_null_external())
             raise_invalid_format();
         return planes-1;
@@ -2856,6 +2870,8 @@ int sparse_vector_deserializer<SV>::load_null_plane(SV& sv,
             {
                 if (idx_range_set_)
                     bv->keep_range(idx_range_from_, idx_range_to_);
+                else if (!sv_size_)
+                    bv->clear(true);
                 else
                     bv->keep_range(0, size_type(sv_size_ - 1));
             }

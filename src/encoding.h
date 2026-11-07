@@ -25,6 +25,9 @@ For more information please visit:  http://bitmagic.io
 
 #include <memory.h>
 #include "bmutil.h"
+#ifndef BM_NO_STL
+#include <stdexcept>
+#endif
 
 
 #ifdef _MSC_VER
@@ -304,6 +307,9 @@ public:
             flush_accum();
     }
 
+    /// Unflushed bits, for exact diagnostic bit accounting without padding.
+    unsigned pending_bits() const BMNOEXCEPT { return used_bits_; }
+
 private:
     void flush_accum() BMNOEXCEPT
     {
@@ -495,6 +501,29 @@ private:
 // ----------------------------------------------------------------
 // Implementation details. 
 // ----------------------------------------------------------------
+
+/**
+    \brief Enforce a serialization data or option constraint at runtime.
+    \ingroup bvserial
+    \internal
+    \param valid Condition required for supported serialization data/options.
+    \throws std::logic_error If valid is false in STL mode.
+    \note Non-STL builds report BM_ERR_SERIALFORMAT through BM_THROW.
+        Unlike BM_ASSERT, this check remains active in release builds.
+*/
+inline
+void serialization_require(bool valid)
+{
+    if (!valid)
+    {
+#ifndef BM_NO_STL
+        throw std::logic_error("BM: invalid serialization data/options");
+#else
+        BM_THROW(BM_ERR_SERIALFORMAT);
+#endif
+    }
+}
+
 
 /*!
     \brief Compute gamma size( in bytes)
@@ -1603,7 +1632,7 @@ void bit_out<TEncoder>::gamma(unsigned value) BMNOEXCEPT
         {
             used += count;
         }
-        acc |= (1 << used);
+        acc |= (1u << used);
         if (++used == acc_bits)
         {
             dest_.put_32(acc);
@@ -1614,8 +1643,8 @@ void bit_out<TEncoder>::gamma(unsigned value) BMNOEXCEPT
     // Put the value bits
     //
     {
-        unsigned mask = (~0u);
-        mask >>= acc_bits - logv;
+        // gamma(1) has no value bits; shifting a 32-bit mask by 32 is UB.
+        unsigned mask = logv ? (~0u >> (acc_bits - logv)) : 0u;
         value &= mask;
     }
     for (;logv;)
@@ -1683,11 +1712,10 @@ void bit_out<TEncoder>::bic_encode_u16_rg(
 
 // ----------------------------------------------------------------------
 
-template<typename TEncoder>
-void bit_out<TEncoder>::bic_encode_u32_cm(const bm::word_t* arr,
-                                          unsigned sz,
-                                          bm::word_t lo,
-                                          bm::word_t hi) BMNOEXCEPT
+// Shared centered-minimal BIC traversal: output may write or count bits.
+template<class TOut>
+void bic_encode_u32_cm_sink(TOut& out, const bm::word_t* arr, unsigned sz,
+                            bm::word_t lo, bm::word_t hi) BMNOEXCEPT
 {
     for (;sz;)
     {
@@ -1713,17 +1741,24 @@ void bit_out<TEncoder>::bic_encode_u32_cm(const bm::word_t* arr,
                 lo1 -= (n & 1);
                 logv += (value <= lo1 || value >= hi1);
                 
-                put_bits(value, logv);
+                out.put_bits(value, logv);
             }
         }
         
-        bic_encode_u32_cm(arr, mid_idx, lo, val-1);
+        bic_encode_u32_cm_sink(out, arr, mid_idx, lo, val-1);
         // tail recursive call:
         // bic_encode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
         arr += mid_idx + 1;
         sz  -= mid_idx + 1;
         lo = val + 1;
     } // for sz
+}
+
+template<class TEncoder>
+void bit_out<TEncoder>::bic_encode_u32_cm(const bm::word_t* arr, unsigned sz,
+                                          bm::word_t lo, bm::word_t hi) BMNOEXCEPT
+{
+    bic_encode_u32_cm_sink(*this, arr, sz, lo, hi);
 }
 
 // ----------------------------------------------------------------------
@@ -1809,11 +1844,11 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
 #endif
 
 
-template<typename TEncoder>
-void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
-                                          unsigned sz,
-                                          bm::gap_word_t lo,
-                                          bm::gap_word_t hi) BMNOEXCEPT
+// Shared u16 BIC traversal. A counting sink can stop when its budget is spent.
+template<class TOut>
+bool bic_encode_u16_cm_sink(TOut& out, const bm::gap_word_t* arr,
+                            unsigned sz, bm::gap_word_t lo,
+                            bm::gap_word_t hi) BMNOEXCEPT
 {
     for (;sz;)
     {
@@ -1838,18 +1873,49 @@ void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
                 unsigned hi1 = (half_r + half_c);
                 logv += (value <= lo1 || value > hi1);
 
-                put_bits(value, logv);
+                if (!out.put_bits(value, logv)) return false;
             }
         }
         
-        bic_encode_u16_cm(arr, mid_idx, lo, bm::gap_word_t(val-1));
+        if (!bic_encode_u16_cm_sink(out, arr, mid_idx, lo, bm::gap_word_t(val-1)))
+            return false;
         // tail recursive call:
         // bic_encode_u32_cm(arr + mid_idx + 1, sz - mid_idx - 1, val+1, hi);
         arr += ++mid_idx;
         sz  -= mid_idx;
         lo = bm::gap_word_t(val + 1);
     } // for sz
+    return true;
 }
+
+template<typename TEncoder>
+void bit_out<TEncoder>::bic_encode_u16_cm(const bm::gap_word_t* arr,
+                                          unsigned sz,
+                                          bm::gap_word_t lo,
+                                          bm::gap_word_t hi) BMNOEXCEPT
+{
+    struct writer_sink
+    {
+        bit_out& out;
+        bool put_bits(unsigned value, unsigned count) BMNOEXCEPT
+        { out.put_bits(value, count); return true; }
+    } sink{*this};
+    bic_encode_u16_cm_sink(sink, arr, sz, lo, hi);
+}
+
+// Exact size of the existing delta16s code, including its selector bit.
+inline unsigned delta16s_bits(unsigned value) BMNOEXCEPT
+{
+    BM_ASSERT(value < 65536);
+    return value < 256 ? 9 : value <= 511 ? 10 : value <= 1023 ? 12 : 22;
+}
+
+struct bic_u16_bit_counter
+{
+    unsigned bits, limit;
+    bool put_bits(unsigned, unsigned count) BMNOEXCEPT
+    { bits += count; return bits <= limit; }
+};
 
 // ----------------------------------------------------------------------
 

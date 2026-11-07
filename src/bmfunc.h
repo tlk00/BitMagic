@@ -11348,6 +11348,149 @@ void quick_sort2(T* arr, int first, int last) BMNOEXCEPT
     } // while
 }
 
+// --------------------------------------------------------------
+// Sort array functions
+// --------------------------------------------------------------
+
+/**
+    \brief Restore the max-heap property below one array entry.
+    \internal
+    \tparam T Scalar element type supporting copy, assignment, and comparison.
+    \param arr Writable array of at least count elements.
+    \param root Root index to repair, less than count. Its child subtrees
+        must already be max-heaps.
+    \param count Positive exclusive end of the heap range.
+    \note Entries outside the heap range remain unchanged. No allocation
+        or recursion is used.
+*/
+template<typename T>
+inline
+void heap_sift_down(T* arr, size_t root, size_t count) BMNOEXCEPT
+{
+    BM_ASSERT(arr && count && root < count);
+    // Identify parents without overflowing 2 * root + 1.
+    while (root < count / 2)
+    {
+        size_t child = root * 2 + 1;
+        if (child + 1 < count && arr[child] < arr[child + 1])
+        {
+            ++child;
+        }
+        if (!(arr[root] < arr[child]))
+        {
+            break;
+        }
+        bm::simple_swap(arr + root, arr + child);
+        root = child;
+    } // while root
+}
+
+/**
+    \brief Sort an array in ascending order using in-place heapsort.
+    \internal
+    \tparam T Scalar element type supporting copy, assignment, and comparison.
+        These operations must not throw.
+    \param arr Writable array of count elements; may be null when count is zero.
+    \param count Number of elements to sort. Empty and singleton ranges are valid.
+    \note Takes O(n log n) worst-case time and constant scratch space, without
+        allocation or recursion. Equal elements need not retain their order.
+*/
+template<typename T>
+inline
+void heap_sort(T* arr, size_t count) BMNOEXCEPT
+{
+    BM_ASSERT(arr || !count);
+    for (size_t parent = count / 2; parent; --parent)
+    {
+        bm::heap_sift_down(arr, parent - 1, count);
+    } // for parent
+    for (size_t end = count; end > 1; --end)
+    {
+        bm::simple_swap(arr, arr + end - 1);
+        bm::heap_sift_down(arr, 0, end - 1);
+    } // for end
+}
+
+/**
+    \brief Restore a heap below one entry using a strict ordering predicate.
+    \internal
+    \tparam T Copyable element type; copy and assignment must not throw.
+    \tparam Compare Strict weak ordering predicate; calls must not throw.
+    \param arr Writable array of count elements.
+    \param root Entry to repair; its child subtrees must already be heaps.
+    \param count Positive exclusive end of the heap range.
+    \param compare Returns true when its first argument precedes its second.
+    The root of a valid heap is maximal according to compare. No allocation
+    or recursion is used; elements outside the heap range are unchanged.
+*/
+template<typename T, class Compare>
+inline
+void heap_sift_down(T* arr, size_t root, size_t count,
+                    Compare compare) BMNOEXCEPT
+{
+    BM_ASSERT(arr && count && root < count);
+    while (root < count / 2)
+    {
+        size_t child = root * 2 + 1;
+        if (child + 1 < count && compare(arr[child], arr[child + 1]))
+        {
+            ++child;
+        }
+        if (!compare(arr[root], arr[child]))
+        {
+            break;
+        }
+        bm::simple_swap(arr + root, arr + child);
+        root = child;
+    } // while root
+}
+
+/**
+    \brief Build an in-place heap using a strict ordering predicate.
+    \internal
+    \tparam T Copyable element type; copy and assignment must not throw.
+    \tparam Compare Strict weak ordering predicate; calls must not throw.
+    \param arr Writable array; may be null when count is zero.
+    \param count Number of elements; empty and singleton ranges are valid.
+    \param compare Returns true when its first argument precedes its second.
+    Takes O(n) time and constant scratch space. The root is maximal according
+    to compare; equivalent elements need not retain their relative order.
+*/
+template<typename T, class Compare>
+inline
+void heap_make(T* arr, size_t count, Compare compare) BMNOEXCEPT
+{
+    BM_ASSERT(arr || !count);
+    for (size_t parent = count / 2; parent; --parent)
+    {
+        bm::heap_sift_down(arr, parent - 1, count, compare);
+    } // for parent
+}
+
+
+/**
+    \brief Sort an array using a strict ordering predicate and heapsort.
+    \internal
+    \tparam T Copyable element type; copy and assignment must not throw.
+    \tparam Compare Strict weak ordering predicate; calls must not throw.
+    \param arr Writable array; may be null when count is zero.
+    \param count Number of elements; empty and singleton ranges are valid.
+    \param compare Returns true when its first argument precedes its second.
+    Takes O(n log n) worst-case time and constant scratch space, without
+    allocation or recursion. Equivalent elements need not retain their order.
+*/
+template<typename T, class Compare>
+inline
+void heap_sort(T* arr, size_t count, Compare compare) BMNOEXCEPT
+{
+    bm::heap_make(arr, count, compare);
+    for (size_t end = count; end > 1; --end)
+    {
+        bm::simple_swap(arr, arr + end - 1);
+        bm::heap_sift_down(arr, 0, end - 1, compare);
+    } // for end
+}
+
 
 // --------------------------------------------------------------
 // Nibble array functions

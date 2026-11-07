@@ -2051,7 +2051,8 @@ base_sparse_vector<Val, BV, MAX_SIZE>::base_sparse_vector(
         size_type null_idx = (MAX_SIZE * sizeof(Val) * 8);
         bmatr_.construct_row(null_idx)->init();
         bmatr_.set_null_idx(null_idx);
-        slice_mask_ |= unsigned_value_type(1) << null_idx;
+        // slice_mask_ describes value bits only. The NULL plane is beyond
+        // that mask's width and must not be included in the shift.
     }
 }
 
@@ -2098,12 +2099,14 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::copy_from(
         if (bv)
         {
             bmatr_.destruct_row(i);
-            slice_mask_ &= ~(unsigned_value_type(1) << i);
+            if (i < sizeof(value_type) * 8)
+                slice_mask_ &= ~(unsigned_value_type(1) << i);
         }
         if (bv_src)
         {
             bmatr_.construct_row(i, *bv_src);
-            slice_mask_ |= (unsigned_value_type(1) << i);
+            if (i < sizeof(value_type) * 8)
+                slice_mask_ |= (unsigned_value_type(1) << i);
         }
     } // for i
 }
@@ -2141,7 +2144,6 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::merge_matr(
         if (arg_bv && arg_bv != bv_null_arg)
         {
             bvector_type* bv = this->get_create_slice(j);
-            slice_mask_ |= (unsigned_value_type(1) << j);
             bv->merge(*arg_bv);
         }
     } // for j
@@ -2355,7 +2357,8 @@ void base_sparse_vector<Val, BV, MAX_SIZE>::optimize(bm::word_t* temp_block,
             if (!bv->any())  // empty vector?
             {
                 this->bmatr_.destruct_row(j);
-                slice_mask_ &= ~(unsigned_value_type(1) << j);
+                if (j < sizeof(value_type) * 8)
+                    slice_mask_ &= ~(unsigned_value_type(1) << j);
                 continue;
             }
         }
