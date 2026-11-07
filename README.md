@@ -131,6 +131,10 @@ Selective access is a property of the serialization architecture, rather than of
 
 ### Choosing the compression balance
 
+See [serialization compression levels](docs/compression.md) for the `bvector<>`
+level 1–10 table, API configuration, and explanations of BIC, bitwise BWT,
+GAP-XOR, and superblock encodings.
+
 The API exposes choices such as in-memory optimization, serialization compression levels, XOR filtering, bookmark spacing, and construction or persistence of deserialization indexes. These let applications tune several distinct costs:
 
 - Operational memory footprint.
