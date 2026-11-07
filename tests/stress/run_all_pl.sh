@@ -12,13 +12,19 @@ JOBS=""
 RUN_NAME=""
 LOG_DIR="logs/parallel"
 FAIL_FAST=0
-HEAVY_FIRST=0
+PEDANTIC_ARGS=()
 TESTS=()
 
 usage()
 {
     cat <<EOF
 Usage: $0 [runner options] [test selectors]
+
+  --pedantic          Sweep bvector and sparse-vector serialization levels 0-10
+                      Bvector pairs: 11 same-level + 1 mixed case.
+                      Sparse vectors: 11 levels; full float bookmark variants at level 6.
+                      Sampled interval-16 float bookmarks at levels 7-10.
+                      Default: rotate explicit levels, non-exhaustive.
 
 Runs the selected stress-test binary. A build name is required so the same
 script can run platform-specific builds such as stress_release_avx2 on Linux
@@ -33,8 +39,10 @@ Runner options:
                         --build is used)
   -l DIR, --log-dir DIR Write logs below DIR (default: logs/parallel)
   --fail-fast           Stop launching new groups after the first failure
-  --heavy-first         With the default test partition, launch heavier
-                        groups first
+  --heavy-first         Use learned longest-first order (also the default).
+                        New selectors run first; missing selectors are ignored.
+                        History: ./logs/parallel/order.tsv, shared by all builds.
+                        Completed jobs update history, including failed runs.
   -h, --help            Display this help and exit
 
 Test selectors from t.cpp:
@@ -43,9 +51,10 @@ Test selectors from t.cpp:
   -bvb0                 Bit-vector basic tests, part 0
   -bvb1                 Bit-vector basic tests, part 1
   -complexity           Vector/XOR complexity all-pairs validation
-  -bvser, -bvset        Bit-vector serialization tests
+  -bvser, -bvset        Bit-vector serialization and indexed-gather tests
   -fileser              File serialization/deserialization and corruption tests
   -svfileser            Sparse-vector file and stringstream tests
+  -svser                Sparse-vector level/opcode/index/gather tests
   -strsvstream          Disk-free string streaming and gather tests
   -svfstream            Float file/stringstream serialization and gather tests
   -svfsteam             Alias for -svfstream
@@ -83,14 +92,20 @@ Test selectors from t.cpp:
   -svf0c1               Floating-point sparse-vector scanner linear data
   -svf0c2               Floating-point sparse-vector scanner random data
   -svf0c3               Floating-point sparse-vector scanner skewed data
-  -svf1                 Floating-point sparse-vector tests, part 1
+  -svf1                 Float/RSC index/gather/scanner aggregate
+  -svf1a0/1/2          Float index/gather levels 0-5 / 6 / 7-10
+  -svf1b0/1/2          RSC float index/gather levels 0-5 / 6 / 7-10
+  -svf1c               RSC float scanner tests
 
 The broader overlapping selectors -bvb/-bvbasic, -bvo/-bvops/-bvl, -sv,
--csv/-rsc, -allsvser, and -svf are accepted for targeted runs but are not
+-csv/-rsc, -allsvser, -svf1, and -svf are accepted for targeted runs but are not
 included in the default partition because they duplicate work covered by
 groups above.
 
 Examples:
+  ./run_all_pl.sh -b stress_release_neon -j 7 --pedantic -svf1a0 -svf1a1 -svf1a2 -svf1b0 -svf1b1 -svf1b2 -svf1c
+  ./run_all_pl.sh -b stress_release_neon --pedantic -svser -svfileser -svfstream -strsvstream
+  ./run_all_pl.sh -b stress_release_neon -j 1 --pedantic -bvl1
   ./run_all_pl.sh -b bmtest -j 7 --fail-fast --heavy-first
   ./run_all_pl.sh --build stress_release
   ./run_all_pl.sh --build stress_release --heavy-first
@@ -103,12 +118,12 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-complexity|-bvser|-bvset|-fileser|-svfileser|-strsvstream|-svfstream|-svindex|\
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-complexity|-bvser|-bvset|-fileser|-svfileser|-svser|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
         -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
         -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1c|-sort|--sort|\
         -csv|-rsc|-csv0|-csv0a|-csv0b|-csv0c|-csv1|-csv1a|-csv1a0|-csv1a1|-csv1a2|-csv1b|\
-        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf0c1|-svf0c2|-svf0c3|-svf1)
+        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf0c1|-svf0c2|-svf0c3|-svf1|-svf1a0|-svf1a1|-svf1a2|-svf1b0|-svf1b1|-svf1b2|-svf1c)
             return 0
             ;;
         *)
@@ -151,12 +166,16 @@ while [ "$#" -gt 0 ]; do
             LOG_DIR="$2"
             shift 2
             ;;
+        --pedantic)
+            PEDANTIC_ARGS=(--pedantic)
+            shift
+            ;;
         --fail-fast)
             FAIL_FAST=1
             shift
             ;;
         --heavy-first)
-            HEAVY_FIRST=1
+            # Compatibility option: learned scheduling is always enabled.
             shift
             ;;
         -svfsteam)
@@ -213,32 +232,63 @@ case "$JOBS" in
 esac
 
 if [ "${#TESTS[@]}" -eq 0 ]; then
-    if [ "$HEAVY_FIRST" -ne 0 ]; then
-        TESTS=(
-            -csv0a -bvb1 -csv1a1 -csv1a2
-            -bvs -sv1b -ser -bvl0
-            -strsv -bvl2 -svf0c1 -svf0c2 -svf0c3
-            -svf0b -svf1 -bvl1 -sv1a -sv1c -csv0b
-            -ll -sv0 -bvb0 -complexity -bvser -fileser -svfileser -strsvstream -svfstream -svindex
-            -agg -s -csv1a0 -csv1b -sort -csv0c -cc -rc
-        )
-    else
-        TESTS=(
-            -ll -s
-            -bvb0 -bvb1 -complexity -bvser -fileser -svfileser -strsvstream -svfstream -svindex
-            -bvl0 -bvl1 -bvl2
-            -bvs -rc -agg
-            -sv0 -sv1a -sv1b -sv1c -sort
-            -csv0a -csv0c -csv0b -csv1a0 -csv1a1 -csv1a2 -csv1b
-            -strsv -cc -ser
-            -svf0a -svf0c1 -svf0c2 -svf0c3 -svf0b -svf1
-        )
-    fi
+    TESTS=(
+        -ll -s
+        -bvb0 -bvb1 -complexity -bvser -fileser -svfileser -svser -strsvstream -svfstream -svindex
+        -bvl0 -bvl1 -bvl2
+        -bvs -rc -agg
+        -sv0 -sv1a -sv1b -sv1c -sort
+        -csv0a -csv0c -csv0b -csv1a0 -csv1a1 -csv1a2 -csv1b
+        -strsv -cc -ser
+        -svf0a -svf0c1 -svf0c2 -svf0c3 -svf0b -svf1a1 -svf1b1 -svf1a0 -svf1b0 -svf1a2 -svf1b2 -svf1c
+    )
 fi
 
 RUN_LOG_DIR="${LOG_DIR}/${RUN_NAME}"
 mkdir -p "$RUN_LOG_DIR" || exit 1
 RUN_LOG_DIR="$(cd "$RUN_LOG_DIR" && pwd)" || exit 1
+
+# One learned order per suite, independent of binary and log-directory overrides.
+# Rows contain selector and latest elapsed seconds, sorted longest first.
+ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
+mkdir -p "$(dirname "$ORDER_FILE")" || exit 1
+touch "$ORDER_FILE" || exit 1
+
+# Unknown selectors precede timed selectors; ties preserve selection order.
+ORDERED_TESTS=()
+while IFS= read -r test_opt; do
+    ORDERED_TESTS[${#ORDERED_TESTS[@]}]="$test_opt"
+done < <(
+    printf '%s\n' "${TESTS[@]}" |
+        awk 'FILENAME == ARGV[1] {
+                 if (NF == 2 && $2 ~ /^[0-9]+$/) duration[$1] = $2
+                 next
+             }
+             { known = ($1 in duration)
+               print known, (known ? duration[$1] : 0), FNR, $1 }' \
+            "$ORDER_FILE" - |
+        LC_ALL=C sort -k1,1n -k2,2nr -k3,3n |
+        awk '{ print $4 }'
+)
+TESTS=("${ORDERED_TESTS[@]}")
+
+# Persist each completed job so a later interruption retains earlier results.
+# Keep other selectors for future targeted runs; scheduling filters them out.
+record_timing()
+{
+    local selector="$1" duration="$2" temporary
+    temporary="$(mktemp "${ORDER_FILE}.XXXXXX")" || return 1
+    if awk -v selector="$selector" -v duration="$duration" '
+        NF == 2 && $2 ~ /^[0-9]+$/ && $1 != selector { print $1, $2 }
+        END { print selector, duration }' "$ORDER_FILE" |
+        LC_ALL=C sort -k2,2nr -k1,1 > "$temporary" &&
+        mv "$temporary" "$ORDER_FILE"; then
+        return 0
+    fi
+    rm -f "$temporary"
+    echo "Warning: could not update timing history: $ORDER_FILE" >&2
+    return 1
+}
 
 PIDS=()
 PID_TESTS=()
@@ -297,8 +347,13 @@ start_test()
 
     echo "START  $test_opt -> $log_file"
 
+    worker_args=("$test_opt" -silent)
+    if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
+        worker_args[${#worker_args[@]}]=--pedantic
+    fi
+
     # Every background process uses -silent to keep its log small.
-    "$RUN_PATH" "$test_opt" -silent >"$log_file" 2>&1 &
+    "$RUN_PATH" "${worker_args[@]}" >"$log_file" 2>&1 &
 
     index=${#PIDS[@]}
     PIDS[$index]=$!
@@ -321,6 +376,7 @@ reap_finished()
             status=$?
             elapsed=$(($(date +%s) - PID_STARTS[$index]))
             PID_SECONDS[$index]="$elapsed"
+            record_timing "${PID_TESTS[$index]}" "$elapsed"
 
             if [ "$status" -eq 0 ]; then
                 PID_STATUS[$index]="pass"
@@ -364,10 +420,12 @@ count_running()
 echo "Architecture : $ARCH"
 echo "Binary       : $RUN_PATH"
 echo "Parallel jobs: $JOBS"
-if [ "$HEAVY_FIRST" -ne 0 ]; then
-    echo "Schedule     : heavy-first"
+echo "Schedule     : learned heavy-first (new jobs first)"
+echo "Order file   : $ORDER_FILE"
+if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
+    echo "Serialization: pedantic bvector/sparse-vector levels 0-10 (bvector pairs add one mixed case)"
 else
-    echo "Schedule     : natural"
+    echo "Warning: THIS IS NON EXHAUSTIVE TEST: use --pedantic for exhaustive compression-level coverage."
 fi
 echo "Test groups  : ${#TESTS[@]}"
 echo "Logs         : $RUN_LOG_DIR"
