@@ -1,21 +1,51 @@
 #!/bin/sh
-#
-# Script for in-place build for regular, SSE4.2 and AVX2
-#
+# Build native and architecture-specific variants. AVX-512 is opt-in.
+set -eu
 
-cd ../../
-. ./bmenv.sh
-cd -
+case "${1:-}" in
+    '') avx512=0 ;;
+    --avx512) avx512=1 ;;
+    -h|--help) echo "Usage: $0 [--avx512]"; exit 0 ;;
+    *) echo "Usage: $0 [--avx512]" >&2; exit 2 ;;
+esac
+if [ "$#" -gt 1 ]; then
+    echo "Usage: $0 [--avx512]" >&2
+    exit 2
+fi
+cd "$(dirname "$0")"
+os=$(uname -s)
+arch=$(uname -m)
+case "$os:$arch" in
+    Darwin:arm64|Darwin:aarch64) platform=arm ;;
+    Linux:x86_64|Linux:amd64) platform=x86 ;;
+    *) echo "Unsupported platform: $os $arch" >&2; exit 1 ;;
+esac
+if [ "$platform" = arm ] && [ "$avx512" -eq 1 ]; then
+    echo "--avx512 requires x86 Linux" >&2
+    exit 2
+fi
 
-rm  ./xsample7* ./xsample07a
-make clean
+build()
+{
+    output=$1
+    shift
+    echo "Building $output"
+    make "$@" rebuild
+    mv -f ./xsample07a "./$output"
+}
 
-make BMOPTFLAGS=-DBMSSE42OPT rebuild
-mv ./xsample07a ./xsample07a_sse42
 
-make BMOPTFLAGS=-DBMAVX2OPT rebuild
-mv ./xsample07a ./xsample07a_avx2
-
+if [ "$platform" = arm ]; then
+    build xsample07a_neon BMOPTFLAGS=-DBMNEONOPT
+else
+    build xsample07a_sse2 BMOPTFLAGS=-DBMSSE2OPT
+    build xsample07a_sse42 BMOPTFLAGS=-DBMSSE42OPT
+    build xsample07a_avx2 BMOPTFLAGS=-DBMAVX2OPT
+    if [ "$avx512" -eq 1 ]; then
+        build xsample07a_avx512 BMOPTFLAGS=-DBMAVX512OPT
+    fi
+fi
+# Build the scalar executable last for callers that use its ordinary name.
+echo "Building xsample07a_release"
 make rebuild
-cp ./xsample07a ./xsample07a_release
-
+cp -f ./xsample07a ./xsample07a_release

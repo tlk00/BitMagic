@@ -1,20 +1,51 @@
 #!/bin/sh
+# Build native and architecture-specific variants. AVX-512 is opt-in.
+set -eu
 
-#  build_all.sh
-#  
-#
-#  Created by Anatoliy Kuznetsov on 9/2/17.
-#
+case "${1:-}" in
+    '') avx512=0 ;;
+    --avx512) avx512=1 ;;
+    -h|--help) echo "Usage: $0 [--avx512]"; exit 0 ;;
+    *) echo "Usage: $0 [--avx512]" >&2; exit 2 ;;
+esac
+if [ "$#" -gt 1 ]; then
+    echo "Usage: $0 [--avx512]" >&2
+    exit 2
+fi
+cd "$(dirname "$0")"
+os=$(uname -s)
+arch=$(uname -m)
+case "$os:$arch" in
+    Darwin:arm64|Darwin:aarch64) platform=arm ;;
+    Linux:x86_64|Linux:amd64) platform=x86 ;;
+    *) echo "Unsupported platform: $os $arch" >&2; exit 1 ;;
+esac
+if [ "$platform" = arm ] && [ "$avx512" -eq 1 ]; then
+    echo "--avx512 requires x86 Linux" >&2
+    exit 2
+fi
 
-make clean
+build()
+{
+    output=$1
+    shift
+    echo "Building $output"
+    make "$@" rebuild
+    mv -f ./bminv "./$output"
+}
 
-rm -rf ./bminv_* ./test
+
+if [ "$platform" = arm ]; then
+    build bminv_neon BMOPTFLAGS=-DBMNEONOPT
+else
+    build bminv_sse2 BMOPTFLAGS=-DBMSSE2OPT
+    build bminv_sse42 BMOPTFLAGS=-DBMSSE42OPT
+    build bminv_avx2 BMOPTFLAGS=-DBMAVX2OPT
+    if [ "$avx512" -eq 1 ]; then
+        build bminv_avx512 BMOPTFLAGS=-DBMAVX512OPT
+    fi
+fi
+# Build the scalar executable last for callers that use its ordinary name.
+echo "Building bminv_reg"
 make rebuild
-mv ./bminv ./bminv_reg
-
-make BMOPTFLAGS=-DBMSSE42OPT rebuild
-mv ./bminv ./bminv_sse42
-
-make BMOPTFLAGS=-DBMAVX2OPT rebuild
-mv ./bminv ./bminv_avx2
-
+mv -f ./bminv ./bminv_reg
