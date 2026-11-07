@@ -60,6 +60,15 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmneon.
                          ./src/bmtask.h ./src/bmthreadpool.h ./src/bmsparsevec_parallel.h \
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h ./src/bmaggregator.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmfio.h ./src/bmalloc.h ./src/bmrandom.h \
+                         ./src/bmadaptivedelta.h \
+                         ./src/bmblockselection.h \
+                         ./src/bmbwt.h \
+                         ./src/bmgaproute.h \
+                         ./src/bmgapxor.h \
+                         ./src/bmperiodic.h \
+                         ./src/bmsblocklarge.h \
+                         ./src/bmsblockwave.h \
+                         ./src/bmserial_profile.h \
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
                          ./src/bmsparsevec_compr.h ./src/bmstrsparsevec.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
 ./samples/bvsample01/sample1.cpp \

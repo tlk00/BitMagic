@@ -32,7 +32,8 @@
 COMPILER = GNU_CC
 
 SHELL=/bin/sh
-DEPTOOL = gcc -MM 
+# Emit placeholder header targets so stale dependencies tolerate removed headers.
+DEPTOOL = gcc -MM -MP
 RM = rm -f
 
 
@@ -145,6 +146,10 @@ COBJECTS:=$(CSOURCES:.c=.o)
 CXXOBJECTS:=$(addprefix $(OUTDIR), $(CXXOBJECTS))
 COBJECTS:=$(addprefix $(OUTDIR), $(COBJECTS))
 
+# Include every library header, including newly added codec headers. This
+# conservative dependency also covers builds without a regenerated dep file.
+BM_HEADERS := $(wildcard $(PROJECT_DIR)/src/*.h)
+
 
 
 .PHONY : clean init check-platform rebuild
@@ -214,6 +219,10 @@ ifndef INSTALL_LIST
 endif
 
 all: init banner $(DESTINATION) $(OUTDIR)
+
+ifneq ($(strip $(CXXOBJECTS) $(COBJECTS)),)
+$(CXXOBJECTS) $(COBJECTS): $(BM_HEADERS)
+endif
 
 check-platform:	$(PLATFORM-MK)
 	@echo Platform : $(PLATFORM-MK)

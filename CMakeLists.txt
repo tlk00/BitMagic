@@ -71,6 +71,15 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmutil.h
                ${PROJECT_SOURCE_DIR}/src/bmvmin.h
                ${PROJECT_SOURCE_DIR}/src/bmxor.h
+               ${PROJECT_SOURCE_DIR}/src/bmadaptivedelta.h
+               ${PROJECT_SOURCE_DIR}/src/bmblockselection.h
+               ${PROJECT_SOURCE_DIR}/src/bmbwt.h
+               ${PROJECT_SOURCE_DIR}/src/bmgaproute.h
+               ${PROJECT_SOURCE_DIR}/src/bmgapxor.h
+               ${PROJECT_SOURCE_DIR}/src/bmperiodic.h
+               ${PROJECT_SOURCE_DIR}/src/bmsblocklarge.h
+               ${PROJECT_SOURCE_DIR}/src/bmsblockwave.h
+               ${PROJECT_SOURCE_DIR}/src/bmserial_profile.h
                ${PROJECT_SOURCE_DIR}/src/encoding.h
                ${PROJECT_SOURCE_DIR}/src/bmsse2.h
                ${PROJECT_SOURCE_DIR}/src/bmsse4.h
@@ -81,6 +90,9 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmbmi2.h
 )
 
+
+# Keep library headers visible together in generated IDE projects.
+source_group("BitMagic Headers" FILES ${BM_HEADERS})
 
 set (CMAKE_CXX_STANDARD 17)
 
@@ -141,7 +153,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} ${bmoptf} ${bmptflags} ${warnop
 
 
 
-add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp)
+add_executable(bmsvutil ${PROJECT_SOURCE_DIR}/utils/svutil/svutil.cpp ${BM_HEADERS})
 
 add_executable(bmtest ${PROJECT_SOURCE_DIR}/tests/stress/t.cpp ${BM_HEADERS})
 add_executable(bmptest ${PROJECT_SOURCE_DIR}/tests/test_threads/ptest.cpp ${BM_HEADERS})
