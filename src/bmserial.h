@@ -6515,8 +6515,11 @@ unsigned char serializer<BV>::encode_periodic_block(
     if (options.order)
     {
         const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
-        if (xor_trial_buffer_.size() < capacity) xor_trial_buffer_.resize(capacity, false);
-        if (transform_best_buffer_.size() < capacity) transform_best_buffer_.resize(capacity, false);
+        if (xor_trial_buffer_.size() < capacity)
+            xor_trial_buffer_.resize(capacity, false);
+        if (transform_best_buffer_.size() < capacity)
+            transform_best_buffer_.resize(capacity, false);
+        
         size_t payload_size = 0, best_payload = 0, best_size = plain_size;
         bm::periodic_formula_bits bits, best_bits;
         unsigned formula_choice = 0, best_formula_choice = 0;
@@ -6671,7 +6674,10 @@ unsigned char serializer<BV>::encode_periodic_block(
             ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
             ++compression_stat_[bm::set_block_bwt];
         }
-        else ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+        else // if groups.empty()
+        {
+            ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+        }
         return 0;
     }
     auto& candidates = periodic_workspace_.candidates;
@@ -6799,9 +6805,13 @@ unsigned char serializer<BV>::encode_periodic_block(
         ++periodic_stats_.trial_step[c.step];
         const unsigned score_bucket = bm::periodic_score_bucket(c.score);
         ++periodic_stats_.trial_score_bucket[score_bucket];
-        if (c.score > 0) ++periodic_stats_.positive_trials;
-        else ++periodic_stats_.nonpositive_trials;
+        
+        if (c.score > 0)
+            ++periodic_stats_.positive_trials;
+        else
+            ++periodic_stats_.nonpositive_trials;
         periodic_stats_.payload_improved += payload_size < plain_size;
+        
         if (trial.size() < plain_size)
         {
             ++periodic_stats_.win_score_bucket[score_bucket];
@@ -6825,6 +6835,7 @@ unsigned char serializer<BV>::encode_periodic_block(
         }
     }
     BM_ASSERT(best_trial);
+    
     ++periodic_stats_.best_candidate_blocks;
     periodic_stats_.best_baseline_bytes += plain_size;
     periodic_stats_.best_residual_bytes += best_trial_payload;
@@ -6833,6 +6844,7 @@ unsigned char serializer<BV>::encode_periodic_block(
     periodic_stats_.best_covered += best_trial->covered;
     periodic_stats_.best_exceptions += best_trial->exceptions;
     ++periodic_stats_.best_step[best_trial->step];
+    
     if (best_trial_size >= plain_size)
     {
         const size_t miss = best_trial_size - plain_size;
@@ -6877,12 +6889,17 @@ unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
         : !BM_IS_GAP(blk) && bwt_enabled_
             ? encode_bwt_block(blk, sub_stat, nb, enc)
             : encode_block(blk, sub_stat, nb, enc);
-    if (type || BM_IS_GAP(blk) || !gap_xor_enabled_ || !try_gap) return type;
+    
+    if (type || BM_IS_GAP(blk) || !gap_xor_enabled_ || !try_gap)
+        return type;
+    
     // XOR products are BIT blocks even when a compact GAP representation is
     // available. Compare that complete candidate for originals and residuals.
+    //
     unsigned gc, bc;
     bm::bit_block_change_bc(blk, &gc, &bc);
-    if (gc >= bm::gap_max_safe_len) return 0;
+    if (gc >= bm::gap_max_safe_len)
+        return 0;
     bm::gap_word_t gap[8192];
     if (bm::bit_to_gap(gap, blk, 8192))
     {
@@ -6979,7 +6996,9 @@ void serializer<BV>::encode_xor_block(const bm::word_t* blk,
         enc.memcpy(ref_xor_trial_buffer_.data(), trial.size());
     }
     else
+    {
         ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+    }
 }
 
 } // namespace bm
@@ -7075,7 +7094,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                         else
                         {
                             bienc_arr_sblock(bv, i0, enc);
-                                            }
+                        }
                         if (gap_route_diagnostics_)
                         {
                             ++gap_route_stats_.superblocks;
@@ -7107,27 +7126,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                         i += (bm::set_sub_array_size - j0) - 1;
                         continue;
                     }
-                    else
-                    {
-                        unsigned sub_max_bc = bm::gap_max_bits * bm::set_sub_array_size;
-                        unsigned ibc = unsigned(sub_max_bc - sub_stat.bv_count);
-                        if (ibc < 65536)
-                        {
-                        }
-                        if (sub_stat.is_only_gaps())
-                        {
-                            if (sub_stat.avg_gap_len() < 10)
-                            {
-                            #if (0)
-                                bienc_gaps_sblock(bv, i0, sub_stat, enc);
 
-                                i += (bm::set_sub_array_size - j0) - 1;
-                                header_flag_ |= BM_HM_SPARSE;
-                                continue;
-                            #endif
-                            }
-                        }
-                    }
                 } // level >= 5
 
             } // if first block in this sub
