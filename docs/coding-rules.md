@@ -27,6 +27,20 @@ Apply them to new and modified code; keep unrelated refactoring out of a change.
 
 - Keep documented declarations in classes/structures and move implementations
   outside them. Header definitions that need `inline` must retain it.
+- Exception: simple member functions with a one-line body should stay defined
+  inside the class/structure declaration. Both layouts below are acceptable;
+  do not move these definitions outside the class just to separate declaration
+  and implementation. In-class definitions are implicitly inline.
+
+  ```cpp
+  int get_value() const { return 10; }
+  ```
+
+  ```cpp
+  int get_value() const
+  { return 10; }
+  ```
+
 - Put `inline` on a separate line, after any template declarations:
 
   ```cpp
@@ -86,14 +100,17 @@ Apply them to new and modified code; keep unrelated refactoring out of a change.
 
 ## Containers, allocation, and workspace lifetime
 
-- Avoid STL dependencies in low-level (algorithmic and SIMD kernels) library headers 
-  and preserve non-STL use.
+- Preserve non-STL use in low-level library headers (algorithmic and SIMD
+  kernels) that avoid STL dependencies.
   Prefer BM containers and existing BM algorithms over `std::vector` and
   `<algorithm>` utilities. Use BM sort utilities; keep general-purpose utilities
   such as heap sort next to the existing sorting functions.
-- use of STL is fine in experimental code in diagnostics and rendering code like bmdbg.h 
-- use of STL is ok hight level code (examples and utilities) and in code implementing 
-  parallel algorithms with threading dependencies and mutexes
+- If a code module (header or source) already uses STL headers, keep using STL
+  and prefer STL containers and algorithms over BM internal substitutes. This
+  applies to all examples, utilities, and experimental code; do not replace
+  existing STL usage merely to use a BM equivalent.
+- STL is also appropriate in diagnostics and rendering code such as `bmdbg.h`,
+  and in parallel algorithms with threading dependencies and mutexes.
 - Propagate the application's allocator. Derive it from `BV::allocator_type`
   through the serializer or pass an allocator template parameter. Do not hardcode
   `bm::standard_allocator` in internal storage that must honor a custom BV
