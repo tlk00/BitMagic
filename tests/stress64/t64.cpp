@@ -19825,7 +19825,11 @@ void TestSignedSparseVectorScan()
         {
         chrono_taker<std::ostream> ct(cout, "sparse_vector<> search");
 
-            for (unsigned j = 0; j < sv_size; ++j)
+            // Spread default queries over the entire value range, including
+            // the final value. Data generation remains full-size.
+            for (unsigned j = 0; j < sv_size;
+                 j = j == sv_size - 1 ? sv_size :
+                     bm::min_value(j + (is_pedantic ? 1u : 4093u), sv_size - 1))
             {
                 int search_value;
                 if (j & 1)
@@ -19887,8 +19891,12 @@ void TestSignedSparseVectorScan()
     {
         cout << "Find EQ test on flat data" << endl;
         bvect::allocator_pool_type pool;
-        int max_value = 128000;
-        for (int value = 0; value < max_value; ++value)
+        const int max_value = 128000;
+        // Each value rebuilds three 67K-element vectors. Sample the value
+        // range by default; keep every value in pedantic mode.
+        for (int value = 0; value < max_value;
+             value = value == max_value - 1 ? max_value :
+                 bm::min_value(value + (is_pedantic ? 1 : 257), max_value - 1))
         {
             sparse_vector_i32 sv(bm::use_null);
             sparse_vector_i64 sv_64(bm::use_null);
@@ -20296,7 +20304,13 @@ void TestCompressSparseVector()
         rsc_sparse_vector_u32::bvector_type bv;
         bv.set_range(1, 65536*2);
 
-        for (unsigned i = 1; i < 65536*2; ++i)
+        // Sample split positions, covering block starts and the final split.
+        // Each selected split still validates the complete merged vector.
+        const unsigned split_count = 65536 * 2;
+        const unsigned split_step = is_pedantic ? 1u : 4096u;
+        for (unsigned i = 1; i < split_count;
+             i = i == split_count - 1 ? split_count :
+                 bm::min_value(i + split_step, split_count - 1))
         {
             rsc_sparse_vector_u32 csv1(bv);
             rsc_sparse_vector_u32 csv2(bv);
@@ -25725,7 +25739,8 @@ void TestCompressSparseGather()
     }
 #endif
 
-    unsigned max_passes = 1024;
+    // Full-size gather sweeps are reserved for pedantic runs.
+    const unsigned max_passes = is_pedantic ? 1024u : 16u;
     unsigned sampling_delta = 3;
 
     for (unsigned pass = 0; pass < max_passes; ++pass)
@@ -25733,7 +25748,8 @@ void TestCompressSparseGather()
         rsc_sparse_vector_i32 csv1(bm::use_null);
         std::vector<int> vect_c;
 
-        rsc_sparse_vector_i32::size_type test_size = 65536 * 256 * 2;
+        rsc_sparse_vector_i32::size_type test_size =
+            is_pedantic ? 65536u * 256u * 2u : 65536u * 16u;
         rsc_sparse_vector_i32::size_type test_start = pass * 65536;
         if (test_start > bm::id_max/4)
             test_start = (unsigned)((pass % 256) * (unsigned(rand()) % 65536));
@@ -26003,7 +26019,12 @@ void TestCompressedSparseVectorAlgo()
             cout << "PASS = " << p << endl;
             chrono_taker<std::ostream> ct(cout, "sparse_vector<> unique value mismatch search");
 
-            for (sparse_vector_u32::size_type k = 0; k < sv_size; ++k)
+            // Repeated mismatch searches each inspect the whole fixture.
+            // An odd stride exercises both NULL and populated positions.
+            for (sparse_vector_u32::size_type k = 0; k < sv_size;
+                 k = k == sv_size - 1 ? sv_size :
+                     bm::min_value(k + sparse_vector_u32::size_type(is_pedantic ? 1 : 257),
+                                   sv_size - 1))
             {
                 sparse_vector_u32::size_type j = k + bm::id_max32;
 
@@ -26174,6 +26195,21 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     auto it_end = sv.end();
     for (typename SV::size_type i(0); it != it_end; ++it, ++i)
     {
+        // Compressed vectors may have enormous NULL gaps. Skip those gaps
+        // using the NULL plane; values still come from the independent iterator.
+        if constexpr (SV::is_compressed())
+        {
+            if (it.is_null())
+            {
+                typename SV::size_type next;
+                if (!sv.get_null_bvector()->find(i, next))
+                {
+                    break;
+                }
+                i = next;
+                it.go_to(i);
+            }
+        }
         if (!it.is_null())
         {
             auto v1 = *it;
@@ -26305,8 +26341,13 @@ void TestCompressedSparseVectorScanGT()
     cout << "  stress test GT on random data " << endl;
 
     {
-        const rsc_sparse_vector_u32::size_type total_size = 55 * 1024 * 1024;
-        const unsigned sample_size = 2048;
+        // Keep the original stress budget for pedantic runs. The default still
+        // spans many blocks and checks both ordinary and optimized storage.
+        const rsc_sparse_vector_u32::size_type total_size =
+            (is_pedantic ? 55u : 2u) * 1024 * 1024;
+        const unsigned sample_size = is_pedantic ? 2048u : 32u;
+        cout << "  GT workload: " << total_size << " values, "
+             << sample_size << " random queries per pass" << endl;
 
 
         rsc_sparse_vector_u32 csv(bm::use_null);
