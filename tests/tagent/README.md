@@ -192,10 +192,19 @@ message, clear/caution build reports, and successful/failed build summaries. The
 
 ## Build dispatcher
 
-In steampunk mode the dispatcher gives a build-status report every 40 seconds
-while a build is running. `BUILD_REPORT_SECONDS` in the launcher or
-`--build-report-seconds N` changes the interval; checks run at subprocess
-heartbeats, so the actual report can be up to about 10 seconds later. The report counts complete
+TAgent builds perf and stress concurrently when the worker budget is at least
+two; with one worker it builds them sequentially. Each family keeps its own log.
+If either build fails, TAgent waits for the other build to finish, reports the
+combined diagnostics and exits without starting tests.
+
+While builds run, TAgent prints a status report after 60 seconds, then after
+another 70 seconds, 80 seconds, and so on. In steampunk mode the dispatcher
+announces it too. `BUILD_REPORT_SECONDS` in the launcher or
+`--build-report-seconds N` changes the initial interval; each later interval
+still increases by 10 seconds, and a new build cycle resets it. Checks run at
+subprocess heartbeats, so reports can be up to about 10 seconds later. Each
+report shows the ready and pending expected perf and stress build targets;
+ready means the executable has been produced. The report also counts complete
 GCC/Clang-style `warning:` diagnostic lines across the current perf and stress
 build logs so far; repeated warnings in separate variants count separately.
 Compiler summary lines such as `3 warnings generated` are not counted. Other
@@ -203,9 +212,12 @@ warning formats may not be recognized; the currently unfinished line is counted
 when it completes, or when its build ends. This is a count of log diagnostic
 lines, not unique issues or a full code analysis.
 
-With eSpeak NG the female dispatcher (`DISPATCHER_VOICE`, default `en-us+f3`,
-overridable by `--dispatcher-voice`) says the exact observed count. At zero she
-reports clear tracks and no snowdrifts; above zero she calls caution on the line.
+With eSpeak NG, the dispatcher announces the exact warning and build-target
+counts. The voice is selected from `DISPATCHER_VOICE` (default
+`en-us+f3,en-us+f4,en-us+m3`; set one voice or a comma-separated list via the
+launcher or `--dispatcher-voice`). At zero warnings, randomized reports mention
+clear tracks, weather, snow, avalanches or signals; above zero the dispatcher
+calls caution on the line.
 The wording is railway-themed fiction, not a real dispatcher instruction.
 At the end of the build, success or failure, TAgent prints the recognized
 compiler/linker `error:` (including `fatal error:`) and `warning:` line totals
@@ -216,7 +228,9 @@ fragments announce exact numbers digit by digit. Unrecognized formats are not
 included. Build failures still propagate their original exit status.
 When TTS is unavailable or disabled, bundled female-voice WAVs report either no
 warnings or a generic caution; the fallback never invents a warning count. All
-voice playback remains optional and follows the normal no-audio fallback.
+voice playback remains optional and follows the normal no-audio fallback. The
+prerecorded progress fallback gives generic clear/caution audio rather than
+inventing dynamic counts; the full counts remain visible on the console.
 
 Preview either case without building (the warning preview uses a simulated 3):
 

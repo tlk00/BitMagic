@@ -322,7 +322,7 @@ class SoundtrackTests(unittest.TestCase):
             with patch.object(agent, 'sound') as sound, \
                  patch.object(tagent.time, 'monotonic', return_value=100):
                 agent.build_progress(log)
-                sound.assert_called_once_with('build-warning', workers=1)
+                sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
                 agent.build_progress(log)
                 self.assertEqual(sound.call_count, 1)
             self.assertEqual(agent.build_warnings.count, 1)
@@ -346,9 +346,11 @@ class SoundtrackTests(unittest.TestCase):
                     stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
                     stream.writeframes(b'\x10\x10' * 4410)
             with patch.object(agent, 'command', side_effect=synth):
-                agent.render_build_report(output, 3)
-            self.assertEqual(spoken[0][spoken[0].index('-v') + 1], 'en-us+f3')
+                agent.render_build_report(output, (3, 2, 4, 5, 7))
+            self.assertIn(spoken[0][spoken[0].index('-v') + 1], ('en-us+f3', 'en-us+f4', 'en-us+m3'))
             self.assertIn('3 compiler warnings so far', spoken[0][-1])
+            self.assertIn('Performance builds: 2 ready, 4 pending', spoken[0][-1])
+            self.assertIn('Stress builds: 5 ready, 7 pending', spoken[0][-1])
             with wave.open(str(output)) as stream:
                 self.assertEqual(stream.getnchannels(), 1)
             agent.tts_engine = None
@@ -376,7 +378,7 @@ class SoundtrackTests(unittest.TestCase):
             with patch.object(agent, 'command', side_effect=synth):
                 agent.render_build_summary(output, (12, 34, False))
             self.assertIn('Build failed. 12 compiler errors. 34 compiler warnings.', spoken[0][-1])
-            self.assertEqual(spoken[0][spoken[0].index('-v') + 1], 'en-us+f3')
+            self.assertIn(spoken[0][spoken[0].index('-v') + 1], ('en-us+f3', 'en-us+f4', 'en-us+m3'))
             agent.tts_engine = None
             collected = []
             def capture(voice, path, volume, workers, budget, background):

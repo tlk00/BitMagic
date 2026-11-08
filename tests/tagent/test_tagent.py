@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -71,17 +73,61 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(list(self.agent.home.glob('*abc123/perf_release/perf.log')))
 
     def test_build_failure_is_fatal(self):
-        """Build failure propagates immediately instead of entering test recovery."""
+        """Build failure propagates instead of entering test recovery."""
         self.fixture()
         (self.root / 'tests/perf/build_all.sh').write_text(
             "echo 'a.cpp:1: warning: first'\necho 'a.cpp:2: error: bad'\nprintf 'b.cpp:1: fatal error: missing'\nexit 9\n")
+        stress = self.root / 'tests/stress/build_all.sh'
+        stress.write_text(stress.read_text() + "echo 'stress.cpp:1: warning: second'\n")
         self.agent.args.sound_theme = 'steampunk'
         with patch.object(self.agent, 'sound') as sound:
             with self.assertRaises(ta.CommandFailure):
                 self.agent.cycle()
-            sound.assert_any_call('build-final-failed', workers=(2, 1, False))
-        self.assertIn('BUILD FAILED | diagnostic errors: 2 | warnings: 1',
+            sound.assert_any_call('build-final-failed', workers=(2, 2, False))
+        self.assertIn('BUILD FAILED | diagnostic errors: 2 | warnings: 2',
                       (self.agent.home / 'agent.log').read_text())
+
+    def test_builds_overlap_and_combine_warnings(self):
+        """Both builds reach a barrier together and contribute to the final count."""
+        self.fixture()
+        barrier = threading.Barrier(2, timeout=5)
+        original = self.agent.command
+        def command(argv, log=None, *args, **kwargs):
+            """Hold both build jobs at the barrier before launching them."""
+            if log and log.name in ('build-perf.log', 'build-stress.log'):
+                barrier.wait()
+            return original(argv, log, *args, **kwargs)
+        for family in ('perf', 'stress'):
+            script = self.root / 'tests' / family / 'build_all.sh'
+            script.write_text(script.read_text() + "echo 'test.cpp:1: warning: synthetic'\n")
+        with patch.object(self.agent, 'command', side_effect=command):
+            self.assertTrue(self.agent.cycle())
+        self.assertIn('BUILD COMPLETE | diagnostic errors: 0 | warnings: 2',
+                      (self.agent.home / 'agent.log').read_text())
+
+    def test_single_worker_serializes_builds(self):
+        """A one-worker budget never runs both build families at once."""
+        self.fixture()
+        self.agent.jobs = 1
+        active = [0, 0]
+        mutex = threading.Lock()
+        original = self.agent.command
+        def command(argv, log=None, *args, **kwargs):
+            """Record overlap while the synthetic builds run."""
+            if not log or log.name not in ('build-perf.log', 'build-stress.log'):
+                return original(argv, log, *args, **kwargs)
+            with mutex:
+                active[0] += 1
+                active[1] = max(active)
+            try:
+                time.sleep(.1)
+                return original(argv, log, *args, **kwargs)
+            finally:
+                with mutex:
+                    active[0] -= 1
+        with patch.object(self.agent, 'command', side_effect=command):
+            self.assertTrue(self.agent.cycle())
+        self.assertEqual(active[1], 1)
 
     def test_recovery_deadline_without_new_commit(self):
         """Successful fetches with an unchanged tip do not reset the failure window."""
@@ -278,8 +324,49 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(self.agent, 'sound') as sound:
             self.agent.command(['bash', '-c',
                 "printf 'a.cpp:1:2: warning: first\\n'; sleep 11; printf 'b.cpp:3: warning: second\\n'"], log)
-            sound.assert_called_once_with('build-warning', workers=1)
+            sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
         self.assertEqual(self.agent.build_warnings.observe(log), 2)
+
+    def test_build_progress_counts_both_logs_once(self):
+        """Concurrent heartbeat reports observe both logs without double counting."""
+        logs = [self.root / 'build-perf.log', self.root / 'build-stress.log']
+        for path in logs:
+            path.write_text('x.cpp:1: warning: synthetic\n')
+        self.agent.build_logs = logs
+        self.agent.args.sound_theme = 'steampunk'
+        self.agent.next_build_report = 0
+        with patch.object(self.agent, 'sound') as sound:
+            self.agent.build_progress(logs[0])
+            self.agent.build_progress(logs[1])
+            sound.assert_called_once_with('build-warning', workers=(2, 0, 0, 0, 0))
+        self.assertEqual(self.agent.build_warnings.count, 2)
+
+    def test_build_progress_tracks_targets_and_increases_interval(self):
+        """Snapshots count completed files and each report adds ten seconds."""
+        log = self.root / 'build-perf.log'
+        log.write_text('')
+        perf = [self.root / 'perf1', self.root / 'perf2']
+        stress = [self.root / 'stress1', self.root / 'stress2', self.root / 'stress3']
+        for path in (perf[0], stress[0], stress[1]):
+            path.write_text('ready')
+            path.chmod(0o755)
+        self.agent.build_targets = {'perf': perf, 'stress': stress}
+        self.agent.args.sound_theme = 'steampunk'
+        self.agent.next_build_report = 60
+        with patch.object(self.agent, 'sound') as sound, \
+             patch.object(ta.time, 'monotonic') as clock:
+            clock.return_value = 60
+            self.agent.build_progress(log)
+            sound.assert_called_with('build-clear', workers=(0, 1, 1, 2, 1))
+            self.assertEqual(self.agent.next_build_report, 130)
+            clock.return_value = 129
+            self.agent.build_progress(log)
+            self.assertEqual(sound.call_count, 1)
+            clock.return_value = 130
+            self.agent.build_progress(log)
+            self.assertEqual(self.agent.next_build_report, 210)
+        self.assertIn('perf: 1 ready, 1 pending | stress: 2 ready, 1 pending',
+                      (self.agent.home / 'agent.log').read_text())
 
     def test_running_job_polls_real_remote(self):
         """A commit arriving during a long job is detected without changing its checkout."""

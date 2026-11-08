@@ -76,14 +76,27 @@ class WarningCounter:
         return self.count
 
 
-def build_report_text(count):
+def build_report_text(count, progress=None):
     """Return a railway-themed status, accurately scoped to warnings seen so far."""
+    status = ''
+    if progress is not None:
+        perf_ready, perf_pending, stress_ready, stress_pending = progress
+        status = (' Performance builds: {} ready, {} pending. '
+                  'Stress builds: {} ready, {} pending.'.format(
+                      perf_ready, perf_pending, stress_ready, stress_pending))
     if count == 0:
-        return ('Dispatch to BitMagic. Build in progress. No compiler warnings so far. '
-                'Tracks are clear, no snowdrifts reported.')
+        weather = random.choice((
+            'Tracks are clear, no snowdrifts reported.',
+            'The mountain pass is clear of snow and avalanches.',
+            'Clear signals ahead and fair weather on the line.',
+            'The snowplough reports clear tracks all the way to the junction.',
+            'No ice on the rails and no delays at the crossing.',
+            'The line is open, and the points are set for a clear run.',
+        ))
+        return 'Dispatch to BitMagic. Build in progress. No compiler warnings so far.' + status + ' ' + weather
     word = 'warning' if count == 1 else 'warnings'
-    return ('Dispatch to BitMagic. Caution on the line. {} compiler {} so far. '
-            'Please check the build log.'.format(count, word))
+    return ('Dispatch to BitMagic. Caution on the line. {} compiler {} so far.'.format(count, word)
+            + status + ' Please check the build log.')
 
 
 def arguments():
@@ -91,7 +104,7 @@ def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     for name, default in [('poll-minutes', 5), ('retry-minutes', 60),
                           ('reserve-cpus', 2), ('jobs', 0), ('min-free-gb', 5),
-                          ('log-retention-days', 7), ('build-report-seconds', 40)]:
+                          ('log-retention-days', 7), ('build-report-seconds', 60)]:
         parser.add_argument('--' + name, type=float, default=float(
             os.environ.get(name.upper().replace('-', '_'), default)))
     for name, default in [('remote', 'origin'), ('branch', 'master')]:
@@ -113,7 +126,8 @@ def arguments():
                         default=os.environ.get('TTS_MODE', 'auto'),
                         help='use local eSpeak NG when available, or use recorded voice')
     parser.add_argument('--tts-voice', default=os.environ.get('TTS_VOICE', 'en-us+m3'))
-    parser.add_argument('--dispatcher-voice', default=os.environ.get('DISPATCHER_VOICE', 'en-us+f3'))
+    parser.add_argument('--dispatcher-voice', default=os.environ.get('DISPATCHER_VOICE', 'en-us+f3,en-us+f4,en-us+m3'),
+                        help='comma-separated eSpeak NG voices for build reports')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
     parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
@@ -188,6 +202,10 @@ class Agent:
         self.console_notice = False
         self.tts_warned = False
         self.build_warnings = WarningCounter()
+        self.build_lock = threading.Lock()
+        self.build_logs = []
+        self.build_targets = {}
+        self.build_report_interval = args.build_report_seconds
         self.next_build_report = math.inf
         self.tts_engine = (os.environ.get('TAGENT_TTS_ENGINE') if
                            os.environ.get('TAGENT_TTS_CHECKED') == '1' else
@@ -367,9 +385,10 @@ class Agent:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
                     if self.stopping.is_set():
                         raise Failure('Job cancelled')
-                    self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
                     if log and log.name in ('build-perf.log', 'build-stress.log'):
                         self.build_progress(log)
+                    else:
+                        self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
                     if log and log.name in ('perf.log', 'runner.log'):
                         self.poll_remote()
                         workers = len(self.perf_workers)
@@ -532,24 +551,45 @@ class Agent:
             self.sound('depart-' + phase)
 
     def build_progress(self, log):
-        """Count complete warning lines and periodically announce the build status."""
-        count = self.build_warnings.observe(log)
-        now = time.monotonic()
-        if now >= self.next_build_report:
-            self.next_build_report = now + self.args.build_report_seconds
-            self.say('BUILD STATUS: {} warning(s) so far'.format(count))
-            if self.args.sound_theme == 'steampunk':
-                self.sound('build-clear' if count == 0 else 'build-warning', workers=count)
+        """Report aggregate warnings and completed target counts on a growing interval."""
+        with self.build_lock:
+            for path in self.build_logs or [log]:
+                if path.exists():
+                    self.build_warnings.observe(path)
+            count = self.build_warnings.count
+            now = time.monotonic()
+            if now >= self.next_build_report:
+                self.build_report_interval += 10
+                self.next_build_report = now + self.build_report_interval
+                progress = []
+                for family in ('perf', 'stress'):
+                    targets = self.build_targets.get(family, [])
+                    ready = sum(path.is_file() and os.access(path, os.X_OK) for path in targets)
+                    progress.extend((ready, len(targets) - ready))
+                self.say('BUILD STATUS: {} warning(s) | perf: {} ready, {} pending | '
+                         'stress: {} ready, {} pending'.format(count, *progress))
+                if self.args.sound_theme == 'steampunk':
+                    self.sound('build-clear' if count == 0 else 'build-warning',
+                               workers=(count, *progress))
 
-    def render_build_report(self, path, count):
-        """Synthesize a female dispatcher or use the accurate prerecorded fallback."""
+    def dispatcher_voice(self):
+        """Choose a configured eSpeak voice for this announcement."""
+        voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
+        return random.choice(voices or ['en-us+f3'])
+
+    def render_build_report(self, path, report):
+        """Synthesize a status snapshot or use the prerecorded warning fallback."""
+        if isinstance(report, tuple):
+            count, *progress = report
+        else:
+            count, progress = report, None
         if self.args.tts == 'auto' and self.tts_engine:
             try:
                 with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
                     speech = Path(temp) / 'speech.wav'
-                    self.command([self.tts_engine, '-v', self.args.dispatcher_voice,
+                    self.command([self.tts_engine, '-v', self.dispatcher_voice(),
                                   '-s', '145', '-p', '57' if count else '50',
-                                  '-w', str(speech), build_report_text(count)], timeout=15)
+                                  '-w', str(speech), build_report_text(count, progress)], timeout=15)
                     return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
                                                            1, self.jobs, background='build')
             except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
@@ -571,7 +611,7 @@ class Agent:
                     text = ('Dispatch to BitMagic. Build {}. {} compiler errors. '
                             '{} compiler warnings.'.format('complete' if success else 'failed',
                                                            errors, warnings))
-                    self.command([self.tts_engine, '-v', self.args.dispatcher_voice,
+                    self.command([self.tts_engine, '-v', self.dispatcher_voice(),
                                   '-s', '145', '-p', '50' if success else '57',
                                   '-w', str(speech), text], timeout=15)
                     return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
@@ -740,11 +780,14 @@ class Agent:
         run.mkdir()
         self.active_run = run
         self.build_warnings = WarningCounter()
+        self.build_report_interval = self.args.build_report_seconds
         self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
                     'jobs': self.jobs, 'pedantic': self.args.pedantic, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
+        self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress')]
+        build_tasks = []
         for family in ('perf', 'stress'):
             directory = self.repo / 'tests' / family
             names = self.builds(family)
@@ -756,16 +799,37 @@ class Agent:
                 argv.append('--avx512')
             if family == 'perf' and self.args.pedantic:
                 argv.append('--pedantic')
-            self.sound('building')
+            build_tasks.append((family, directory, names, argv, run / ('build-' + family + '.log')))
+        self.build_targets = {family: [directory / name for name in names]
+                              for family, directory, names, _, _ in build_tasks}
+        self.sound('building')
+
+        def run_build(task):
+            """Run one build family and retain its separate diagnostic log."""
+            family, _, _, argv, build_log = task
             self.say('BUILD ' + family + ' | ' + str(run))
-            build_log = run / ('build-' + family + '.log')
             try:
                 self.command(argv, build_log)
-            except CommandFailure:
-                self.build_warnings.observe(build_log, final=True)
-                self.finish_build(False)
-                raise
-            self.build_warnings.observe(build_log, final=True)
+            finally:
+                with self.build_lock:
+                    if build_log.exists():
+                        self.build_warnings.observe(build_log, final=True)
+
+        failures = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, self.jobs)) as pool:
+            futures = [pool.submit(run_build, task) for task in build_tasks]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Failure as error:
+                    failures.append(error)
+        for path in self.build_logs:
+            if path.exists():
+                self.build_warnings.observe(path, final=True)
+        if failures:
+            self.finish_build(False)
+            raise failures[0]
+        for _, directory, names, _, _ in build_tasks:
             for name in names:
                 if not os.access(directory / name, os.X_OK):
                     self.finish_build(False)
@@ -861,7 +925,8 @@ class Agent:
                 sequence.insert(3, ('depart-perf', 1))
                 sequence.insert(4, ('depart-stress', 1))
                 sequence.insert(7, ('dispatch', 1))
-                sequence.extend([('build-clear', 0), ('build-warning', 3),
+                sequence.extend([('build-clear', (0, 2, 4, 3, 7)),
+                                 ('build-warning', (3, 5, 1, 7, 3)),
                                  ('build-final-ok', (0, 3, True)),
                                  ('build-final-failed', (2, 3, False))])
             clips = []
@@ -882,8 +947,8 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.home))
             return 0
         if self.args.sound_preview:
-            preview_count = (0 if self.args.sound_preview == 'build-clear' else
-                             3 if self.args.sound_preview == 'build-warning' else
+            preview_count = ((0, 2, 4, 3, 7) if self.args.sound_preview == 'build-clear' else
+                             (3, 5, 1, 7, 3) if self.args.sound_preview == 'build-warning' else
                              (0, 3, True) if self.args.sound_preview == 'build-final-ok' else
                              (2, 3, False) if self.args.sound_preview == 'build-final-failed' else self.jobs)
             self.sound(self.args.sound_preview, force=True, workers=preview_count)
