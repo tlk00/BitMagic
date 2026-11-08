@@ -7,6 +7,7 @@ Build/test outputs live in persistent per-cycle directories for investigation.
 import argparse
 import concurrent.futures
 import datetime
+import depot
 import fcntl
 import json
 import math
@@ -118,6 +119,9 @@ def arguments():
         parser.add_argument('--' + name, action='store_true')
     parser.add_argument('--no-sound', action='store_true',
                         default=os.environ.get('SOUND', 'yes') == 'no')
+    parser.add_argument('--no-depot', action='store_true',
+                        default=os.environ.get('DEPOT_SOUND', 'yes') == 'no',
+                        help='disable steampunk depot and train ambience')
     parser.add_argument('--sound-theme', choices=soundtrack.THEMES,
                         default=os.environ.get('SOUND_THEME', 'dieselpunk'))
     parser.add_argument('--sound-volume', type=float,
@@ -130,7 +134,7 @@ def arguments():
                         help='comma-separated eSpeak NG voices for build reports')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='Play one event locally and exit without Git/build validation')
     args = parser.parse_args()
     if args.tts not in ('auto', 'off'):
@@ -139,7 +143,7 @@ def arguments():
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview in ('dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+    if args.sound_preview in ('depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
         parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
@@ -197,6 +201,7 @@ class Agent:
         self.audio_active = None
         self.audio_epoch = 0
         self.audio_mutex = threading.Lock()
+        self.depot = None
         self.audio_warned = False
         self.audio_available = True
         self.console_notice = False
@@ -537,14 +542,22 @@ class Agent:
         try:
             if not self.audio_available and not (self.args.sound_demo or self.args.sound_preview):
                 return
+            if self.depot:
+                self.depot.mute()
+            if self.stopping.is_set() or epoch != self.audio_epoch:
+                return
             self.play_sound(event, workers)
         finally:
+            if self.depot:
+                self.depot.unmute()
             with self.audio_mutex:
                 if self.audio_active is threading.current_thread():
                     self.audio_active = None
 
     def start_test_sound(self, phase='perf'):
         """Announce a test phase without resetting the shared five-minute clock."""
+        if self.depot:
+            self.depot.set_mode('train')
         if self.next_train_at == math.inf:
             self.next_train_at = time.monotonic() + 300
         if self.args.sound_theme == 'steampunk':
@@ -667,7 +680,10 @@ class Agent:
         try:
             suffix = '-' + str(workers) if event == 'work' else ''
             path = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
-            if event in ('depart-perf', 'depart-stress'):
+            if event in ('depot', 'train-ambient'):
+                duration = depot.render_preview(path, self.args.sound_volume,
+                                                'depot' if event == 'depot' else 'train')
+            elif event in ('depart-perf', 'depart-stress'):
                 duration = soundtrack.render(path, self.args.sound_theme, 'depart',
                                              self.args.sound_volume, workers, self.jobs,
                                              announcement=event.split('-')[1])
@@ -776,6 +792,8 @@ class Agent:
 
     def cycle(self):
         """Build exact current commit; return False on test failure, True on success."""
+        if self.depot:
+            self.depot.set_mode('depot')
         run = self.home / (datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '-' + self.commit[:12])
         run.mkdir()
         self.active_run = run
@@ -906,6 +924,8 @@ class Agent:
             self.sound('fail')
             return False
         finally:
+            if self.depot:
+                self.depot.set_mode('depot')
             self.active_run = None
             self.stress_stop_file = None
             self.next_remote_poll = math.inf
@@ -956,6 +976,10 @@ class Agent:
         self.validate()
         if self.args.check:
             return 0
+        if (self.args.sound_theme == 'steampunk' and not self.args.no_sound and
+                not self.args.no_depot and self.args.sound_volume > 0 and self.audio_available):
+            self.depot = depot.Depot(self)
+            self.depot.start()
         self.cleanup_logs()
         self.sound('start')
         failed = None
@@ -976,6 +1000,9 @@ class Agent:
                     restart_args = list(sys.argv[1:])
                     if '--resume-cycle' not in restart_args:
                         restart_args.append('--resume-cycle')
+                    if self.depot:
+                        self.depot.close()
+                    self.stop_children()
                     os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
             previous = json.loads(state_path.read_text()) if state_path.exists() else None
@@ -1028,6 +1055,8 @@ def main():
         if agent.audio_thread and not agent.stopping.is_set():
             agent.wait_for_audio()
         agent.stopping.set()
+        if agent.depot:
+            agent.depot.close()
         agent.stop_children()
         if agent.lock_file:
             agent.lock_file.close()

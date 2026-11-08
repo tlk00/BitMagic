@@ -107,6 +107,24 @@ class SoundtrackTests(unittest.TestCase):
             finally:
                 release.set()
 
+    def test_foreground_sound_mutes_depot(self):
+        """Foreground playback starts after the depot fades and then restores it."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--sound-theme', 'steampunk', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            order = []
+            class Background:
+                """Track the ordering of foreground and background playback."""
+                def mute(self):
+                    order.append('muted')
+                def unmute(self):
+                    order.append('resumed')
+            agent.depot = Background()
+            with patch.object(agent, 'play_sound', side_effect=lambda *_: order.append('sound')):
+                agent.sound('build-clear')
+                agent.audio_thread.join(2)
+            self.assertEqual(order, ['muted', 'sound', 'resumed'])
+
     def test_phase_change_keeps_train_timer(self):
         """Both phases announce while the periodic five-minute clock is preserved."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
