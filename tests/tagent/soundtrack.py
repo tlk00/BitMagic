@@ -1,4 +1,4 @@
-"""Steampunk/dieselpunk soundtrack with synthesized sounds and a bundled voice.
+"""Steampunk soundtrack with synthesized sounds and a bundled voice.
 
 44.1 kHz mono PCM synthesis uses seeded noise, harmonics and soft envelopes. The
 engine pulse rate represents worker occupancy, not measured CPU utilization.
@@ -14,7 +14,7 @@ import wave
 
 RATE = 44100
 EVENTS = ('start', 'building', 'build', 'depart', 'work', 'success', 'fail', 'idle')
-THEMES = ('steampunk', 'dieselpunk')
+THEMES = ('steampunk',)
 
 
 TELEGRAM = 'New BitMagic updates, new BitMagic updates'
@@ -267,107 +267,96 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=T
         value = 0.0
         if event in ('work', 'depart'):
             phase = (t * cadence) % 1
-            if steam:
-                # Paired cylinder exhaust: an accented CHUFF followed by a
-                # softer chuff. Filtered noise gives steam body rather than clicks.
-                # Outside observer: a gradual approach, locomotive first, then a
-                # longer freight-car tail. Integrating a mild Doppler ratio keeps
-                # the source clock continuous through the closest point.
-                crossing = duration * 0.36
-                transition = 0.45
-                source_time = t - 0.06 * transition * (
-                    math.log(math.cosh((t - crossing) / transition))
-                    - math.log(math.cosh(-crossing / transition)))
-                departing = event == 'depart'
-                if departing:
-                    # Start at the platform, then accelerate: integrate speed to
-                    # obtain a continuous axle/exhaust clock, rather than jumping
-                    # the frequency at successive animation frames.
-                    # Double the scene length without lowering the pitch: the
-                    # event/acceleration timeline runs at half speed, while tonal
-                    # oscillators and noise remain at the original sample rate.
-                    scene_time = t / 2
-                    moving = max(0, scene_time - 1.6)
-                    source_time = 2 * (0.27 * moving + 0.10 * moving * moving)
-                    cadence = 2.5
-                pair_phase = (source_time * cadence / 2) % 1
-                chuff = 0.0
-                for offset, accent in ((0.0, 1.0), (0.48, 0.82)):
-                    local = pair_phase - offset
-                    if local >= 0:
-                        chuff += accent * (1 - math.exp(-local * 100)) * math.exp(-local * 10)
-                engine_distance = (t - crossing) / (duration * 0.19)
-                engine_gain = 0.12 + 1.15 / (1 + engine_distance * engine_distance)
-                if departing:
-                    engine_gain = 1.1
-                value = engine_gain * chuff * (2.4 * steam_noise + 0.65 * noise)
-                value += engine_gain * chuff * 0.35 * math.sin(2 * math.pi * 95 * source_time)
-                # Freight bogies trail the locomotive: slower, low paired thuds,
-                # with broad rolling rumble rather than a high metallic jingle.
-                wagon_distance = (t - duration * 0.57) / (duration * 0.24)
-                wagon_gain = 0.06 + 0.94 / (1 + wagon_distance * wagon_distance)
-                if departing:
-                    wagon_gain = min(1, max(0, (scene_time - 1.6) / 2))
-                value += wagon_gain * wheel_clatter(source_time, rail_rate, steam_noise)
-                value += wagon_gain * (0.3 * low_noise +
-                    0.065 * math.sin(2 * math.pi * 37 * source_time) +
-                    0.04 * math.sin(2 * math.pi * 54 * source_time))
-                if departing:
-                    # Steam valves hiss under the prolonged bell/whistle scene.
-                    value += steam_noise * (0.10 + 0.18 * math.exp(
-                        -((scene_time - 2.5) / 1.2) ** 2))
-                    # Platform bell overlaps the steam whistle and first chuffs.
-                    for strike_at in (0.1, 1.0, 1.9, 2.8):
-                        elapsed = t - strike_at * 2
-                        if elapsed >= 0:
-                            envelope = (1 - math.exp(-elapsed * 120)) * math.exp(-elapsed * 2.5)
-                            value += envelope * (
-                                0.52 * math.sin(2 * math.pi * 698.5 * elapsed)
-                                + 0.20 * math.sin(2 * math.pi * 1928 * elapsed))
-                    whistle_time = scene_time - 0.8
-                    if 0 < whistle_time < 2.6:
-                        envelope = min(1, whistle_time / 0.25, (2.6 - whistle_time) / 0.4)
-                        value += envelope * (0.06 * noise + sum(
-                            0.19 * math.sin(2 * math.pi * hz * (whistle_time * 2) +
-                                            0.5 * math.sin(2 * math.pi * 4.5 * t))
-                            for hz in (330, 412.5, 495)))
-            else:
-                # Low crankshaft harmonics, cylinder knocks and filtered rumble.
-                value = 0.26 * math.sin(2 * math.pi * 48 * t)
-                value += 0.15 * math.sin(2 * math.pi * 96 * t)
-                value += (0.5 * low_noise + 0.22 * noise) * math.exp(-phase * 15)
+            # Paired cylinder exhaust: an accented CHUFF followed by a
+            # softer chuff. Filtered noise gives steam body rather than clicks.
+            # Outside observer: a gradual approach, locomotive first, then a
+            # longer freight-car tail. Integrating a mild Doppler ratio keeps
+            # the source clock continuous through the closest point.
+            crossing = duration * 0.36
+            transition = 0.45
+            source_time = t - 0.06 * transition * (
+                math.log(math.cosh((t - crossing) / transition))
+                - math.log(math.cosh(-crossing / transition)))
+            departing = event == 'depart'
+            if departing:
+                # Start at the platform, then accelerate: integrate speed to
+                # obtain a continuous axle/exhaust clock, rather than jumping
+                # the frequency at successive animation frames.
+                # Double the scene length without lowering the pitch: the
+                # event/acceleration timeline runs at half speed, while tonal
+                # oscillators and noise remain at the original sample rate.
+                scene_time = t / 2
+                moving = max(0, scene_time - 1.6)
+                source_time = 2 * (0.27 * moving + 0.10 * moving * moving)
+                cadence = 2.5
+            pair_phase = (source_time * cadence / 2) % 1
+            chuff = 0.0
+            for offset, accent in ((0.0, 1.0), (0.48, 0.82)):
+                local = pair_phase - offset
+                if local >= 0:
+                    chuff += accent * (1 - math.exp(-local * 100)) * math.exp(-local * 10)
+            engine_distance = (t - crossing) / (duration * 0.19)
+            engine_gain = 0.12 + 1.15 / (1 + engine_distance * engine_distance)
+            if departing:
+                engine_gain = 1.1
+            value = engine_gain * chuff * (2.4 * steam_noise + 0.65 * noise)
+            value += engine_gain * chuff * 0.35 * math.sin(2 * math.pi * 95 * source_time)
+            # Freight bogies trail the locomotive: slower, low paired thuds,
+            # with broad rolling rumble rather than a high metallic jingle.
+            wagon_distance = (t - duration * 0.57) / (duration * 0.24)
+            wagon_gain = 0.06 + 0.94 / (1 + wagon_distance * wagon_distance)
+            if departing:
+                wagon_gain = min(1, max(0, (scene_time - 1.6) / 2))
+            value += wagon_gain * wheel_clatter(source_time, rail_rate, steam_noise)
+            value += wagon_gain * (0.3 * low_noise +
+                0.065 * math.sin(2 * math.pi * 37 * source_time) +
+                0.04 * math.sin(2 * math.pi * 54 * source_time))
+            if departing:
+                # Steam valves hiss under the prolonged bell/whistle scene.
+                value += steam_noise * (0.10 + 0.18 * math.exp(
+                    -((scene_time - 2.5) / 1.2) ** 2))
+                # Platform bell overlaps the steam whistle and first chuffs.
+                for strike_at in (0.1, 1.0, 1.9, 2.8):
+                    elapsed = t - strike_at * 2
+                    if elapsed >= 0:
+                        envelope = (1 - math.exp(-elapsed * 120)) * math.exp(-elapsed * 2.5)
+                        value += envelope * (
+                            0.52 * math.sin(2 * math.pi * 698.5 * elapsed)
+                            + 0.20 * math.sin(2 * math.pi * 1928 * elapsed))
+                whistle_time = scene_time - 0.8
+                if 0 < whistle_time < 2.6:
+                    envelope = min(1, whistle_time / 0.25, (2.6 - whistle_time) / 0.4)
+                    value += envelope * (0.06 * noise + sum(
+                        0.19 * math.sin(2 * math.pi * hz * (whistle_time * 2) +
+                                        0.5 * math.sin(2 * math.pi * 4.5 * t))
+                        for hz in (330, 412.5, 495)))
         elif event == 'building':
-            if steam:
-                # Slow steam crescendo only; Morse never gates its amplitude.
-                progress = t / duration
-                swell = progress * progress * (3 - 2 * progress)
-                value = steam_noise * (0.04 + 0.5 * swell)
-            else:
-                value = 0.3 * math.sin(2 * math.pi * (30 * t + 24 * t * t)) + 0.2 * low_noise
+            # Slow steam crescendo only; Morse never gates its amplitude.
+            progress = t / duration
+            swell = progress * progress * (3 - 2 * progress)
+            value = steam_noise * (0.04 + 0.5 * swell)
         elif event == 'fail':
             if any(start <= t < end for start, end in sos):
-                value = 0.48 * math.sin(2 * math.pi * (880 if steam else 660) * t)
+                value = 0.48 * math.sin(2 * math.pi * 880 * t)
         elif event in ('success', 'start'):
-            # Steam whistle chord or a diesel air horn, with gentle vibrato.
-            fundamental = 440 if steam else 146.83
+            # Steam whistle chord, with gentle vibrato.
+            fundamental = 440
             vibrato = 0.6 * math.sin(2 * math.pi * 5 * t)
             gate = 1 if event == 'success' else max(0, math.sin(math.pi * t / duration))
             value = gate * sum(0.22 * math.sin(2 * math.pi * fundamental * ratio * t + vibrato)
-                               for ratio in ((1, 1.25, 1.5) if steam else (1, 1.5, 2)))
-            value += 0.07 * noise if steam else 0.04 * low_noise
+                               for ratio in (1, 1.25, 1.5))
+            value += 0.07 * noise
         elif event == 'build':
             # Four celebratory mechanical bell/ignition notes: cha-cha.
             note = int(t / 0.3)
             local = t % 0.3
             hz = (523.25, 659.25, 783.99, 1046.5, 783.99)[min(note, 4)]
-            if not steam:
-                hz *= 0.5
             value = math.exp(-local * 12) * (0.4 * math.sin(2 * math.pi * hz * t)
                     + 0.16 * math.sin(2 * math.pi * hz * 2.76 * t))
         elif event == 'idle':
             value = 0.32 * math.sin(2 * math.pi * (330 * t - 75 * t * t / duration))
             value *= math.sin(math.pi * t / duration)
-            value += 0.13 * noise * (1 - t / duration) if steam else 0.06 * low_noise
+            value += 0.13 * noise * (1 - t / duration)
         value = math.tanh(value) * fade * volume
         # Small stereo spread; mono playback remains compatible.
         if steam and event in ('work', 'depart'):

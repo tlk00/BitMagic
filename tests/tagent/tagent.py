@@ -123,7 +123,7 @@ def arguments():
                         default=os.environ.get('DEPOT_SOUND', 'yes') == 'no',
                         help='disable steampunk depot and train ambience')
     parser.add_argument('--sound-theme', choices=soundtrack.THEMES,
-                        default=os.environ.get('SOUND_THEME', 'dieselpunk'))
+                        default=os.environ.get('SOUND_THEME', 'steampunk'))
     parser.add_argument('--sound-volume', type=float,
                         default=float(os.environ.get('SOUND_VOLUME', '0.35')))
     parser.add_argument('--tts', choices=('auto', 'off'),
@@ -489,8 +489,8 @@ class Agent:
     def sound(self, event, force=False, workers=1):
         """Schedule local themed audio without delaying jobs; workers sets cadence.
 
-        Steam trains pass every 300 seconds within the active test cycle; diesel
-        pulses retain their 15-second interval. force bypasses timing for demos.
+        Steam trains pass every 300 seconds within the active test cycle.
+        force bypasses timing for demos.
         Events queue behind the current clip without blocking tests. A failure
         drops queued chatter and sounds after the currently playing clip.
         """
@@ -501,7 +501,7 @@ class Agent:
         with self.audio_mutex:
             now = time.monotonic()
             if event == 'work' and not force:
-                due = self.next_train_at if self.args.sound_theme == 'steampunk' else self.last_sound + 15
+                due = self.next_train_at
                 if now < due or (self.audio_thread and self.audio_thread.is_alive()):
                     return
             if event == 'fail':

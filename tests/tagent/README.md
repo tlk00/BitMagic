@@ -62,7 +62,7 @@ initial targets are x86-64 Linux/WSL and Apple Silicon macOS, matching the curre
   output uses timestamped lines. Print progress during builds/tests too.
 - Sound plays on the test machine; `--no-sound` disables it. Prefer local audio
   playback, with a local console-speaker fallback. Missing sound never prevents
-  testing. Events: startup beep, build-success cha-cha, workload diesel pulse,
+  testing. Events: startup beep, build-success cha-cha, passing freight train,
   failure SOS three times, idle disappointment. Initial synthesized sounds are
   deliberately simple and can be refined later. Ctrl-C/termination stops all
   child process groups, preserves logs and releases the checkout lock.
@@ -115,10 +115,9 @@ constitute a full BitMagic regression, native Linux/WSL validation, or an audio
 quality check. First deployment should use `--check`, then an attended `--once`
 cycle before unattended operation.
 
-## Steampunk and dieselpunk sound modes
+## Steampunk sounds
 
-The default `dieselpunk` theme uses crankshaft rumble, cylinder knocks and an air
-horn. During steampunk build warm-up, a mechanical spark telegraph sends
+During steampunk build warm-up, a mechanical spark telegraph sends
 **"New BitMagic updates, new BitMagic updates"** in Morse, including the comma,
 over an independent steam hiss that gradually swells in volume. The dry metal
 key track sounds only at contact closure/release; held marks have no sustained
@@ -131,7 +130,7 @@ the start of each perf/stress build script, including the initial cycle; it is
 not a separate notification for each fetched commit.
 
 `steampunk` uses exhaust chuffs, steam, mechanical bells and a steam-whistle
-chord. Both include a build-up, build-success cha-cha, descending idle sigh,
+chord. The sounds include a build-up, build-success cha-cha, descending idle sigh,
 victory horn and Morse SOS repeated three times. All effects and the combined
 demo are 44.1 kHz mono PCM and need no extra Python packages. The dispatch
 message is a bundled mono voice/steam/wheel recording.
@@ -139,7 +138,6 @@ message is a bundled mono voice/steam/wheel recording.
 ```sh
 # Demo only: no Git checks, fetching, builds or tests. Ctrl-C stops playback.
 bash tests/tagent/run_tagent.sh --sound-demo --sound-theme steampunk
-bash tests/tagent/run_tagent.sh --sound-demo --sound-theme dieselpunk
 
 # One sound, or normal operation with a chosen theme and volume (0..1).
 bash tests/tagent/run_tagent.sh --sound-preview depart --sound-theme steampunk
@@ -148,7 +146,7 @@ bash tests/tagent/run_tagent.sh --sound-preview train-ambient --sound-theme stea
 bash tests/tagent/run_tagent.sh --sound-preview depart-perf --sound-theme steampunk
 bash tests/tagent/run_tagent.sh --sound-preview depart-stress --sound-theme steampunk
 bash tests/tagent/run_tagent.sh --sound-preview dispatch --sound-theme steampunk
-bash tests/tagent/run_tagent.sh --sound-theme dieselpunk --sound-volume 0.25
+bash tests/tagent/run_tagent.sh --sound-volume 0.25
 ```
 
 `SOUND_THEME` and `SOUND_VOLUME` are editable launcher defaults with environment
@@ -210,14 +208,12 @@ and the male dispatch message with quiet steam and wheels. The first plays about
 five minutes after tests start (heartbeat granularity up to ten seconds).
 The train clock spans perf and stress builds and stops when the cycle ends; no
 passing trains play during builds, idle or recovery. Other sound events do not
-reset that clock. Diesel work clips retain their 15-second interval.
+reset that clock.
 Steampunk clips last 10.5 seconds: a heavy freight train approaches, passes the listener, and recedes. Prominent layered cylinder chuffs and steam breaths lead the slower paired bogie knocks
 and low rolling rumble of the carriages. Their cadence is separate from the
 exhaust; mild pitch/cadence change and distance envelopes suggest the passing
 train. This is a procedural impression, not a recording or physical simulation.
-Diesel clips last three seconds. Their
-pulse rate follows active perf processes or the stress runner's START/PASS/FAIL
-counts relative to the job budget; it does not measure CPU utilization. Clips
+Clips
 play in background threads and are queued to avoid overlapping sounds. On failure,
 queued non-emergency sounds are discarded, and the distress signal follows the
 clip currently playing. The demo includes both low and full
@@ -304,6 +300,6 @@ number of perf processes or stress groups last observed by the runner. Like the
 other periodic steampunk effect, live dispatch is selected by a coin toss every
 five minutes. Neither missing eSpeak nor an unavailable sound device blocks tests.
 
-The demo also exports `demo-steampunk.wav` or `demo-dieselpunk.wav` in the state
+The demo also exports `demo-steampunk.wav` in the state
 directory, with short gaps between events. This allows listening later when the
 current host has no audio device. Demo files include SOS at the end.

@@ -52,7 +52,7 @@ def render(source_path, output_path):
         if len(passage) != 65 * RATE:
             raise ValueError('source is shorter than the requested passage')
         rms = math.sqrt(sum(value * value for value in passage) / len(passage)) / 32768
-        gain = min(1.0, .05 / rms) if rms else 0.0
+        gain = .85 * min(1.0, .05 / rms) if rms else 0.0
         overlap = 5 * RATE
         for i in range(SECONDS * RATE):
             value = passage[i + overlap]

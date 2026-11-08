@@ -12,10 +12,10 @@ import tagent
 
 
 class SoundtrackTests(unittest.TestCase):
-    """Validate both themed sound banks and their supervisor integration."""
+    """Validate the steampunk sound bank and their supervisor integration."""
 
     def test_banks(self):
-        """Every event is valid mono PCM, distinct per theme, with bounded peaks."""
+        """Every event is valid mono PCM with bounded peaks."""
         with tempfile.TemporaryDirectory() as directory:
             for event in soundtrack.EVENTS:
                 banks = []
@@ -34,8 +34,6 @@ class SoundtrackTests(unittest.TestCase):
                     self.assertLess(max(abs(value) for value in values), 16000)
                     self.assertGreater(max(values), 0)
                     banks.append(data)
-                # SOS is intentionally the same timing with different horn pitch.
-                self.assertNotEqual(*banks)
 
     def test_station_music_precedes_unchanged_departure(self):
         """The mono station excerpt plays first; the accepted train follows a pause."""
@@ -209,25 +207,6 @@ class SoundtrackTests(unittest.TestCase):
             with wave.open(str(path), 'rb') as stream:
                 self.assertFalse(any(stream.readframes(stream.getnframes())))
 
-    def test_demo_sequence(self):
-        """Demo bypasses checkout validation and exports the full theme sequence."""
-        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
-                'tagent', '--sound-demo', '--sound-theme', 'dieselpunk',
-                '--jobs', '8', '--state-dir', directory]):
-            agent = tagent.Agent(tagent.arguments())
-            agent.args.tts = 'off'
-            with patch.object(agent, 'validate') as validate, \
-                 patch.object(tagent.shutil, 'which', return_value='/fake/afplay'), \
-                 patch.object(agent, 'command', return_value='') as command:
-                self.assertEqual(agent.run(), 0)
-                validate.assert_not_called()
-                self.assertEqual(command.call_count, 8)
-                self.assertTrue((Path(directory) / 'sound-dieselpunk-work-1.wav').exists())
-                self.assertTrue((Path(directory) / 'sound-dieselpunk-work-8.wav').exists())
-                with wave.open(str(Path(directory) / 'demo-dieselpunk.wav')) as stream:
-                    self.assertEqual(stream.getnchannels(), 1)
-                    self.assertGreater(stream.getnframes() / soundtrack.RATE, 20)
-
     def test_steam_demo_includes_mono_dispatch(self):
         """Demo plays each variant explicitly and combines mono clips correctly."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -284,12 +263,6 @@ class SoundtrackTests(unittest.TestCase):
                 agent.sound('work')
                 agent.audio_thread.join()
                 self.assertEqual(played, ['depart-perf', 'build', 'work', 'dispatch'])
-                self.assertEqual(coin.call_count, 2)
-                agent.args.sound_theme = 'dieselpunk'
-                clock[0] = 800
-                agent.sound('work')
-                agent.audio_thread.join()
-                self.assertEqual(played[-1], 'work')
                 self.assertEqual(coin.call_count, 2)
 
     def test_dispatch_asset_mono_and_volume(self):
@@ -567,7 +540,7 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertIn('continuing without sound', (Path(directory) / 'agent.log').read_text())
 
     def test_dispatch_preview_requires_steampunk(self):
-        """The dispatcher voice is unavailable in diesel-punk mode."""
+        """Removed dieselpunk theme is rejected."""
         with patch('sys.argv', ['tagent', '--sound-preview', 'dispatch',
                                 '--sound-theme', 'dieselpunk']), \
              patch('sys.stderr'):
