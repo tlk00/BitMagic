@@ -2,16 +2,16 @@
 # Build platform-specific test binaries. Optional: --avx512 on x86 Linux.
 set -eu
 
-case "${1:-}" in
-    '') avx512=0 ;;
-    --avx512) avx512=1 ;;
-    -h|--help) echo "Usage: $0 [--avx512]"; exit 0 ;;
-    *) echo "Usage: $0 [--avx512]" >&2; exit 2 ;;
-esac
-if [ "$#" -gt 1 ]; then
-    echo "Usage: $0 [--avx512]" >&2
-    exit 2
-fi
+avx512=0
+pedantic=0
+for arg in "$@"; do
+    case "$arg" in
+        --avx512) avx512=1 ;;
+        --pedantic) pedantic=1 ;;
+        -h|--help) echo "Usage: $0 [--avx512] [--pedantic]"; exit 0 ;;
+        *) echo "Unknown option: $arg" >&2; exit 2 ;;
+    esac
+done
 cd "$(dirname "$0")"
 os=$(uname -s)
 arch=$(uname -m)
@@ -46,5 +46,16 @@ else
     build perf_release_64 BMOPTFLAGS=-DBM64OPT
     if [ "$avx512" -eq 1 ]; then
         build perf_release_avx512 BMOPTFLAGS=-DBMAVX512OPT
+    fi
+fi
+
+# Pedantic TAgent coverage includes debug versions of every x86 kernel.
+if [ "$platform" = x86 ] && [ "$pedantic" -eq 1 ]; then
+    build perf_debug_sse2 DEBUG=YES BMOPTFLAGS=-DBMSSE2OPT
+    build perf_debug_sse42 DEBUG=YES BMOPTFLAGS=-DBMSSE42OPT
+    build perf_debug_avx2 DEBUG=YES BMOPTFLAGS=-DBMAVX2OPT
+    build perf_debug_64 DEBUG=YES BMOPTFLAGS=-DBM64OPT
+    if [ "$avx512" -eq 1 ]; then
+        build perf_debug_avx512 DEBUG=YES BMOPTFLAGS=-DBMAVX512OPT
     fi
 fi
