@@ -28529,8 +28529,8 @@ void BitForEachTest()
 
     cout << "Stress 64-bit bitscan..." << endl;
     {
-        unsigned bit_list3[64];
-        unsigned bit_list6[64];
+        unsigned bit_list3[64] = {};
+        unsigned bit_list6[64] = {};
         for (bm::id64_t i = 0; i < 65536*10000; ++i)
         {
             bm::id64_t w = i | (i << 32);
@@ -37151,6 +37151,21 @@ void CheckGTSearch(const SV& sv, typename SV::value_type v,
     auto it_end = sv.end();
     for (typename SV::size_type i(0); it != it_end; ++it, ++i)
     {
+        // Compressed vectors may have enormous NULL gaps. Skip those gaps
+        // using the NULL plane; values still come from the independent iterator.
+        if constexpr (SV::is_compressed())
+        {
+            if (it.is_null())
+            {
+                typename SV::size_type next;
+                if (!sv.get_null_bvector()->find(i, next))
+                {
+                    break;
+                }
+                i = next;
+                it.go_to(i);
+            }
+        }
         if (!it.is_null())
         {
             auto v1 = *it;
@@ -38875,8 +38890,13 @@ void TestCompressedSparseVectorScanGT(unsigned test_mask = csv_scan_gt_all)
         cout << "  stress test GT on random data " << endl;
         cout << "  data generation..." << flush;
 
-        const rsc_sparse_vector_u32::size_type total_size = 25 * 1024 * 1024;
-        const unsigned sample_size = 1024;
+        // Keep the original stress budget for pedantic runs. The default still
+        // spans many blocks and checks both ordinary and optimized storage.
+        const rsc_sparse_vector_u32::size_type total_size =
+            (is_pedantic ? 25u : 2u) * 1024 * 1024;
+        const unsigned sample_size = is_pedantic ? 1024u : 32u;
+        cout << "  GT workload: " << total_size << " values, "
+             << sample_size << " random queries per pass" << endl;
 
 
         rsc_sparse_vector_u32 csv(bm::use_null);
