@@ -13,6 +13,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import random
 import re
 import shlex
 import shutil
@@ -58,13 +59,15 @@ def arguments():
                         default=float(os.environ.get('SOUND_VOLUME', '0.35')))
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS,
+    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('dispatch',),
                         help='Play one event locally and exit without Git/build validation')
     args = parser.parse_args()
     if args.startup not in ('build', 'changed'):
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
+    if args.sound_preview == 'dispatch' and args.sound_theme != 'steampunk':
+        parser.error('dispatch preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
     for name in ['poll_minutes', 'retry_minutes', 'min_free_gb', 'log_retention_days']:
@@ -376,8 +379,12 @@ class Agent:
             self.last_sound = time.monotonic()
             if event == 'work' and self.args.sound_theme == 'steampunk':
                 self.next_train_at = self.last_sound + 300
+            selected = event
+            if event == 'work' and not force and self.args.sound_theme == 'steampunk':
+                selected = random.choice(('work', 'dispatch'))
+                self.say('STEAMPUNK SOUND ' + ('passing train' if selected == 'work' else 'dispatch'))
             self.audio_thread = threading.Thread(target=self.play_sound,
-                                                args=(event, workers), daemon=True)
+                                                args=(selected, workers), daemon=True)
             self.audio_thread.start()
 
     def start_test_sound(self):
@@ -395,8 +402,11 @@ class Agent:
         try:
             suffix = '-' + str(workers) if event == 'work' else ''
             path = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
-            duration = soundtrack.render(path, self.args.sound_theme, event,
-                              self.args.sound_volume, workers, self.jobs)
+            if event == 'dispatch':
+                duration = soundtrack.render_dispatch(path, self.args.sound_volume)
+            else:
+                duration = soundtrack.render(path, self.args.sound_theme, event,
+                                             self.args.sound_volume, workers, self.jobs)
             for player in ('afplay', 'pw-play', 'paplay', 'aplay'):
                 if shutil.which(player):
                     try:
@@ -406,7 +416,7 @@ class Agent:
                         pass
             with open('/dev/console', 'w') as console:
                 console.write('\a' * (3 if event == 'fail' else 1))
-        except (OSError, ValueError, subprocess.SubprocessError):
+        except (OSError, ValueError, wave.Error, subprocess.SubprocessError):
             if not self.audio_warned:
                 self.audio_warned = True
                 self.say('Local audio unavailable; continuing. Generated WAV files: ' + str(self.home))
@@ -591,6 +601,7 @@ class Agent:
                         ('success', 1), ('idle', 1), ('fail', 1)]
             if self.args.sound_theme == 'steampunk':
                 sequence.insert(3, ('depart', 1))
+                sequence.insert(6, ('dispatch', 1))
             clips = []
             for event, workers in sequence:
                 self.say('DEMO ' + event + (' | workers ' + str(workers) if event == 'work' else ''))
@@ -604,8 +615,8 @@ class Agent:
                         clips.append(stream.readframes(stream.getnframes()))
             if clips:
                 with wave.open(str(self.home / ('demo-' + self.args.sound_theme + '.wav')), 'wb') as stream:
-                    stream.setparams((2, 2, soundtrack.RATE, 0, 'NONE', 'not compressed'))
-                    stream.writeframes((b'\0' * (soundtrack.RATE // 3 * 4)).join(clips))
+                    stream.setparams((1, 2, soundtrack.RATE, 0, 'NONE', 'not compressed'))
+                    stream.writeframes((b'\0' * (soundtrack.RATE // 3 * 2)).join(clips))
             self.say('Sound demo complete | WAV files: ' + str(self.home))
             return 0
         if self.args.sound_preview:

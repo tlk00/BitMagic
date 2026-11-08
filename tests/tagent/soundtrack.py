@@ -1,10 +1,11 @@
-"""Procedural steampunk/dieselpunk stereo soundtrack, without external assets.
+"""Steampunk/dieselpunk soundtrack with synthesized sounds and a bundled voice.
 
-44.1 kHz PCM synthesis uses seeded noise, harmonics and soft envelopes. The
+44.1 kHz mono PCM synthesis uses seeded noise, harmonics and soft envelopes. The
 engine pulse rate represents worker occupancy, not measured CPU utilization.
 """
 import array
 import math
+from pathlib import Path
 import random
 import sys
 import wave
@@ -20,6 +21,35 @@ MORSE = dict(zip('ABCDEFGHIJKLMNOPQRSTUVWXYZ', (
     '-.-', '.-..', '--', '-.', '---', '.--.', '--.-', '.-.', '...', '-',
     '..-', '...-', '.--', '-..-', '-.--', '--..')))
 MORSE[','] = '--..--'
+
+
+def render_dispatch(path, volume=0.35):
+    """Write the bundled mono radio message at the requested volume.
+
+    path is the destination WAV; volume must be finite and in [0,1]. The source
+    is the approved voice/steam/wheel mix at reference volume 0.5. Returns clip
+    duration in seconds. No audio device or runtime speech service is needed.
+    """
+    if not math.isfinite(volume) or not 0 <= volume <= 1:
+        raise ValueError('Volume must be between 0 and 1')
+    asset = Path(__file__).resolve().parent / 'assets' / 'dispatch.wav'
+    with wave.open(str(asset), 'rb') as source:
+        if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
+            raise ValueError('Invalid dispatch audio format')
+        frames = source.getnframes()
+        mono = array.array('h', source.readframes(frames))
+    if sys.byteorder != 'little':
+        mono.byteswap()
+    scaled = array.array('h')
+    scale = volume / 0.5
+    for sample in mono:
+        scaled.append(max(-32768, min(32767, round(sample * scale))))
+    if sys.byteorder != 'little':
+        scaled.byteswap()
+    with wave.open(str(path), 'wb') as destination:
+        destination.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
+        destination.writeframes(scaled.tobytes())
+    return frames / RATE
 
 
 def morse_intervals(text, unit=0.105, lead=0.3):
@@ -104,7 +134,7 @@ def wheel_clatter(t, rate, noise):
 
 
 def render(path, theme, event, volume=0.35, workers=1, budget=1):
-    """Write a bounded stereo WAV to path; return duration in seconds.
+    """Write a bounded mono WAV to path; return duration in seconds.
 
     theme/event select a known sound. volume is amplitude in [0,1]. workers and
     budget set engine cadence. No audio device is accessed by this function.
@@ -279,11 +309,11 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1):
         else:
             left_sample = value * left
             right_sample = value * right
-        samples.append(int(32767 * left_sample))
-        samples.append(int(32767 * right_sample))
+        # Fold both positions into a single mono sample for all output devices.
+        samples.append(int(32767 * (left_sample + right_sample) / 2))
     if sys.byteorder != 'little':
         samples.byteswap()
     with wave.open(str(path), 'wb') as stream:
-        stream.setparams((2, 2, RATE, 0, 'NONE', 'not compressed'))
+        stream.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
         stream.writeframes(samples.tobytes())
     return duration

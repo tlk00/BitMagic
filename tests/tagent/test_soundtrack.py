@@ -14,7 +14,7 @@ class SoundtrackTests(unittest.TestCase):
     """Validate both themed sound banks and their supervisor integration."""
 
     def test_banks(self):
-        """Every event is valid stereo PCM, distinct per theme, with bounded peaks."""
+        """Every event is valid mono PCM, distinct per theme, with bounded peaks."""
         with tempfile.TemporaryDirectory() as directory:
             for event in soundtrack.EVENTS:
                 banks = []
@@ -26,7 +26,7 @@ class SoundtrackTests(unittest.TestCase):
                     if theme == 'steampunk' and event == 'building':
                         self.assertGreater(duration, soundtrack.morse_intervals(soundtrack.TELEGRAM)[-1][1])
                     with wave.open(str(path), 'rb') as stream:
-                        self.assertEqual(stream.getparams()[:3], (2, 2, 44100))
+                        self.assertEqual(stream.getparams()[:3], (1, 2, 44100))
                         self.assertAlmostEqual(stream.getnframes() / 44100, duration, places=4)
                         data = stream.readframes(stream.getnframes())
                     values = array.array('h', data)
@@ -69,8 +69,8 @@ class SoundtrackTests(unittest.TestCase):
             with wave.open(str(path), 'rb') as stream:
                 values = array.array('h', stream.readframes(stream.getnframes()))
             def rms(start, end):
-                """Return RMS amplitude in a stereo sample window, in seconds."""
-                window = values[int(start * soundtrack.RATE) * 2:int(end * soundtrack.RATE) * 2]
+                """Return RMS amplitude in a mono sample window, in seconds."""
+                window = values[int(start * soundtrack.RATE):int(end * soundtrack.RATE)]
                 return math.sqrt(sum(value * value for value in window) / len(window))
             self.assertGreater(rms(duration * .8, duration * .9),
                                4 * rms(duration * .05, duration * .15))
@@ -100,7 +100,32 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertTrue((Path(directory) / 'sound-dieselpunk-work-1.wav').exists())
                 self.assertTrue((Path(directory) / 'sound-dieselpunk-work-8.wav').exists())
                 with wave.open(str(Path(directory) / 'demo-dieselpunk.wav')) as stream:
+                    self.assertEqual(stream.getnchannels(), 1)
                     self.assertGreater(stream.getnframes() / soundtrack.RATE, 20)
+
+    def test_steam_demo_includes_mono_dispatch(self):
+        """Demo plays each variant explicitly and combines mono clips correctly."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--sound-demo', '--sound-theme', 'steampunk',
+                '--jobs', '8', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            def short_clip(path, theme, event, volume, workers, jobs):
+                """Stand in for long synthesized events using a short mono clip."""
+                with wave.open(str(path), 'wb') as stream:
+                    stream.setparams((1, 2, soundtrack.RATE, 0, 'NONE', 'not compressed'))
+                    stream.writeframes(b'\0' * (soundtrack.RATE // 10 * 2))
+                return .1
+            with patch.object(soundtrack, 'render', side_effect=short_clip), \
+                 patch.object(tagent.shutil, 'which', return_value='/fake/afplay'), \
+                 patch.object(agent, 'command', return_value='') as command, \
+                 patch.object(tagent.random, 'choice', side_effect=AssertionError('random demo')):
+                self.assertEqual(agent.run(), 0)
+                self.assertEqual(command.call_count, 10)
+                with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
+                    self.assertEqual(stream.getnchannels(), 1)
+                    self.assertGreater(stream.getnframes() / stream.getframerate(), 5)
+                with wave.open(str(Path(directory) / 'sound-steampunk-dispatch.wav')) as stream:
+                    self.assertEqual(stream.getnchannels(), 1)
 
     def test_steam_train_schedule(self):
         """Departure starts the five-minute timer; other signals cannot reset it."""
@@ -110,6 +135,7 @@ class SoundtrackTests(unittest.TestCase):
             clock = [100.0]
             played = []
             with patch.object(tagent.time, 'monotonic', side_effect=lambda: clock[0]), \
+                 patch.object(tagent.random, 'choice', side_effect=['work', 'dispatch']) as coin, \
                  patch.object(agent, 'play_sound', side_effect=lambda event, workers: played.append(event)):
                 agent.sound('work')
                 self.assertIsNone(agent.audio_thread)  # No train outside a test cycle.
@@ -131,7 +157,39 @@ class SoundtrackTests(unittest.TestCase):
                 clock[0] = 700
                 agent.sound('work')
                 agent.audio_thread.join()
-                self.assertEqual(played.count('work'), 2)
+                self.assertEqual(played, ['depart', 'build', 'work', 'dispatch'])
+                self.assertEqual(coin.call_count, 2)
+                agent.args.sound_theme = 'dieselpunk'
+                clock[0] = 800
+                agent.sound('work')
+                agent.audio_thread.join()
+                self.assertEqual(played[-1], 'work')
+                self.assertEqual(coin.call_count, 2)
+
+    def test_dispatch_asset_mono_and_volume(self):
+        """The approved portable clip remains mono and obeys the volume setting."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'dispatch.wav'
+            source_path = Path(soundtrack.__file__).parent / 'assets' / 'dispatch.wav'
+            with wave.open(str(source_path), 'rb') as source:
+                reference = source.readframes(source.getnframes())
+            duration = soundtrack.render_dispatch(path, .5)
+            with wave.open(str(path), 'rb') as output:
+                self.assertEqual(output.getparams()[:3], (1, 2, 44100))
+                self.assertEqual(output.readframes(output.getnframes()), reference)
+                self.assertGreater(duration, 4)
+            soundtrack.render_dispatch(path, 0)
+            with wave.open(str(path), 'rb') as output:
+                self.assertFalse(any(output.readframes(output.getnframes())))
+
+    def test_dispatch_preview_requires_steampunk(self):
+        """The dispatcher voice is unavailable in diesel-punk mode."""
+        with patch('sys.argv', ['tagent', '--sound-preview', 'dispatch',
+                                '--sound-theme', 'dieselpunk']), \
+             patch('sys.stderr'):
+            with self.assertRaises(SystemExit) as error:
+                tagent.arguments()
+            self.assertEqual(error.exception.code, 2)
 
     def test_preview_without_checkout_or_audio_device(self):
         """Preview bypasses Git validation and dispatches local player asynchronously."""

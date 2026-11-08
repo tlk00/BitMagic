@@ -132,8 +132,9 @@ not a separate notification for each fetched commit.
 
 `steampunk` uses exhaust chuffs, steam, mechanical bells and a steam-whistle
 chord. Both include a build-up, build-success cha-cha, descending idle sigh,
-victory horn and Morse SOS repeated three times. Sounds are synthesized as
-44.1 kHz stereo PCM without downloaded samples or extra Python packages.
+victory horn and Morse SOS repeated three times. All effects and the combined
+demo are 44.1 kHz mono PCM and need no extra Python packages. The dispatch
+message is a bundled mono voice/steam/wheel recording.
 
 ```sh
 # Demo only: no Git checks, fetching, builds or tests. Ctrl-C stops playback.
@@ -142,6 +143,7 @@ bash tests/tagent/run_tagent.sh --sound-demo --sound-theme dieselpunk
 
 # One sound, or normal operation with a chosen theme and volume (0..1).
 bash tests/tagent/run_tagent.sh --sound-preview depart --sound-theme steampunk
+bash tests/tagent/run_tagent.sh --sound-preview dispatch --sound-theme steampunk
 bash tests/tagent/run_tagent.sh --sound-theme dieselpunk --sound-volume 0.25
 ```
 
@@ -154,14 +156,15 @@ directory for inspection.
 In steampunk mode, each complete perf/stress cycle begins with one departure:
 platform bell, steam whistle, then accelerating chuffs and bogie knocks as the
 train pulls away (23 seconds). The extended scene doubles bell decay, whistle
-and acceleration timing while preserving tonal pitch. The departure is not repeated for every worker
-or build. During active tests a train passes every five minutes, first at about
-five minutes after the test cycle starts (heartbeat granularity up to ten seconds).
+and acceleration timing while preserving tonal pitch. The departure is not
+repeated for every worker or build. During active tests, every five minutes TAgent
+chooses independently with equal probability between the passing freight train
+and the male dispatch message with quiet steam and wheels. The first plays about
+five minutes after tests start (heartbeat granularity up to ten seconds).
 The train clock spans perf and stress builds and stops when the cycle ends; no
 passing trains play during builds, idle or recovery. Other sound events do not
 reset that clock. Diesel work clips retain their 15-second interval.
-Steampunk clips last 10.5 seconds: a heavy freight train approaches, passes from
-left to right, and recedes. Prominent layered cylinder chuffs and steam breaths lead the slower paired bogie knocks
+Steampunk clips last 10.5 seconds: a heavy freight train approaches, passes the listener, and recedes. Prominent layered cylinder chuffs and steam breaths lead the slower paired bogie knocks
 and low rolling rumble of the carriages. Their cadence is separate from the
 exhaust; mild pitch/cadence change and distance envelopes suggest the passing
 train. This is a procedural impression, not a recording or physical simulation.
@@ -172,7 +175,8 @@ play in a background thread, and critical events wait for an existing short clip
 before starting to avoid overlapping sounds. The demo includes both low and full
 worker occupancy; use `--jobs 8` if demonstrating on a single-worker machine.
 
-The steampunk demo includes the departure before the two passing trains.
+The steampunk demo includes the departure, two passing trains and the dispatch
+message. The random choice applies to periodic test sounds, not to demo previews.
 
 The demo also exports `demo-steampunk.wav` or `demo-dieselpunk.wav` in the state
 directory, with short gaps between events. This allows listening later when the
