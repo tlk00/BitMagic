@@ -13,6 +13,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import re
 import shlex
 import shutil
 import signal
@@ -36,12 +37,17 @@ def arguments():
     """Return validated CLI configuration, defaulting to launcher environment."""
     parser = argparse.ArgumentParser(description=__doc__)
     for name, default in [('poll-minutes', 5), ('retry-minutes', 60),
-                          ('reserve-cpus', 2), ('jobs', 0), ('min-free-gb', 5)]:
+                          ('reserve-cpus', 2), ('jobs', 0), ('min-free-gb', 5),
+                          ('log-retention-days', 7)]:
         parser.add_argument('--' + name, type=float, default=float(
             os.environ.get(name.upper().replace('-', '_'), default)))
     for name, default in [('remote', 'origin'), ('branch', 'master')]:
         parser.add_argument('--' + name, default=os.environ.get(name.upper(), default))
     parser.add_argument('--state-dir', type=Path)
+    parser.add_argument('--startup', choices=('build', 'changed'),
+                        default=os.environ.get('STARTUP', 'build'),
+                        help='build on every manual start (default), or only when changed')
+    parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     for name in ['pedantic', 'avx512', 'once', 'check', 'force']:
         parser.add_argument('--' + name, action='store_true')
     parser.add_argument('--no-sound', action='store_true',
@@ -55,11 +61,13 @@ def arguments():
     parser.add_argument('--sound-preview', choices=soundtrack.EVENTS,
                         help='Play one event locally and exit without Git/build validation')
     args = parser.parse_args()
+    if args.startup not in ('build', 'changed'):
+        parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
-    for name in ['poll_minutes', 'retry_minutes', 'min_free_gb']:
+    for name in ['poll_minutes', 'retry_minutes', 'min_free_gb', 'log_retention_days']:
         if not math.isfinite(getattr(args, name)) or getattr(args, name) <= 0:
             parser.error(name + ' must be positive and finite')
     for name in ['jobs', 'reserve_cpus']:
@@ -98,7 +106,7 @@ class Agent:
         """Initialize local paths and tracking; args is validated CLI configuration."""
         self.args = args
         self.repo = Path(__file__).resolve().parents[2]
-        self.home = (args.state_dir or self.repo / '.tagent').resolve()
+        self.home = (args.state_dir or self.repo / 'TAgent-logs').resolve()
         self.home.mkdir(parents=True, exist_ok=True)
         self.children = set()
         self.mutex = threading.RLock()
@@ -113,7 +121,16 @@ class Agent:
         self.audio_mutex = threading.Lock()
         self.audio_warned = False
         self.perf_workers = set()
+        self.perf_skipped = False
         self.lock_file = None
+        self.poll_lock = threading.Lock()
+        self.cleanup_lock = threading.Lock()
+        self.next_remote_poll = math.inf
+        self.pending_tip = None
+        self.poll_failure_since = None
+        self.poll_retry_delay = 60
+        self.active_run = None
+        self.stress_stop_file = None
         self.flags = set()
         self.arm = platform.system() == 'Darwin' and platform.machine() in ('arm64', 'aarch64')
 
@@ -145,6 +162,87 @@ class Agent:
             if proc.poll() is None:
                 raise
 
+    def cleanup_logs(self):
+        """Remove expired owned cycle folders; never follow symlinks or remove an active run."""
+        if not self.cleanup_lock.acquire(blocking=False):
+            return
+        try:
+            cutoff = time.time() - self.args.log_retention_days * 86400
+            for path in self.home.iterdir():
+                if path.is_symlink() or not path.is_dir() or path == self.active_run:
+                    continue
+                if not re.fullmatch(r'\d{8}-\d{6}-\d{6}-[0-9a-f]{6,12}', path.name):
+                    continue
+                try:
+                    manifest = json.loads((path / 'manifest.json').read_text())
+                    if manifest.get('tagent_run') != 1:
+                        continue
+                    created = datetime.datetime.strptime(path.name[:22], '%Y%m%d-%H%M%S-%f').timestamp()
+                    if created < cutoff:
+                        shutil.rmtree(path)
+                        self.say('Removed expired cycle logs: ' + str(path))
+                except (OSError, ValueError, TypeError) as error:
+                    self.say('Log cleanup skipped {}: {}'.format(path, error))
+        finally:
+            self.cleanup_lock.release()
+
+    def poll_remote(self):
+        """Check remote without changing checkout; enforce bounded network recovery."""
+        if time.monotonic() < self.next_remote_poll or not self.poll_lock.acquire(False):
+            return
+        try:
+            now = time.monotonic()
+            if now < self.next_remote_poll:
+                return
+            self.cleanup_logs()
+            self.attempts += 1
+            try:
+                output = self.git('ls-remote', '--exit-code', self.args.remote,
+                                  'refs/heads/' + self.args.branch)
+                lines = output.splitlines()
+                if len(lines) != 1 or len(lines[0].split()) != 2:
+                    raise CommandFailure('Unexpected remote branch response')
+                tip, ref = lines[0].split()
+                if ref != 'refs/heads/' + self.args.branch or not re.fullmatch(r'[0-9a-fA-F]{40,64}', tip):
+                    raise CommandFailure('Invalid remote branch response')
+                self.last_fetch = time.strftime('%H:%M:%S') + ' (remote check)'
+                self.poll_failure_since = None
+                self.poll_retry_delay = 60
+                self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
+                if tip != self.commit:
+                    self.pending_tip = tip
+                    if self.stress_stop_file is not None:
+                        self.stress_stop_file.touch()
+                    self.say('New commit ' + tip[:12] + '; waiting for current tests to finish')
+                else:
+                    self.pending_tip = None
+            except CommandFailure as error:
+                now = time.monotonic()
+                if self.poll_failure_since is None:
+                    self.poll_failure_since = now
+                    self.sound('fail')
+                self.say('Remote check failed: ' + str(error))
+                remaining = self.args.retry_minutes * 60 - (now - self.poll_failure_since)
+                if remaining <= 0:
+                    raise Failure('Recovery window exhausted during remote checks')
+                self.next_remote_poll = now + min(self.poll_retry_delay, remaining)
+                self.poll_retry_delay = min(600, self.poll_retry_delay * 2)
+        finally:
+            self.poll_lock.release()
+
+    def update_waiting(self):
+        """Check due remote updates at a safe test boundary; return whether to rebuild."""
+        self.poll_remote()
+        # Do not declare success or start another build while the latest remote
+        # check is in recovery. Continue the same bounded backoff window.
+        while self.poll_failure_since is not None:
+            self.pause(max(0, self.next_remote_poll - time.monotonic()), 'RECOVERY')
+            self.poll_remote()
+        if self.pending_tip:
+            self.say('Current tests finished; fetching update and restarting cycle')
+            return True
+        return False
+
     def stop_children(self):
         """Terminate all owned process groups, escalating after three seconds."""
         with self.mutex:
@@ -157,7 +255,7 @@ class Agent:
         for proc in processes:
             proc.wait()
 
-    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False):
+    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=()):
         """Run argv in an owned group; return stdout or raise with log diagnostics.
 
         log optionally redirects combined output; cwd defaults to the checkout.
@@ -169,6 +267,9 @@ class Agent:
             with self.mutex:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
+                if log and log.name == 'perf.log' and self.pending_tip:
+                    self.perf_skipped = True
+                    return 'skipped-update'
                 env = dict(os.environ, GIT_TERMINAL_PROMPT='0',
                            GIT_SSH_COMMAND='ssh -oBatchMode=yes -oConnectTimeout=20')
                 proc = subprocess.Popen(argv, cwd=cwd or self.repo, stdout=output,
@@ -196,6 +297,7 @@ class Agent:
                         raise Failure('Job cancelled')
                     self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
                     if log and log.name in ('perf.log', 'runner.log'):
+                        self.poll_remote()
                         workers = len(self.perf_workers)
                         if log.name == 'runner.log':
                             lines = log.read_text(errors='replace').splitlines()
@@ -203,6 +305,8 @@ class Agent:
                                 line.startswith(('PASS   ', 'FAIL   ')) for line in lines)
                         if workers > 0:
                             self.sound('work', workers=workers)
+            if proc.returncode in allowed_exit_codes:
+                return str(proc.returncode)
             if proc.returncode:
                 detail = str(log) if log else (result or '')[-2000:]
                 raise CommandFailure('{} exited {} | {}'.format(shlex.join(map(str, argv)), proc.returncode, detail))
@@ -312,6 +416,7 @@ class Agent:
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             self.resource_check()
+            self.cleanup_logs()
             line = '{} | fetch {} | attempts {} | commit {} | next {:.0f}s | free {:.1f} GB'.format(
                 label, self.last_fetch, self.attempts, self.commit[:12],
                 deadline - time.monotonic(), shutil.disk_usage(self.home).free / 1024**3)
@@ -378,7 +483,8 @@ class Agent:
         """Build exact current commit; return False on test failure, True on success."""
         run = self.home / (datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '-' + self.commit[:12])
         run.mkdir()
-        manifest = {'commit': self.commit, 'platform': platform.platform(),
+        self.active_run = run
+        manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
                     'jobs': self.jobs, 'pedantic': self.args.pedantic, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
@@ -401,6 +507,11 @@ class Agent:
                     raise Failure('Expected build missing: ' + str(directory / name))
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
         self.sound('build')
+        self.pending_tip = None
+        self.perf_skipped = False
+        self.poll_failure_since = None
+        self.poll_retry_delay = 60
+        self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
         self.start_test_sound()
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
@@ -422,6 +533,9 @@ class Agent:
                             pending.cancel()
                         self.stop_children()
                         raise
+            if self.update_waiting() or self.perf_skipped:
+                self.args.force = True
+                return 'updated'
             for name in manifest['builds']['stress']:
                 if not self.supported(name):
                     self.say('SKIP unsupported ' + name)
@@ -436,12 +550,24 @@ class Agent:
                     shlex.quote(str(work / 'job.XXXXXX')) + ')"\nexec ' +
                     shlex.quote(str(self.repo / 'tests/stress' / name)) + ' "$@"\n')
                 wrapper.chmod(0o755)
+                self.stress_stop_file = work / 'stop-for-update'
                 argv = ['bash', str(runner), '--binary', './worker.sh',
-                        '--jobs', str(self.jobs), '--fail-fast']
+                        '--jobs', str(self.jobs), '--fail-fast',
+                        '--stop-file', str(self.stress_stop_file)]
                 if self.args.pedantic:
                     argv.append('--pedantic')
                 self.say('STRESS ' + name + ' | ' + str(work))
-                self.command(argv, work / 'runner.log', work, fail_fast=True)
+                status = self.command(argv, work / 'runner.log', work, fail_fast=True,
+                                      allowed_exit_codes=(75,))
+                self.stress_stop_file = None
+                if status == '75':
+                    # A branch may have moved back while the workers drained.
+                    # Rebuild even then, since this stress suite is incomplete.
+                    self.args.force = True
+                    self.update_waiting()
+                    return 'updated'
+                if self.update_waiting():
+                    return 'updated'
             return True
         except CommandFailure as error:
             self.say('TEST FAILURE ' + str(error))
@@ -449,6 +575,9 @@ class Agent:
             self.sound('fail')
             return False
         finally:
+            self.active_run = None
+            self.stress_stop_file = None
+            self.next_remote_poll = math.inf
             self.next_train_at = math.inf
             self.stopping.clear()
 
@@ -485,9 +614,11 @@ class Agent:
         self.validate()
         if self.args.check:
             return 0
+        self.cleanup_logs()
         self.sound('start')
         failed = None
         state_path = self.home / 'success.json'
+        startup_pending = True
         while True:
             tip = self.fetch(failed)
             self.commit = self.git('rev-parse', 'HEAD')
@@ -500,11 +631,21 @@ class Agent:
                 if agent_changed:
                     self.say('TAgent updated; restarting launcher. If restart fails, rerun run_tagent.sh.')
                     self.lock_file.close()
-                    os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *sys.argv[1:]])
+                    restart_args = list(sys.argv[1:])
+                    if '--resume-cycle' not in restart_args:
+                        restart_args.append('--resume-cycle')
+                    os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
             previous = json.loads(state_path.read_text()) if state_path.exists() else None
-            if self.args.force or previous != key or failed:
-                if not self.cycle():
+            start_cycle = startup_pending and (self.args.startup == 'build' or self.args.resume_cycle)
+            startup_pending = False
+            if start_cycle or self.args.force or previous != key or failed:
+                result = self.cycle()
+                if result == 'updated':
+                    self.args.force = True
+                    failed = None
+                    continue
+                if not result:
                     if self.args.once:
                         return 3
                     failed = self.commit

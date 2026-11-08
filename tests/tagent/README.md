@@ -10,8 +10,16 @@ initial targets are x86-64 Linux/WSL and Apple Silicon macOS, matching the curre
 - Start from an operator-cloned BitMagic repository. Watch its `origin/master`
   by default. Fetch periodically (default five minutes); any new commit,
   including documentation changes, triggers a complete cycle. Test the current
-  tip on first startup. Finish a pinned commit before updating to the latest tip;
-  intermediate commits may be skipped.
+  tip on every manual startup by default, even if it was tested earlier. With
+  `--startup changed`, test only when the commit or coverage settings differ from
+  the last successful run. An automatic self-restart resumes its pending cycle.
+  During perf/stress execution, check the remote at that
+  interval without changing the checkout. If a new tip appears, finish the
+  currently running perf processes or active stress groups, then fetch,
+  fast-forward and start a fresh build/test cycle. Queued perf processes and
+  stress groups are skipped while active jobs drain; remaining old-cycle builds
+  and groups are skipped and intermediate commits may be skipped. No partial cycle is recorded
+  as successful. Checks run at test process heartbeats (up to 10 seconds later).
 - Update the containing checkout with fast-forward-only Git operations. Refuse
   tracked local modifications, divergent history, and conflicting untracked
   files; never reset, stash, or discard operator work.
@@ -67,21 +75,28 @@ No pip packages are required. Run on a dedicated clean checkout:
 ```sh
 bash tests/tagent/run_tagent.sh --help
 bash tests/tagent/run_tagent.sh --jobs 6
+bash tests/tagent/run_tagent.sh --startup changed
 bash tests/tagent/run_tagent.sh --pedantic --retry-minutes 60 --no-sound
 ```
 
 Defaults are at the top of the launcher; environment variables of the same names
 can override them. Logs, persistent state, generated sounds and isolated test
-working directories default to `.tagent/` at repository root (untracked; add it to your local Git exclude file if desired). Each cycle has a timestamp/commit directory,
+working directories default to `TAgent-logs/` at repository root (untracked; add
+it to your local Git exclude file if desired). Each cycle has a timestamp/commit directory,
 `manifest.json`, separate build/perf/stress logs, and stress-group logs.
-`agent.log` records lifecycle events. Keep or archive these directories as needed;
-TAgent never deletes historical evidence. Increase storage or archive old runs
-when the free-space threshold is reached.
+`agent.log` records lifecycle events. Agent-created cycle folders older than seven
+days are removed periodically, including failed and superseded cycles. Change
+`LOG_RETENTION_DAYS` in the launcher or use `--log-retention-days N`; use a longer
+retention if failure evidence must be kept. The active cycle, state, sound files,
+other folders, and older `.tagent/` directories are never removed by cleanup.
 
-Use `--once` for one cycle (or to confirm a previously successful tip); it still
-uses network recovery but exits immediately on test failure. `--check` validates
-local prerequisites without fetching, building or testing. `--force` retests a
-previously successful commit. Failure exit codes: 1 operational/build, 2 invalid
+`STARTUP` at the top of the launcher defaults to `build`; `--startup changed`
+overrides it to reuse a previous successful result. `--force` still forces a
+cycle even with `--startup changed`. `--once` performs the selected startup
+policy and exits; with `changed` it can exit without testing. It still uses
+network recovery but exits immediately on test failure. `--check` validates
+local prerequisites without fetching, building or testing. A failed initial
+fetch retries within the configured window and exits if recovery fails. Failure exit codes: 1 operational/build, 2 invalid
 arguments, 3 test/recovery exhausted, 130 interrupted. Automatic self-update
 restarts retain options. The running agent code is not hot-reloaded.
 

@@ -12,6 +12,8 @@ JOBS=""
 RUN_NAME=""
 LOG_DIR="logs/parallel"
 FAIL_FAST=0
+STOP_FILE=""
+STOP_REQUESTED=0
 PEDANTIC_ARGS=()
 TESTS=()
 
@@ -38,6 +40,8 @@ Runner options:
   -b BIN, --binary BIN  Use BIN as the test binary path/name (required unless
                         --build is used)
   -l DIR, --log-dir DIR Write logs below DIR (default: logs/parallel)
+  --stop-file FILE      Stop launching groups when FILE exists; drain active jobs
+                        and exit 75 (test failures still exit 1).
   --fail-fast           Stop launching new groups after the first failure
   --heavy-first         Use learned longest-first order (also the default).
                         New selectors run first; missing selectors are ignored.
@@ -169,6 +173,11 @@ while [ "$#" -gt 0 ]; do
         --pedantic)
             PEDANTIC_ARGS=(--pedantic)
             shift
+            ;;
+        --stop-file)
+            [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
+            STOP_FILE="$2"
+            shift 2
             ;;
         --fail-fast)
             FAIL_FAST=1
@@ -434,6 +443,10 @@ echo
 test_index=0
 
 while [ "$test_index" -lt "${#TESTS[@]}" ]; do
+    if [ -n "$STOP_FILE" ] && [ -e "$STOP_FILE" ]; then
+        STOP_REQUESTED=1
+        break
+    fi
     [ "$STOP_LAUNCHING" -ne 0 ] && break
 
     count_running
@@ -473,6 +486,14 @@ if [ "$FAILURES" -ne 0 ]; then
         index=$((index + 1))
     done
     exit 1
+fi
+
+if [ -n "$STOP_FILE" ] && [ -e "$STOP_FILE" ]; then
+    STOP_REQUESTED=1
+fi
+if [ "$STOP_REQUESTED" -ne 0 ]; then
+    echo "Update requested; active groups finished."
+    exit 75
 fi
 
 if [ "$STOP_LAUNCHING" -ne 0 ]; then

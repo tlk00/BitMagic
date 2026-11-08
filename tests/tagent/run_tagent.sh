@@ -1,7 +1,9 @@
 #!/bin/bash
 # TAgent launcher. Environment and CLI overrides survive self-restarts.
+STARTUP=${STARTUP:-build}        # build | changed
 POLL_MINUTES=${POLL_MINUTES:-5}
 RETRY_MINUTES=${RETRY_MINUTES:-60}
+LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-7}
 RESERVE_CPUS=${RESERVE_CPUS:-2}
 JOBS=${JOBS:-0}                  # 0 = automatic
 MIN_FREE_GB=${MIN_FREE_GB:-5}
@@ -19,5 +21,6 @@ command -v "$PYTHON" >/dev/null || { echo 'Python 3.9+ is required' >&2; exit 1;
     echo 'Python 3.9+ is required' >&2; exit 1;
 }
 export SOUND_THEME SOUND_VOLUME
+export STARTUP LOG_RETENTION_DAYS
 export POLL_MINUTES RETRY_MINUTES RESERVE_CPUS JOBS MIN_FREE_GB REMOTE BRANCH SOUND PYTHON
 exec "$PYTHON" "$SCRIPT_DIR/tagent.py" "$@"
