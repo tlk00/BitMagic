@@ -162,9 +162,11 @@ When perf or stress tests start, it transitions to a five-minute mono moving-tra
 loop with recorded wheel sounds and occasional quiet tonal Morse for BITMAGIC.
 At the end of the tests, the background returns to the depot.
 It fades to silence over about two seconds before each sound event, then returns
-over about three seconds. Playback uses one-second chunks, so the fade can start
-up to one second after an event is queued. A short taper at each chunk boundary
-reduces clicks when players reopen the audio device. The background is independent of builds and tests;
+over about three seconds. On Linux, both backgrounds use a continuous PCM stream
+to one player; the stream drains and releases the audio device before each sound
+event, then restarts afterwards. Linux tries PipeWire, PulseAudio and ALSA in
+that order. On macOS, playback uses one-second WAV chunks with short tapers at
+the boundaries. The background is independent of builds and tests;
 an unavailable player disables the ambience without stopping work. Set
 `DEPOT_SOUND=no` in the launcher or use `--no-depot` to disable both backgrounds;
 `--no-sound` disables all audio. The normal sound demo and individual previews

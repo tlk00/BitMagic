@@ -1,11 +1,102 @@
 """Interruptible mono depot ambience using standard local audio players."""
 import array
+import os
+import select
 import shutil
+import signal
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import wave
 from pathlib import Path
+
+
+def stream_command(player, rate):
+    """Return the Linux player's command for a mono, signed 16-bit PCM stream."""
+    if player == 'pw-play':
+        return [player, '--raw', '--rate=' + str(rate), '--channels=1', '--format=s16', '-']
+    if player == 'paplay':
+        return [player, '--raw', '--rate=' + str(rate), '--channels=1', '--format=s16le']
+    if player == 'aplay':
+        return [player, '-q', '-t', 'raw', '-f', 'S16_LE', '-r', str(rate), '-c', '1']
+    raise ValueError('unsupported streaming player: ' + player)
+
+
+class StreamPlayer:
+    """An agent-owned Linux audio player accepting PCM over a nonblocking pipe."""
+
+    def __init__(self, agent, player, rate, stop):
+        """Start player and register its process so Ctrl-C also stops it."""
+        self.agent = agent
+        self.stop = stop
+        self.error_log = tempfile.TemporaryFile()
+        self.process = None
+        try:
+            with agent.mutex:
+                if stop.is_set() or agent.stopping.is_set():
+                    raise RuntimeError('Audio stopped')
+                self.process = subprocess.Popen(stream_command(player, rate), stdin=subprocess.PIPE,
+                                                stdout=subprocess.DEVNULL, stderr=self.error_log,
+                                                start_new_session=True, bufsize=0)
+                os.set_blocking(self.process.stdin.fileno(), False)
+                agent.children.add(self.process)
+        except BaseException:
+            if self.process:
+                self.process.kill()
+                self.process.wait()
+            self.error_log.close()
+            raise
+
+    def write(self, data):
+        """Write all PCM while remaining responsive to shutdown and player failure."""
+        remaining = memoryview(data)
+        last_progress = time.monotonic()
+        while remaining and not self.stop.is_set() and not self.agent.stopping.is_set():
+            if self.process.poll() is not None:
+                raise RuntimeError(self.error_detail())
+            _, writable, _ = select.select([], [self.process.stdin], [], .2)
+            if writable:
+                try:
+                    count = os.write(self.process.stdin.fileno(), remaining)
+                except BlockingIOError:
+                    continue
+                except BrokenPipeError:
+                    raise RuntimeError(self.error_detail()) from None
+                remaining = remaining[count:]
+                last_progress = time.monotonic()
+            elif time.monotonic() - last_progress > 4:
+                raise RuntimeError('Audio player stopped consuming data')
+        if remaining:
+            raise RuntimeError('Audio stopped')
+
+    def error_detail(self):
+        """Return a short player error without exposing an unbounded log."""
+        self.error_log.seek(0)
+        detail = self.error_log.read(2048).decode(errors='replace').strip()
+        return 'Audio player exited' + (': ' + detail if detail else '')
+
+    def close(self):
+        """Drain queued audio, then reap and unregister the player process."""
+        proc = self.process
+        if proc is None:
+            return
+        try:
+            if proc.stdin:
+                proc.stdin.close()
+            if (self.stop.is_set() or self.agent.stopping.is_set()) and proc.poll() is None:
+                self.agent.signal_group(proc, signal.SIGTERM)
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.agent.signal_group(proc, signal.SIGKILL)
+                proc.wait()
+        finally:
+            with self.agent.mutex:
+                self.agent.children.discard(proc)
+            self.error_log.close()
+            self.process = None
 
 
 def read_loop(mode):
@@ -42,8 +133,8 @@ def render_preview(path, volume, mode='depot'):
 class Depot:
     """Play a looping recording and fade it around foreground sounds.
 
-    The agent owns all playback children; the worker uses one-second WAV chunks
-    so fade requests are portable across the supported external players.
+    The agent owns all playback children. Linux uses a continuous PCM stream;
+    macOS retains the portable one-second WAV playback fallback.
     """
 
     def __init__(self, agent):
@@ -89,6 +180,9 @@ class Depot:
         try:
             current = 'depot'
             rate, samples = read_loop(current)
+            if sys.platform.startswith('linux'):
+                self.run_stream(current, rate, samples)
+                return
             players = [p for p in ('afplay', 'pw-play', 'paplay', 'aplay') if shutil.which(p)]
             if not players:
                 return
@@ -150,3 +244,84 @@ class Depot:
             self.agent.say('Depot ambience unavailable: {}; continuing without background audio'.format(error))
         finally:
             self.quiet.set()
+
+    def run_stream(self, current, rate, samples):
+        """Stream both backgrounds through one Linux player between announcements."""
+        players = [p for p in ('pw-play', 'paplay', 'aplay') if shutil.which(p)]
+        if not players:
+            return
+        failed = set()
+        stream = None
+        gain, position = 0.0, 0
+        next_write = time.monotonic()
+        try:
+            while not self.stop.is_set():
+                if self.agent.stopping.is_set():
+                    if stream:
+                        stream.close()
+                        stream = None
+                    gain = 0.0
+                    self.stop.wait(.1)
+                    continue
+                if self.mode != current and gain <= 0:
+                    current = self.mode
+                    new_rate, samples = read_loop(current)
+                    if new_rate != rate and stream:
+                        stream.close()
+                        stream = None
+                    rate, position = new_rate, 0
+                if self.pause.is_set() and gain <= 0:
+                    if stream:
+                        stream.close()
+                        stream = None
+                    self.quiet.set()
+                    self.stop.wait(.1)
+                    continue
+                self.quiet.clear()
+                target = 0.0 if self.pause.is_set() or self.mode != current else 1.0
+                count = max(1, rate // 4)
+                elapsed = count / rate
+                end_gain = max(target, gain - elapsed / 2) if target == 0 else min(target, gain + elapsed / 3)
+                volume = self.agent.args.sound_volume / .35 * 1.15
+                data = array.array('h')
+                for i in range(count):
+                    amplitude = (gain + (end_gain - gain) * i / count) * volume
+                    value = int(samples[(position + i) % len(samples)] * amplitude)
+                    data.append(max(-32768, min(32767, value)))
+                if sys.byteorder != 'little':
+                    data.byteswap()
+                while not self.stop.is_set() and not self.agent.stopping.is_set():
+                    if stream is None:
+                        player = next((p for p in players if p not in failed), None)
+                        if player is None:
+                            self.agent.say('Depot ambience unavailable; continuing without background audio')
+                            return
+                        try:
+                            stream = StreamPlayer(self.agent, player, rate, self.stop)
+                            next_write = time.monotonic()
+                        except (OSError, RuntimeError) as error:
+                            failed.add(player)
+                            self.agent.say('Background player {} failed: {}'.format(player, error))
+                            continue
+                    try:
+                        stream.write(data.tobytes())
+                        break
+                    except (OSError, RuntimeError) as error:
+                        stream.close()
+                        stream = None
+                        if not self.stop.is_set() and not self.agent.stopping.is_set():
+                            failed.add(player)
+                            self.agent.say('Background player {} failed: {}'.format(player, error))
+                else:
+                    continue
+                gain = end_gain
+                position = (position + count) % len(samples)
+                next_write = max(next_write + elapsed, time.monotonic())
+                while not self.stop.is_set() and not self.agent.stopping.is_set():
+                    delay = next_write - time.monotonic()
+                    if delay <= 0:
+                        break
+                    self.stop.wait(min(.1, delay))
+        finally:
+            if stream:
+                stream.close()
