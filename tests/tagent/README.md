@@ -173,7 +173,7 @@ play their effects without the continuous depot layer.
 The depot recording includes modified excerpts from [Sherman tank, rijden en
 manoeuvreren](https://commons.wikimedia.org/wiki/File:Sherman_tank,_rijden_en_manoeuvreren_-_SoundCloud_-_Beeld_en_Geluid.ogg),
 by Beeld en Geluid, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
-The excerpts were resampled, normalized and mixed with quiet workshop sounds;
+The continuous excerpt was resampled, normalized and mixed with quiet workshop sounds;
 the resulting `assets/depot.wav` is distributed under the same license. To
 reproduce it, convert the source to 22050 Hz, 16-bit mono WAV and run
 `python3 tests/tagent/generate_depot_ambient.py SHERMAN.wav`.

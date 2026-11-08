@@ -1,5 +1,6 @@
 """Checks for the optional, interruptible background audio worker."""
 import array
+import subprocess
 import tempfile
 import threading
 import time
@@ -10,10 +11,28 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import depot
+import generate_depot_ambient
 
 
 class DepotTests(unittest.TestCase):
     """Exercise fades and failed players without a physical sound device."""
+
+    def test_sherman_passage_has_no_scripted_gaps(self):
+        """A steady source remains audible throughout the generated depot loop."""
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source.wav'
+            result = Path(directory) / 'result.wav'
+            with wave.open(str(source), 'wb') as stream:
+                stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                stream.writeframes(b'\0\0' * (670 * 22050))
+                stream.writeframes(b'\x00\x10' * (65 * 22050))
+            generate_depot_ambient.render(source, result)
+            with wave.open(str(result), 'rb') as stream:
+                self.assertEqual(stream.getnchannels(), 1)
+                for second in range(60):
+                    chunk = array.array('h', stream.readframes(22050))
+                    self.assertGreater(sum(abs(value) for value in chunk) / len(chunk), 700,
+                                       'unexpected quiet at second {}'.format(second))
 
     def test_preview_renders_mono_loop(self):
         """The standalone preview is a scaled minute of portable PCM audio."""
@@ -113,3 +132,29 @@ class DepotTests(unittest.TestCase):
             self.assertFalse(worker.thread.is_alive())
             self.assertTrue(worker.quiet.is_set())
             self.assertTrue(any('continuing without background audio' in text for text in messages))
+
+    def test_repeated_player_processes_keep_running(self):
+        """A sequence of real player processes continues past three seconds."""
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / 'fake-player'
+            script.write_text('#!/bin/sh\nsleep 1\n')
+            script.chmod(0o755)
+            calls = []
+            fifth = threading.Event()
+            def command(argv, timeout):
+                """Run a one-second fake player and observe successive calls."""
+                calls.append(time.monotonic())
+                if len(calls) >= 5:
+                    fifth.set()
+                subprocess.run([str(script), argv[1]], check=True, timeout=timeout)
+            agent = SimpleNamespace(home=Path(directory), args=SimpleNamespace(sound_volume=.35),
+                                    stopping=threading.Event(), command=command, say=lambda _: None)
+            worker = depot.Depot(agent)
+            with patch.object(depot.shutil, 'which', side_effect=lambda name: name == 'afplay'):
+                try:
+                    worker.start()
+                    self.assertTrue(fifth.wait(8), 'player stopped before the fifth audio chunk')
+                    self.assertGreaterEqual(calls[-1] - calls[0], 3.5)
+                finally:
+                    worker.close()
+            self.assertFalse(worker.thread.is_alive())

@@ -127,6 +127,7 @@ class Depot:
                         stream.setparams((1, 2, rate, 0, 'NONE', 'not compressed'))
                         stream.writeframes(data.tobytes())
                     played = False
+                    last_error = None
                     for player in players:
                         if self.agent.stopping.is_set() or self.stop.is_set():
                             break
@@ -134,13 +135,15 @@ class Depot:
                             self.agent.command([player, str(chunk)], timeout=4)
                             played = True
                             break
-                        except (OSError, RuntimeError):
+                        except (OSError, RuntimeError) as error:
+                            last_error = error
                             continue
                     if not played:
                         if self.agent.stopping.is_set() or self.stop.is_set():
                             gain = 0.0
                             continue
-                        self.agent.say('Depot ambience unavailable; continuing without background audio')
+                        self.agent.say('Depot ambience unavailable; continuing without background audio'
+                                       + (': ' + str(last_error) if last_error else ''))
                         return
                     gain = end_gain
         except (OSError, ValueError, EOFError, wave.Error) as error:

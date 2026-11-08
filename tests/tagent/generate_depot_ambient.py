@@ -17,7 +17,7 @@ SECONDS = 60
 
 
 def render(source_path, output_path):
-    """Mix louder Sherman passages and soft workshop sounds without steam."""
+    """Mix a continuous Sherman passage and soft workshop sounds without steam."""
     rng = random.Random(8273)
     samples = array.array('f', [0.0]) * (RATE * SECONDS)
     low = 0.0
@@ -43,19 +43,24 @@ def render(source_path, output_path):
     with wave.open(str(source_path), 'rb') as source:
         if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
             raise ValueError('source must be 22050 Hz, 16-bit mono WAV')
-        for source_time, destination in ((90, 4), (330, 23), (450, 42)):
-            source.setpos(source_time * RATE)
-            passage = array.array('h', source.readframes(15 * RATE))
-            if sys.byteorder != 'little':
-                passage.byteswap()
-            if len(passage) != 15 * RATE:
-                raise ValueError('source is shorter than the requested passage')
-            rms = math.sqrt(sum(value * value for value in passage) / len(passage)) / 32768
-            gain = min(1.0, .05 / rms) if rms else 0.0
-            for i, value in enumerate(passage):
-                t = i / RATE
-                fade = max(0, min(1, t / 1.5, (15 - t) / 2))
-                samples[destination * RATE + i] += gain * fade * value / 32768
+        # This steady passage avoids the approach/departure envelopes in the
+        # earlier excerpts. Blend its last five seconds into its beginning.
+        source.setpos(670 * RATE)
+        passage = array.array('h', source.readframes(65 * RATE))
+        if sys.byteorder != 'little':
+            passage.byteswap()
+        if len(passage) != 65 * RATE:
+            raise ValueError('source is shorter than the requested passage')
+        rms = math.sqrt(sum(value * value for value in passage) / len(passage)) / 32768
+        gain = min(1.0, .05 / rms) if rms else 0.0
+        overlap = 5 * RATE
+        for i in range(SECONDS * RATE):
+            value = passage[i + overlap]
+            if i >= (SECONDS * RATE - overlap):
+                offset = i - (SECONDS * RATE - overlap)
+                fraction = offset / overlap
+                value = value * (1 - fraction) + passage[offset] * fraction
+            samples[i] += gain * value / 32768
     pcm = array.array('h', (max(-32768, min(32767, int(value * 32767))) for value in samples))
     if sys.byteorder != 'little':
         pcm.byteswap()
