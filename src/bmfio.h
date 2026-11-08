@@ -1292,9 +1292,10 @@ bool streams_sparse_vector_deserializer<SV>::read(
     bm::decoder hdr(header);
     unsigned char version = 0;
     const unsigned planes = this->load_header(hdr, sv, version);
-    if (!this->digest_offset_ || this->digest_offset_ < header_size ||
-        this->digest_offset_ > (std::numeric_limits<size_t>::max)()) return false;
-    if (!seek(stream, origin, size_t(this->digest_offset_))) return false;
+    const auto digest_offset = this->digest_offset_;
+    if (!digest_offset || digest_offset < header_size ||
+        digest_offset > (std::numeric_limits<size_t>::max)()) return false;
+    if (!seek(stream, origin, size_t(digest_offset))) return false;
     this->plane_digest_bv_.clear();
     streams_decoder digest_input(stream);
     if (!reader_.deserialize(this->plane_digest_bv_, digest_input)) return false;

@@ -179,8 +179,9 @@ private:
         }
         else
         {
-            *m_buf = 0;
-            gap_set_all((gap_word_t*)m_buf, bm::gap_max_bits, 0);
+            bm::gap_word_t* gap = reinterpret_cast<bm::gap_word_t*>(m_buf);
+            gap[0] = 0;
+            bm::gap_set_all(gap, bm::gap_max_bits, 0);
         }
         m_type = 1;
     }

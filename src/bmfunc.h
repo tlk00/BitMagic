@@ -97,7 +97,10 @@ struct bv_statistics
         bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
         max_serialize_mem = memory_used = gap_cap_overhead = 0;
         for (unsigned i = 0; i < bm::gap_levels; ++i)
+        {
+            gap_levels[i] = 0;
             gaps_by_level[i] = 0;
+        } // for i
     }
     
     /// Sum data from another sttructure
@@ -110,6 +113,16 @@ struct bv_statistics
         max_serialize_mem += st.max_serialize_mem + 8;
         memory_used += st.memory_used;
         gap_cap_overhead += st.gap_cap_overhead;
+        // Rows may use different GAP capacities. Report their maximum at each
+        // level, and sum the actual number of blocks using that level.
+        for (unsigned i = 0; i < bm::gap_levels; ++i)
+        {
+            if (gap_levels[i] < st.gap_levels[i])
+            {
+                gap_levels[i] = st.gap_levels[i];
+            }
+            gaps_by_level[i] += st.gaps_by_level[i];
+        } // for i
     }
 
     /// Keep serialization prediction and clear memory ownership counters
@@ -118,7 +131,10 @@ struct bv_statistics
         bit_blocks = gap_blocks = ptr_sub_blocks = bv_count = 0;
         memory_used = gap_cap_overhead = 0;
         for (unsigned i = 0; i < bm::gap_levels; ++i)
+        {
+            gap_levels[i] = 0;
             gaps_by_level[i] = 0;
+        } // for i
     }
 
     /// add serialization correction (sandbox for override)

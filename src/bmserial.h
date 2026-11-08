@@ -9083,9 +9083,16 @@ void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
                 bv.set_range(a, b);
             }
         };
-        for(unsigned k=0;k<len;++k){size_type zero=first+arr[k];
-            bm::serialization_require(zero<=last);
-            if(next<zero)set_ones(next,zero-1);next=zero+1;}
+        for (unsigned k = 0; k < len; ++k)
+        {
+            const size_type zero = first + arr[k];
+            bm::serialization_require(zero <= last);
+            if (next < zero)
+            {
+                set_ones(next, zero - 1);
+            }
+            next = zero + 1;
+        } // for k
         if(next<=last)set_ones(next,last);
         normalize_decoded_blocks(bv.get_blocks_manager(),
             block_idx_type(sb) * bm::set_sub_array_size,
@@ -9368,7 +9375,7 @@ size_t deserializer<BV, DEC>::deserialize_from(bvector_type& bv, IN& in)
 
     block_idx_type nb_sync;
 
-    unsigned char btype;
+    unsigned char btype = bm::set_block_end;
     block_idx_type nb;
     unsigned i0, j0;
 #ifdef BM_TRACE_DES
