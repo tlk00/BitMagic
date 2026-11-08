@@ -163,7 +163,8 @@ loop with recorded wheel sounds and occasional quiet tonal Morse for BITMAGIC.
 At the end of the tests, the background returns to the depot.
 It fades to silence over about two seconds before each sound event, then returns
 over about three seconds. Playback uses one-second chunks, so the fade can start
-up to one second after an event is queued. It is independent of builds and tests;
+up to one second after an event is queued. A short taper at each chunk boundary
+reduces clicks when players reopen the audio device. The background is independent of builds and tests;
 an unavailable player disables the ambience without stopping work. Set
 `DEPOT_SOUND=no` in the launcher or use `--no-depot` to disable both backgrounds;
 `--no-sound` disables all audio. The normal sound demo and individual previews
@@ -172,9 +173,10 @@ play their effects without the continuous depot layer.
 The depot recording includes modified excerpts from [Sherman tank, rijden en
 manoeuvreren](https://commons.wikimedia.org/wiki/File:Sherman_tank,_rijden_en_manoeuvreren_-_SoundCloud_-_Beeld_en_Geluid.ogg),
 by Beeld en Geluid, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
-The excerpts were resampled, mixed, attenuated and faded into the procedural
-depot atmosphere; the resulting `assets/depot.wav` is distributed under the
-same license.
+The excerpts were resampled, normalized and mixed with quiet workshop sounds;
+the resulting `assets/depot.wav` is distributed under the same license. To
+reproduce it, convert the source to 22050 Hz, 16-bit mono WAV and run
+`python3 tests/tagent/generate_depot_ambient.py SHERMAN.wav`.
 The moving-train loop combines and modifies [Стук колёс поезда](https://commons.wikimedia.org/wiki/File:%D0%A1%D1%82%D1%83%D0%BA_%D0%BA%D0%BE%D0%BB%D1%91%D1%81_%D0%BF%D0%BE%D0%B5%D0%B7%D0%B4%D0%B0.ogg)
 by Ural-66 and [Passenger Train on the run](https://freesound.org/people/ceejay/sounds/76078/)
 by ceejay, plus [Railway Line & Signal Lights](https://freesound.org/people/dbache/sounds/351425/)

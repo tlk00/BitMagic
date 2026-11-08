@@ -1,4 +1,5 @@
 """Checks for the optional, interruptible background audio worker."""
+import array
 import tempfile
 import threading
 import time
@@ -63,10 +64,14 @@ class DepotTests(unittest.TestCase):
         """A foreground clip waits until the background player has stopped."""
         with tempfile.TemporaryDirectory() as directory:
             plays = []
+            edges = []
             played = threading.Event()
             def command(argv, timeout):
                 """Observe each complete background chunk as a fake player."""
                 self.assertTrue(Path(argv[1]).exists())
+                with wave.open(argv[1], 'rb') as stream:
+                    samples = array.array('h', stream.readframes(stream.getnframes()))
+                    edges.append((samples[0], samples[-1]))
                 plays.append(time.monotonic())
                 played.set()
                 time.sleep(.02)
@@ -88,6 +93,8 @@ class DepotTests(unittest.TestCase):
                 finally:
                     worker.close()
             self.assertFalse(worker.thread.is_alive())
+            self.assertTrue(edges)
+            self.assertTrue(all(first == 0 and last == 0 for first, last in edges))
 
     def test_player_failure_releases_foreground(self):
         """A broken audio device ends ambience and cannot block an announcement."""

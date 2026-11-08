@@ -112,8 +112,12 @@ class Depot:
                     end_gain = max(target, gain - .5) if target == 0 else min(target, gain + 1 / 3)
                     volume = self.agent.args.sound_volume / .35 * 1.15
                     data = array.array('h')
+                    edge = max(1, round(rate * .004))
                     for i in range(rate):
                         amplitude = (gain + (end_gain - gain) * i / rate) * volume
+                        # External players reopen the device per chunk; taper
+                        # both ends to avoid clicks from abrupt sample jumps.
+                        amplitude *= min(1.0, i / edge, (rate - 1 - i) / edge)
                         value = int(samples[position] * amplitude)
                         data.append(max(-32768, min(32767, value)))
                         position = (position + 1) % len(samples)
