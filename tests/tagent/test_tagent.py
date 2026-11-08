@@ -55,7 +55,8 @@ class SupervisorTests(unittest.TestCase):
         self.fixture()
         with patch.object(self.agent, 'start_test_sound', wraps=self.agent.start_test_sound) as departure:
             self.assertTrue(self.agent.cycle())
-            departure.assert_called_once()
+            self.assertEqual([call.args[0] for call in departure.call_args_list],
+                             ['perf', 'stress'])
         self.assertEqual(self.agent.next_train_at, float('inf'))
         runs = list(self.agent.home.glob('*abc123'))
         self.assertEqual(len(runs), 1)
@@ -72,9 +73,15 @@ class SupervisorTests(unittest.TestCase):
     def test_build_failure_is_fatal(self):
         """Build failure propagates immediately instead of entering test recovery."""
         self.fixture()
-        (self.root / 'tests/perf/build_all.sh').write_text('exit 9\n')
-        with self.assertRaises(ta.CommandFailure):
-            self.agent.cycle()
+        (self.root / 'tests/perf/build_all.sh').write_text(
+            "echo 'a.cpp:1: warning: first'\necho 'a.cpp:2: error: bad'\nprintf 'b.cpp:1: fatal error: missing'\nexit 9\n")
+        self.agent.args.sound_theme = 'steampunk'
+        with patch.object(self.agent, 'sound') as sound:
+            with self.assertRaises(ta.CommandFailure):
+                self.agent.cycle()
+            sound.assert_any_call('build-final-failed', workers=(2, 1, False))
+        self.assertIn('BUILD FAILED | diagnostic errors: 2 | warnings: 1',
+                      (self.agent.home / 'agent.log').read_text())
 
     def test_recovery_deadline_without_new_commit(self):
         """Successful fetches with an unchanged tip do not reset the failure window."""
@@ -262,6 +269,17 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(paths[1].exists())
         self.assertTrue(paths[2].exists())
         self.assertTrue(recent.exists())
+
+    def test_running_build_reports_warning_count(self):
+        """A long real subprocess reports accumulated warnings while still running."""
+        self.agent.args.sound_theme = 'steampunk'
+        self.agent.next_build_report = 0
+        log = self.root / 'build-perf.log'
+        with patch.object(self.agent, 'sound') as sound:
+            self.agent.command(['bash', '-c',
+                "printf 'a.cpp:1:2: warning: first\\n'; sleep 11; printf 'b.cpp:3: warning: second\\n'"], log)
+            sound.assert_called_once_with('build-warning', workers=1)
+        self.assertEqual(self.agent.build_warnings.observe(log), 2)
 
     def test_running_job_polls_real_remote(self):
         """A commit arriving during a long job is detected without changing its checkout."""

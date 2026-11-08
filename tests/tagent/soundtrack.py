@@ -4,10 +4,12 @@
 engine pulse rate represents worker occupancy, not measured CPU utilization.
 """
 import array
+import json
 import math
 from pathlib import Path
 import random
 import sys
+import tempfile
 import wave
 
 RATE = 44100
@@ -50,6 +52,88 @@ def render_dispatch(path, volume=0.35):
         destination.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
         destination.writeframes(scaled.tobytes())
     return frames / RATE
+
+
+def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, background="train"):
+    """Mix mono 16-bit TTS with quiet procedural steam/wheels into a mono WAV.
+
+    voice_path must be a nonempty, uncompressed, mono 16-bit PCM WAV; arbitrary
+    positive sample rates are linearly resampled to RATE. volume is [0,1], and
+    workers/budget control wheel cadence; background is train or quiet build steam.
+    Returns output duration in seconds.
+    """
+    if not math.isfinite(volume) or not 0 <= volume <= 1:
+        raise ValueError('Volume must be between 0 and 1')
+    if background not in ('train', 'build'):
+        raise ValueError('Invalid voice background')
+    with wave.open(str(voice_path), 'rb') as source:
+        if source.getnchannels() != 1 or source.getsampwidth() != 2 or source.getcomptype() != 'NONE':
+            raise ValueError('TTS must produce mono 16-bit PCM')
+        src_rate = source.getframerate()
+        frames = source.getnframes()
+        voice = array.array('h', source.readframes(frames))
+    if src_rate <= 0 or len(voice) < 2:
+        raise ValueError('TTS produced empty or invalid audio')
+    if sys.byteorder != 'little':
+        voice.byteswap()
+    duration = .4 + len(voice) / src_rate + .65
+    rng = random.Random(2211)
+    filtered = 0.0
+    result = array.array('h')
+    rail_rate = .5 + .35 * min(1, max(0, workers) / max(1, budget))
+    for i in range(int(duration * RATE)):
+        t = i / RATE
+        position = (t - .4) * src_rate
+        spoken = 0.0
+        if 0 <= position < len(voice) - 1:
+            j = int(position)
+            fraction = position - j
+            spoken = ((1 - fraction) * voice[j] + fraction * voice[j + 1]) / 32768
+        filtered = .65 * filtered + .35 * rng.uniform(-1, 1)
+        fade = min(1, t / .2, (duration - t) / .25)
+        bed = .04 * filtered
+        if background == 'train':
+            bed += .14 * wheel_clatter(t, rail_rate, filtered) + .02 * math.sin(2 * math.pi * 42 * t)
+        sample = round(32767 * volume * (.85 * spoken + fade * bed))
+        result.append(max(-32768, min(32767, sample)))
+    if sys.byteorder != 'little':
+        result.byteswap()
+    with wave.open(str(output_path), 'wb') as output:
+        output.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
+        output.writeframes(result.tobytes())
+    return duration
+
+
+def render_build_summary_fallback(path, errors, warnings, success, volume):
+    """Assemble exact decimal counts from recorded female-voice fragments.
+
+    path is output WAV, counts are nonnegative integers and success is a boolean.
+    The natural voiced fragments preserve exact counts even without a TTS engine;
+    multi-digit numbers are read digit by digit. Quiet build steam is mixed in.
+    Returns output duration in seconds.
+    """
+    if errors < 0 or warnings < 0:
+        raise ValueError('Diagnostic counts must be nonnegative')
+    assets = Path(__file__).resolve().parent / 'assets'
+    metadata = json.loads((assets / 'build-summary-voice.json').read_text())
+    names = ('zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine')
+    tokens = (['success' if success else 'failed', 'errors'] +
+              [names[int(digit)] for digit in str(errors)] + ['warnings'] +
+              [names[int(digit)] for digit in str(warnings)])
+    with tempfile.TemporaryDirectory(prefix='tagent-voice-') as directory:
+        voice = Path(directory) / 'voice.wav'
+        with wave.open(str(assets / 'build-summary-voice.wav'), 'rb') as source:
+            if (source.getnchannels(), source.getsampwidth()) != (1, 2):
+                raise ValueError('Invalid prerecorded summary voice format')
+            rate = source.getframerate()
+            with wave.open(str(voice), 'wb') as result:
+                result.setparams((1, 2, rate, 0, 'NONE', 'not compressed'))
+                for token in tokens:
+                    offset, length = metadata[token]
+                    source.setpos(offset)
+                    result.writeframes(source.readframes(length))
+                    result.writeframes(b'\0' * (rate // 20 * 2))
+        return mix_dynamic_dispatch(voice, path, volume, 1, 1, background='build')
 
 
 def morse_intervals(text, unit=0.105, lead=0.3):
@@ -133,17 +217,21 @@ def wheel_clatter(t, rate, noise):
     return value
 
 
-def render(path, theme, event, volume=0.35, workers=1, budget=1):
+def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=True, announcement=None):
     """Write a bounded mono WAV to path; return duration in seconds.
 
     theme/event select a known sound. volume is amplitude in [0,1]. workers and
-    budget set engine cadence. No audio device is accessed by this function.
+    budget set engine cadence. station_music prepends the station recording to a
+    steampunk departure. announcement may be perf or stress for a recorded
+    station announcement before the music. No audio device is accessed.
     """
     if theme not in THEMES or event not in EVENTS:
         raise ValueError('Unknown sound theme or event')
     if not math.isfinite(volume) or not 0 <= volume <= 1:
         raise ValueError('Volume must be between 0 and 1')
     steam = theme == 'steampunk'
+    if announcement not in (None, 'perf', 'stress') or (announcement and not (steam and event == 'depart')):
+        raise ValueError('Invalid departure announcement')
     duration = {'start': 1.1, 'building': 1.6, 'build': 1.4, 'work': 3.0,
                 'depart': 3.0, 'success': 2.3, 'fail': 6.0, 'idle': 1.5}[event]
     if steam and event in ('work', 'depart'):
@@ -311,6 +399,37 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1):
             right_sample = value * right
         # Fold both positions into a single mono sample for all output devices.
         samples.append(int(32767 * (left_sample + right_sample) / 2))
+    if steam and event == 'depart' and (station_music or announcement):
+        # Assemble separate mono assets in order: announcement, station music,
+        # then the unchanged train. Assets are resampled without runtime tools.
+        asset_dir = Path(__file__).resolve().parent / 'assets'
+        intro = array.array('h')
+        asset_names = []
+        if announcement:
+            asset_names.append('station-' + announcement + '.wav')
+        if station_music:
+            asset_names.append('station-march.wav')
+        for name in asset_names:
+            with wave.open(str(asset_dir / name), 'rb') as source:
+                if (source.getnchannels(), source.getsampwidth()) != (1, 2):
+                    raise ValueError('Invalid station audio format: ' + name)
+                source_rate = source.getframerate()
+                source_samples = array.array('h', source.readframes(source.getnframes()))
+            if source_rate <= 0 or len(source_samples) < 2:
+                raise ValueError('Empty station audio: ' + name)
+            if sys.byteorder != 'little':
+                source_samples.byteswap()
+            for i in range(round(len(source_samples) * RATE / source_rate)):
+                position = i * source_rate / RATE
+                j = min(int(position), len(source_samples) - 1)
+                fraction = position - j
+                next_sample = source_samples[min(j + 1, len(source_samples) - 1)]
+                intro.append(round(volume * (source_samples[j] * (1 - fraction) +
+                                             next_sample * fraction)))
+            intro.extend([0] * round(.3 * RATE))
+        intro.extend(samples)
+        samples = intro
+        duration = len(samples) / RATE
     if sys.byteorder != 'little':
         samples.byteswap()
     with wave.open(str(path), 'wb') as stream:

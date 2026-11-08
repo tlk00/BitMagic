@@ -20,6 +20,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import soundtrack
@@ -34,12 +35,63 @@ class CommandFailure(Failure):
     """A child command returned nonzero; test phases may wait for a fix."""
 
 
+class WarningCounter:
+    """Incrementally count complete GCC/Clang-style warning diagnostic lines."""
+
+    def __init__(self):
+        """Start an empty counter for a single build cycle."""
+        self.count = 0
+        self.errors = 0
+        self.offsets = {}
+        self.partial = {}
+
+    def count_line(self, line):
+        """Count a single complete diagnostic line after removing ANSI colors."""
+        line = re.sub(rb'\x1b\[[0-9;]*m', b'', line)
+        if re.search(rb'(?:^|:\s*)warning:', line, re.IGNORECASE):
+            self.count += 1
+        if re.search(rb'(?:^|:\s*)(?:fatal\s+)?error:', line, re.IGNORECASE):
+            self.errors += 1
+
+    def observe(self, path, final=False):
+        """Read appended bytes from path and return the total across build logs.
+
+        Count case-insensitive warning:/error:/fatal error: diagnostic lines.
+        Summary lines and incomplete lines are ignored unless final=True, which
+        includes the last unterminated line. ANSI colors are stripped.
+        """
+        with path.open('rb') as stream:
+            stream.seek(self.offsets.get(path, 0))
+            while True:
+                chunk = stream.read(65536)
+                if not chunk:
+                    break
+                lines = (self.partial.get(path, b'') + chunk).split(b'\n')
+                self.partial[path] = lines.pop()
+                for line in lines:
+                    self.count_line(line)
+            self.offsets[path] = stream.tell()
+            if final and self.partial.get(path):
+                self.count_line(self.partial.pop(path))
+        return self.count
+
+
+def build_report_text(count):
+    """Return a railway-themed status, accurately scoped to warnings seen so far."""
+    if count == 0:
+        return ('Dispatch to BitMagic. Build in progress. No compiler warnings so far. '
+                'Tracks are clear, no snowdrifts reported.')
+    word = 'warning' if count == 1 else 'warnings'
+    return ('Dispatch to BitMagic. Caution on the line. {} compiler {} so far. '
+            'Please check the build log.'.format(count, word))
+
+
 def arguments():
     """Return validated CLI configuration, defaulting to launcher environment."""
     parser = argparse.ArgumentParser(description=__doc__)
     for name, default in [('poll-minutes', 5), ('retry-minutes', 60),
                           ('reserve-cpus', 2), ('jobs', 0), ('min-free-gb', 5),
-                          ('log-retention-days', 7)]:
+                          ('log-retention-days', 7), ('build-report-seconds', 40)]:
         parser.add_argument('--' + name, type=float, default=float(
             os.environ.get(name.upper().replace('-', '_'), default)))
     for name, default in [('remote', 'origin'), ('branch', 'master')]:
@@ -57,20 +109,27 @@ def arguments():
                         default=os.environ.get('SOUND_THEME', 'dieselpunk'))
     parser.add_argument('--sound-volume', type=float,
                         default=float(os.environ.get('SOUND_VOLUME', '0.35')))
+    parser.add_argument('--tts', choices=('auto', 'off'),
+                        default=os.environ.get('TTS_MODE', 'auto'),
+                        help='use local eSpeak NG when available, or use recorded voice')
+    parser.add_argument('--tts-voice', default=os.environ.get('TTS_VOICE', 'en-us+m3'))
+    parser.add_argument('--dispatcher-voice', default=os.environ.get('DISPATCHER_VOICE', 'en-us+f3'))
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('dispatch',),
+    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='Play one event locally and exit without Git/build validation')
     args = parser.parse_args()
+    if args.tts not in ('auto', 'off'):
+        parser.error('TTS_MODE must be auto or off')
     if args.startup not in ('build', 'changed'):
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview == 'dispatch' and args.sound_theme != 'steampunk':
-        parser.error('dispatch preview requires --sound-theme steampunk')
+    if args.sound_preview in ('dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+        parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
-    for name in ['poll_minutes', 'retry_minutes', 'min_free_gb', 'log_retention_days']:
+    for name in ['poll_minutes', 'retry_minutes', 'min_free_gb', 'log_retention_days', 'build_report_seconds']:
         if not math.isfinite(getattr(args, name)) or getattr(args, name) <= 0:
             parser.error(name + ' must be positive and finite')
     for name in ['jobs', 'reserve_cpus']:
@@ -121,8 +180,18 @@ class Agent:
         self.last_sound = 0
         self.next_train_at = math.inf
         self.audio_thread = None
+        self.audio_active = None
+        self.audio_epoch = 0
         self.audio_mutex = threading.Lock()
         self.audio_warned = False
+        self.audio_available = True
+        self.console_notice = False
+        self.tts_warned = False
+        self.build_warnings = WarningCounter()
+        self.next_build_report = math.inf
+        self.tts_engine = (os.environ.get('TAGENT_TTS_ENGINE') if
+                           os.environ.get('TAGENT_TTS_CHECKED') == '1' else
+                           shutil.which('espeak-ng'))
         self.perf_workers = set()
         self.perf_skipped = False
         self.lock_file = None
@@ -299,6 +368,8 @@ class Agent:
                     if self.stopping.is_set():
                         raise Failure('Job cancelled')
                     self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
+                    if log and log.name in ('build-perf.log', 'build-stress.log'):
+                        self.build_progress(log)
                     if log and log.name in ('perf.log', 'runner.log'):
                         self.poll_remote()
                         workers = len(self.perf_workers)
@@ -357,14 +428,51 @@ class Agent:
         self.resource_check()
         self.say('Validated Python {} | {} workers | {}'.format(platform.python_version(), self.jobs, self.repo))
 
+    def report_audio(self):
+        """Report optional TTS/audio availability without requiring either resource."""
+        if self.args.no_sound or self.args.sound_volume == 0:
+            self.say('Sound disabled')
+            return
+        players = [p for p in ('afplay', 'pw-play', 'paplay', 'aplay') if shutil.which(p)]
+        if not players:
+            if os.access('/dev/console', os.W_OK):
+                self.say('No audio player found; will try the local console bell')
+            else:
+                self.audio_available = False
+                self.say('No audio player found and console unavailable; continuing without sound')
+        if self.args.sound_theme == 'steampunk' and self.args.tts == 'auto':
+            if self.tts_engine:
+                self.say('TTS: eSpeak NG available (' + self.tts_engine + ')')
+            else:
+                self.tts_warned = True
+                self.say('TTS: eSpeak NG unavailable; using prerecorded voice')
+
+    def wait_for_audio(self, timeout=300):
+        """Wait in short interruptible steps for a bounded in-flight audio clip.
+
+        Return whether the audio thread has finished. This includes synthesis
+        time as well as playback, which matters for the longer station departure.
+        """
+        deadline = time.monotonic() + timeout
+        thread = self.audio_thread
+        while thread and thread.is_alive() and not self.stopping.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            thread.join(timeout=min(1, remaining))
+        return not thread or not thread.is_alive()
+
     def sound(self, event, force=False, workers=1):
         """Schedule local themed audio without delaying jobs; workers sets cadence.
 
         Steam trains pass every 300 seconds within the active test cycle; diesel
         pulses retain their 15-second interval. force bypasses timing for demos.
-        Important events finish the previous clip; audio failures remain nonfatal.
+        Events queue behind the current clip without blocking tests. A failure
+        drops queued chatter and sounds after the currently playing clip.
         """
         if self.args.no_sound or self.args.sound_volume == 0:
+            return
+        if not self.audio_available and not (self.args.sound_demo or self.args.sound_preview):
             return
         with self.audio_mutex:
             now = time.monotonic()
@@ -372,10 +480,14 @@ class Agent:
                 due = self.next_train_at if self.args.sound_theme == 'steampunk' else self.last_sound + 15
                 if now < due or (self.audio_thread and self.audio_thread.is_alive()):
                     return
-            if self.audio_thread and self.audio_thread.is_alive():
-                self.audio_thread.join(timeout=55)
-                if self.audio_thread.is_alive():
-                    return
+            if event == 'fail':
+                # Discard queued non-emergency chatter; finish the one clip
+                # already playing before the distress signal.
+                self.audio_epoch += 1
+                previous = self.audio_active if self.audio_active and self.audio_active.is_alive() else None
+            else:
+                previous = self.audio_thread if self.audio_thread and self.audio_thread.is_alive() else None
+            epoch = self.audio_epoch
             self.last_sound = time.monotonic()
             if event == 'work' and self.args.sound_theme == 'steampunk':
                 self.next_train_at = self.last_sound + 300
@@ -383,15 +495,127 @@ class Agent:
             if event == 'work' and not force and self.args.sound_theme == 'steampunk':
                 selected = random.choice(('work', 'dispatch'))
                 self.say('STEAMPUNK SOUND ' + ('passing train' if selected == 'work' else 'dispatch'))
-            self.audio_thread = threading.Thread(target=self.play_sound,
-                                                args=(selected, workers), daemon=True)
+            self.audio_thread = threading.Thread(target=self.play_after,
+                                                args=(previous, selected, workers, epoch), daemon=True)
             self.audio_thread.start()
 
-    def start_test_sound(self):
-        """Announce the whole perf/stress test cycle and start its train clock."""
-        self.next_train_at = time.monotonic() + 300
+    def play_after(self, previous, event, workers, epoch):
+        """Play queued audio after its predecessor without blocking test work.
+
+        epoch invalidates queued clips when a failure signal takes precedence.
+        Already playing audio finishes; pending chatter cannot delay the alarm.
+        """
+        while previous and previous.is_alive() and not self.stopping.is_set():
+            if epoch != self.audio_epoch:
+                return
+            previous.join(timeout=.25)
+        if self.stopping.is_set() or epoch != self.audio_epoch:
+            return
+        with self.audio_mutex:
+            if epoch != self.audio_epoch:
+                return
+            self.audio_active = threading.current_thread()
+        try:
+            if not self.audio_available and not (self.args.sound_demo or self.args.sound_preview):
+                return
+            self.play_sound(event, workers)
+        finally:
+            with self.audio_mutex:
+                if self.audio_active is threading.current_thread():
+                    self.audio_active = None
+
+    def start_test_sound(self, phase='perf'):
+        """Announce a test phase without resetting the shared five-minute clock."""
+        if self.next_train_at == math.inf:
+            self.next_train_at = time.monotonic() + 300
         if self.args.sound_theme == 'steampunk':
-            self.sound('depart')
+            self.sound('depart-' + phase)
+
+    def build_progress(self, log):
+        """Count complete warning lines and periodically announce the build status."""
+        count = self.build_warnings.observe(log)
+        now = time.monotonic()
+        if now >= self.next_build_report:
+            self.next_build_report = now + self.args.build_report_seconds
+            self.say('BUILD STATUS: {} warning(s) so far'.format(count))
+            if self.args.sound_theme == 'steampunk':
+                self.sound('build-clear' if count == 0 else 'build-warning', workers=count)
+
+    def render_build_report(self, path, count):
+        """Synthesize a female dispatcher or use the accurate prerecorded fallback."""
+        if self.args.tts == 'auto' and self.tts_engine:
+            try:
+                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+                    speech = Path(temp) / 'speech.wav'
+                    self.command([self.tts_engine, '-v', self.args.dispatcher_voice,
+                                  '-s', '145', '-p', '57' if count else '50',
+                                  '-w', str(speech), build_report_text(count)], timeout=15)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           1, self.jobs, background='build')
+            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                if not self.tts_warned:
+                    self.tts_warned = True
+                    self.say('TTS unavailable or failed ({}); using prerecorded voice'.format(error))
+        asset = Path(soundtrack.__file__).resolve().parent / 'assets' / (
+            'build-warning.wav' if count else 'build-clear.wav')
+        return soundtrack.mix_dynamic_dispatch(asset, path, self.args.sound_volume,
+                                               1, self.jobs, background='build')
+
+    def render_build_summary(self, path, result):
+        """Announce final success and exact diagnostic counts, with offline fallback."""
+        errors, warnings, success = result
+        if self.args.tts == 'auto' and self.tts_engine:
+            try:
+                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+                    speech = Path(temp) / 'speech.wav'
+                    text = ('Dispatch to BitMagic. Build {}. {} compiler errors. '
+                            '{} compiler warnings.'.format('complete' if success else 'failed',
+                                                           errors, warnings))
+                    self.command([self.tts_engine, '-v', self.args.dispatcher_voice,
+                                  '-s', '145', '-p', '50' if success else '57',
+                                  '-w', str(speech), text], timeout=15)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           1, self.jobs, background='build')
+            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                if not self.tts_warned:
+                    self.tts_warned = True
+                    self.say('TTS unavailable or failed ({}); using prerecorded voice'.format(error))
+        return soundtrack.render_build_summary_fallback(path, errors, warnings, success,
+                                                        self.args.sound_volume)
+
+    def finish_build(self, success):
+        """Print and announce final recognized error/warning line counts."""
+        counts = (self.build_warnings.errors, self.build_warnings.count, success)
+        self.say('BUILD {} | diagnostic errors: {} | warnings: {}'.format(
+            'COMPLETE' if success else 'FAILED', counts[0], counts[1]))
+        if self.args.sound_theme == 'steampunk':
+            self.sound('build-final-ok' if success else 'build-final-failed', workers=counts)
+
+    def render_dispatch(self, path, workers):
+        """Create a live crew-count announcement, falling back to the bundled WAV.
+
+        path is the output file; workers is the last observed active test-process
+        count. A missing engine, bad voice, timeout or invalid WAV never stops tests.
+        """
+        if self.args.tts == 'auto' and not self.tts_engine and not self.tts_warned:
+            self.tts_warned = True
+            self.say('TTS: eSpeak NG unavailable; using prerecorded voice')
+        if self.args.tts == 'auto' and self.tts_engine:
+            try:
+                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+                    speech = Path(temp) / 'speech.wav'
+                    count = max(1, int(workers))
+                    crew = 'crew' if count == 1 else 'crews'
+                    text = 'BitMagic freight rolling. {} test {} at work.'.format(count, crew)
+                    self.command([self.tts_engine, '-v', self.args.tts_voice,
+                                  '-s', '145', '-p', '40', '-w', str(speech), text], timeout=15)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           count, self.jobs)
+            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                if not self.tts_warned:
+                    self.tts_warned = True
+                    self.say('TTS unavailable or failed ({}); using prerecorded voice'.format(error))
+        return soundtrack.render_dispatch(path, self.args.sound_volume)
 
     def play_sound(self, event, workers):
         """Render and play one event through local audio, then console fallback.
@@ -399,14 +623,27 @@ class Agent:
         Called by the audio thread; event and workers are captured on scheduling.
         All playback processes belong to the agent's normal cleanup registry.
         """
+        rendered = False
         try:
             suffix = '-' + str(workers) if event == 'work' else ''
             path = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
-            if event == 'dispatch':
-                duration = soundtrack.render_dispatch(path, self.args.sound_volume)
+            if event in ('depart-perf', 'depart-stress'):
+                duration = soundtrack.render(path, self.args.sound_theme, 'depart',
+                                             self.args.sound_volume, workers, self.jobs,
+                                             announcement=event.split('-')[1])
+            elif event in ('build-final-ok', 'build-final-failed'):
+                duration = self.render_build_summary(path, workers)
+            elif event in ('build-clear', 'build-warning'):
+                duration = self.render_build_report(path, workers)
+            elif event == 'dispatch':
+                duration = self.render_dispatch(path, workers)
             else:
                 duration = soundtrack.render(path, self.args.sound_theme, event,
                                              self.args.sound_volume, workers, self.jobs)
+            rendered = True
+            # Explicit demos/previews still export WAVs on a headless machine.
+            if not self.audio_available:
+                return
             for player in ('afplay', 'pw-play', 'paplay', 'aplay'):
                 if shutil.which(player):
                     try:
@@ -414,12 +651,20 @@ class Agent:
                         return
                     except (OSError, Failure):
                         pass
+            if not self.console_notice:
+                self.console_notice = True
+                self.say('No working audio player; trying the local console bell')
             with open('/dev/console', 'w') as console:
                 console.write('\a' * (3 if event == 'fail' else 1))
-        except (OSError, ValueError, wave.Error, subprocess.SubprocessError):
+        except (OSError, ValueError, EOFError, wave.Error, subprocess.SubprocessError) as error:
+            if rendered:
+                self.audio_available = False
             if not self.audio_warned:
                 self.audio_warned = True
-                self.say('Local audio unavailable; continuing. Generated WAV files: ' + str(self.home))
+                if rendered:
+                    self.say('Local audio unavailable; continuing without sound. Generated WAV files: ' + str(self.home))
+                else:
+                    self.say('Sound generation failed: {}; continuing tests'.format(error))
 
     def pause(self, seconds, label):
         """Wait interruptibly with resource checks and visible fetch heartbeat."""
@@ -494,6 +739,8 @@ class Agent:
         run = self.home / (datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '-' + self.commit[:12])
         run.mkdir()
         self.active_run = run
+        self.build_warnings = WarningCounter()
+        self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
                     'jobs': self.jobs, 'pedantic': self.args.pedantic, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
@@ -511,18 +758,27 @@ class Agent:
                 argv.append('--pedantic')
             self.sound('building')
             self.say('BUILD ' + family + ' | ' + str(run))
-            self.command(argv, run / ('build-' + family + '.log'))
+            build_log = run / ('build-' + family + '.log')
+            try:
+                self.command(argv, build_log)
+            except CommandFailure:
+                self.build_warnings.observe(build_log, final=True)
+                self.finish_build(False)
+                raise
+            self.build_warnings.observe(build_log, final=True)
             for name in names:
                 if not os.access(directory / name, os.X_OK):
+                    self.finish_build(False)
                     raise Failure('Expected build missing: ' + str(directory / name))
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
+        self.finish_build(True)
         self.sound('build')
         self.pending_tip = None
         self.perf_skipped = False
         self.poll_failure_since = None
         self.poll_retry_delay = 60
         self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
-        self.start_test_sound()
+        self.start_test_sound('perf')
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
                 futures = []
@@ -546,6 +802,7 @@ class Agent:
             if self.update_waiting() or self.perf_skipped:
                 self.args.force = True
                 return 'updated'
+            self.start_test_sound('stress')
             for name in manifest['builds']['stress']:
                 if not self.supported(name):
                     self.say('SKIP unsupported ' + name)
@@ -593,6 +850,7 @@ class Agent:
 
     def run(self):
         """Run update/build/test/wait loop; return exit status, or exec on self-update."""
+        self.report_audio()
         if self.args.sound_demo:
             self.say('SOUND DEMO | ' + self.args.sound_theme +
                      ' | volume ' + str(self.args.sound_volume))
@@ -600,14 +858,18 @@ class Agent:
                         ('work', 1), ('work', self.jobs),
                         ('success', 1), ('idle', 1), ('fail', 1)]
             if self.args.sound_theme == 'steampunk':
-                sequence.insert(3, ('depart', 1))
-                sequence.insert(6, ('dispatch', 1))
+                sequence.insert(3, ('depart-perf', 1))
+                sequence.insert(4, ('depart-stress', 1))
+                sequence.insert(7, ('dispatch', 1))
+                sequence.extend([('build-clear', 0), ('build-warning', 3),
+                                 ('build-final-ok', (0, 3, True)),
+                                 ('build-final-failed', (2, 3, False))])
             clips = []
             for event, workers in sequence:
                 self.say('DEMO ' + event + (' | workers ' + str(workers) if event == 'work' else ''))
                 self.sound(event, force=True, workers=workers)
                 if self.audio_thread:
-                    self.audio_thread.join(timeout=55)
+                    self.wait_for_audio()
                 suffix = '-' + str(workers) if event == 'work' else ''
                 clip = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
                 if not self.args.no_sound and self.args.sound_volume > 0 and clip.exists():
@@ -620,7 +882,11 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.home))
             return 0
         if self.args.sound_preview:
-            self.sound(self.args.sound_preview, force=True, workers=self.jobs)
+            preview_count = (0 if self.args.sound_preview == 'build-clear' else
+                             3 if self.args.sound_preview == 'build-warning' else
+                             (0, 3, True) if self.args.sound_preview == 'build-final-ok' else
+                             (2, 3, False) if self.args.sound_preview == 'build-final-failed' else self.jobs)
+            self.sound(self.args.sound_preview, force=True, workers=preview_count)
             return 0
         self.validate()
         if self.args.check:
@@ -695,7 +961,7 @@ def main():
         return 3 if 'Recovery window exhausted' in str(error) else 1
     finally:
         if agent.audio_thread and not agent.stopping.is_set():
-            agent.audio_thread.join(timeout=55)
+            agent.wait_for_audio()
         agent.stopping.set()
         agent.stop_children()
         if agent.lock_file:

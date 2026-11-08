@@ -4,6 +4,7 @@ STARTUP=${STARTUP:-build}        # build | changed
 POLL_MINUTES=${POLL_MINUTES:-5}
 RETRY_MINUTES=${RETRY_MINUTES:-60}
 LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-7}
+BUILD_REPORT_SECONDS=${BUILD_REPORT_SECONDS:-40}
 RESERVE_CPUS=${RESERVE_CPUS:-2}
 JOBS=${JOBS:-0}                  # 0 = automatic
 MIN_FREE_GB=${MIN_FREE_GB:-5}
@@ -11,6 +12,9 @@ REMOTE=${REMOTE:-origin}
 BRANCH=${BRANCH:-master}
 SOUND=${SOUND:-yes}
 SOUND_THEME=${SOUND_THEME:-dieselpunk}  # steampunk | dieselpunk
+TTS_MODE=${TTS_MODE:-auto}      # auto | off
+TTS_VOICE=${TTS_VOICE:-en-us+m3}
+DISPATCHER_VOICE=${DISPATCHER_VOICE:-en-us+f3}
 SOUND_VOLUME=${SOUND_VOLUME:-0.35}      # 0.0 .. 1.0
 PYTHON=${PYTHON:-python3}
 
@@ -20,6 +24,10 @@ command -v "$PYTHON" >/dev/null || { echo 'Python 3.9+ is required' >&2; exit 1;
 "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)' || {
     echo 'Python 3.9+ is required' >&2; exit 1;
 }
+# TTS is optional; preserve an empty result so Python knows it was checked.
+TAGENT_TTS_ENGINE="$(command -v espeak-ng || true)"
+TAGENT_TTS_CHECKED=1
+export TAGENT_TTS_ENGINE TAGENT_TTS_CHECKED TTS_MODE TTS_VOICE DISPATCHER_VOICE BUILD_REPORT_SECONDS
 export SOUND_THEME SOUND_VOLUME
 export STARTUP LOG_RETENTION_DAYS
 export POLL_MINUTES RETRY_MINUTES RESERVE_CPUS JOBS MIN_FREE_GB REMOTE BRANCH SOUND PYTHON
