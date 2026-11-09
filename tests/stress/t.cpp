@@ -208,6 +208,9 @@ void CycleSparseIndex(INDEX& index, bool comprehensive = false)
 
 bool is_silent = false;
 bool is_pedantic = false;
+bool is_fast = false;
+
+#include "../common/stress_workload.h"
 
 #include "../common/sparse_serial_levels_tests.h"
 #include "../common/serialization_allocator_tests.h"
@@ -451,6 +454,12 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
 
     cout << "... VisitorAllRangeTest() step=" << step << endl;
 
+    // Each query still visits and compares its complete original range.
+    if (is_fast && step < drange / 16)
+    {
+        step = drange / 16;
+    }
+
     auto pcnt = 256;
     for (auto i = left; i <= right; i+=step)
     {
@@ -496,6 +505,11 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
             pcnt = 128;
         }
         --pcnt;
+        // Avoid wrapping a sampled high-index step beyond the query endpoint.
+        if (is_fast && (i > right || step > right - i))
+        {
+            break;
+        }
 
     } // for i
     cout << endl;
@@ -541,8 +555,12 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
             pcnt = 128;
         }
         --pcnt;
+        if (is_fast && (!right || left > right || step > right - left))
+        {
+            break;
+        }
 
-    } // for i
+    } // for left
     cout << endl;
 }
 
@@ -2990,6 +3008,13 @@ void CheckVectors(bvect_mini &bvect_min,
         }
     }
 
+    if (is_fast && full_count > 1000000)
+    {
+        CheckFastDenseVector(bvect_min, bvect_full);
+        cout << "Full reference bitmap comparison and sampled API checks OK" << endl;
+        return;
+    }
+
     // find_last check
     {
         bm::id_t pos1 = 0;
@@ -3425,7 +3450,7 @@ void WordCmpTest()
 {
     cout << "---------------------------- WordCmp test" << endl;
 
-    for (int i = 0; i < 10000000; ++i)
+    for (unsigned i = 0; i < StressRepetitions(10000000, 4096); ++i)
     {
         unsigned w1 = unsigned(rand());
         unsigned w2 = unsigned(rand());
@@ -3464,7 +3489,7 @@ void WordCmpTest()
             exit(1);
         }
 
-    }
+    } // for i
 
     cout << "Ok." << endl;
 }
@@ -3551,7 +3576,8 @@ void TestBlockCountChange()
 
     
         unsigned k_max = (1u << 31) / 4;
-        for (unsigned k = 0; k <= k_max; ++k)
+        // Independent repeated-word blocks; preserve the original input range.
+        for (unsigned k = 0; k <= k_max; k = NextStressTestValue(k, k_max))
         {
             for (i = 0; i < bm::set_block_size; ++i)
                 blk[i] = k;
@@ -4147,7 +4173,7 @@ void TestBlockToGAP()
        gap_word_t* gap_buf2 = gapv2.get_buf();
        *gap_buf2 = 0;
 
-        unsigned max_try = 1000000;
+        unsigned max_try = StressRepetitions(1000000, 256);
         for (unsigned k = 0; k < max_try; ++k)
         {
             for (i = 0; i < bm::set_block_size; ++i)
@@ -4392,7 +4418,8 @@ void BlockBitInsertTest()
                 unsigned t = bm::test_bit(blk0, i+1);
                 assert(t);
             }
-            for (unsigned k = 0; k < 65536; ++k)
+            for (unsigned k = 0; k < 65536;
+                 k = NextStressTestValue(k, 65535u, 8, 1))
             {
                 if (k != i+1)
                 {
@@ -4421,7 +4448,8 @@ void BlockBitInsertTest()
         {
             bm::word_t co = bm::bit_block_insert(blk0, i, 0);
             assert(co == 1 || i == 65535);
-            for (unsigned k = 0; k < 65536; ++k)
+            for (unsigned k = 0; k < 65536;
+                 k = NextStressTestValue(k, 65535u, 8, 1))
             {
                 unsigned t = bm::test_bit(blk0, k);
                 if (k <= i)
@@ -4543,7 +4571,8 @@ void BlockBitEraseTest()
         if (cnt != 1)
         {
             unsigned control = 0;
-            for (unsigned k = 0; k < 65536; ++k)
+            for (unsigned k = 0; k < 65536;
+                 k = NextStressTestValue(k, 65535u, 8, 1))
             {
                 t = bm::test_bit(blk0, k);
                 control += t;
@@ -4965,11 +4994,17 @@ void BasicFunctionalityTest()
     
     cout << "test data generation... " << endl;
     unsigned i;
+    unsigned next_rank_check = 0;
     for (i = 0; i < ITERATIONS; ++i)
     {
         bvect_min.set_bit(i);
         bvect_full.set_bit(i);
 
+        if (i != next_rank_check)
+        {
+            continue;
+        }
+        next_rank_check = NextStressTestValue(i, unsigned(ITERATIONS - 1), 16);
         bvect_full.build_rs_index(&bc_arr);
         
         bm::id_t pos1, pos2, pos3, pos4, pos5;
@@ -5012,7 +5047,7 @@ void BasicFunctionalityTest()
 
     cout << "Rank check 2" << endl;
 
-    for (i = 0; i < ITERATIONS; ++i)
+    for (i = 0; i < ITERATIONS; i = NextStressTestValue(i, unsigned(ITERATIONS - 1), 16))
     {
         bm::id_t pos1, pos2, pos3, pos4;
         auto rf1 = FindRank(bvect_full1, i+1, 0, pos1);
@@ -5075,14 +5110,15 @@ void BasicFunctionalityTest()
     }
 
     cout << "Rank check 3" << endl;
-    for (i = 0; i < ITERATIONS; ++i)
+    for (i = 0; i < ITERATIONS; i = NextStressTestValue(i, unsigned(ITERATIONS - 1), 16))
     {
         CheckCountRange(bvect_full, rs_idx_full, i, ITERATIONS);
         CheckCountRange(bvect_full1, rs_idx_full1, i, ITERATIONS);
     }
 
     cout << "Rank check 4" << endl;
-    for (i = ITERATIONS; i > 0; --i)
+    for (i = ITERATIONS; i > 0;
+         i = ITERATIONS - NextStressTestValue(unsigned(ITERATIONS - i), unsigned(ITERATIONS - 1), 16))
     {
         CheckCountRange(bvect_full, rs_idx_full, 0, i);
         CheckCountRange(bvect_full1, rs_idx_full1, 0, i);
@@ -5419,7 +5455,9 @@ void BvectorBulkSetTest()
         bvect bv1c;
         std::vector<bm::id_t> v1;
 
-        for (unsigned delta = 1; delta < delta_max; ++delta)
+        // Sample insertion spacings, retaining the full original index range.
+        for (unsigned delta = 1; delta < delta_max;
+             delta = is_fast ? NextFastIntervalIncrement(delta, delta_max) : delta + 1)
         {
             v1.resize(0);
             bvect::bulk_insert_iterator iit(bv2);
@@ -5560,7 +5598,8 @@ void RankFindTest()
         bv1.build_rs_index(&bc_arr1);
 
         
-        for (unsigned i = 0; i < max_size; ++i)
+        for (unsigned i = 0; i < max_size;
+             i = NextStressTestValue(i, max_size - 1, 16, 1))
         {
             bool rf1, rf3;
             bm::id_t pos, pos1;
@@ -6118,9 +6157,19 @@ void BvectorShiftTest()
     
     s = std::chrono::steady_clock::now();
 
-    for( ; start; --start)
+    for( ; start;
+         start = bm::id_max - 1 - NextStressTestValue(bm::id_max - 1 - start, unsigned(bm::id_max - 2), 16))
     {
+        if (is_fast)
+        {
+            bv.clear();
+            bv.set(start);
+        }
         bool carry_over = bv.shift_left();
+        if (is_fast)
+        {
+            assert(bv.count() == 1 && bv.get_first() == start - 1);
+        }
         if (carry_over)
         {
             cout << "CO at " << start << endl;
@@ -6233,7 +6282,20 @@ void BvectorShiftTest()
 
             s = std::chrono::steady_clock::now();
         }
-        ++start;
+        if (is_fast)
+        {
+            assert(bv.count() == 1 && bv.get_first() == start + 1);
+            assert(bv.equal(bv1));
+            start = NextStressTestValue(start, unsigned(bm::id_max - 1), 16);
+            bv.clear();
+            bv1.clear();
+            bv.set(start);
+            bv1.set(start);
+        }
+        else
+        {
+            ++start;
+        }
     }
     cout << "ok.\n";
     }
@@ -6244,7 +6306,8 @@ void BvectorShiftTest()
         generate_bvector(bv);
         bvect bv_control(bv);
         
-        unsigned max_shifts = 10000;
+        // Cross the 32-bit and 64-bit word boundaries even in fast mode.
+        unsigned max_shifts = StressRepetitions(10000, 65);
         for (unsigned i = 0; i < max_shifts; ++i)
         {
             ShiftRight(&bv_control, 1);
@@ -6265,7 +6328,7 @@ void BvectorShiftTest()
     //
     cout << "\nAggregator based SHIT-R tests..." << endl;
     {
-        const unsigned int REPEATS = 300;
+        const unsigned int REPEATS = StressRepetitions(300, 8);
 
         bvect mask_bv; // mask vector
         mask_bv.init();
@@ -6491,7 +6554,7 @@ void BvectorInsertTest()
         generate_bvector(bv, 40000000);
         bvect bv_control(bv);
         
-        unsigned max_shifts = 10000;
+        unsigned max_shifts = StressRepetitions(10000, 8);
         for (unsigned i = 0; i < max_shifts; ++i)
         {
             bvect bv2(bm::BM_GAP);
@@ -6654,7 +6717,7 @@ void BvectorEraseTest()
         
         bvect bv_c(bv);
         
-        unsigned max_erase = 256;
+        unsigned max_erase = StressRepetitions(256, 8);
         
         for(unsigned k = 0; k < max_erase; ++k)
         {
@@ -6719,6 +6782,16 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub)
     for (unsigned i = 0; i < samples_size; ++i)
     {
         unsigned sample_count = samples[i];
+        // Large fractional subsets require millions of random picks. Keep the
+        // full source fixture and 0/1/2/15/full-copy requests; smaller fixtures
+        // retain every fractional/complement request.
+        if (is_fast && sample_count < bcnt &&
+            ((bcnt == bm::id_max && sample_count > 15) ||
+             (bcnt != bm::id_max && bcnt > 1000000 &&
+              sample_count > 2 && sample_count != 15)))
+        {
+            continue;
+        }
         if (!is_silent)
             printf(" %u, ", sample_count);
         rsub.sample(bv_subset, bv, sample_count);
@@ -6791,19 +6864,28 @@ void SimpleRandomFillTest()
     bvect_min.set_bit(0);
     bvect_full.set_bit(0);
     unsigned i;
+    unsigned next_check = 0;
     for (i = 0; i < iter; ++i)
     {
         unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
 
-        bvect_full.build_rs_index(&rs_idx_full);
+        // Always check the last mutation so subsequent checks use a fresh index.
+        if (i == next_check)
+        {
+            bvect_full.build_rs_index(&rs_idx_full);
 
-        CheckCountRange(bvect_full, rs_idx_full, 0, num);
-        CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
+            CheckCountRange(bvect_full, rs_idx_full, 0, num);
+            CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
+            if (i + 1 < iter)
+            {
+                next_check = NextStressTestValue(i, iter - 1, 32);
+            }
+        }
 
         if ((i % 1000) == 0) cout << "." << flush;
-    }
+    } // for i
 
     CheckVectors(bvect_min, bvect_full, iter);
 
@@ -6838,18 +6920,27 @@ void SimpleRandomFillTest()
     bvect_full.build_rs_index(&rs_idx_full);
 
     unsigned i;
+    unsigned next_check = 0;
     for(i = 0; i < iter; ++i)
     {
         unsigned num = unsigned(::rand()) % iter;
         bvect_min.set_bit(num);
         bvect_full.set_bit(num);
 
-        bvect_full.build_rs_index(&rs_idx_full);
+        // Always check the last mutation so subsequent checks use a fresh index.
+        if (i == next_check)
+        {
+            bvect_full.build_rs_index(&rs_idx_full);
 
-        CheckCountRange(bvect_full, rs_idx_full, 0, 65535);
-        CheckCountRange(bvect_full, rs_idx_full, 0, num);
-        CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
-    }
+            CheckCountRange(bvect_full, rs_idx_full, 0, 65535);
+            CheckCountRange(bvect_full, rs_idx_full, 0, num);
+            CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
+            if (i + 1 < iter)
+            {
+                next_check = NextStressTestValue(i, iter - 1, 32);
+            }
+        }
+    } // for i
 
     CheckVectors(bvect_min, bvect_full, iter);
 
@@ -6857,17 +6948,26 @@ void SimpleRandomFillTest()
 
     printf("Simple random fill test 4.");
 
+    next_check = 0;
     for(i = 0; i < iter; ++i)
     {
         unsigned num = unsigned(rand()) % iter;
         bvect_min.clear_bit(num);
         bvect_full.clear_bit(num);
 
-        bvect_full.build_rs_index(&rs_idx_full);
+        // Always check the last mutation so subsequent checks use a fresh index.
+        if (i == next_check)
+        {
+            bvect_full.build_rs_index(&rs_idx_full);
 
-        CheckCountRange(bvect_full, rs_idx_full, 0, num);
-        CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
-    }
+            CheckCountRange(bvect_full, rs_idx_full, 0, num);
+            CheckCountRange(bvect_full, rs_idx_full, num, num+iter);
+            if (i + 1 < iter)
+            {
+                next_check = NextStressTestValue(i, iter - 1, 32);
+            }
+        }
+    } // for i
 
     CheckVectors(bvect_min, bvect_full, iter);
     CheckCountRange(bvect_full, rs_idx_full, 0, iter);
@@ -6950,22 +7050,40 @@ void RangeCopyTest()
 
         for (unsigned k = 0; k < 2; ++k)
         {
+            // Keep every sparse-fixture transition and its neighbors in fast mode.
+            if (is_fast)
+            {
+                for (auto en = bvect1.first(); en.valid(); ++en)
+                {
+                    const auto position = *en;
+                    const auto first = position ? position - 1 : position;
+                    const auto last = position < to_max ? position + 1 : position;
+                    for (auto query = first; query <= last; ++query)
+                    {
+                        CheckRangeCopy(bvect1, query, to_max);
+                        CheckRangeCopy(bvect1, 0, query);
+                    } // for query
+                } // for en
+            }
             cout << "Pass " << k << "-0" << endl;
-            for (unsigned i = 0; i < to_max; ++i)
+            for (unsigned i = 0; i < to_max;
+                 i = NextStressTestValue(i, to_max - 1, 16))
             {
                 CheckRangeCopy(bvect1, i, to_max);
-            }
+            } // for i
             cout << "Pass " << k << "-1" << endl;
-            for (unsigned i = to_max-1; i > 0; --i)
+            for (unsigned i = to_max-1; i > 0;
+                 i = to_max - 1 - NextStressTestValue(to_max - 1 - i, to_max - 2, 16))
             {
                 CheckRangeCopy(bvect1, 0, i);
-            }
+            } // for i
             cout << "Pass " << k << "-2" << endl;
             auto to = to_max;
-            for (unsigned i = 0; i != to_max; ++i, --to)
+            for (unsigned i = 0; i != to_max;
+                 i = NextStressTestValue(i, to_max - 1, 16), to = to_max - i)
             {
                 CheckRangeCopy(bvect1, i, to_max);
-            }
+            } // for i
             bvect1.optimize();
         } // for k
         cout << "OK" << endl;
@@ -6982,35 +7100,41 @@ void RangeCopyTest()
             cout << "T1" << endl;
             auto to = to_max;
 
-            for (unsigned i = 0; i < to; ++i)
+            for (unsigned i = 0; i < to;
+                 i = NextStressTestValue(i, to_max - 1, 16))
             {
                 CheckRangeCopy(bvect1, i, to);
-            }
+            } // for i
             
             cout << "T2" << endl;
             to = to_max;
-            for (unsigned i = to; i > 0; --i)
+            for (unsigned i = to; i > 0;
+                 i = to_max - NextStressTestValue(to_max - i, to_max - 1, 16))
             {
                 CheckRangeCopy(bvect1, 0, i);
-            }
+            } // for i
             
             cout << "T3" << endl;
             to = to_max;
-            for (unsigned i = 0; i != to; ++i, --to)
+            // The original moving endpoints satisfy to == to_max - i.
+            for (unsigned i = 0; i != to;
+                 i = NextStressTestValue(i, to_max / 2 - 1, 16), to = to_max - i)
             {
                 CheckRangeCopy(bvect1, i, to);
-            }
+            } // for i
             cout << "T4" << endl;
             to = bm::id_max-1 - to_max - 100;
-            for (unsigned i = to; i < bm::id_max; ++i)
+            for (unsigned i = to; i < bm::id_max;
+                 i = to + NextStressTestValue(i - to, unsigned(bm::id_max - 1 - to), 16, 1))
             {
                 CheckRangeCopy(bvect1, i, bm::id_max);
                 if ((i & 0xFFFF) == 0)
                     if (!is_silent)
                         cout << "\r" << i << flush;
-            }
+            } // for i
             cout << endl;
             to = bm::id_max-1 - to_max - 100;
+            const auto holes_from = to;
             for (unsigned i = to; i < bm::id_max-(65536 * 3); i+=65536 * 2)
             {
                 bvect1.set(i, false);
@@ -7018,14 +7142,26 @@ void RangeCopyTest()
             for (unsigned k = 0; k < 2; ++k)
             {
                 cout << "T5 pass=" << k << endl;
+                if (is_fast)
+                {
+                    for (unsigned hole = holes_from; hole < bm::id_max - 65536 * 3;
+                         hole += 65536 * 2)
+                    {
+                        for (unsigned query = hole - 1; query <= hole + 1; ++query)
+                        {
+                            CheckRangeCopy(bvect1, query, bm::id_max);
+                        } // for query
+                    } // for hole
+                }
                 to = bm::id_max-1 - to_max - (bm::gap_max_bits/2);
-                for (unsigned i = to; i < bm::id_max; ++i)
+                for (unsigned i = to; i < bm::id_max;
+                 i = to + NextStressTestValue(i - to, unsigned(bm::id_max - 1 - to), 16, 1))
                 {
                     CheckRangeCopy(bvect1, i, bm::id_max);
                     if ((i & 0xFFFF) == 0)
                         if (!is_silent)
                             cout << "\r" << i << flush;
-                }
+                } // for i
                 bvect1.optimize();
             }
         }
@@ -9358,6 +9494,8 @@ void GenerateRandomKleenVect(bvect& bv_v, bvect& bv_null,
 static
 void KleeneLogicAndStressTest(unsigned repeats = 150, unsigned size = 1000000)
 {
+    repeats = StressRepetitions(repeats, 8);
+
     cout << "-------------------------------------- KleenLogicAndStressTest()" << endl;
 
     for (unsigned i = 0; i < repeats; ++i)
@@ -9405,6 +9543,8 @@ void KleeneLogicAndStressTest(unsigned repeats = 150, unsigned size = 1000000)
 static
 void KleeneLogicOrStressTest(unsigned repeats = 150, unsigned size = 1000000)
 {
+    repeats = StressRepetitions(repeats, 8);
+
     cout << "-------------------------------------- KleeneLogicOrStressTest()" << endl;
 
     for (unsigned i = 0; i < repeats; ++i)
@@ -9974,7 +10114,8 @@ void RankRangeSplitTest()
         bool b = bv.find_range(first, last);
         assert(b);
 
-        for (bvect::size_type i = 1; i < cnt+1; ++i)
+        for (bvect::size_type i = 1; i < cnt+1;
+             i = NextStressTestValue(i, cnt, 16, 1))
         {
             bm::rank_range_split(bv, i, pair_vect);
             assert(pair_vect.size());
@@ -10337,7 +10478,8 @@ void DesrializationTest2()
 
    int clcnt = 0;
 
-   unsigned repetitions = 25;
+   // Exercise the five-trial clear cycle and the following reuse.
+   unsigned repetitions = StressRepetitions(25, 6);
    for (i = 0; i < repetitions; ++i)
    {
         cout << endl << endl << "Deserialization STEP " << i << endl;
@@ -10494,7 +10636,7 @@ void CheckRangeDeserial(const bvect&     bv,
 
             bvect bv_rd_m;
             bv_rd_m.set_range(from, target);
-            for (bvect::size_type i = from; i <= target; ++cnt)
+            for (bvect::size_type i = from; i <= target && (!is_fast || cnt < 32); ++cnt)
             {
                 bv_r.copy_range(bv, i, target);
                 bvect bv_rd;
@@ -10516,7 +10658,7 @@ void CheckRangeDeserial(const bvect&     bv,
                 auto r = target - i;
                 if (!is_silent)
                     cout << "\r      " << r << "      " << flush;
-                if (cnt > 128 && (target - i) > 128)
+                if (cnt > StressRepetitions(128, 8) && (target - i) > 128)
                 {
                     {
                         i += bvect::size_type(rand() % max_inc);
@@ -10540,7 +10682,7 @@ void CheckRangeDeserial(const bvect&     bv,
         cnt = 0;
         bvect::size_type j = to;
 
-        for (bvect::size_type i = from; i <= j; ++i, --j, ++cnt)
+        for (bvect::size_type i = from; i <= j && (!is_fast || cnt < 32); ++i, --j, ++cnt)
         {
             bv_r.copy_range(bv, i, j);
             bvect bv_rd;
@@ -10558,7 +10700,7 @@ void CheckRangeDeserial(const bvect&     bv,
             if (!is_silent)
                 cout << "\r      " << r << "      " << flush;
             // turn on random gallop mode
-            if (cnt > 100)
+            if (cnt > StressRepetitions(100, 8))
             {
                 {
                     i = bvect::size_type(i + unsigned(rand() % max_inc));
@@ -11451,6 +11593,8 @@ void AggregatorTest()
 static
 void StressTestAggregatorOR(unsigned repetitions)
 {
+    repetitions = StressRepetitions(repetitions, 8);
+
   cout << "---------------------------- Aggregator OR Stress Test" << endl;
    unsigned size = BITVECT_SIZE - 10;
    bvect bv_target1, bv_target2;
@@ -11570,6 +11714,8 @@ void StressTestAggregatorOR(unsigned repetitions)
 static
 void StressTestAggregatorAND(unsigned repetitions)
 {
+    repetitions = StressRepetitions(repetitions, 8);
+
   cout << "---------------------------- Aggregator AND Stress Test" << endl;
    unsigned size = BITVECT_SIZE - 10;
 
@@ -11809,6 +11955,8 @@ void StressTestAggregatorAND(unsigned repetitions)
 static
 void StressTestAggregatorAND_SUB(unsigned repetitions)
 {
+    repetitions = StressRepetitions(repetitions, 8);
+
   cout << "---------------------------- Aggregator AND-SUB Stress Test" << endl;
    unsigned size = BITVECT_SIZE - 10;
     bm::random_subset<bvect> rsub;
@@ -11988,6 +12136,8 @@ void GenerateTestCollection(std::vector<bvect>* target, unsigned count = 30, uns
 static
 void StressTestAggregatorShiftAND(unsigned repeats)
 {
+    repeats = StressRepetitions(repeats, 2);
+
    cout << "----------------------------StressTestAggregatorShiftAND " << endl;
 
     unsigned vector_max = 400000000;
@@ -12006,7 +12156,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
         bm::aggregator<bvect> agg;
         agg.set_optimization();
 
-        unsigned shift_repeats = 65536/3;
+        unsigned shift_repeats = StressRepetitions(65536 / 3, 8);
         for (unsigned i = 0; i < shift_repeats; ++i)
         {
             bvect bv_target0(mask_bv0);
@@ -12080,6 +12230,9 @@ static
 void StressTest(unsigned repetitions, int set_operation, bool detailed,
                 int method = -1, const bvect* bv1=0, const bvect* bv2 = 0)
 {
+    // Retain both allocation strategies selected by trial parity.
+    repetitions = StressRepetitions(repetitions, 8);
+
 
    unsigned RatioSum = 0;
    unsigned SRatioSum = 0;
@@ -17248,7 +17401,7 @@ void GAPCheck()
    bvect_r.set_bit(0, false);
    //bvect_r.clear();
 
-   for (int i = 0; i < 5000; ++i)
+   for (unsigned i = 0; i < StressRepetitions(5000, 64); ++i)
    {
         unsigned* buf = (unsigned*) bvect_r.get_blocks_manager().get_block_ptr(0, 0);
         assert(buf);
@@ -17717,7 +17870,9 @@ void GAPTestStress()
     cout << "----------------------------------- GAP test stress " << endl;
     const unsigned BV_SIZE = 65535 * 3;
 
-    for (unsigned ff = 64; ff < 10000; ff++)
+    // Each density is independently rebuilt and checked over the full range.
+    for (unsigned ff = 64; ff < 10000;
+         ff = NextStressTestValue(ff, 9999u, 16))
     {
         bvect bv0, bv1;
         SimpleGapFillSets(bv0, bv1, 0, BV_SIZE, ff);
@@ -17738,7 +17893,7 @@ void GAPTestStress()
         {
             cout << "*" << flush;
         }
-    } // for j
+    } // for ff
 
     cout << "----------------------------------- GAP test stress " << endl;
 }
@@ -23287,7 +23442,8 @@ void BVImportTest()
     cout << "... import stress test" << endl;
     {
         unsigned max = 250000;
-        for (unsigned size = 1; size < max; ++size)
+        for (unsigned size = 1; size < max;
+             size = NextStressTestValue(size, max - 1, 8, 1))
         {
             std::vector<unsigned> vect;
             vect.resize(size);
@@ -23879,8 +24035,10 @@ void IntervalEnumeratorTest()
 
         unsigned delta_max = 65536*2;
         double duration = 0;
+        // Keep the full fixture and both optimization passes at each spacing.
         for (unsigned inc = 1; inc < delta_max;
-            inc += (inc < 64) ? 1 : rand()&0xF)
+             inc = is_fast ? NextFastIntervalIncrement(inc, delta_max)
+                           : inc + ((inc < 64) ? 1 : rand() & 0xF))
         {
             clock_t start = clock();
             //cout << "\rinc = " << inc << " delta_max= " << delta_max << " (" << duration << ")" << flush;
@@ -23911,7 +24069,10 @@ void IntervalEnumeratorTest()
 
                 {
                     bvect::size_type copy_to = test_max/100;
-                    for (bvect::size_type k = 1; k < copy_to; ++k)
+                    const unsigned copy_trials = StressRepetitions(unsigned(copy_to), 16);
+                    unsigned trial = 0;
+                    for (bvect::size_type k = 1; k < copy_to && trial < copy_trials;
+                         ++k, ++trial)
                     {
                         bvect bv2; bvect bv2_c;
                         bv2_c.copy_range(bv, k, copy_to);
@@ -23920,7 +24081,7 @@ void IntervalEnumeratorTest()
                         eq = bv2.equal(bv2_c);
                         assert(eq);
                         copy_to -= (unsigned) rand()%256;
-                    }
+                    } // for k
                 }
 
                 bv.optimize(tb);
@@ -23933,7 +24094,7 @@ void IntervalEnumeratorTest()
 
             cout << "\rinc = " << inc << " delta_max= " << delta_max << " (" << duration << ")" << flush;
 
-            if (inc > 65536)
+            if (!is_fast && inc > 65536)
                 inc += (unsigned) rand() % 128; // fast pace randomiser
         } // for inc
 
@@ -25190,14 +25351,16 @@ void SwapTest()
         bv2 = bv1;
         bvect::size_type j = max;
         bvect::size_type cnt = 0;
-        for (bvect::size_type i = 0; i <= j; i+=unsigned(rand()%16), j--)
+        unsigned trials = 0;
+        for (bvect::size_type i = 0; i <= j && (!is_fast || trials < 64);
+             i += unsigned(rand() % 16), --j, ++trials)
         {
             swap_bits_check(bv1, bv2, i, j);
 
             if (!is_silent)
                 if ((++cnt & 0xFFFF) == 0)
                     cout << "\r" << i << "/" << j << flush;
-        } // for
+        } // for i
     }
 
     cout << "\nStress test 2" << endl;
@@ -25207,14 +25370,16 @@ void SwapTest()
         bv2 = bv1;
         bvect::size_type j = max;
         bvect::size_type cnt = 0;
-        for (bvect::size_type i = 0; i <= j; i+=unsigned(rand()%22), j--)
+        unsigned trials = 0;
+        for (bvect::size_type i = 0; i <= j && (!is_fast || trials < 64);
+             i += unsigned(rand() % 22), --j, ++trials)
         {
             swap_bits_check(bv1, bv2, i, j);
             if (!is_silent)
                 if ((++cnt & 0xFFFF) == 0)
                     cout << "\r" << i << "/" << j << flush;
 
-        } // for
+        } // for i
     }
 
 
@@ -26414,7 +26579,7 @@ void BitSplitTest()
     } // for pass
     }
 
-    for (unsigned pass = 0; pass < 100000; ++pass)
+    for (unsigned pass = 0; pass < StressRepetitions(100000, 256); ++pass)
     {
         bm::bit_block_set(tb1, 0u); bm::bit_block_set(tb2, 0u);
         for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -27164,7 +27329,8 @@ void VerifyCountRange(const bvect& bv,
                       bvect::size_type from,
                       bvect::size_type to)
 {
-    for (bvect::size_type i = from; i < to; ++i)
+    for (bvect::size_type i = from; i < to;
+         i = from + NextStressTestValue(i - from, to - from - 1, 16, 1))
     {
         bvect::size_type cnt1 = bv.count_range(0, i);
         bvect::size_type cnt2 = bv.count_to(i, bc_arr);
@@ -28307,7 +28473,8 @@ void BitForEachTest()
 #else
 #define BITSCAN_NIBGCC bm::bitscan_nibble
 #endif
-        for (unsigned i = 0; i < 65536*10000; ++i)
+        for (unsigned i = 0; i < 65536*10000;
+             i = NextStressTestValue(i, 65536u * 10000u - 1))
         {
             unsigned bits1 = bm::bit_list(i, bit_list1);
             unsigned bits2 = bm::bit_list_4(i, bit_list2);
@@ -28337,7 +28504,7 @@ void BitForEachTest()
                     assert(0); exit(1);
                 }
             }
-        } // for
+        } // for i
     }
     
     {
@@ -28393,7 +28560,8 @@ void BitForEachTest()
     {
         unsigned bit_list3[64] = {};
         unsigned bit_list6[64] = {};
-        for (bm::id64_t i = 0; i < 65536*10000; ++i)
+        for (bm::id64_t i = 0; i < 65536*10000;
+             i = NextStressTestValue(i, bm::id64_t(65536u * 10000u - 1)))
         {
             bm::id64_t w = i | (i << 32);
             unsigned bits3 = bm::bitscan_popcnt64(w, bit_list3);
@@ -28407,7 +28575,7 @@ void BitForEachTest()
             bits3 = bm::bitscan_popcnt64(w, bit_list3);
             bits6 = bm::bitscan_bsf64(w, bit_list6);
             CheckBitList(bit_list3, bits3, bit_list6, bits6);
-        }
+        } // for i
     }
 
 
@@ -28486,7 +28654,8 @@ void Log2Test()
         }
     }
     cout << "Stage 2" << endl;
-    for (unsigned  i = 1; i <= 10000*65535; ++i)
+    for (unsigned i = 1; i <= 10000*65535;
+         i = NextStressTestValue(i, 10000u * 65535u))
     {
         unsigned l1 = bm::ilog2<unsigned>(i);
         unsigned l2 = iLog2(i);
@@ -28498,7 +28667,7 @@ void Log2Test()
             cout << l2 << " " << l3 << endl;;
             exit(1);
         }
-    }
+    } // for i
     cout << "Stage 3" << endl;
     unsigned v = 1;
     for (unsigned  i = 1; i <= 31; ++i)
@@ -28739,7 +28908,9 @@ void SelectTest()
     {
         cout << "\nSELECT stress test." << std::endl;
         const unsigned test_size = 1000000 * 10;
-        for (unsigned i = 1; i < test_size; ++i)
+        // Sample across the full word-pattern range in fast mode.
+        for (unsigned i = 1; i < test_size;
+             i = NextSelectTestPosition(i, test_size - 1))
         {
             bm::id64_t w64 = i;
             bm::id64_t w64_1 = (w64 << 32) | w64;
@@ -28789,7 +28960,7 @@ void SelectTest()
             if (!is_silent)
                 if (i % 1000000 == 0)
                     cout << "\r" << i << " - " << test_size << std::flush;
-        }
+        } // for i
     }
 
     {
@@ -28802,7 +28973,9 @@ void SelectTest()
             tb1.b_.w32[i] = ~0u;
         }
         unsigned test_size = 65535;
-        for (unsigned i = 1; i <= 65535; ++i)
+        // Keep the full block; reduce only the queried rank/range pairs.
+        for (unsigned i = 1; i <= test_size;
+             i = NextSelectTestPosition(i, test_size))
         {
             unsigned idx;
             unsigned rank = bm::bit_find_rank(tb1, i, 0, idx);
@@ -28810,7 +28983,8 @@ void SelectTest()
             cnt = bm::bit_block_calc_count_to(tb1, i-1);
             assert(idx == cnt-1);
 
-            for (unsigned j = 65535; j > i; --j)
+            for (unsigned j = test_size; j > i;
+                 j = test_size - NextSelectTestPosition(test_size - j, test_size - i))
             {
                 cnt = bm::bit_block_calc_count_range(tb1, i, j);
                 if (cnt)
@@ -28819,12 +28993,12 @@ void SelectTest()
                     assert(rank == 0);
                     assert(idx == j);
                 }
-            }
+            } // for j
 
             if (!is_silent)
                 if (i % 128 == 0)
                     cout << "\r" << i << "-" << test_size << std::flush;
-        }
+        } // for i
     }
     
     cout << "\n---------------------------- SELECT Test OK" << endl;
@@ -29181,7 +29355,7 @@ void InterpolativeCodingTest()
 
     cout << "\nu16 interpolated cm encoding Stress..." << endl;
     {
-        const unsigned code_repeats = 1000000;
+        const unsigned code_repeats = StressRepetitions(1000000, 256);
         const unsigned test_size = 12000;
         vector<gap_word_t> sa; sa.resize(test_size);
         vector<gap_word_t> da; da.resize(test_size);
@@ -29241,7 +29415,7 @@ void InterpolativeCodingTest()
         cout << "\n  random pattern" << endl;
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            sz = generate_inter_test(src_arr, k, test_size);
+            sz = generate_inter_test(src_arr, StressRepetitionIndex(k, code_repeats, 1000000), test_size);
             if (sz < 3)
                 continue;
 
@@ -29287,7 +29461,7 @@ void InterpolativeCodingTest()
 
     cout << "\nu32 interpolated cm encoding Stress..." << endl;
     {
-        const unsigned code_repeats = 1000000;
+        const unsigned code_repeats = StressRepetitions(1000000, 256);
         const unsigned test_size = 12000;
         vector<unsigned> sa; sa.resize(test_size);
         vector<unsigned> da; da.resize(test_size);
@@ -29347,7 +29521,7 @@ void InterpolativeCodingTest()
         cout << "\n  random pattern" << endl;
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            sz = generate_inter_test(src_arr, k, test_size);
+            sz = generate_inter_test(src_arr, StressRepetitionIndex(k, code_repeats, 1000000), test_size);
             if (sz < 3)
                 continue;
 
@@ -29391,7 +29565,7 @@ void InterpolativeCodingTest()
 
     cout << "\nu16 interpolated encoding Stress..." << endl;
     {
-        const unsigned code_repeats = 1000000;
+        const unsigned code_repeats = StressRepetitions(1000000, 256);
         const unsigned test_size = 65536;
         vector<bm::gap_word_t> sa; sa.resize(test_size);
         vector<bm::gap_word_t> da; da.resize(test_size);
@@ -29450,7 +29624,7 @@ void InterpolativeCodingTest()
 
         for (unsigned k = 0; k < code_repeats; ++k)
         {
-            sz = generate_inter_test(src_arr, k, 65536);
+            sz = generate_inter_test(src_arr, StressRepetitionIndex(k, code_repeats, 1000000), 65536);
             if (sz < 3)
                 continue;
             assert(sz);
@@ -29670,11 +29844,12 @@ void ArrayEncodingTest()
 
     // stress test
     {
-        for (gap_word_t i = 1; i < 65535; ++i)
+        for (unsigned i = 1; i < 65535;
+             i = NextStressTestValue(i, 65534u))
         {
             bm::gap_word_t step = bm::gap_word_t(rand() % 64);
             if (!step)
-                step = i;
+                step = bm::gap_word_t(i); // i < 65535 fits the GAP word.
             bm::gap_word_t arr[65536], arr2c[65536], arr2[65536];
 
             unsigned sz = 0;
@@ -29824,7 +29999,8 @@ void GammaEncoderTest()
     cout << "Stage 3" << endl;
 
     unsigned code_value = 65535;
-    for (unsigned i = 0; i < 10000; ++i)
+    // 66 full buffers cover all 65535 values and the wrap to 65535.
+    for (unsigned i = 0; i < StressRepetitions(10000, 66); ++i)
     {
         gap_word_t short_block[1000] = {0,};
         
@@ -29865,7 +30041,7 @@ void GammaEncoderTest()
             }
         } // for
         }
-    }
+    } // for i
 
 
     cout << "---------------------------- GammaEncoderTest Ok." << endl;
@@ -33350,14 +33526,22 @@ void TestSparseVector()
     cout << "sparse vector inc test" << endl;
     bm::sparse_vector<unsigned, bvect > sv;
     
-    for (unsigned i = 1; i < 65536; ++i)
+    unsigned previous_value = 0;
+    for (unsigned i = 1; i < 65536;
+         i = NextStressTestValue(i, 65535u, 16))
     {
         for (unsigned j = 0; j < 200000; ++j)
         {
+            // Restore skipped increments without shrinking the populated range.
+            if (is_fast && i != previous_value + 1)
+            {
+                sv.set(j, i - 1);
+            }
             sv.inc(j);
             unsigned v = sv.get(j);
             assert(v == i);
         } // for j
+        previous_value = i;
         if (!is_silent)
             if ((i % 200) == 0)
                 cout << "\r" << i << " / " << 65536 << flush;
@@ -35126,7 +35310,9 @@ void TestSparseVectorSerial()
                 //i = 59982;
                 //i = 2147491602; j = 2147551230;
 
-                for (i = from; i < j; ++i, --j)
+                for (i = from; i < j;
+                     i = from + NextStressTestValue(i - from, (to - from) / 2 - 1, 8, 1),
+                     j = to - (i - from))
                 {
                     sparse_vector_u32::bvector_type bv_mask;
                     bv_mask.set_range(i, j);
@@ -35464,7 +35650,9 @@ void TestSignedSparseVectorSerial()
                 //i = 59982;
                 //i = 2147491602; j = 2147551230;
 
-                for (i = from; i < j; ++i, --j)
+                for (i = from; i < j;
+                     i = from + NextStressTestValue(i - from, (to - from) / 2 - 1, 8, 1),
+                     j = to - (i - from))
                 {
                     sparse_vector_i32::bvector_type bv_mask;
                     bv_mask.set_range(i, j);
@@ -35888,7 +36076,8 @@ void TestSparseVectorGatherDecode()
         time_t      start_time = time(0);
         time_t      finish_time;
 
-        for (unsigned i = 0; i < probe_to; ++i)
+        for (unsigned i = 0; i < probe_to;
+             i = NextStressTestValue(i, probe_to - 1, 8, 1))
         {
             CheckSparseVectorGather(sv, i, i);
             CheckSparseVectorGather(sv2, i, i, control_value);
@@ -35916,7 +36105,8 @@ void TestSparseVectorGatherDecode()
         time_t      start_time = time(0);
         time_t      finish_time;
 
-        for (unsigned i = 0; i < probe_to; ++i)
+        for (unsigned i = 0; i < probe_to;
+             i = NextStressTestValue(i, probe_to - 1, 8, 1))
         {
             unsigned gsize = (unsigned)rand()%2024;
             CheckSparseVectorGatherRandom(sv, gsize);
@@ -36042,7 +36232,8 @@ void TestSparseVectorRange()
         }
         
         cout << "Phase 1.." << endl;
-        for (unsigned i = 0; i < sv_max; ++i)
+        for (unsigned i = 0; i < sv_max;
+             i = NextStressTestValue(i, sv_max - 1, 8, 1))
         {
             CheckSparseVectorRange(sv, 0, i);
             CheckSparseVectorRange(sv, i, sv_max+10);
@@ -36053,7 +36244,8 @@ void TestSparseVectorRange()
         
         cout << "\nPhase 2.." << endl;
         unsigned k = sv_max;
-        for (unsigned i = 0; i < k; ++i, --k)
+        for (unsigned i = 0; i < k;
+             i = NextStressTestValue(i, sv_max / 2 - 1, 8, 1), k = sv_max - i)
         {
             CheckSparseVectorRange(sv, i, k);
         }
@@ -36061,7 +36253,8 @@ void TestSparseVectorRange()
         sv.optimize();
         
         cout << "Phase 3.." << endl;
-        for (unsigned i = 0; i < sv_max; ++i)
+        for (unsigned i = 0; i < sv_max;
+             i = NextStressTestValue(i, sv_max - 1, 8, 1))
         {
             CheckSparseVectorRange(sv, 0, i);
             CheckSparseVectorRange(sv, i, sv_max+10);
@@ -36069,7 +36262,8 @@ void TestSparseVectorRange()
         
         cout << "Phase 4.." << endl;
         k = sv_max;
-        for (unsigned i = 0; i < k; ++i, --k)
+        for (unsigned i = 0; i < k;
+             i = NextStressTestValue(i, sv_max / 2 - 1, 8, 1), k = sv_max - i)
         {
             CheckSparseVectorRange(sv, i, k);
         }
@@ -36087,7 +36281,8 @@ void TestSparseVectorRange()
         }
         
         cout << "Phase 2-1.." << endl;
-        for (unsigned i = 0; i < sv_max; ++i)
+        for (unsigned i = 0; i < sv_max;
+             i = NextStressTestValue(i, sv_max - 1, 8, 1))
         {
             CheckSparseVectorRange(sv, i, i);
             CheckSparseVectorRange(sv, 0, i);
@@ -36099,7 +36294,8 @@ void TestSparseVectorRange()
         
         cout << "\nPhase 2-2.." << endl;
         unsigned k = sv_max;
-        for (unsigned i = 0; i < k; ++i, --k)
+        for (unsigned i = 0; i < k;
+             i = NextStressTestValue(i, sv_max / 2 - 1, 8, 1), k = sv_max - i)
         {
             CheckSparseVectorRange(sv, i, k);
         }
@@ -36262,13 +36458,14 @@ void TestSparseVectorFilter()
         cout << "done" << endl;
         
         const unsigned max_factor = 10000;
-        for (unsigned i = 2; i < max_factor; ++i)
+        for (unsigned i = 2; i < max_factor;
+             i = NextStressTestValue(i, max_factor - 1, 16))
         {
             CheckSparseVectorFilter(sv, i);
             if (!is_silent)
                 if (i % 256 == 0)
                     cout << "\r" << i << "/" << max_factor << flush;
-        }
+        } // for i
         cout << endl;
     }
     
@@ -37355,7 +37552,8 @@ void TestSparseVectorScan()
         {
         chrono_taker<std::ostream> ct(cerr, "sparse_vector<> search");
 
-            for (unsigned j = 0; j < sv_size; ++j)
+            for (unsigned j = 0; j < sv_size;
+                 j = NextStressTestValue(j, sv_size - 1, 16, 1))
             {
                 scanner.find_eq(sv, j, bv_control);
                 if (bv_control.count()!= 1)
@@ -37446,7 +37644,9 @@ void TestSparseVectorScan()
         cout << "Find EQ test on flat data" << endl;
         bvect::allocator_pool_type pool;
         unsigned max_value = 128000;
-        for (unsigned value = 0; value < max_value; ++value)
+        // Each value has an independent full-size fixture.
+        for (unsigned value = 0; value < max_value;
+             value = NextStressTestValue(value, max_value - 1, 32))
         {
             sparse_vector_u32 sv(bm::use_null);
             sparse_vector_u64 sv_64(bm::use_null);
@@ -37552,7 +37752,7 @@ void TestSparseVectorScan()
             if (!is_silent)
                 if (value % 256 == 0)
                     cout << "\r" << value << "/" << max_value << "    " << flush;
-        }
+        } // for value
         
         cout << endl << "Flat EQ ok" << endl;
     }
@@ -37675,7 +37875,8 @@ void TestSparseVectorScanGT()
         }
 
         // not found tests
-        for (bvect::size_type j = sv_size; j < sv_size+1024*10; ++j)
+        for (bvect::size_type j = sv_size; j < sv_size+1024*10;
+             j = sv_size + NextStressTestValue(j - sv_size, bvect::size_type(1024*10-1), 8, 1))
         {
             bvect bv_res;
             scanner.find_gt_horizontal(sv, j, bv_res);
@@ -37683,7 +37884,8 @@ void TestSparseVectorScanGT()
             assert(b);
         } // for
 
-        for (bvect::size_type j = 0; j < sv_size; ++j)
+        for (bvect::size_type j = 0; j < sv_size;
+             j = NextStressTestValue(j, bvect::size_type(sv_size - 1), 16, 1))
         {
             {
                 bvect bv_res, bv_control;
@@ -37897,7 +38099,8 @@ void TestSignedSparseVectorScanGT()
         }
 
         // not found tests
-        for (int j = sv_size; j < sv_size+1024*10; ++j)
+        for (int j = sv_size; j < sv_size+1024*10;
+             j = sv_size + int(NextStressTestValue(unsigned(j - sv_size), 1024u*10u-1u, 8, 1)))
         {
             bvect bv_res;
             scanner64.find_gt_horizontal(sv, j, bv_res);
@@ -37912,7 +38115,9 @@ void TestSignedSparseVectorScanGT()
         }
 
         unsigned i = 0;
-        for (int j = -sv_size; j < sv_size; ++j, ++i)
+        for (int j = -sv_size; j < sv_size;
+             i = NextStressTestValue(i, unsigned(2 * sv_size - 1), 16, 1),
+             j = int(i) - sv_size)
         {
             {
                 bvect bv_res, bv_control;
@@ -38004,7 +38209,8 @@ void TestSignedSparseVectorScan()
         {
         chrono_taker<std::ostream> ct(cout, "sparse_vector<> search");
 
-            for (unsigned j = 0; j < sv_size; ++j)
+            for (unsigned j = 0; j < sv_size;
+                 j = NextStressTestValue(j, sv_size - 1, 16, 1))
             {
                 int search_value;
                 if (j & 1)
@@ -38068,7 +38274,8 @@ void TestSignedSparseVectorScan()
         cout << "Find EQ test on flat data" << endl;
         bvect::allocator_pool_type pool;
         int max_value = 128000;
-        for (int value = 0; value < max_value; ++value)
+        for (int value = 0; value < max_value;
+             value = int(NextStressTestValue(unsigned(value), unsigned(max_value - 1), 16)))
         {
             sparse_vector_i32 sv(bm::use_null);
             sparse_vector_i64 sv_64(bm::use_null);
@@ -38267,7 +38474,8 @@ void TestCompressSparseGather()
     unsigned max_passes = 1024;
     unsigned sampling_delta = 3;
 
-    for (unsigned pass = 0; pass < max_passes; ++pass)
+    for (unsigned pass = 0; pass < max_passes;
+         pass = is_fast ? NextFastIntervalIncrement(pass + 1, max_passes + 1) - 1 : pass + 1)
     {
         rsc_sparse_vector_i32 csv1(bm::use_null);
         std::vector<int> vect_c;
@@ -38301,14 +38509,33 @@ void TestCompressSparseGather()
         if (pass < 10)
         {
             rsc_sparse_vector_i32::size_type rank = 0;
-            for (rsc_sparse_vector_i32::size_type i = 0; i < csv1.size(); ++i)
+            if (is_fast)
             {
-                int v;
-                bool b = csv1.try_get(i, v);
-                if (b)
+                // Exact assigned positions also verify all intervening NULL gaps.
+                assert(csv1.get_null_bvector()->count() == vect_c.size());
+                for (auto en = csv1.get_null_bvector()->first(); en.valid(); ++en)
                 {
-                    auto vc = vect_c[rank++];
-                    assert(v == vc);
+                    const auto expected_idx = bm::id64_t(test_start) +
+                        bm::id64_t(rank) * (pass + 1);
+                    assert(bm::id64_t(*en) == expected_idx);
+                    int value;
+                    bool found = csv1.try_get(*en, value);
+                    assert(found && value == vect_c[rank]);
+                    ++rank;
+                } // for en
+                assert(rank == vect_c.size());
+            }
+            else
+            {
+                for (rsc_sparse_vector_i32::size_type i = 0; i < csv1.size(); ++i)
+                {
+                    int v;
+                    bool b = csv1.try_get(i, v);
+                    if (b)
+                    {
+                        auto vc = vect_c[rank++];
+                        assert(v == vc);
+                    }
                 }
             }
         }
@@ -38332,7 +38559,8 @@ void TestCompressSparseGather()
         vbuf.resize(idx.size());
 
         auto sort_opt = bm::BM_SORTED;
-        for (unsigned gpass = 0; gpass < 5; ++gpass)
+        // Keep one sorted and one shuffled/unsorted gather per full fixture.
+        for (unsigned gpass = 0; gpass < StressRepetitions(5, 2); ++gpass)
         {
             auto sz = csv1.gather(vbuf.data(), idx.data(), idx_buf.data(),
                                   (rsc_sparse_vector_i32::size_type)idx.size(),
@@ -38903,6 +39131,9 @@ void FillSparseIntervals(std::vector<unsigned>&   vect,
 static
 void TestSparseVector_Stress(unsigned count)
 {
+    // Keep the detailed first pass and a subsequent ordinary pass.
+    count = StressRepetitions(count, 2);
+
 
     cout << "---------------------------- Bit-plane sparse vector stress" << endl;
 
@@ -38912,7 +39143,9 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < count; ++i)
     {
         unsigned fill_factor = 0;
-        for (unsigned min = 0; min < 10000000; min+= (unsigned)rand()%100000)
+        for (unsigned min = 0; min < 10000000;
+             min = is_fast ? NextStressTestValue(min, 9999999u, 8, 1)
+                           : min + unsigned(rand()) % 100000)
         {
             unsigned max = min + (65535 * 10);
             {{
@@ -38955,7 +39188,9 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < 1; ++i)
     {
         unsigned fill_factor = 0;
-        for (unsigned min = 0; min < 10000000; min+= (unsigned)rand()%100000)
+        for (unsigned min = 0; min < 10000000;
+             min = is_fast ? NextStressTestValue(min, 9999999u, 8, 1)
+                           : min + unsigned(rand()) % 100000)
         {
             unsigned max = min + (65535 * 10);
             unsigned min2 = max + (unsigned)rand() % 65536;
@@ -39060,7 +39295,7 @@ void CheckStrSVCompare(const STR_SV& str_sv,
     i = j = 0;
     auto it1 = str_sv.begin();
     auto it_end = str_sv.end();
-    for (; it1 != it_end; ++it1, ++i)
+    for (; it1 != it_end;)
     {
         const char* s1 = *it1;
         if (!s1)
@@ -39071,7 +39306,7 @@ void CheckStrSVCompare(const STR_SV& str_sv,
 
         auto it2 = str_sv.begin();
         it2.go_to(i);
-        for (j = i; j < limit; ++it2, ++j)
+        for (j = i; j < limit;)
         {
             assert(it2 != it_end);
             const char* s2 = *it2;
@@ -39083,9 +39318,29 @@ void CheckStrSVCompare(const STR_SV& str_sv,
             int r2 = ::strcmp(s1, s2);
             int r1 = str_sv.compare(i, j);
             assert (r1 == r2 || (r1 < 0 && r2 < 0) || (r1 > 0 && r2 > 0));
+            if (is_fast)
+            {
+                j = NextStressTestValue(j, limit - 1, 8, 1);
+                it2.go_to(j);
+            }
+            else
+            {
+                ++it2;
+                ++j;
+            }
         } // for j
         if ((!is_silent) && ((i & 0xFF) == 0))
             cout << "\r   " << i << " / " << (limit ? limit : str_sv.size()) << flush;
+        if (is_fast)
+        {
+            i = NextStressTestValue(i, str_sv.size() - 1, 8, 1);
+            it1.go_to(i);
+        }
+        else
+        {
+            ++it1;
+            ++i;
+        }
     } // for i
     cout << endl << endl;
 }
@@ -41337,7 +41592,8 @@ void TestStrSparseVectorSerial()
         CheckSparseVectorStringStream(str_sv1);
 
         std::vector<unsigned char> buf_v_prev;
-        for (unsigned pass = 0; pass < 10; ++pass)
+        // Keep the comparison with the previous serialized buffer.
+        for (unsigned pass = 0; pass < StressRepetitions(10, 2); ++pass)
         {
             sparse_vector_serial_layout<str_sparse_vector<char, bvect, 3> > sv_lay2;
             bm::sparse_vector_serialize<str_sparse_vector<char, bvect, 3> >(str_sv1, sv_lay2, tb);
@@ -41357,7 +41613,7 @@ void TestStrSparseVectorSerial()
             }
             buf_v_prev.resize(sv_lay2.size());
             ::memcpy((void*)buf_v_prev.data(), buf2, sv_lay2.size());
-        }
+        } // for pass
 
         std::vector<unsigned char> buf_v;
         {
@@ -41443,7 +41699,8 @@ void TestStrSparseVectorSerial()
         bvect::size_type to = from + 65536;
 
         cout << "\n   Single element deserializations... \n";
-        for (unsigned i = from; i < to; ++i)
+        for (unsigned i = from; i < to;
+             i = from + NextStressTestValue(i - from, unsigned(to - from - 1), 8, 1))
         {
             bvect bv_mask;
             bv_mask.set_range(i, i);
@@ -41477,7 +41734,8 @@ void TestStrSparseVectorSerial()
         } // for
 
         cout << "\n   Ranges deserializations... \n";
-        for (unsigned i = from; i < to; ++i)
+        for (unsigned i = from; i < to;
+             i = from + NextStressTestValue(i - from, unsigned(to - from - 1), 8, 1))
         {
             bvect bv_mask;
             bv_mask.set_range(i, to);
@@ -41605,7 +41863,8 @@ void TestStrSparseVectorSerial()
 
         bvect::size_type from = 100000-1;
         bvect::size_type to = from + 65536;
-        for (auto i = from; i < to; ++i)
+        for (auto i = from; i < to;
+             i = from + NextStressTestValue(i - from, to - from - 1, 8, 1))
         {
             bvect bv_mask;
             bv_mask.set_range(i, to);
@@ -41816,6 +42075,7 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
 
     str_svect_type::const_iterator it = str_sv.begin();
     string str;
+    unsigned next_scan = 0;
     for (unsigned i = 0; i < str_sv.size(); ++i, ++it)
     {
         assert (it.valid());
@@ -41837,16 +42097,21 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
                      << endl;
                 exit(1);
             }
-            str_svect_type::const_iterator it2 = str_sv.get_const_iterator(i);
-            assert(it == it2);
-            s = *it2;
-            cmp = ::strcmp(s, str_control.c_str());
-            if (cmp != 0)
+            // Sequential iterator checks above still cover every string.
+            if (i == next_scan)
             {
-                cerr << "2. Iterator comparison failed! " << s << " != " << str_control
-                     << endl;
-                exit(1);
+                str_svect_type::const_iterator it2 = str_sv.get_const_iterator(i);
+                assert(it == it2);
+                s = *it2;
+                cmp = ::strcmp(s, str_control.c_str());
+                if (cmp != 0)
+                {
+                    cerr << "2. Iterator comparison failed! " << s << " != " << str_control
+                         << endl;
+                    exit(1);
+                }
             }
+
         }
         int cmp = str_sv.compare(i, str_control.c_str());
         if (cmp != 0)
@@ -41877,6 +42142,13 @@ void CompareStrSparseVector(const str_svect_type& str_sv,
             }
         }
         
+       // Keep every value/iterator comparison; sample full-vector searches.
+       if (i != next_scan)
+       {
+           continue;
+       }
+       next_scan = str_sv.size() <= 65536 ? i + 1
+                   : NextStressTestValue(i, unsigned(str_sv.size() - 1), 16, 1);
        unsigned pos;
        bool found = scanner.find_eq_str(str_sv, str_control.c_str(), pos);
        if (!found)
@@ -41934,12 +42206,23 @@ void GenerateTestStrCollection(std::vector<string>& str_coll, unsigned max_coll)
     } // for i
 }
 
+/** Erase midpoint strings and validate the shifted neighbor.
+    @param str_sv Borrowed vector, modified in place. Normal mode empties it;
+        fast mode performs up to 64 erases and leaves the remaining strings.
+    Does not consume random numbers. Callers do not require an empty result.
+*/
 static
 void EraseStrCollection(str_svect_type& str_sv)
 {
     std::string s_next, s_curr;
-    while (str_sv.size())
+    auto erases = str_sv.size();
+    if (is_fast && erases > 64)
     {
+        erases = 64;
+    }
+    while (str_sv.size() && erases)
+    {
+        --erases;
         unsigned idx = str_sv.size() / 2;
         unsigned sz = str_sv.size();
         
@@ -41958,13 +42241,25 @@ void EraseStrCollection(str_svect_type& str_sv)
     }
 }
 
+/** Erase midpoint values and validate the shifted neighbor.
+    @tparam SV Sparse-vector type supporting size, get and erase.
+    @param sv Borrowed vector, modified in place. Normal mode empties it;
+        fast mode performs up to 64 erases and leaves the remaining values.
+    Does not consume random numbers. Callers do not require an empty result.
+*/
 template<typename SV>
 void EraseSVCollection(SV& sv)
 {
     typename SV::value_type v_next, v_curr;
     v_next = 0;
-    while (sv.size())
+    auto erases = sv.size();
+    if (is_fast && erases > 64)
     {
+        erases = 64;
+    }
+    while (sv.size() && erases)
+    {
+        --erases;
         auto idx = sv.size() / 2;
         auto sz = sv.size();
         
@@ -42105,10 +42400,12 @@ void StressTestStrSparseVector()
     if (test_size > 20000)
         test_size = 20000;
 
-    for (unsigned i = 0; i < test_size; ++i)
+    for (unsigned i = 0; i < test_size;
+         i = NextStressTestValue(i, test_size - 1, 8, 1))
     {
         str_sv_sorted.get(i, &str1[0], str_size);
-        for (unsigned j = 0; j < test_size; ++j)
+        for (unsigned j = 0; j < test_size;
+             j = NextStressTestValue(j, test_size - 1, 8, 1))
         {
             str_sv_sorted.get(j, &str2[0], str_size);
             unsigned octet_idx = 0;
@@ -42172,7 +42469,8 @@ void StressTestStrSparseVector()
         scanner64.bind(str_sv_remap, true); // bind sorted vector
 
 
-        for (unsigned i = 0; i < unsigned(str_coll_sorted.size()); ++i)
+        for (unsigned i = 0; i < unsigned(str_coll_sorted.size());
+             i = NextStressTestValue(i, unsigned(str_coll_sorted.size() - 1), 16, 1))
         {
             const string& s = str_coll_sorted[i];
             unsigned pos1, pos2, pos3, pos4;
@@ -44320,12 +44618,13 @@ cout << idx << endl;
 
     cout << "avx2_cmpge_u32 stress" << endl;
     {
-        for (unsigned i = 1; i < ~0u; ++i)
+        for (unsigned i = 1; i < ~0u;
+             i = NextStressTestValue(i, ~0u - 1))
         {
             __m256i vect8 = _mm256_set_epi32(-1, -1, int(i), 0, 0, 0, 0, 0);
             int pos = bm::avx2_cmpge_u32(vect8, i);
             assert(pos == 5);
-        }
+        } // for i
     }
     cout << " - ok " << endl;
 
@@ -44998,7 +45297,7 @@ void TestCompressedCollection()
     
     {
         cout << "Compressed buffer collection stress." << endl;
-        const unsigned test_count = 60;
+        const unsigned test_count = StressRepetitions(60, 8);
         for (unsigned i = 0; i < test_count; ++i)
         {
             bm::compressed_buffer_collection<bvect> cbc1;
@@ -45289,7 +45588,8 @@ void TestFindBlockDiff()
             assert(pos == k);
 
 
-            for (unsigned j = k+1; j < 65535; ++j)
+            for (unsigned j = k+1; j < 65535;
+                 j = NextStressTestValue(j, 65534u, 8, 1))
             {
                 bm::set_bit(tb1, j);
                 f = bm::bit_find_first_diff(tb1, tb2, &pos);
@@ -45575,14 +45875,16 @@ void TestBlockDigest()
         // uncomment this to fully re-check DIGEST mask (takes a very long time
         //unsigned test_to = 65536;
         unsigned test_to = 15000;
-        for (unsigned i = 0; i < test_to; ++i)
+        for (unsigned i = 0; i < test_to;
+             i = NextStressTestValue(i, test_to - 1, 8, 1))
         {
             bm::id64_t d0_c;
             d0 = bm::digest_mask(0, i);
             d0_c = bm::dm_control(0, i);
             assert(d0 == d0_c);
 
-            for (unsigned j = test_to; j > i; --j)
+            for (unsigned j = test_to; j > i;
+                 j = test_to - NextStressTestValue(test_to - j, test_to - i - 1, 8, 1))
             {
                 d0 = bm::digest_mask(i, j);
                 d0_c = bm::dm_control(i, j);
@@ -45730,7 +46032,7 @@ void TestArrMin0()
             }
         } // for w
     }
-    for (unsigned pass = 1; pass < 1024; ++pass)
+    for (unsigned pass = 1; pass < StressRepetitions(1024, 17); ++pass)
     {
         std::cout << "Stress pass " << pass << endl;
         bm::gap_word_t test_arr[65536] = {0, };
@@ -46508,6 +46810,16 @@ void DetailedCompareSparseVectors(const CSV& csv,
         }
     }
     
+    // Keep complete value validation without rebuilding ranks per lookup.
+    // Small fixtures still exercise the original unsynchronized access path.
+    std::unique_ptr<CSV> indexed;
+    if (is_fast && !csv.in_sync() && csv.size() > 65536)
+    {
+        indexed.reset(new CSV(csv));
+        indexed->sync();
+    }
+    const CSV& csv_read = indexed ? *indexed : csv;
+
     for (unsigned i = 0; i < sv_size; ++i)
     {
         bool is_null_sv = sv.is_null(i);
@@ -46535,14 +46847,14 @@ void DetailedCompareSparseVectors(const CSV& csv,
             assert(0); exit(1);
         }
         value_type v1c{0};
-        bool found = csv.try_get(i, v1c);
+        bool found = csv_read.try_get(i, v1c);
         assert(is_null_csv == !found);
         
         if (!is_null_sv)
         {
             value_type v1 = sv[i];
             value_type v1_s = sv_s[i];
-            value_type v2 = csv[i];
+            value_type v2 = csv_read[i];
             
             if (v1 != v2 || v1_s != v1 || v1c != v1)
             {
@@ -46643,11 +46955,13 @@ template<typename CSV>
 void DetailedCheckCompressedDecode(const CSV& csv)
 {
     auto size = csv.size();
+    unsigned trials = 0;
     cout << endl;
 
     {
-    unsigned size1 = 100;
-    for (unsigned i = 0; i < size1; )
+    unsigned size1 = StressRepetitions(100, 4);
+    trials = 0;
+    for (unsigned i = 0; i < size1 && (!is_fast || trials++ < 8); )
     {
         if (size == 0) break;
         CheckCompressedDecode(csv, i, size);
@@ -46661,7 +46975,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
 
     {
     unsigned size1 = 100000;
-    for (unsigned i = 0; i < size1; )
+    trials = 0;
+    for (unsigned i = 0; i < size1 && (!is_fast || trials++ < 8); )
     {
         if (size1 == 0) break;
         CheckCompressedDecode(csv, i, size1);
@@ -46675,7 +46990,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
 
     {
     unsigned size1 = size;
-    for (unsigned i = size-size/2; i < size1; )
+    trials = 0;
+    for (unsigned i = size-size/2; i < size1 && (!is_fast || trials++ < 8); )
     {
         if (size1 == 0) break;
         CheckCompressedDecode(csv, i, size1);
@@ -46686,7 +47002,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     }
     cout << endl;
 
-    for (unsigned i = size-size/2; i < size; )
+    trials = 0;
+    for (unsigned i = size-size/2; i < size && (!is_fast || trials++ < 8); )
     {
         if (size == 0) break;
         CheckCompressedDecode(csv, i, size);
@@ -46696,7 +47013,8 @@ void DetailedCheckCompressedDecode(const CSV& csv)
     }
     cout << endl;
     
-    for (unsigned i = size-size/2; i < size; )
+    trials = 0;
+    for (unsigned i = size-size/2; i < size && (!is_fast || trials++ < 8); )
     {
         if (size <= i)
             break;
@@ -47300,7 +47618,10 @@ void TestCompressSparseVector()
 
             auto sz = csv1.size();
             auto last_r = sz;
-            for (unsigned j = 0; j < sz; ++j, --sz)
+            const unsigned query_extent = unsigned(sz);
+            for (unsigned j = 0; j < sz;
+                 j = is_fast ? NextStressTestValue(j, (query_extent - 1) / 2, 16, 1) : j + 1,
+                 sz = is_fast ? query_extent - j : sz - 1)
             {
                 cnt = csv1.count_range_notnull(j, sz);
                 const bvect* bv = csv1.get_null_bvector();
@@ -47322,7 +47643,7 @@ void TestCompressSparseVector()
                     last_r = r;
                 }
 
-                if (r > 65536 && j > 65536)
+                if (!is_fast && r > 65536 && j > 65536)
                 {
                     j+= (unsigned)rand()%256;
                     sz -= (unsigned)rand()%256;
@@ -47629,7 +47950,8 @@ void TestCompressSparseVector()
         unsigned to = 65536*2;
         bv.set_range(1, to);
 
-        for (unsigned i = 1; i < to; ++i)
+        for (unsigned i = 1; i < to;
+             i = NextStressTestValue(i, to - 1, 8, 1))
         {
             rsc_sparse_vector_u32 csv1(bv);
             rsc_sparse_vector_u32 csv2(bv);
@@ -47748,52 +48070,85 @@ void TestCompressSparseVector()
 
         rsc_sparse_vector_u32 csv1;
         rsc_sparse_vector_u32 csv2(bv);
+        if (is_fast)
         {
-            bvect::enumerator en = bv.get_enumerator(mid);
-            for (;en.valid(); ++en)
+            // Preserve every populated index and final value. Sample expensive
+            // rank-based mutations after constructing the full expected fixture.
+            for (auto en = bv.first(); en.valid(); ++en)
             {
-                auto idx = *en;
-                csv1.set(idx, idx & 0xFF);
-                csv1.inc(idx);
-
-            }
-            csv1.optimize();
-            en.go_to(0);
-            for (;en.valid(); ++en)
-            {
-                auto idx = *en;
-                if (idx >= mid)
-                    break;
-                csv1.set(idx, idx & 0xFF);
-                csv1.inc(idx);
-            }
-            csv1.optimize();
-        }
-        // sync mode
-        {
+                const auto idx = *en;
+                csv1.push_back(idx, (idx & 0xFF) + 1);
+            } // for en
+            csv2 = csv1;
+            csv1.unsync();
             csv2.sync();
-            bvect::enumerator en = bv.get_enumerator(mid);
-            for (;en.valid(); ++en)
+            for (unsigned pass = 0; pass < 2; ++pass)
             {
-                auto idx = *en;
-                csv2.set(idx, idx & 0xFF);
-                csv2.inc(idx);
-            }
-            assert(csv2.in_sync());
-            csv2.optimize();
-
-            en.go_to(0);
-            for (;en.valid(); ++en)
+                const auto begin = pass ? first : mid;
+                const auto end = pass ? mid - 1 : last;
+                for (auto en = bv.get_enumerator(begin); en.valid() && *en <= end;)
+                {
+                    const auto idx = *en;
+                    csv1.set(idx, idx & 0xFF);
+                    csv1.inc(idx);
+                    csv2.set(idx, idx & 0xFF);
+                    csv2.inc(idx);
+                    assert(!csv1.in_sync() && csv2.in_sync());
+                    en.go_to(NextStressTestValue(idx, end, 16, 1));
+                } // for en
+                csv1.optimize();
+                csv2.optimize();
+            } // for pass
+        }
+        else
+        {
             {
-                auto idx = *en;
-                if (idx >= mid)
-                    break;
-                csv2.set(idx, idx & 0xFF);
-                csv2.inc(idx);
-            }
-            assert(csv2.in_sync());
-            csv2.optimize();
+                bvect::enumerator en = bv.get_enumerator(mid);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    csv1.set(idx, idx & 0xFF);
+                    csv1.inc(idx);
 
+                }
+                csv1.optimize();
+                en.go_to(0);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    if (idx >= mid)
+                        break;
+                    csv1.set(idx, idx & 0xFF);
+                    csv1.inc(idx);
+                }
+                csv1.optimize();
+            }
+            // sync mode
+            {
+                csv2.sync();
+                bvect::enumerator en = bv.get_enumerator(mid);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    csv2.set(idx, idx & 0xFF);
+                    csv2.inc(idx);
+                }
+                assert(csv2.in_sync());
+                csv2.optimize();
+
+                en.go_to(0);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    if (idx >= mid)
+                        break;
+                    csv2.set(idx, idx & 0xFF);
+                    csv2.inc(idx);
+                }
+                assert(csv2.in_sync());
+                csv2.optimize();
+
+            }
         }
         bool eq = csv1.equal(csv2);
         if (!eq)
@@ -48933,7 +49288,11 @@ void TestCompressSparseVectorSerial()
 
             size_t cnt = 0;
             auto j = to;
-            for (auto i = from; i < j; ++cnt, ++i, --j)
+            // Sample independent ranges; preserve the full fixture and both passes.
+            for (auto i = from; i < j; ++cnt,
+                 i = is_fast ? from + NextStressTestValue(
+                     i - from, (to - from) / 2 - 1, 8, 1) : i + 1,
+                 j = is_fast ? to - (i - from) : j - 1)
             {
                 bool eq;
 
@@ -49004,7 +49363,7 @@ void TestCompressSparseVectorSerial()
 
                 csv1.sync();
 
-                if (cnt < 512 || (j - i) < 65536/2)
+                if (is_fast || cnt < 512 || (j - i) < 65536/2)
                 {
                     continue;
                 }
@@ -49393,6 +49752,8 @@ void show_help()
         << "-svf1a0/1/2      - float index/gather levels 0-5 / 6 / 7-10" << endl
         << "-svf1b0/1/2      - RSC float index/gather levels 0-5 / 6 / 7-10" << endl
         << "-svf1c           - RSC float scanner tests" << endl
+        << "Options accept one or two leading hyphens (including aliases)." << endl
+        << "-fast             - reduce stress checks; incompatible with -pedantic" << endl
         << "--pedantic        - bvector and sparse-vector serialization levels 0-10" << endl
         << "-llevel (or -ll)      - low level tests" << endl
         << "-support (or -s)      - support containers " << endl
@@ -49505,7 +49866,17 @@ int parse_args(int argc, char *argv[])
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
-        if (arg == "--pedantic")
+        // Every option and alias accepts either one or two leading hyphens.
+        if (arg.size() > 2 && arg[0] == '-' && arg[1] == '-' && arg[2] != '-')
+        {
+            arg.erase(0, 1);
+        }
+        if (arg == "-fast")
+        {
+            is_fast = true;
+            continue;
+        }
+        if (arg == "-pedantic")
         {
             is_pedantic = true;
             continue;
@@ -49772,13 +50143,13 @@ int parse_args(int argc, char *argv[])
             is_c_coll = true;
             continue;
         }
-        if (arg == "-sort" || arg == "--sort")
+        if (arg == "-sort")
         {
             is_all = false;
             is_sv_sort = true;
             continue;
         }
-        if (arg == "-silent" || arg == "--silent")
+        if (arg == "-silent")
         {
             is_silent = true;
             continue;
@@ -49860,6 +50231,11 @@ int parse_args(int argc, char *argv[])
         }
 
     } // for i
+    if (is_fast && is_pedantic)
+    {
+        cerr << "-fast and -pedantic cannot be combined." << endl;
+        return 1;
+    }
     return 0;
 }
 
@@ -50559,14 +50935,14 @@ void CheckFloatStream(const SV& source, bool file = false, bool gather = false,
         SV restored(source.get_null_support());
         legacy.deserialize(restored, reinterpret_cast<const unsigned char*>(bytes.data()));
         restored.sync(true, true);
-        sparse_serial_test::CheckFloatBits(source, restored);
+        sparse_serial_test::CheckFloatBits(source, restored, nullptr, is_fast);
         if (!source.equal(restored)) throw std::runtime_error("Float legacy restore mismatch");
         io.seekg(6);
         for (unsigned repeat = 0; repeat < 2; ++repeat)
         {
             if (!reader.deserialize(restored, io)) throw std::runtime_error("Float stream read failed");
             restored.sync(true, true);
-            sparse_serial_test::CheckFloatBits(source, restored);
+            sparse_serial_test::CheckFloatBits(source, restored, nullptr, is_fast);
             if (!source.equal(restored) || io.tellg() != std::streampos(std::streamoff(6 + (repeat+1)*ram.size())))
                 throw std::runtime_error("Float stream restore/position mismatch");
         }
@@ -50608,7 +50984,7 @@ void CheckFloatStream(const SV& source, bool file = false, bool gather = false,
                 io.seekg(6);
                 if (!reader.deserialize(restored, io, &mask)) throw std::runtime_error("Float gather failed");
                 restored.sync(true, true);
-                sparse_serial_test::CheckFloatBits(expected, restored, &mask);
+                sparse_serial_test::CheckFloatBits(expected, restored, &mask, is_fast);
                 if (!expected.equal(restored) || io.tellg() != std::streampos(std::streamoff(6+ram.size())))
                     throw std::runtime_error("Float gather mismatch");
             }
@@ -51594,7 +51970,7 @@ void StrSparseVectorDeserializationIndexGatherTest()
             str_deserialization_index_collect_points(present_points, null_points,
                                                      sv_size, source_id, 2);
 
-            if (!is_silent)
+            if (!is_silent || is_fast)
             {
                 cout << "  string source distribution: " << source_names[source_id]
                      << ", " << null_variant.name
@@ -51638,14 +52014,20 @@ void StrSparseVectorDeserializationIndexGatherTest()
                 CycleSparseIndex(deserialization_index);
                 deserialization_index.optimize();
 
-                if (!is_silent)
+                if (!is_silent || is_fast)
                     cout << "    serialization variant: " << variant.name << endl;
 
                 bvect mask_bv;
-                const size_t single_total = present_points.size() + null_points.size();
+                // Retain every fixture/serialization variant; sample independent queries.
+                const unsigned present_trials = StressRepetitions(unsigned(present_points.size()), 2);
+                const unsigned null_trials = StressRepetitions(unsigned(null_points.size()), 2);
+                const size_t single_total = present_trials + null_trials;
                 size_t single_idx = 0;
-                for (size_t i = 0; i < present_points.size(); ++i, ++single_idx)
+                for (unsigned trial = 0; trial < present_trials; ++trial, ++single_idx)
                 {
+                    const size_t i = present_trials < present_points.size()
+                        ? size_t(trial) * (present_points.size() - 1) / (present_trials - 1)
+                        : trial;
                     if (!is_silent && ((single_idx & 255u) == 0))
                         cout << "\r      single point " << single_idx << "/"
                              << single_total << flush;
@@ -51654,8 +52036,11 @@ void StrSparseVectorDeserializationIndexGatherTest()
                     str_deserialization_index_check_mask(str_src, buf, mask_bv, deserialization_index,
                                                          variant.name, "single point present");
                 }
-                for (size_t i = 0; i < null_points.size(); ++i, ++single_idx)
+                for (unsigned trial = 0; trial < null_trials; ++trial, ++single_idx)
                 {
+                    const size_t i = null_trials < null_points.size()
+                        ? size_t(trial) * (null_points.size() - 1) / (null_trials - 1)
+                        : trial;
                     std::string mask_name = "single point ";
                     mask_name.append(null_variant.missing_name);
                     if (!is_silent && ((single_idx & 255u) == 0))
@@ -51672,7 +52057,7 @@ void StrSparseVectorDeserializationIndexGatherTest()
 
                 if (!is_silent)
                     cout << "      block islands" << flush;
-                for (unsigned i = 0; i < 5; ++i)
+                for (unsigned i = 0; i < StressRepetitions(5, 2); ++i)
                 {
                     if (!is_silent)
                         cout << " " << (i + 1) << "/5" << flush;
@@ -51685,8 +52070,9 @@ void StrSparseVectorDeserializationIndexGatherTest()
                     cout << endl;
 
                 const unsigned island_counts[] = { 1, 2, 4, 8, 16, 32, 64 };
-                for (unsigned attempt = 0; attempt < 32; ++attempt)
+                for (unsigned trial = 0; trial < StressRepetitions(32, 3); ++trial)
                 {
+                    const unsigned attempt = is_fast ? trial * 3 : trial;
                     if (!is_silent)
                         cout << "\r      random islands " << (attempt + 1)
                              << "/32" << flush;
@@ -53315,9 +53701,10 @@ void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all)
         testSVF.optimize(tb);
 
         std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTest(linData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -53337,9 +53724,10 @@ void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all)
         testSVF.optimize(tb);
 
         std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTest(randData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -53359,9 +53747,10 @@ void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all)
         testSVF.optimize(tb);
 
         std::cout << "-------------------------SVF Skewed Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTest(skewData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -53546,10 +53935,11 @@ void sparseVecFloatRSCScannerTests()
     
     {
         std::cout << "-------------------------SVF RCS Linear Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTestRSC(linData, testSVF, from[i], to[i]);
             
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -53575,9 +53965,10 @@ void sparseVecFloatRSCScannerTests()
 
     {
         std::cout << "-------------------------SVF RCS Random Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTestRSC(randData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -53609,9 +54000,10 @@ void sparseVecFloatRSCScannerTests()
 
     {
         std::cout << "-------------------------SVF RCS Skewed Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTestRSC(skewData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -53751,9 +54143,10 @@ void SparseVecFloatScannerUnboundedTests()
     
     {
         std::cout << "-------------------------SVF Linear Values Unbounded Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerUnboundedTest(linData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
                 std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
@@ -54720,6 +55113,10 @@ int main(int argc, char *argv[])
     auto ret = parse_args(argc, argv);
     if (ret != 0)
         return ret;
+    }
+    if (is_fast)
+    {
+        cout << "Fast mode: reduced stress repetitions; fixture sizes unchanged; SELECT sweeps sampled." << endl;
     }
     if (is_pedantic)
         cout << "Pedantic serialization: levels 0-10 for bvectors and sparse vectors; bvector pairs add one mixed case; existing bookmark policy." << endl;

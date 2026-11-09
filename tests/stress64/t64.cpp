@@ -198,6 +198,9 @@ void CycleSparseIndex(INDEX& index, bool comprehensive = false)
 
 bool is_silent = false;
 bool is_pedantic = false;
+bool is_fast = false;
+
+#include "../common/stress_workload.h"
 
 #include "../common/sparse_serial_levels_tests.h"
 #include "../common/serialization_allocator_tests.h"
@@ -1680,7 +1683,8 @@ void BVImportTest()
     cout << "... import stress test" << endl;
     {
         unsigned max = 250000;
-        for (unsigned size = 1; size < max; ++size)
+        for (unsigned size = 1; size < max;
+             size = NextStressTestValue(size, max - 1, 8, 1))
         {
             std::vector<unsigned> vect;
             vect.resize(size);
@@ -3054,7 +3058,9 @@ void IntervalEnumeratorTest()
     cout << "interval_enumerator +N stress test" << endl;
     {
         unsigned delta_max = 65536;
-        for (unsigned inc = 1; inc < delta_max; ++inc)
+        // Keep the full fixture and both optimization passes at each spacing.
+        for (unsigned inc = 1; inc < delta_max;
+             inc = is_fast ? NextFastIntervalIncrement(inc, delta_max) : inc + 1)
         {
             if (inc % 256 == 0)
                 cout << "\rinc = " << inc << " of " << delta_max << flush;
@@ -3099,7 +3105,8 @@ void VerifyCountRange(const bvect& bv,
                       bvect::size_type from,
                       bvect::size_type to)
 {
-    for (bvect::size_type i = from; i < to; ++i)
+    for (bvect::size_type i = from; i < to;
+         i = from + NextStressTestValue(i - from, to - from - 1, 16, 1))
     {
         bvect::size_type cnt1 = bv.count_range(0, i);
         bvect::size_type cnt2 = bv.count_to(i, bc_arr);
@@ -3378,7 +3385,8 @@ void CountRangeTest()
         assert(bc_arr.count() == 2);
         
         assert(bc_arr.rcount(512) == 2);
-        for (bvect::size_type i = 0; i < bm::set_total_blocks; ++i)
+        for (bvect::size_type i = 0; i < bm::set_total_blocks;
+             i = NextStressTestValue(i, bvect::size_type(bm::set_total_blocks - 1), 16, 1))
         {
             assert(bc_arr.rcount(i) == 2);
         } // for
@@ -3389,7 +3397,8 @@ void CountRangeTest()
         bvect::rs_index_type bc_arr1;
         bv1.build_rs_index(&bc_arr1);
         
-        for (bvect::size_type i = 0; i < bm::set_total_blocks; ++i)
+        for (bvect::size_type i = 0; i < bm::set_total_blocks;
+             i = NextStressTestValue(i, bvect::size_type(bm::set_total_blocks - 1), 16, 1))
         {
             assert(bc_arr1.rcount(i) == 2);
         } // for
@@ -3406,7 +3415,8 @@ void CountRangeTest()
         assert(bc_arr.count() == 2);
 
         assert(bc_arr.rcount(bm::set_total_blocks-1) == 2);
-        for (bvect::size_type i = 0; i < bm::set_total_blocks-1; ++i)
+        for (bvect::size_type i = 0; i < bm::set_total_blocks-1;
+             i = NextStressTestValue(i, bvect::size_type(bm::set_total_blocks - 2), 16, 1))
         {
             assert(bc_arr.rcount(i) == 0);
         } // for
@@ -3418,7 +3428,8 @@ void CountRangeTest()
         bv1.build_rs_index(&bc_arr1);
 
         assert(bc_arr.rcount(bm::set_total_blocks-1) == 2);
-        for (bvect::size_type i = 0; i < bm::set_total_blocks-1; ++i)
+        for (bvect::size_type i = 0; i < bm::set_total_blocks-1;
+             i = NextStressTestValue(i, bvect::size_type(bm::set_total_blocks - 2), 16, 1))
         {
             assert(bc_arr1.rcount(i) == 0);
         } // for
@@ -3438,7 +3449,8 @@ void CountRangeTest()
         assert(bc_arr.rcount(1) == 5);
         assert(bc_arr.rcount(bm::set_total_blocks-1) == 6);
 
-        for (bvect::size_type i = 2; i < bm::set_total_blocks-1; ++i)
+        for (bvect::size_type i = 2; i < bm::set_total_blocks-1;
+             i = NextStressTestValue(i, bvect::size_type(bm::set_total_blocks - 2), 16, 1))
         {
             assert(bc_arr.rcount(i) == 5);
         } // for
@@ -3939,14 +3951,15 @@ void RankFindTest()
         bv.build_rs_index(&rs_idx);
 
         bvect::size_type i;
-        for (i = 0; i <= r; ++i)
+        // Preserve the full 64-bit vector; sample rank/select queries only.
+        for (i = 0; i <= r; i = NextSelectTestPosition(i, r))
         {
             bvect::size_type ri = bv.rank(i, rs_idx);
             assert(ri == (i+1));
             bool f = bv.select(ri, pos, rs_idx);
             assert(f);
             assert(pos == i);
-        }
+        } // for i
     }
 
     
@@ -3964,7 +3977,8 @@ void RankFindTest()
         bv1.build_rs_index(&bc_arr1);
 
         
-        for (bvect::size_type i = max_size; i > min_size; --i)
+        for (bvect::size_type i = max_size; i > min_size;
+             i = max_size - NextStressTestValue(max_size - i, max_size - min_size - 1, 16, 1))
         {
             bool rf1, rf3;
             bvect::size_type pos, pos1;
@@ -4072,6 +4086,12 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step)
     cout << "   step=" << step << endl;
 
 
+    // Each query still visits and compares its complete original range.
+    if (is_fast && step < drange / 16)
+    {
+        step = drange / 16;
+    }
+
     auto pcnt = 4;
     for (auto i = left; i <= right; i+=step, right-=step)
     {
@@ -4116,6 +4136,11 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step)
             pcnt = 4;
         }
         --pcnt;
+        // Avoid wrapping a sampled high-index step beyond the query endpoint.
+        if (is_fast && (i > right || step > right - i))
+        {
+            break;
+        }
 
     } // for i
     cout << endl;
@@ -5022,7 +5047,9 @@ void BvectorBulkSetTest()
         bvect bv1c;
         std::vector<bvect::size_type> v1;
 
-        for (unsigned delta = 1; delta < delta_max; ++delta)
+        // Sample insertion spacings, retaining the full original index range.
+        for (unsigned delta = 1; delta < delta_max;
+             delta = is_fast ? NextFastIntervalIncrement(delta, delta_max) : delta + 1)
         {
             v1.resize(0);
             bvect::bulk_insert_iterator iit(bv2);
@@ -5074,10 +5101,17 @@ void BvectorBulkSetTest()
 
             //if ((delta & 0xFF) == 0)
                 cout << "\r" << delta << "/" << delta_max << flush;
-            if (delta < 128)
-                delta++;
-            else
-                delta += delta / 2;
+            if (!is_fast)
+            {
+                if (delta < 128)
+                {
+                    delta++;
+                }
+                else
+                {
+                    delta += delta / 2;
+                }
+            }
 
         } // for delta
         cout << endl;
@@ -5133,6 +5167,7 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub, bvect::si
 {
     bvect bv_subset;
     bvect::size_type bcnt = bv.count();
+    const bool fast_inverted = is_fast && limit && bcnt == bm::id_max;
     if (limit)
         bcnt = limit;
 
@@ -5145,7 +5180,21 @@ void TestRandomSubset(const bvect& bv, bm::random_subset<bvect>& rsub, bvect::si
     
     for (bvect::size_type i = 0; i < samples_size; ++i)
     {
+        // Each nonempty request rebuilds the full-universe rank index.
+        // Retain empty, singleton and maximum limited requests in fast mode.
+        if (fast_inverted && i > 1 && i + 1 < samples_size)
+        {
+            continue;
+        }
         bvect::size_type sample_count = samples[i];
+        // Keep large fixtures, but avoid massive fractional-subset repetitions.
+        // Smaller fixtures retain all original fractional/complement requests.
+        if (is_fast && bcnt > 1000000 && sample_count > 2 &&
+            sample_count != 15 && sample_count < bcnt)
+        {
+            continue;
+        }
+
         
         if (!is_silent)
             cout << "\r" << i << " / " << samples_size << " take = " << sample_count << flush;
@@ -5241,6 +5290,13 @@ void CheckVectors(bvect_mini &bvect_min,
             assert(0);
             exit(1);
         }
+    }
+
+    if (is_fast && full_count > 1000000)
+    {
+        CheckFastDenseVector(bvect_min, bvect_full);
+        cout << "Full reference bitmap comparison and sampled API checks OK" << endl;
+        return;
     }
 
     // find_last check
@@ -5589,6 +5645,21 @@ void RangeCopyTest()
 
         for (unsigned k = 0; k < 2; ++k)
         {
+            // Keep every sparse-fixture transition and its neighbors in fast mode.
+            if (is_fast)
+            {
+                for (auto en = bvect1.first(); en.valid(); ++en)
+                {
+                    const auto position = *en;
+                    const auto first = position ? position - 1 : position;
+                    const auto last = position < to_max ? position + 1 : position;
+                    for (auto query = first; query <= last; ++query)
+                    {
+                        CheckRangeCopy(bvect1, query, to_max);
+                        CheckRangeCopy(bvect1, 0, query);
+                    } // for query
+                } // for en
+            }
             cout << "Pass " << k << "-0" << endl;
             for (bvect::size_type i = 0; i < to_max;)
             {
@@ -5648,35 +5719,55 @@ void RangeCopyTest()
             const bvect::size_type to_max = bvect::size_type(bm::id_max-1);
             const bvect::size_type from = bvect::size_type(bm::id_max-1)-(200);
 
+            // Retain absolute word boundaries in the high-index window.
+            if (is_fast)
+            {
+                const bvect::size_type word_mask = 63;
+                for (auto boundary = (from + word_mask) & ~word_mask;
+                     boundary < to_max; boundary += 64)
+                {
+                    for (auto query = boundary - 1; query <= boundary + 1; ++query)
+                    {
+                        CheckRangeCopy(bvect1, query, to_max);
+                        CheckRangeCopy(bvect1, 0, query);
+                    } // for query
+                } // for boundary
+            }
             cout << "T1" << endl;
             auto to = to_max;
 
-            for (bvect::size_type i = from; i < to; ++i)
+            for (bvect::size_type i = from; i < to;
+                 i = from + NextStressTestValue(i - from, to_max - from - 1, 8, 1))
             {
                 CheckRangeCopy(bvect1, i, to);
-            }
+            } // for i
             
             cout << "T2" << endl;
             to = to_max;
-            for (bvect::size_type i = to; i > from; --i)
+            for (bvect::size_type i = to; i > from;
+                 i = to_max - NextStressTestValue(to_max - i, to_max - from - 1, 8, 1))
             {
                 CheckRangeCopy(bvect1, 0, i);
-            }
+            } // for i
             
             cout << "T3" << endl;
             to = to_max;
-            for (bvect::size_type i = from; i != to; ++i, --to)
+            // Advance the offset while preserving the original moving endpoint.
+            for (bvect::size_type i = from; i != to;
+                 i = from + NextStressTestValue(i - from, (to_max - from) / 2 - 1, 8, 1),
+                 to = to_max - (i - from))
             {
                 CheckRangeCopy(bvect1, i, to);
-            }
+            } // for i
             cout << "T4" << endl;
             to = bm::id_max-1 - to_max - 100;
-            for (bvect::size_type i = to; i < bm::id_max; ++i)
+            for (bvect::size_type i = to; i < bm::id_max;
+                 i = to + NextStressTestValue(i - to, bvect::size_type(bm::id_max - 1 - to), 16, 1))
             {
                 CheckRangeCopy(bvect1, i, bm::id_max);
                 if ((i & 0xFFFF) == 0)
                     cout << "\r" << i << flush;
-            }
+            } // for i
             cout << endl;
             to = bm::id_max-1 - to_max - 100;
             for (bvect::size_type i = to; i < bm::id_max-(65536 * 3); i+=65536 * 2)
@@ -5687,12 +5778,13 @@ void RangeCopyTest()
             {
                 cout << "T5 pass=" << k << endl;
                 to = bm::id_max-1 - to_max - (bm::gap_max_bits/2);
-                for (bvect::size_type i = to; i < bm::id_max; ++i)
+                for (bvect::size_type i = to; i < bm::id_max;
+                 i = to + NextStressTestValue(i - to, bvect::size_type(bm::id_max - 1 - to), 16, 1))
                 {
                     CheckRangeCopy(bvect1, i, bm::id_max);
                     if ((i & 0xFFFF) == 0)
                         cout << "\r" << i << flush;
-                }
+                } // for i
                 bvect1.optimize();
             }
         }
@@ -7370,7 +7462,8 @@ void DesrializationTest2()
    bvect  bvtotal;
    bvect::size_type size = BITVECT_SIZE - 10;
    BM_DECLARE_TEMP_BLOCK(tb)
-   unsigned repetitions = 10;
+   // Exercise the five-trial clear cycle and the following reuse.
+   unsigned repetitions = StressRepetitions(10, 6);
    bvect::size_type i;
 
 
@@ -7975,7 +8068,7 @@ void CheckRangeDeserial(const bvect&     bv,
 
             bvect bv_rd_m;
             bv_rd_m.set_range(from, target);
-            for (bvect::size_type i = from; i <= target; ++cnt)
+            for (bvect::size_type i = from; i <= target && (!is_fast || cnt < 32); ++cnt)
             {
                 bv_r.copy_range(bv, i, target);
                 bvect bv_rd;
@@ -7996,7 +8089,7 @@ void CheckRangeDeserial(const bvect&     bv,
 
                 auto r = target - i;
                 cout << "\r      " << r << "      " << flush;
-                if (cnt > 128 && (target - i) > 128)
+                if (cnt > StressRepetitions(128, 8) && (target - i) > 128)
                 {
                     {
                         i += bvect::size_type(rand() % max_inc);
@@ -8020,7 +8113,7 @@ void CheckRangeDeserial(const bvect&     bv,
         cnt = 0;
         bvect::size_type j = to;
 
-        for (bvect::size_type i = from; i <= j; ++i, --j, ++cnt)
+        for (bvect::size_type i = from; i <= j && (!is_fast || cnt < 32); ++i, --j, ++cnt)
         {
             bv_r.copy_range(bv, i, j);
             bvect bv_rd;
@@ -8037,7 +8130,7 @@ void CheckRangeDeserial(const bvect&     bv,
             auto r = j - i;
             cout << "\r      " << r << "      " << flush;
             // turn on random gallop mode
-            if (cnt > 100)
+            if (cnt > StressRepetitions(100, 8))
             {
                 {
                     i = bvect::size_type(i + unsigned(rand() % max_inc));
@@ -8523,7 +8616,7 @@ void BvectorShiftTest()
     //
     cout << "Aggregator based SHIFT-R tests..." << endl;
     {
-        const unsigned int REPEATS = 300;
+        const unsigned int REPEATS = StressRepetitions(300, 8);
 
         bvect mask_bv; // mask vector
         mask_bv.init();
@@ -8690,7 +8783,7 @@ void BvectorInsertTest()
         generate_bvector(bv, bm::id_max32+65536, true);
         bvect bv_control(bv);
         
-        unsigned max_shifts = 100;
+        unsigned max_shifts = StressRepetitions(100, 8);
         for (unsigned i = 0; i < max_shifts; ++i)
         {
             bvect bv2(bm::BM_GAP);
@@ -8872,7 +8965,7 @@ void BvectorEraseTest()
         
         bvect bv_c(bv);
         
-        unsigned max_erase = 256;
+        unsigned max_erase = StressRepetitions(256, 8);
         
         for(unsigned k = 0; k < max_erase; ++k)
         {
@@ -12669,6 +12762,10 @@ void TestAND_OR(bm::random_subset<bvect>& rsub,
 static
 void StressTest(unsigned repetitions, int set_operation = -1)
 {
+    // Retain both allocation strategies, the four-trial clear cycle and reuse.
+    // Generated-vector checks still cycle through all compression levels.
+    repetitions = StressRepetitions(repetitions, 6);
+
     const bvect::size_type BITVECT_SIZE = bm::id_max32 + (bm::id_max32 / 2);
 
    bvect::size_type RatioSum = 0;
@@ -13856,19 +13953,27 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
+                }
                 
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
+                }
             }
             break;
 
@@ -13915,19 +14020,27 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
+                }
                 
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
+                }
             }
             break;
 
@@ -13975,19 +14088,27 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
+                }
                 
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
+                }
             }
             
             break;
@@ -14047,19 +14168,27 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
+                }
                 
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
                 bv_target_s.clear();
                 SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
+                // The preceding pair already checks these same inputs in fast mode.
+                if (!is_fast)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
+                }
             }
             break;
         }
@@ -14782,6 +14911,8 @@ void AggregatorTest()
 static
 void StressTestAggregatorOR(unsigned repetitions)
 {
+    repetitions = StressRepetitions(repetitions, 8);
+
   bvect::size_type BITVECT_SIZE =
     bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
 
@@ -14905,6 +15036,8 @@ void StressTestAggregatorOR(unsigned repetitions)
 static
 void StressTestAggregatorAND(unsigned repetitions)
 {
+    repetitions = StressRepetitions(repetitions, 8);
+
    bvect::size_type BITVECT_SIZE =
       bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
 
@@ -15085,6 +15218,8 @@ void GenerateTestCollection(std::vector<bvect>* target,
 static
 void StressTestAggregatorShiftAND(unsigned repeats)
 {
+    repeats = StressRepetitions(repeats, 2);
+
   bvect::size_type BITVECT_SIZE =
     bvect::size_type(bm::id_max32) + ( bvect::size_type(bm::id_max32) / 2);
 
@@ -15108,7 +15243,7 @@ void StressTestAggregatorShiftAND(unsigned repeats)
         bm::aggregator<bvect> agg;
         agg.set_optimization();
 
-        unsigned shift_repeats = 65536/15;
+        unsigned shift_repeats = StressRepetitions(65536 / 15, 8);
         for (unsigned i = 0; i < shift_repeats; ++i)
         {
             bvect bv_target0(mask_bv0);
@@ -15728,14 +15863,22 @@ void TestSparseVector()
         bvect::size_type from = bm::id_max32;
         bvect::size_type to = from + 65536;
         bvect::size_type max_iter = 65536/5;
-        for (bvect::size_type i = 1; i < max_iter; ++i)
+        bvect::size_type previous_value = 0;
+        for (bvect::size_type i = 1; i < max_iter;
+             i = NextStressTestValue(i, max_iter - 1, 16))
         {
             for (auto j = from; j < to; ++j)
             {
+                // Restore skipped increments without shrinking the populated range.
+                if (is_fast && i != previous_value + 1)
+                {
+                    sv.set(j, i - 1);
+                }
                 sv.inc(j);
                 auto v = sv.get(j);
                 assert(v == i);
             } // for j
+            previous_value = i;
             if ((i & 0xFF) == 0)
             {
                 if (!is_silent)
@@ -17713,7 +17856,9 @@ void TestSparseVectorSerial()
 
             auto i = from;
             auto j = to;
-            for (i = from; i < j; ++i, --j)
+            for (i = from; i < j;
+                     i = from + NextStressTestValue(i - from, (to - from) / 2 - 1, 8, 1),
+                     j = to - (i - from))
             {
                 sparse_vector_u32::bvector_type bv_mask;
                 bv_mask.set_range(i, j);
@@ -17968,7 +18113,9 @@ void TestSignedSparseVectorSerial()
                 //i = 59982;
                 //i = 2147491602; j = 2147551230;
 
-                for (i = from; i < j; ++i, --j)
+                for (i = from; i < j;
+                     i = from + NextStressTestValue(i - from, (to - from) / 2 - 1, 8, 1),
+                     j = to - (i - from))
                 {
                     sparse_vector_i32::bvector_type bv_mask;
                     bv_mask.set_range(i, j);
@@ -18265,7 +18412,9 @@ void TestCompressSparseVectorSerial()
         const unsigned char* buf = sv_lay.buf();
 
         auto j = to;
-        for (auto i = from; i < j; ++i, --j)
+        for (auto i = from; i < j;
+             i = from + NextStressTestValue(i - from, (to - from) / 2 - 1, 8, 1),
+             j = to - (i - from))
         {
             sparse_vector_u32::bvector_type bv_mask;
             bv_mask.set_range(i, j);
@@ -18787,7 +18936,8 @@ void TestSparseVectorGatherDecode()
         time_t      start_time = time(0);
         time_t      finish_time;
 
-        for (unsigned i = 0; i < probe_to; ++i)
+        for (unsigned i = 0; i < probe_to;
+             i = NextStressTestValue(i, probe_to - 1, 8, 1))
         {
             CheckSparseVectorGather(sv, i, i);
             CheckSparseVectorGather(sv2, i, i, control_value);
@@ -18813,7 +18963,8 @@ void TestSparseVectorGatherDecode()
         time_t      start_time = time(0);
         time_t      finish_time;
 
-        for (unsigned i = 0; i < probe_to; ++i)
+        for (unsigned i = 0; i < probe_to;
+             i = NextStressTestValue(i, probe_to - 1, 8, 1))
         {
             unsigned gsize = (unsigned)rand()%2024;
             CheckSparseVectorGatherRandom(sv, gsize);
@@ -19411,12 +19562,13 @@ void TestSparseVectorFilter()
         }
         cout << "done" << endl;
         const bvect::size_type max_factor = 10000;
-        for (bvect::size_type i = 2; i < max_factor; ++i)
+        for (bvect::size_type i = 2; i < max_factor;
+             i = NextStressTestValue(i, max_factor - 1, 16))
         {
             CheckSparseVectorFilter(sv, i);
             if ((i & 0xFF) == 0)
                 cout << "\r" << i << "/" << max_factor << flush;
-        }
+        } // for i
         cout << endl;
     }
     
@@ -19496,7 +19648,8 @@ void TestSparseVectorScan()
 
         {
             chrono_taker<std::ostream> ct(cout, "sparse_vector<> search");
-            for (unsigned j = 0; j < sv_size; ++j)
+            for (unsigned j = 0; j < sv_size;
+                 j = NextStressTestValue(j, sv_size - 1, 16, 1))
             {
                 scanner.find_eq(sv, j, bv_control);
                 if (bv_control.count() != 1)
@@ -19552,7 +19705,9 @@ void TestSparseVectorScan()
         cout << "Find EQ test on flat data" << endl;
         bvect::allocator_pool_type pool;
         unsigned max_value = 1280;
-        for (unsigned value = 0; value < max_value; ++value)
+        // Each value has an independent full-size fixture.
+        for (unsigned value = 0; value < max_value;
+             value = NextStressTestValue(value, max_value - 1, 32))
         {
             sparse_vector_u32 sv(bm::use_null);
             sparse_vector_u64 sv_64(bm::use_null);
@@ -19663,7 +19818,7 @@ void TestSparseVectorScan()
             }
 
             cout << "\r" << value << "/" << max_value << "    " << flush;
-        }
+        } // for value
 
         cout << endl << "Flat EQ ok" << endl;
     }
@@ -20488,18 +20643,18 @@ void TestCompressSparseVector()
         bool same = csv1.equal(csv2);
         assert(same);
 
-        DetailedCompareSparseVectors(csv1, sv1);
+        DetailedCompareSparseVectors(csv1, sv1, is_fast);
 
         rsc_sparse_vector_u32 csv4;
         csv4 = std::move(csv1);
         v = csv4.at(10);
         assert(v == 9);
-        DetailedCompareSparseVectors(csv4, sv1);
+        DetailedCompareSparseVectors(csv4, sv1, is_fast);
 
         rsc_sparse_vector_u32 csv5(std::move(csv4));
         v = csv5.at(10);
         assert(v == 9);
-        DetailedCompareSparseVectors(csv5, sv1);
+        DetailedCompareSparseVectors(csv5, sv1, is_fast);
 
     }
 
@@ -20520,16 +20675,16 @@ void TestCompressSparseVector()
             csv1.sync();
 
             cout << "cmp 1...";
-            DetailedCompareSparseVectors(csv1, sv);
+            DetailedCompareSparseVectors(csv1, sv, is_fast);
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1, is_silent);
+                DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
             cout << "ok" << endl;
 
             cout << "cmp 2...";
             csv1.optimize(tb);
-            DetailedCompareSparseVectors(csv1, sv);
+            DetailedCompareSparseVectors(csv1, sv, is_fast);
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1, is_silent);
+                DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
             cout << "ok" << endl;
 
             cout << "cmp 3...";
@@ -20538,23 +20693,23 @@ void TestCompressSparseVector()
             sv.optimize(tb);
             rsc_sparse_vector_u32 csv2;
             csv2.load_from(sv);
-            DetailedCompareSparseVectors(csv2, sv);
+            DetailedCompareSparseVectors(csv2, sv, is_fast);
             csv1.sync();
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1, is_silent);
+                DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
 
             csv2.optimize(tb);
             csv2.sync();
 
-            DetailedCompareSparseVectors(csv2, sv);
+            DetailedCompareSparseVectors(csv2, sv, is_fast);
             if (sz < bm::id_max32*2)
-                DetailedCheckCompressedDecode(csv1, is_silent);
+                DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
             cout << "ok" << endl;
 
             cout << "cmp 4...";
             {
                 rsc_sparse_vector_u32 csv3(csv2);
-                DetailedCompareSparseVectors(csv3, sv);
+                DetailedCompareSparseVectors(csv3, sv, is_fast);
             }
             cout << "ok" << endl;
 
@@ -20562,10 +20717,10 @@ void TestCompressSparseVector()
             {
                 rsc_sparse_vector_u32 csv4;
                 csv4 = std::move(csv2);
-                DetailedCompareSparseVectors(csv4, sv);
+                DetailedCompareSparseVectors(csv4, sv, is_fast);
 
                 rsc_sparse_vector_u32 csv5(std::move(csv4));
-                DetailedCompareSparseVectors(csv5, sv);
+                DetailedCompareSparseVectors(csv5, sv, is_fast);
             }
             cout << "ok" << endl;
         } // for
@@ -20714,7 +20869,7 @@ void TestCompressSparseSignedVector()
 
         csv1.sync();
 
-        DetailedCompareSparseVectors(csv1, sv1);
+        DetailedCompareSparseVectors(csv1, sv1, is_fast);
 
         v = csv1.at(10);
         assert(v == -100);
@@ -21241,18 +21396,18 @@ void TestCompressSparseSignedVector()
         bool same = csv1.equal(csv2);
         assert(same);
 
-        DetailedCompareSparseVectors(csv1, sv1);
+        DetailedCompareSparseVectors(csv1, sv1, is_fast);
 
         rsc_sparse_vector_u32 csv4;
         csv4 = std::move(csv1);
         v = csv4.at(10);
         assert(v == 9);
-        DetailedCompareSparseVectors(csv4, sv1);
+        DetailedCompareSparseVectors(csv4, sv1, is_fast);
 
         rsc_sparse_vector_u32 csv5(std::move(csv4));
         v = csv5.at(10);
         assert(v == 9);
-        DetailedCompareSparseVectors(csv5, sv1);
+        DetailedCompareSparseVectors(csv5, sv1, is_fast);
 
     }
 
@@ -21273,14 +21428,14 @@ void TestCompressSparseSignedVector()
         csv1.sync();
 
         cout << "cmp 1...";
-        DetailedCompareSparseVectors(csv1, sv);
-        DetailedCheckCompressedDecode(csv1, is_silent);
+        DetailedCompareSparseVectors(csv1, sv, is_fast);
+        DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
         cout << "ok" << endl;
 
         cout << "cmp 2...";
         csv1.optimize(tb);
-        DetailedCompareSparseVectors(csv1, sv);
-        DetailedCheckCompressedDecode(csv1, is_silent);
+        DetailedCompareSparseVectors(csv1, sv, is_fast);
+        DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
         cout << "ok" << endl;
 
         cout << "cmp 3...";
@@ -21289,21 +21444,21 @@ void TestCompressSparseSignedVector()
         sv.optimize(tb);
         rsc_sparse_vector_i32 csv2;
         csv2.load_from(sv);
-        DetailedCompareSparseVectors(csv2, sv);
+        DetailedCompareSparseVectors(csv2, sv, is_fast);
         csv1.sync();
-        DetailedCheckCompressedDecode(csv1, is_silent);
+        DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
 
         csv2.optimize(tb);
         csv2.sync();
 
-        DetailedCompareSparseVectors(csv2, sv);
-        DetailedCheckCompressedDecode(csv1, is_silent);
+        DetailedCompareSparseVectors(csv2, sv, is_fast);
+        DetailedCheckCompressedDecode(csv1, is_silent, is_fast);
         cout << "ok" << endl;
 
         cout << "cmp 4...";
         {
         rsc_sparse_vector_i32 csv3(csv2);
-        DetailedCompareSparseVectors(csv3, sv);
+        DetailedCompareSparseVectors(csv3, sv, is_fast);
         }
         cout << "ok" << endl;
 
@@ -21311,10 +21466,10 @@ void TestCompressSparseSignedVector()
         {
         rsc_sparse_vector_i32 csv4;
         csv4 = std::move(csv2);
-        DetailedCompareSparseVectors(csv4, sv);
+        DetailedCompareSparseVectors(csv4, sv, is_fast);
 
         rsc_sparse_vector_i32 csv5(std::move(csv4));
-        DetailedCompareSparseVectors(csv5, sv);
+        DetailedCompareSparseVectors(csv5, sv, is_fast);
         }
         cout << "ok" << endl;
     } // for
@@ -21342,7 +21497,9 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < count; ++i)
     {
         unsigned fill_factor = 0;
-        for (bvect::size_type min = 0; min < 10000000; min+= (unsigned)rand()%100000)
+        for (bvect::size_type min = 0; min < 10000000;
+             min = is_fast ? NextStressTestValue(min, bvect::size_type(9999999), 8, 1)
+                           : min + unsigned(rand()) % 100000)
         {
             bvect::size_type max = min + (65535 * 10);
             {{
@@ -21387,7 +21544,9 @@ void TestSparseVector_Stress(unsigned count)
     for (unsigned i = 0; i < 1; ++i)
     {
         unsigned fill_factor = 0;
-        for (bvect::size_type min = 0; min < 10000000; min+= (unsigned)rand()%100000)
+        for (bvect::size_type min = 0; min < 10000000;
+             min = is_fast ? NextStressTestValue(min, bvect::size_type(9999999), 8, 1)
+                           : min + unsigned(rand()) % 100000)
         {
             bvect::size_type max = min + (65535 * 10);
             bvect::size_type min2 = max + (unsigned)rand() % 65536;
@@ -22308,12 +22467,23 @@ void StrSparseVectorFullTopBlockSerializationRegressionTest()
     cout << "---------------------------- String sparse vector full top-block serialization regression test OK" << endl;
 }
 
+/** Erase midpoint strings and validate the shifted neighbor.
+    @param str_sv Borrowed vector, modified in place. Normal mode empties it;
+        fast mode performs up to 64 erases and leaves the remaining strings.
+    Does not consume random numbers. Callers do not require an empty result.
+*/
 static
 void EraseStrCollection(str_svect_type& str_sv)
 {
     std::string s_next, s_curr;
-    while (str_sv.size())
+    auto erases = str_sv.size();
+    if (is_fast && erases > 64)
     {
+        erases = 64;
+    }
+    while (str_sv.size() && erases)
+    {
+        --erases;
         bvect::size_type idx = str_sv.size() / 2;
         bvect::size_type sz = str_sv.size();
         
@@ -22537,13 +22707,25 @@ void TestStrSparseSort()
 
 }
 
+/** Erase midpoint values and validate the shifted neighbor.
+    @tparam SV Sparse-vector type supporting size, get and erase.
+    @param sv Borrowed vector, modified in place. Normal mode empties it;
+        fast mode performs up to 64 erases and leaves the remaining values.
+    Does not consume random numbers. Callers do not require an empty result.
+*/
 template<typename SV>
 void EraseSVCollection(SV& sv)
 {
     typename SV::value_type v_next, v_curr;
     v_next = v_curr = 0;
-    while (sv.size())
+    auto erases = sv.size();
+    if (is_fast && erases > 64)
     {
+        erases = 64;
+    }
+    while (sv.size() && erases)
+    {
+        --erases;
         auto idx = sv.size() / 2;
         auto sz = sv.size();
         
@@ -23449,14 +23631,14 @@ void CheckFloatStream(const SV& source, bool file = false, bool gather = false,
         SV restored(source.get_null_support());
         legacy.deserialize(restored, reinterpret_cast<const unsigned char*>(bytes.data()));
         restored.sync(true, true);
-        sparse_serial_test::CheckFloatBits(source, restored);
+        sparse_serial_test::CheckFloatBits(source, restored, nullptr, is_fast);
         if (!source.equal(restored)) throw std::runtime_error("Float legacy restore mismatch");
         io.seekg(6);
         for (unsigned repeat = 0; repeat < 2; ++repeat)
         {
             if (!reader.deserialize(restored, io)) throw std::runtime_error("Float stream read failed");
             restored.sync(true, true);
-            sparse_serial_test::CheckFloatBits(source, restored);
+            sparse_serial_test::CheckFloatBits(source, restored, nullptr, is_fast);
             if (!source.equal(restored) || io.tellg() != std::streampos(std::streamoff(6 + (repeat+1)*ram.size())))
                 throw std::runtime_error("Float stream restore/position mismatch");
         }
@@ -23498,7 +23680,7 @@ void CheckFloatStream(const SV& source, bool file = false, bool gather = false,
                 io.seekg(6);
                 if (!reader.deserialize(restored, io, &mask)) throw std::runtime_error("Float gather failed");
                 restored.sync(true, true);
-                sparse_serial_test::CheckFloatBits(expected, restored, &mask);
+                sparse_serial_test::CheckFloatBits(expected, restored, &mask, is_fast);
                 if (!expected.equal(restored) || io.tellg() != std::streampos(std::streamoff(6+ram.size())))
                     throw std::runtime_error("Float gather mismatch");
             }
@@ -24923,7 +25105,8 @@ void SparseVecFloatScannerTests()
 
     {
         std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTest(linData, testSVF, from[i], to[i]);
         }
     }
@@ -24941,7 +25124,8 @@ void SparseVecFloatScannerTests()
 
     {
         std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < random_tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(random_tests, 8); ++i)
+        {
             runSVFScannerTest(randData, testSVF, from[i], to[i]);
         }
     }
@@ -24957,7 +25141,8 @@ void SparseVecFloatScannerTests()
 
     {
         std::cout << "-------------------------SVF Skewed Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTest(skewData, testSVF, from[i], to[i]);
         }
     }
@@ -25390,7 +25575,8 @@ void sparseVecFloatRSCScannerTests()
 
     {
         std::cout << "-------------------------SVF RCS Linear Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTestRSC(linData, testSVF, from[i], to[i]);
         }
     }
@@ -25413,7 +25599,8 @@ void sparseVecFloatRSCScannerTests()
 
     {
         std::cout << "-------------------------SVF RCS Random Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTestRSC(randData, testSVF, from[i], to[i]);
         }
     }
@@ -25441,7 +25628,8 @@ void sparseVecFloatRSCScannerTests()
 
     {
         std::cout << "-------------------------SVF RCS Skewed Values Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerTestRSC(skewData, testSVF, from[i], to[i]);
         }
     }
@@ -25553,9 +25741,10 @@ void SparseVecFloatScannerUnboundedTests()
     
     {
         std::cout << "-------------------------SVF Linear Values Unbounded Scanner" << std::endl;
-        for(unsigned int i = 0; i < tests; i++){
+        for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
+        {
             runSVFScannerUnboundedTest(linData, testSVF, from[i], to[i]);
-            float progress_pct = ((float)(i + 1) / (float)tests) * 100.0f;
+            float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             std::cout << "\r" << std::fixed << std::setprecision(1) << progress_pct << "% " << std::flush;
         }
     }
@@ -25650,7 +25839,8 @@ void TestCompressSparseGather()
     const unsigned max_passes = is_pedantic ? 1024u : 16u;
     unsigned sampling_delta = 3;
 
-    for (unsigned pass = 0; pass < max_passes; ++pass)
+    for (unsigned pass = 0; pass < max_passes;
+         pass = is_fast ? NextFastIntervalIncrement(pass + 1, max_passes + 1) - 1 : pass + 1)
     {
         rsc_sparse_vector_i32 csv1(bm::use_null);
         std::vector<int> vect_c;
@@ -25685,14 +25875,33 @@ void TestCompressSparseGather()
         if (pass < 10)
         {
             rsc_sparse_vector_i32::size_type rank = 0;
-            for (rsc_sparse_vector_i32::size_type i = 0; i < csv1.size(); ++i)
+            if (is_fast)
             {
-                int v;
-                bool b = csv1.try_get(i, v);
-                if (b)
+                // Exact assigned positions also verify all intervening NULL gaps.
+                assert(csv1.get_null_bvector()->count() == vect_c.size());
+                for (auto en = csv1.get_null_bvector()->first(); en.valid(); ++en)
                 {
-                    auto vc = vect_c[rank++];
-                    assert(v == vc);
+                    const auto expected_idx = bm::id64_t(test_start) +
+                        bm::id64_t(rank) * (pass + 1);
+                    assert(bm::id64_t(*en) == expected_idx);
+                    int value;
+                    bool found = csv1.try_get(*en, value);
+                    assert(found && value == vect_c[rank]);
+                    ++rank;
+                } // for en
+                assert(rank == vect_c.size());
+            }
+            else
+            {
+                for (rsc_sparse_vector_i32::size_type i = 0; i < csv1.size(); ++i)
+                {
+                    int v;
+                    bool b = csv1.try_get(i, v);
+                    if (b)
+                    {
+                        auto vc = vect_c[rank++];
+                        assert(v == vc);
+                    }
                 }
             }
         }
@@ -25716,7 +25925,8 @@ void TestCompressSparseGather()
         vbuf.resize(idx.size());
 
         auto sort_opt = bm::BM_SORTED;
-        for (unsigned gpass = 0; gpass < 5; ++gpass)
+        // Keep one sorted and one shuffled/unsorted gather per full fixture.
+        for (unsigned gpass = 0; gpass < StressRepetitions(5, 2); ++gpass)
         {
             auto sz = csv1.gather(vbuf.data(), idx.data(), idx_buf.data(),
                                   (rsc_sparse_vector_i32::size_type)idx.size(),
@@ -26414,7 +26624,7 @@ void TestCompressedCollection()
     
     {
         cout << "Compressed buffer collection stress." << endl;
-        const unsigned test_count = 160;
+        const unsigned test_count = StressRepetitions(160, 8);
         for (unsigned i = 0; i < test_count; ++i)
         {
             bm::compressed_buffer_collection<bvect> cbc1;
@@ -26746,6 +26956,8 @@ void show_help()
         << "-svf1a0/1/2      - float index/gather levels 0-5 / 6 / 7-10" << endl
         << "-svf1b0/1/2      - RSC float index/gather levels 0-5 / 6 / 7-10" << endl
         << "-svf1c           - RSC float scanner tests" << endl
+        << "Options accept one or two leading hyphens (including aliases)." << endl
+        << "-fast             - reduce stress checks; incompatible with -pedantic" << endl
         << "--pedantic        - bvector and sparse-vector serialization levels 0-10" << endl
         << "-llevel (or -ll)  - low level tests" << endl
         << "-support (or -s)  - support containers " << endl
@@ -26830,11 +27042,21 @@ int parse_args(int argc, char *argv[])
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
+        // Every option and alias accepts either one or two leading hyphens.
+        if (arg.size() > 2 && arg[0] == '-' && arg[1] == '-' && arg[2] != '-')
+        {
+            arg.erase(0, 1);
+        }
+        if (arg == "-fast")
+        {
+            is_fast = true;
+            continue;
+        }
         if (arg == "-svser")
         {
             is_all = false; is_sv_ser = true; continue;
         }
-        if (arg == "--pedantic")
+        if (arg == "-pedantic")
         {
             is_pedantic = true;
             continue;
@@ -26989,7 +27211,7 @@ int parse_args(int argc, char *argv[])
             is_nostress = true;
             continue;
         }
-        if (arg == "-silent" || arg == "--silent")
+        if (arg == "-silent")
         {
             is_silent = true;
             continue;
@@ -27035,6 +27257,11 @@ int parse_args(int argc, char *argv[])
         }
 
     } // for i
+    if (is_fast && is_pedantic)
+    {
+        cerr << "-fast and -pedantic cannot be combined." << endl;
+        return 1;
+    }
     return 0;
 }
 
@@ -27140,6 +27367,10 @@ int main(int argc, char *argv[])
     auto ret = parse_args(argc, argv);
     if (ret != 0)
         return ret;
+    }
+    if (is_fast)
+    {
+        cout << "Fast mode: reduced stress repetitions; fixture sizes unchanged; SELECT sweeps sampled." << endl;
     }
     if (is_pedantic)
         cout << "Pedantic serialization: levels 0-10 for bvectors and sparse vectors; bvector pairs add one mixed case; existing bookmark policy." << endl;

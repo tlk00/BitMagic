@@ -13,6 +13,7 @@ RUN_NAME=""
 LOG_DIR="logs/parallel"
 FAIL_FAST=0
 PEDANTIC_ARGS=()
+FAST=0
 ONLY_STRESS=0
 NO_STRESS=0
 TESTS=()
@@ -22,7 +23,10 @@ usage()
     cat <<EOF
 Usage: $0 [runner options] [test selectors]
 
-  --pedantic          Sweep bvector and sparse-vector serialization levels 0-10
+  -fast, --fast        Reduce stress checks; keep fixture sizes
+                      Incompatible with -pedantic / --pedantic.
+  -pedantic, --pedantic
+                      Sweep bvector and sparse-vector serialization levels 0-10
                       Bvector pairs: 11 same-level + 1 mixed case.
                       Sparse vectors: 11 levels; full float bookmark variants at level 6.
                       Sampled interval-16 float bookmarks at levels 7-10.
@@ -44,7 +48,7 @@ Runner options:
   --heavy-first         Use learned longest-first order (also the default).
                         New selectors run first; missing selectors are ignored.
                         History: ./logs/parallel/order.tsv, shared by all builds.
-                        Completed jobs update history, including failed runs.
+                        Completed non-fast jobs update history, including failed runs.
   -onlystress,
     --only-stress       Pass -onlystress to every t64.cpp test process
   -nostress,
@@ -151,7 +155,11 @@ while [ "$#" -gt 0 ]; do
             LOG_DIR="$2"
             shift 2
             ;;
-        --pedantic)
+        -fast|--fast)
+            FAST=1
+            shift
+            ;;
+        -pedantic|--pedantic)
             PEDANTIC_ARGS=(--pedantic)
             shift
             ;;
@@ -197,6 +205,11 @@ done
 
 if [ "$ONLY_STRESS" -ne 0 ] && [ "$NO_STRESS" -ne 0 ]; then
     echo "--only-stress and --no-stress are mutually exclusive" >&2
+    exit 2
+fi
+
+if [ "$FAST" -ne 0 ] && [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
+    echo "--fast and --pedantic are mutually exclusive" >&2
     exit 2
 fi
 
@@ -247,8 +260,14 @@ RUN_LOG_DIR="$(cd "$RUN_LOG_DIR" && pwd)" || exit 1
 # One learned order per suite, independent of binary and log-directory overrides.
 # Rows contain selector and latest elapsed seconds, sorted longest first.
 ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
-mkdir -p "$(dirname "$ORDER_FILE")" || exit 1
-touch "$ORDER_FILE" || exit 1
+# Fast timings are not representative: use existing history read-only.
+ORDER_INPUT="$ORDER_FILE"
+if [ "$FAST" -eq 0 ]; then
+    mkdir -p "$(dirname "$ORDER_FILE")" || exit 1
+    touch "$ORDER_FILE" || exit 1
+elif [ ! -f "$ORDER_FILE" ]; then
+    ORDER_INPUT=/dev/null
+fi
 
 # Unknown selectors precede timed selectors; ties preserve selection order.
 ORDERED_TESTS=()
@@ -262,7 +281,7 @@ done < <(
              }
              { known = ($1 in duration)
                print known, (known ? duration[$1] : 0), FNR, $1 }' \
-            "$ORDER_FILE" - |
+            "$ORDER_INPUT" - |
         LC_ALL=C sort -k1,1n -k2,2nr -k3,3n |
         awk '{ print $4 }'
 )
@@ -272,6 +291,8 @@ TESTS=("${ORDERED_TESTS[@]}")
 # Keep other selectors for future targeted runs; scheduling filters them out.
 record_timing()
 {
+    # Keep elapsed times in the report, but never learn weights from fast runs.
+    [ "$FAST" -eq 0 ] || return 0
     local selector="$1" duration="$2" temporary
     temporary="$(mktemp "${ORDER_FILE}.XXXXXX")" || return 1
     if awk -v selector="$selector" -v duration="$duration" '
@@ -346,6 +367,9 @@ start_test()
     worker_args=("$test_opt" -silent)
     if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
         worker_args[${#worker_args[@]}]=--pedantic
+    fi
+    if [ "$FAST" -ne 0 ]; then
+        worker_args[${#worker_args[@]}]=--fast
     fi
 
     if [ "$ONLY_STRESS" -ne 0 ]; then
@@ -427,6 +451,9 @@ if [ "$ONLY_STRESS" -ne 0 ]; then
     echo "Test mode    : only stress loops"
 elif [ "$NO_STRESS" -ne 0 ]; then
     echo "Test mode    : no stress loops"
+fi
+if [ "$FAST" -ne 0 ]; then
+    echo "Workload     : fast (reduced stress checks; timing weights not updated)"
 fi
 if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
     echo "Serialization: pedantic bvector/sparse-vector levels 0-10 (bvector pairs add one mixed case)"

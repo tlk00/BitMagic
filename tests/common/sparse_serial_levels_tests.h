@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <bmserial_profile.h>
+#include "stress_workload.h"
 
 // Additional serialization contracts shared by the new fixtures. The existing
 // 32-/64-bit generators, reference comparisons and bookmark policies stay local.
@@ -93,10 +94,19 @@ inline uint32_t FloatBits(float value)
     return bits;
 }
 
-// Supplement the existing value/equality checks; never replace them. Enumerate
-// NULL maps so large logical gaps in BM64/RSC vectors do not require dense scans.
+/** Supplement equality checks with exact float bit probes.
+    @tparam SV Float sparse-vector type; source and restored share the type.
+    @param source Expected vector, borrowed for this call.
+    @param restored Vector to validate, borrowed for this call.
+    @param requested Optional borrowed gather mask; NULL checks all positions.
+    @param fast Driver fast-mode flag. Large non-nullable vectors retain exact
+        plane equality and sample redundant point probes. Small masks and NULL
+        maps retain their full point enumeration.
+    @pre Include after defining is_fast; fast may be true only in that mode.
+    Does not modify vectors or random-generator state.
+*/
 template<class SV> void CheckFloatBits(const SV& source, const SV& restored,
-    const typename SV::bvector_type* requested = nullptr)
+    const typename SV::bvector_type* requested = nullptr, bool fast = false)
 {
     if constexpr (std::is_same<typename SV::value_type, float>::value)
     {
@@ -111,6 +121,20 @@ template<class SV> void CheckFloatBits(const SV& source, const SV& restored,
             if (requested) selected &= *requested;
             for (auto en = selected.first(); en.valid(); ++en)
                 assert(FloatBits(source.get(*en)) == FloatBits(restored.get(*en)));
+        }
+        else if (fast && (requested ? requested->count() : source.size()) > 65536)
+        {
+            // equal() compares all sign/exponent/mantissa planes, including
+            // zero gaps. Bound only the supplementary per-position probes.
+            assert(source.equal(restored));
+            for (typename SV::size_type i = 0; i < source.size();
+                 i = NextStressTestValue(i, source.size() - 1, 32))
+            {
+                if (!requested || requested->test(i))
+                {
+                    assert(FloatBits(source.get(i)) == FloatBits(restored.get(i)));
+                }
+            } // for i
         }
         else if (requested)
         {

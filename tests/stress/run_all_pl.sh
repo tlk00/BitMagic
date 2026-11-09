@@ -16,6 +16,7 @@ STOP_FILE=""
 ORDER_FILE=""
 STOP_REQUESTED=0
 PEDANTIC_ARGS=()
+FAST=0
 TESTS=()
 
 usage()
@@ -23,7 +24,10 @@ usage()
     cat <<EOF
 Usage: $0 [runner options] [test selectors]
 
-  --pedantic          Sweep bvector and sparse-vector serialization levels 0-10
+  -fast, --fast        Reduce stress checks; keep fixture sizes
+                      Incompatible with -pedantic / --pedantic.
+  -pedantic, --pedantic
+                      Sweep bvector and sparse-vector serialization levels 0-10
                       Bvector pairs: 11 same-level + 1 mixed case.
                       Sparse vectors: 11 levels; full float bookmark variants at level 6.
                       Sampled interval-16 float bookmarks at levels 7-10.
@@ -47,7 +51,7 @@ Runner options:
   --heavy-first         Use learned longest-first order (also the default).
                         New selectors run first; missing selectors are ignored.
                         Default history: ./logs/parallel/order.tsv.
-                        Completed jobs update history, including failed runs.
+                        Completed non-fast jobs update history, including failed runs.
   --order-file FILE     Share learned timing history at FILE across runs.
   -h, --help            Display this help and exit
 
@@ -172,7 +176,11 @@ while [ "$#" -gt 0 ]; do
             LOG_DIR="$2"
             shift 2
             ;;
-        --pedantic)
+        -fast|--fast)
+            FAST=1
+            shift
+            ;;
+        -pedantic|--pedantic)
             PEDANTIC_ARGS=(--pedantic)
             shift
             ;;
@@ -214,6 +222,11 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
+
+if [ "$FAST" -ne 0 ] && [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
+    echo "--fast and --pedantic are mutually exclusive" >&2
+    exit 2
+fi
 
 ARCH="$(uname -m)"
 
@@ -267,8 +280,14 @@ RUN_LOG_DIR="$(cd "$RUN_LOG_DIR" && pwd)" || exit 1
 # One learned order per suite, independent of binary and log-directory overrides.
 # Rows contain selector and latest elapsed seconds, sorted longest first.
 [ -n "$ORDER_FILE" ] || ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
-mkdir -p "$(dirname "$ORDER_FILE")" || exit 1
-touch "$ORDER_FILE" || exit 1
+# Fast timings are not representative: use existing history read-only.
+ORDER_INPUT="$ORDER_FILE"
+if [ "$FAST" -eq 0 ]; then
+    mkdir -p "$(dirname "$ORDER_FILE")" || exit 1
+    touch "$ORDER_FILE" || exit 1
+elif [ ! -f "$ORDER_FILE" ]; then
+    ORDER_INPUT=/dev/null
+fi
 
 # Unknown selectors precede timed selectors; ties preserve selection order.
 ORDERED_TESTS=()
@@ -282,7 +301,7 @@ done < <(
              }
              { known = ($1 in duration)
                print known, (known ? duration[$1] : 0), FNR, $1 }' \
-            "$ORDER_FILE" - |
+            "$ORDER_INPUT" - |
         LC_ALL=C sort -k1,1n -k2,2nr -k3,3n |
         awk '{ print $4 }'
 )
@@ -292,6 +311,8 @@ TESTS=("${ORDERED_TESTS[@]}")
 # Keep other selectors for future targeted runs; scheduling filters them out.
 record_timing()
 {
+    # Keep elapsed times in the report, but never learn weights from fast runs.
+    [ "$FAST" -eq 0 ] || return 0
     local selector="$1" duration="$2" temporary
     temporary="$(mktemp "${ORDER_FILE}.XXXXXX")" || return 1
     if awk -v selector="$selector" -v duration="$duration" '
@@ -367,6 +388,9 @@ start_test()
     if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
         worker_args[${#worker_args[@]}]=--pedantic
     fi
+    if [ "$FAST" -ne 0 ]; then
+        worker_args[${#worker_args[@]}]=--fast
+    fi
 
     # Every background process uses -silent to keep its log small.
     "$RUN_PATH" "${worker_args[@]}" >"$log_file" 2>&1 &
@@ -438,6 +462,9 @@ echo "Binary       : $RUN_PATH"
 echo "Parallel jobs: $JOBS"
 echo "Schedule     : learned heavy-first (new jobs first)"
 echo "Order file   : $ORDER_FILE"
+if [ "$FAST" -ne 0 ]; then
+    echo "Workload     : fast (reduced stress checks; timing weights not updated)"
+fi
 if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
     echo "Serialization: pedantic bvector/sparse-vector levels 0-10 (bvector pairs add one mixed case)"
 else

@@ -17,6 +17,8 @@ For more information please visit:  http://bitmagic.io
 */
 
 
+#include <memory>
+
 /// Load bit-vector using ref syntax
 ///
 template<typename BV, typename VT, typename TOut>
@@ -526,8 +528,17 @@ void bulk_load_SV_set_ref(SV* sv, const VT& vect)
     bi.flush();
 }
 
+/** Verify compressed-vector values, NULL layout and serialization.
+    @tparam CSV Compressed sparse-vector type.
+    @tparam SV Independent nullable sparse-vector reference type.
+    @param csv Borrowed compressed input; not modified.
+    @param sv Borrowed expected input; not modified.
+    @param fast Use indexed reads for large unsynchronized inputs and enumerate
+        assigned values after complete NULL-map comparison. Defaults to the
+        original exhaustive checks. Mismatches assert or terminate the test.
+*/
 template<typename CSV, typename SV>
-void DetailedCompareSparseVectors(const CSV& csv, const SV& sv)
+void DetailedCompareSparseVectors(const CSV& csv, const SV& sv, bool fast = false)
 {
     SV   sv_s(bm::use_null);  // sparse vector decompressed
 
@@ -581,7 +592,7 @@ void DetailedCompareSparseVectors(const CSV& csv, const SV& sv)
     }
     if (!sv_size)
         return;
- 
+
     {
         int cmp;
         cmp = bv_null_sv->compare(*bv_null_sv_s);
@@ -636,50 +647,76 @@ void DetailedCompareSparseVectors(const CSV& csv, const SV& sv)
 
 
     cout << "detailed compare from=" << sv_first << " to=" << sv_size << "..." << flush;
-    for (typename SV::size_type i = sv_first; i < sv_size; ++i)
+    std::unique_ptr<CSV> indexed;
+    if (fast && !csv.in_sync() && csv.size() > 65536)
     {
-        bool is_null_sv = sv.is_null(i);
-        bool is_null_sv_s = sv_s.is_null(i);
-        bool is_null_csv = csv.is_null(i);
-        if (is_null_sv != is_null_csv || is_null_sv != is_null_sv_s)
+        indexed.reset(new CSV(csv));
+        indexed->sync();
+    }
+    const CSV& csv_read = indexed ? *indexed : csv;
+    if (fast && sv_size > 65536)
+    {
+        // NULL planes were compared completely above; check every assigned value.
+        for (auto en = bv_null_sv->first(); en.valid(); ++en)
         {
-            cerr << "Detailed csv check failed (null mismatch) at i=" << i
-                << " sv=" << is_null_sv
-                << " sv_s=" << is_null_sv_s
-                << " csv=" << is_null_csv
-                << endl;
-            int cmp = bv_null_sv->compare(*bv_null_csv);
-            if (cmp != 0)
-            {
-                cerr << "1. cmp=" << cmp << endl;
-                exit(1);
-            }
-            cmp = bv_null_sv->compare(*bv_null_sv_s);
-            if (cmp != 0)
-            {
-                cerr << "2. cmp=" << cmp << endl;
-                exit(1);
-            }
-
-            assert(0); exit(1);
-        }
-        if (!is_null_sv)
-        {
-            auto v1 = sv[i];
-            auto v1_s = sv_s[i];
-            auto v2 = csv[i];
-
+            const auto i = *en;
+            const auto v1 = sv[i];
+            const auto v1_s = sv_s[i];
+            const auto v2 = csv_read[i];
             if (v1 != v2 || v1_s != v1)
             {
-                cerr << "Detailed csv check failed (value mismatch) at i=" << i
-                    << " v1=" << v1
-                    << " v1_s=" << v1_s
-                    << " v2=" << v2
-                    << endl;
-                assert(0);  exit(1);
+                cerr << "Detailed csv assigned-value mismatch at i=" << i << endl;
+                assert(0); exit(1);
             }
-        }
-    } // for
+        } // for en
+    }
+    else
+    {
+        for (typename SV::size_type i = sv_first; i < sv_size; ++i)
+        {
+            bool is_null_sv = sv.is_null(i);
+            bool is_null_sv_s = sv_s.is_null(i);
+            bool is_null_csv = csv.is_null(i);
+            if (is_null_sv != is_null_csv || is_null_sv != is_null_sv_s)
+            {
+                cerr << "Detailed csv check failed (null mismatch) at i=" << i
+                    << " sv=" << is_null_sv
+                    << " sv_s=" << is_null_sv_s
+                    << " csv=" << is_null_csv
+                    << endl;
+                int cmp = bv_null_sv->compare(*bv_null_csv);
+                if (cmp != 0)
+                {
+                    cerr << "1. cmp=" << cmp << endl;
+                    exit(1);
+                }
+                cmp = bv_null_sv->compare(*bv_null_sv_s);
+                if (cmp != 0)
+                {
+                    cerr << "2. cmp=" << cmp << endl;
+                    exit(1);
+                }
+
+                assert(0); exit(1);
+            }
+            if (!is_null_sv)
+            {
+                auto v1 = sv[i];
+                auto v1_s = sv_s[i];
+                auto v2 = csv_read[i];
+
+                if (v1 != v2 || v1_s != v1)
+                {
+                    cerr << "Detailed csv check failed (value mismatch) at i=" << i
+                        << " v1=" << v1
+                        << " v1_s=" << v1_s
+                        << " v2=" << v2
+                        << endl;
+                    assert(0);  exit(1);
+                }
+            }
+        } // for
+    }
     cout << "OK" << endl;
 
 
@@ -738,16 +775,26 @@ void CheckCompressedDecode(const CSV& csv,
     }
 }
 
+/** Validate full decode results over repeated query ranges.
+    @tparam CSV Compressed sparse-vector type.
+    @param csv Borrowed input; not modified.
+    @param silent Suppress progress output.
+    @param fast Keep all query-sweep shapes with 4 prefix and at most 8 other
+        trials per sweep. Defaults to original repetitions and random draws.
+    Selected trials retain their full decode buffers and original random steps.
+*/
 template<typename CSV>
-void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false)
+void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false, bool fast = false)
 {
     auto size = csv.size();
+    unsigned trials = 0;
     if (!silent)
         cout << endl;
 
     {
-        typename CSV::size_type size1 = 100;
-        for (typename CSV::size_type i = 0; i < size1; )
+        trials = 0;
+        typename CSV::size_type size1 = fast ? 4 : 100;
+        for (typename CSV::size_type i = 0; i < size1 && (!fast || trials++ < 8); )
         {
             CheckCompressedDecode(csv, i, size);
             if (!silent && i % 128 == 0)
@@ -759,8 +806,9 @@ void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false)
         cout << endl;
 
     {
+        trials = 0;
         typename CSV::size_type size1 = 100000;
-        for (typename CSV::size_type i = 0; i < size1; )
+        for (typename CSV::size_type i = 0; i < size1 && (!fast || trials++ < 8); )
         {
             CheckCompressedDecode(csv, i, size1);
             if (!silent)
@@ -773,8 +821,9 @@ void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false)
         cout << endl;
 
     {
+        trials = 0;
         typename CSV::size_type size1 = size;
-        for (typename CSV::size_type i = size - size / 2; i < size1; )
+        for (typename CSV::size_type i = size - size / 2; i < size1 && (!fast || trials++ < 8); )
         {
             CheckCompressedDecode(csv, i, size1);
             if (!silent)
@@ -785,7 +834,8 @@ void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false)
     if (!silent)
         cout << endl;
 
-    for (typename CSV::size_type i = size - size / 2; i < size; )
+    trials = 0;
+    for (typename CSV::size_type i = size - size / 2; i < size && (!fast || trials++ < 8); )
     {
         CheckCompressedDecode(csv, i, size);
         if (!silent)
@@ -795,7 +845,8 @@ void DetailedCheckCompressedDecode(const CSV& csv, bool silent = false)
     if (!silent)
         cout << endl;
 
-    for (typename CSV::size_type i = size - size / 2; i < size; )
+    trials = 0;
+    for (typename CSV::size_type i = size - size / 2; i < size && (!fast || trials++ < 8); )
     {
         if (size <= i)
             break;
