@@ -244,8 +244,8 @@ bash tests/tagent/run_tagent.sh --sound-preview repo-unchanged
 ```
 
 While perf variants run, every ten minutes TAgent prints the progress of every
-active variant and announces one variant in rotation using the configured Piper
-voice or a female eSpeak conductor voice. Progress counts complete timing-result lines
+active variant and announces one variant in rotation using the separate Piper
+conductor voice or a female eSpeak fallback. Progress counts complete timing-result lines
 ending in `ms`, `sec` or `min`; blank lines, headers, informational lines and
 incomplete lines are excluded. These are observed benchmark results, not a
 prediction of the total number of tests. Without TTS, a short neutral sound
@@ -313,6 +313,9 @@ bash tests/tagent/run_tagent.sh --sound-theme steampunk --sound-preview build-fi
 to prerecorded audio or non-verbal effects if neither works. `TTS_MODE=off`
 disables both engines. By default Piper uses `~/piper-demo/.venv/bin/python`
 and `~/piper-demo/en_US-lessac-medium.onnx` with its `.onnx.json` file alongside.
+The perf conductor uses `~/piper-demo/en_GB-southern_english_female-low.onnx`
+instead; configure it with `PIPER_CONDUCTOR_MODEL` or `--piper-conductor-model`.
+The conductor voice is prepared when perf starts, or before its sound preview.
 Change `PIPER_PYTHON` and `PIPER_MODEL` in the launcher or environment, or use
 `--piper-python` and `--piper-model`, to select another installation or voice.
 When needed, TAgent creates the default user-local virtual environment and

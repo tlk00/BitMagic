@@ -132,6 +132,8 @@ def arguments():
                         help='use local Piper or eSpeak NG when available')
     parser.add_argument('--piper-python', default=os.environ.get('PIPER_PYTHON', '~/piper-demo/.venv/bin/python'))
     parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL', '~/piper-demo/en_US-lessac-medium.onnx'))
+    parser.add_argument('--piper-conductor-model', default=os.environ.get(
+        'PIPER_CONDUCTOR_MODEL', '~/piper-demo/en_GB-southern_english_female-low.onnx'))
     parser.add_argument('--no-piper-install', action='store_true',
                         default=os.environ.get('PIPER_INSTALL', 'yes') == 'no',
                         help='do not create a user virtual environment or install Piper')
@@ -230,11 +232,20 @@ class Agent:
                            shutil.which('espeak-ng'))
         self.piper_python = Path(args.piper_python).expanduser()
         self.piper_model = Path(args.piper_model).expanduser()
+        self.piper_conductor_model = Path(args.piper_conductor_model).expanduser()
         self.piper_available = (self.piper_python.is_file() and os.access(self.piper_python, os.X_OK)
                                 and self.piper_model.is_file() and self.piper_model.stat().st_size > 0
                                 and Path(str(self.piper_model) + '.json').is_file()
                                 and Path(str(self.piper_model) + '.json').stat().st_size > 0)
         self.piper_failed = False
+        self.piper_conductor_available = (self.piper_python.is_file() and
+            os.access(self.piper_python, os.X_OK) and self.piper_conductor_model.is_file() and
+            self.piper_conductor_model.stat().st_size > 0 and
+            Path(str(self.piper_conductor_model) + '.json').is_file() and
+            Path(str(self.piper_conductor_model) + '.json').stat().st_size > 0)
+        self.piper_conductor_failed = False
+        self.conductor_download_thread = None
+        self.conductor_download_lock = threading.Lock()
         self.piper_download_thread = None
         self.perf_workers = set()
         self.perf_logs = {}
@@ -554,22 +565,50 @@ class Agent:
                       '--disable-pip-version-check', 'piper-tts'], timeout=300)
         self.command(probe, timeout=20)
 
-    def download_piper_voice(self, voice):
+    def start_conductor_download(self):
+        """Prepare the conductor's separate Piper voice without delaying tests."""
+        if (self.args.tts != 'auto' or self.args.no_sound or self.args.sound_volume == 0
+                or self.args.check or self.piper_conductor_available or self.args.no_piper_download):
+            return
+        with self.conductor_download_lock:
+            if self.conductor_download_thread:
+                return
+            voice = self.piper_conductor_model.stem
+            if (self.piper_conductor_model.suffix != '.onnx' or not re.fullmatch(
+                    r'[A-Za-z]{2,3}_[A-Za-z]{2}-[A-Za-z0-9_]+-(?:x_low|low|medium|high)', voice)):
+                self.say('Conductor Piper voice path is not a downloadable voice name; using fallback')
+                return
+            def prepare():
+                """Wait for shared engine setup before provisioning the conductor voice."""
+                if self.piper_download_thread:
+                    while self.piper_download_thread.is_alive() and not self.stopping.is_set():
+                        self.piper_download_thread.join(timeout=.25)
+                if not self.stopping.is_set():
+                    self.download_piper_voice(voice, self.piper_conductor_model, conductor=True)
+            self.conductor_download_thread = threading.Thread(target=prepare, daemon=True)
+            self.conductor_download_thread.start()
+
+    def download_piper_voice(self, voice, target_model=None, conductor=False):
         """Prepare Piper and stage a missing voice; failures preserve TTS fallback."""
+        target_model = target_model or self.piper_model
         try:
             self.ensure_piper_engine()
-            config_path = Path(str(self.piper_model) + '.json')
-            if (self.piper_model.is_file() and self.piper_model.stat().st_size > 0 and
+            config_path = Path(str(target_model) + '.json')
+            if (target_model.is_file() and target_model.stat().st_size > 0 and
                     config_path.is_file() and config_path.stat().st_size > 0):
-                self.piper_available = True
-                self.piper_failed = False
-                self.say('TTS: Piper ready (' + str(self.piper_model) + ')')
+                if conductor:
+                    self.piper_conductor_available = True
+                    self.piper_conductor_failed = False
+                else:
+                    self.piper_available = True
+                    self.piper_failed = False
+                self.say('TTS: Piper ready (' + str(target_model) + ')')
                 return
             if self.args.no_piper_download:
                 return
             self.say('Piper voice missing; downloading {}'.format(voice))
-            self.piper_model.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix='.tagent-piper-', dir=self.piper_model.parent) as temp:
+            target_model.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix='.tagent-piper-', dir=target_model.parent) as temp:
                 directory = Path(temp)
                 model = directory / (voice + '.onnx')
                 config = Path(str(model) + '.json')
@@ -584,15 +623,19 @@ class Agent:
                 with wave.open(str(probe), 'rb') as stream:
                     if stream.getnchannels() != 1 or stream.getsampwidth() != 2 or not stream.getnframes():
                         raise ValueError('Piper produced invalid test audio')
-                for source, target in ((model, self.piper_model),
-                                       (config, Path(str(self.piper_model) + '.json'))):
+                for source, target in ((model, target_model),
+                                       (config, Path(str(target_model) + '.json'))):
                     if not target.is_file() or not target.stat().st_size:
                         os.replace(source, target)
-                self.piper_available = (self.piper_model.is_file() and
-                                        Path(str(self.piper_model) + '.json').is_file())
-                if self.piper_available:
+                ready = target_model.is_file() and Path(str(target_model) + '.json').is_file()
+                if conductor:
+                    self.piper_conductor_available = ready
+                    self.piper_conductor_failed = False
+                else:
+                    self.piper_available = ready
                     self.piper_failed = False
-                    self.say('TTS: Piper voice ready (' + str(self.piper_model) + ')')
+                if ready:
+                    self.say('TTS: Piper voice ready (' + str(target_model) + ')')
         except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
             if not self.stopping.is_set():
                 self.say('Piper setup or voice download failed ({}); continuing with TTS fallback'.format(error))
@@ -685,6 +728,7 @@ class Agent:
         if self.depot:
             self.depot.set_mode('train')
         if phase == 'perf':
+            self.start_conductor_download()
             self.next_perf_report = time.monotonic() + 600
             self.perf_report_index = 0
         if self.next_train_at == math.inf:
@@ -753,7 +797,7 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
-    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build'):
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False):
         """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
 
         voice is a callable so eSpeak voice selection happens only when needed.
@@ -761,24 +805,31 @@ class Agent:
         """
         if self.args.tts != 'auto':
             return None
-        if (not self.tts_engine and (not self.piper_available or self.piper_failed)
+        available = (self.piper_conductor_available and not self.piper_conductor_failed if conductor
+                     else self.piper_available and not self.piper_failed)
+        model = self.piper_conductor_model if conductor else self.piper_model
+        if (not self.tts_engine and not available
                 and not self.tts_warned):
             self.tts_warned = True
             self.say('TTS unavailable; using prerecorded voice or sound')
-        if not self.tts_engine and (not self.piper_available or self.piper_failed):
+        if not self.tts_engine and not available:
             return None
         if callable(text):
             text = text()
         with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
             speech = Path(temp) / 'speech.wav'
-            if self.piper_available and not self.piper_failed:
+            if available:
                 try:
-                    self.command([str(self.piper_python), '-m', 'piper', '-m', str(self.piper_model),
+                    self.command([str(self.piper_python), '-m', 'piper', '-m', str(model),
                                   '-f', str(speech), '--', text], timeout=60)
                     return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           workers, self.jobs, background=background)
+                                                           workers, self.jobs, background=background,
+                                                           voice_gain=.85)
                 except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                    self.piper_failed = True
+                    if conductor:
+                        self.piper_conductor_failed = True
+                    else:
+                        self.piper_failed = True
                     fallback = 'eSpeak NG' if self.tts_engine else 'prerecorded audio or sound'
                     self.say('Piper unavailable or failed ({}); falling back to {}'.format(error, fallback))
                     speech.unlink(missing_ok=True)
@@ -787,7 +838,8 @@ class Agent:
                     self.command([self.tts_engine, '-v', voice(), '-s', '145', '-p', str(pitch),
                                   '-w', str(speech), text], timeout=15)
                     return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           workers, self.jobs, background=background)
+                                                           workers, self.jobs, background=background,
+                                                           voice_gain=.85)
                 except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
                     if not self.tts_warned:
                         self.tts_warned = True
@@ -920,7 +972,7 @@ class Agent:
             return random.choice(voices or ['en-us+f3'])
         spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
         message = 'Conductor reporting. {} completed {} tests.'.format(spoken_name, count)
-        duration = self.synthesize_announcement(path, message, female_voice, 50)
+        duration = self.synthesize_announcement(path, message, female_voice, 50, conductor=True)
         if duration is not None:
             return duration
         return soundtrack.render(path, self.args.sound_theme, 'start', self.args.sound_volume, 1, self.jobs)
@@ -1149,6 +1201,11 @@ class Agent:
         if (self.args.sound_demo or self.args.sound_preview) and self.piper_download_thread:
             while self.piper_download_thread.is_alive() and not self.stopping.is_set():
                 self.piper_download_thread.join(timeout=.25)
+        if self.args.sound_demo or self.args.sound_preview == 'perf-progress':
+            self.start_conductor_download()
+            if self.conductor_download_thread:
+                while self.conductor_download_thread.is_alive() and not self.stopping.is_set():
+                    self.conductor_download_thread.join(timeout=.25)
         if self.args.sound_demo:
             self.say('SOUND DEMO | ' + self.args.sound_theme +
                      ' | volume ' + str(self.args.sound_volume))

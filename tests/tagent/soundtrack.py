@@ -54,18 +54,20 @@ def render_dispatch(path, volume=0.35):
     return frames / RATE
 
 
-def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, background="train"):
+def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, background="train", voice_gain=1.0):
     """Mix mono 16-bit TTS with quiet procedural steam/wheels into a mono WAV.
 
     voice_path must be a nonempty, uncompressed, mono 16-bit PCM WAV; arbitrary
     positive sample rates are linearly resampled to RATE. volume is [0,1], and
     workers/budget control wheel cadence; background is train or quiet build steam.
-    Returns output duration in seconds.
+    voice_gain adjusts speech independently of the sound bed. Returns duration.
     """
     if not math.isfinite(volume) or not 0 <= volume <= 1:
         raise ValueError('Volume must be between 0 and 1')
     if background not in ('train', 'build'):
         raise ValueError('Invalid voice background')
+    if not math.isfinite(voice_gain) or not 0 <= voice_gain <= 1:
+        raise ValueError('Invalid voice gain')
     with wave.open(str(voice_path), 'rb') as source:
         if source.getnchannels() != 1 or source.getsampwidth() != 2 or source.getcomptype() != 'NONE':
             raise ValueError('TTS must produce mono 16-bit PCM')
@@ -94,7 +96,7 @@ def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, backg
         bed = .04 * filtered
         if background == 'train':
             bed += .14 * wheel_clatter(t, rail_rate, filtered) + .02 * math.sin(2 * math.pi * 42 * t)
-        sample = round(32767 * volume * (.85 * spoken + fade * bed))
+        sample = round(32767 * volume * (.85 * voice_gain * spoken + fade * bed))
         result.append(max(-32768, min(32767, sample)))
     if sys.byteorder != 'little':
         result.byteswap()
