@@ -232,16 +232,20 @@ successful/failed build summaries. Each successful fetch or remote check prints
 the result. During tests a remote check detects commits without fetching or
 changing the checkout until a safe boundary. Optional TTS announces new updates
 or a clear line; without TTS, different short sound effects indicate each case.
+After fetched changes are applied and a build is due, the dispatcher announces
+that the freight train is diverted to the build depot. A check during active
+tests only announces that updates were detected.
 The random choice applies to periodic test sounds, not to demo previews.
 
 ```sh
 bash tests/tagent/run_tagent.sh --sound-preview repo-new
+bash tests/tagent/run_tagent.sh --sound-preview repo-build
 bash tests/tagent/run_tagent.sh --sound-preview repo-unchanged
 ```
 
 While perf variants run, every ten minutes TAgent prints the progress of every
-active variant and announces one variant in rotation using a female conductor
-voice when eSpeak NG is available. Progress counts complete timing-result lines
+active variant and announces one variant in rotation using the configured Piper
+voice or a female eSpeak conductor voice. Progress counts complete timing-result lines
 ending in `ms`, `sec` or `min`; blank lines, headers, informational lines and
 incomplete lines are excluded. These are observed benchmark results, not a
 prediction of the total number of tests. Without TTS, a short neutral sound
@@ -274,8 +278,8 @@ warning formats may not be recognized; the currently unfinished line is counted
 when it completes, or when its build ends. This is a count of log diagnostic
 lines, not unique issues or a full code analysis.
 
-With eSpeak NG, the dispatcher announces the exact warning and build-target
-counts. The voice is selected from `DISPATCHER_VOICE` (default
+With Piper or eSpeak NG, the dispatcher announces the exact warning and build-target
+counts. For eSpeak, the voice is selected from `DISPATCHER_VOICE` (default
 `en-us+f3,en-us+f4,en-us+m3`; set one voice or a comma-separated list via the
 launcher or `--dispatcher-voice`). At zero warnings, randomized reports mention
 clear tracks, weather, snow, avalanches or signals; above zero the dispatcher
@@ -285,7 +289,7 @@ At the end of the build, success or failure, TAgent prints the recognized
 compiler/linker `error:` (including `fatal error:`) and `warning:` line totals
 across both build logs. A failed build remains failed even if its failure produced
 no recognized diagnostic lines. In steampunk mode, the dispatcher announces the
-same totals. With eSpeak NG they are spoken naturally; without TTS, prerecorded
+same totals. With TTS they are spoken dynamically; without TTS, prerecorded
 fragments announce exact numbers digit by digit. Unrecognized formats are not
 included. Build failures still propagate their original exit status.
 When TTS is unavailable or disabled, bundled female-voice WAVs report either no
@@ -305,9 +309,20 @@ bash tests/tagent/run_tagent.sh --sound-theme steampunk --sound-preview build-fi
 
 ## Optional local text-to-speech
 
-`run_tagent.sh` checks for `espeak-ng` at startup. `TTS_MODE=auto` (default)
-uses it only for the steampunk dispatch voice; `TTS_MODE=off` always uses the
-bundled WAV. `TTS_VOICE=en-us+m3` selects the eSpeak voice. Both settings can be
+`TTS_MODE=auto` (default) prefers local Piper, falls back to `espeak-ng`, then
+to prerecorded audio or non-verbal effects if neither works. `TTS_MODE=off`
+disables both engines. By default Piper uses `~/piper-demo/.venv/bin/python`
+and `~/piper-demo/en_US-lessac-medium.onnx` with its `.onnx.json` file alongside.
+Change `PIPER_PYTHON` and `PIPER_MODEL` in the launcher or environment, or use
+`--piper-python` and `--piper-model`, to select another installation or voice.
+If the Python environment exists but the named Piper voice is missing, TAgent
+downloads it in the background, validates it by generating a short WAV, and
+uses eSpeak or the existing sound fallback until it is ready. Downloads are
+bounded and failures do not stop tests. A standalone sound preview waits for
+the download attempt before playing. Set `PIPER_DOWNLOAD=no` or pass
+`--no-piper-download` to disable this behavior. Piper itself is not installed
+automatically. `TTS_VOICE=en-us+m3` selects the
+eSpeak voice. These settings can be
 edited at the top of the launcher, set in the environment, or overridden by
 `--tts auto|off` and `--tts-voice NAME`. Synthesis runs in the audio thread, has
 a 15-second timeout, and needs no network. Missing/failing TTS is reported and

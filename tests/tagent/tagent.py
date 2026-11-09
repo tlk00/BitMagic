@@ -129,13 +129,18 @@ def arguments():
                         default=float(os.environ.get('SOUND_VOLUME', '0.35')))
     parser.add_argument('--tts', choices=('auto', 'off'),
                         default=os.environ.get('TTS_MODE', 'auto'),
-                        help='use local eSpeak NG when available, or use recorded voice')
+                        help='use local Piper or eSpeak NG when available')
+    parser.add_argument('--piper-python', default=os.environ.get('PIPER_PYTHON', '~/piper-demo/.venv/bin/python'))
+    parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL', '~/piper-demo/en_US-lessac-medium.onnx'))
+    parser.add_argument('--no-piper-download', action='store_true',
+                        default=os.environ.get('PIPER_DOWNLOAD', 'yes') == 'no',
+                        help='do not download a missing Piper voice')
     parser.add_argument('--tts-voice', default=os.environ.get('TTS_VOICE', 'en-us+m3'))
     parser.add_argument('--dispatcher-voice', default=os.environ.get('DISPATCHER_VOICE', 'en-us+f3,en-us+f4,en-us+m3'),
                         help='comma-separated eSpeak NG voices for build reports')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', choices=soundtrack.EVENTS + ('all', 'perf-progress', 'repo-new', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', choices=soundtrack.EVENTS + ('all', 'perf-progress', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='Play one event, or all sounds when omitted, without Git/build validation')
     args = parser.parse_args()
     args.full_sound_preview = args.sound_preview == 'all'
@@ -220,6 +225,14 @@ class Agent:
         self.tts_engine = (os.environ.get('TAGENT_TTS_ENGINE') if
                            os.environ.get('TAGENT_TTS_CHECKED') == '1' else
                            shutil.which('espeak-ng'))
+        self.piper_python = Path(args.piper_python).expanduser()
+        self.piper_model = Path(args.piper_model).expanduser()
+        self.piper_available = (self.piper_python.is_file() and os.access(self.piper_python, os.X_OK)
+                                and self.piper_model.is_file() and self.piper_model.stat().st_size > 0
+                                and Path(str(self.piper_model) + '.json').is_file()
+                                and Path(str(self.piper_model) + '.json').stat().st_size > 0)
+        self.piper_failed = False
+        self.piper_download_thread = None
         self.perf_workers = set()
         self.perf_logs = {}
         self.perf_report_lock = threading.Lock()
@@ -482,11 +495,59 @@ class Agent:
                 self.audio_available = False
                 self.say('No audio player found and console unavailable; continuing without sound')
         if self.args.sound_theme == 'steampunk' and self.args.tts == 'auto':
-            if self.tts_engine:
+            if self.piper_available:
+                self.say('TTS: Piper available (' + str(self.piper_model) + ')')
+            elif self.tts_engine:
                 self.say('TTS: eSpeak NG available (' + self.tts_engine + ')')
             else:
                 self.tts_warned = True
                 self.say('TTS: eSpeak NG unavailable; using prerecorded voice')
+
+    def start_piper_download(self):
+        """Download a missing named voice in the background when Piper is installed."""
+        if (self.args.tts != 'auto' or self.args.no_sound or self.args.sound_volume == 0
+                or self.args.no_piper_download or self.args.check or self.piper_available
+                or not self.piper_python.is_file() or not os.access(self.piper_python, os.X_OK)):
+            return
+        voice = self.piper_model.stem
+        if self.piper_model.suffix != '.onnx' or not re.fullmatch(r'[A-Za-z]{2,3}_[A-Za-z]{2}-[A-Za-z0-9_]+-(?:x_low|low|medium|high)', voice):
+            self.say('Piper voice path is not a downloadable voice name; using fallback')
+            return
+        self.say('Piper voice missing; downloading {} in background'.format(voice))
+        self.piper_download_thread = threading.Thread(target=self.download_piper_voice,
+                                                      args=(voice,), daemon=True)
+        self.piper_download_thread.start()
+
+    def download_piper_voice(self, voice):
+        """Stage and validate a voice before installing missing files; never block tests."""
+        try:
+            self.piper_model.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix='.tagent-piper-', dir=self.piper_model.parent) as temp:
+                directory = Path(temp)
+                model = directory / (voice + '.onnx')
+                config = Path(str(model) + '.json')
+                self.command([str(self.piper_python), '-m', 'piper.download_voices',
+                              '--data-dir', str(directory), voice], timeout=120)
+                if not model.is_file() or not model.stat().st_size or not config.is_file():
+                    raise ValueError('download did not produce both voice files')
+                json.loads(config.read_text())
+                probe = directory / 'probe.wav'
+                self.command([str(self.piper_python), '-m', 'piper', '-m', str(model),
+                              '-f', str(probe), '--', 'Voice ready.'], timeout=60)
+                with wave.open(str(probe), 'rb') as stream:
+                    if stream.getnchannels() != 1 or stream.getsampwidth() != 2 or not stream.getnframes():
+                        raise ValueError('Piper produced invalid test audio')
+                for source, target in ((model, self.piper_model),
+                                       (config, Path(str(self.piper_model) + '.json'))):
+                    if not target.is_file() or not target.stat().st_size:
+                        os.replace(source, target)
+                self.piper_available = (self.piper_model.is_file() and
+                                        Path(str(self.piper_model) + '.json').is_file())
+                if self.piper_available:
+                    self.say('TTS: Piper voice ready (' + str(self.piper_model) + ')')
+        except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+            if not self.stopping.is_set():
+                self.say('Piper voice download failed ({}); continuing with TTS fallback'.format(error))
 
     def wait_for_audio(self, timeout=300):
         """Wait in short interruptible steps for a bounded in-flight audio clip.
@@ -644,25 +705,57 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build'):
+        """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
+
+        voice is a callable so eSpeak voice selection happens only when needed.
+        Both engines use agent-owned processes and retain the standard sound fallback.
+        """
+        if self.args.tts != 'auto':
+            return None
+        if (not self.tts_engine and (not self.piper_available or self.piper_failed)
+                and not self.tts_warned):
+            self.tts_warned = True
+            self.say('TTS unavailable; using prerecorded voice or sound')
+        if not self.tts_engine and (not self.piper_available or self.piper_failed):
+            return None
+        if callable(text):
+            text = text()
+        with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+            speech = Path(temp) / 'speech.wav'
+            if self.piper_available and not self.piper_failed:
+                try:
+                    self.command([str(self.piper_python), '-m', 'piper', '-m', str(self.piper_model),
+                                  '-f', str(speech), '--', text], timeout=60)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           workers, self.jobs, background=background)
+                except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                    self.piper_failed = True
+                    fallback = 'eSpeak NG' if self.tts_engine else 'prerecorded audio or sound'
+                    self.say('Piper unavailable or failed ({}); falling back to {}'.format(error, fallback))
+                    speech.unlink(missing_ok=True)
+            if self.tts_engine:
+                try:
+                    self.command([self.tts_engine, '-v', voice(), '-s', '145', '-p', str(pitch),
+                                  '-w', str(speech), text], timeout=15)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           workers, self.jobs, background=background)
+                except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                    if not self.tts_warned:
+                        self.tts_warned = True
+                        self.say('TTS unavailable or failed ({}); using sound fallback'.format(error))
+        return None
+
     def render_build_report(self, path, report):
         """Synthesize a status snapshot or use the prerecorded warning fallback."""
         if isinstance(report, tuple):
             count, *progress = report
         else:
             count, progress = report, None
-        if self.args.tts == 'auto' and self.tts_engine:
-            try:
-                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
-                    speech = Path(temp) / 'speech.wav'
-                    self.command([self.tts_engine, '-v', self.dispatcher_voice(),
-                                  '-s', '145', '-p', '57' if count else '50',
-                                  '-w', str(speech), build_report_text(count, progress)], timeout=15)
-                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           1, self.jobs, background='build')
-            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                if not self.tts_warned:
-                    self.tts_warned = True
-                    self.say('TTS unavailable or failed ({}); using prerecorded voice'.format(error))
+        duration = self.synthesize_announcement(path, lambda: build_report_text(count, progress),
+                                                self.dispatcher_voice, 57 if count else 50)
+        if duration is not None:
+            return duration
         asset = Path(soundtrack.__file__).resolve().parent / 'assets' / (
             'build-warning.wav' if count else 'build-clear.wav')
         return soundtrack.mix_dynamic_dispatch(asset, path, self.args.sound_volume,
@@ -671,22 +764,11 @@ class Agent:
     def render_build_summary(self, path, result):
         """Announce final success and exact diagnostic counts, with offline fallback."""
         errors, warnings, success = result
-        if self.args.tts == 'auto' and self.tts_engine:
-            try:
-                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
-                    speech = Path(temp) / 'speech.wav'
-                    text = ('Dispatch to BitMagic. Build {}. {} compiler errors. '
-                            '{} compiler warnings.'.format('complete' if success else 'failed',
-                                                           errors, warnings))
-                    self.command([self.tts_engine, '-v', self.dispatcher_voice(),
-                                  '-s', '145', '-p', '50' if success else '57',
-                                  '-w', str(speech), text], timeout=15)
-                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           1, self.jobs, background='build')
-            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                if not self.tts_warned:
-                    self.tts_warned = True
-                    self.say('TTS unavailable or failed ({}); using prerecorded voice'.format(error))
+        text = ('Dispatch to BitMagic. Build {}. {} compiler errors. '
+                '{} compiler warnings.'.format('complete' if success else 'failed', errors, warnings))
+        duration = self.synthesize_announcement(path, text, self.dispatcher_voice, 50 if success else 57)
+        if duration is not None:
+            return duration
         return soundtrack.render_build_summary_fallback(path, errors, warnings, success,
                                                         self.args.sound_volume)
 
@@ -704,24 +786,13 @@ class Agent:
         path is the output file; workers is the last observed active test-process
         count. A missing engine, bad voice, timeout or invalid WAV never stops tests.
         """
-        if self.args.tts == 'auto' and not self.tts_engine and not self.tts_warned:
-            self.tts_warned = True
-            self.say('TTS: eSpeak NG unavailable; using prerecorded voice')
-        if self.args.tts == 'auto' and self.tts_engine:
-            try:
-                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
-                    speech = Path(temp) / 'speech.wav'
-                    count = max(1, int(workers))
-                    crew = 'crew' if count == 1 else 'crews'
-                    text = 'BitMagic freight rolling. {} test {} at work.'.format(count, crew)
-                    self.command([self.tts_engine, '-v', self.args.tts_voice,
-                                  '-s', '145', '-p', '40', '-w', str(speech), text], timeout=15)
-                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           count, self.jobs)
-            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                if not self.tts_warned:
-                    self.tts_warned = True
-                    self.say('TTS unavailable or failed ({}); using prerecorded voice'.format(error))
+        count = max(1, int(workers))
+        crew = 'crew' if count == 1 else 'crews'
+        text = 'BitMagic freight rolling. {} test {} at work.'.format(count, crew)
+        duration = self.synthesize_announcement(path, text, lambda: self.args.tts_voice, 40,
+                                                workers=count, background='train')
+        if duration is not None:
+            return duration
         return soundtrack.render_dispatch(path, self.args.sound_volume)
 
     def play_sound(self, event, workers):
@@ -736,8 +807,8 @@ class Agent:
             path = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
             if event == 'perf-progress':
                 duration = self.render_perf_progress(path, workers)
-            elif event in ('repo-new', 'repo-unchanged'):
-                duration = self.render_repo_report(path, event == 'repo-new')
+            elif event in ('repo-new', 'repo-build', 'repo-unchanged'):
+                duration = self.render_repo_report(path, event != 'repo-unchanged', event == 'repo-build')
             elif event in ('depot', 'train-ambient'):
                 duration = depot.render_preview(path, self.args.sound_volume,
                                                 'depot' if event == 'depot' else 'train')
@@ -780,45 +851,30 @@ class Agent:
                 else:
                     self.say('Sound generation failed: {}; continuing tests'.format(error))
 
-    def render_repo_report(self, path, changed):
+    def render_repo_report(self, path, changed, redirect=False):
         """Announce remote status with optional TTS and a distinct sound fallback."""
-        if self.args.tts == 'auto' and self.tts_engine:
-            try:
-                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
-                    speech = Path(temp) / 'speech.wav'
-                    message = ('Dispatch to BitMagic. Remote updates detected.' if changed else
-                               'Dispatch to BitMagic. No new updates. The line is clear.')
-                    self.command([self.tts_engine, '-v', self.dispatcher_voice(), '-s', '145',
-                                  '-w', str(speech), message], timeout=15)
-                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           1, self.jobs, background='build')
-            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                if not self.tts_warned:
-                    self.tts_warned = True
-                    self.say('TTS unavailable or failed ({}); using sound fallback'.format(error))
+        message = ('Dispatch to BitMagic. Updates received. Freight train diverted to the build depot.'
+                   if redirect else 'Dispatch to BitMagic. Remote updates detected.' if changed else
+                   'Dispatch to BitMagic. No new updates. The line is clear.')
+        duration = self.synthesize_announcement(path, message, self.dispatcher_voice, 50)
+        if duration is not None:
+            return duration
         return soundtrack.render(path, self.args.sound_theme, 'build' if changed else 'idle',
                                  self.args.sound_volume, 1, self.jobs)
 
     def render_perf_progress(self, path, report):
         """Speak one variant and its observed count, or play a neutral fallback."""
         name, count = report
-        if self.args.tts == 'auto' and self.tts_engine:
-            try:
-                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
-                    speech = Path(temp) / 'speech.wav'
-                    voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',')
-                              if '+f' in voice.strip().lower()]
-                    voice = random.choice(voices or ['en-us+f3'])
-                    spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
-                    message = 'Conductor reporting. {} completed {} tests.'.format(spoken_name, count)
-                    self.command([self.tts_engine, '-v', voice, '-s', '145',
-                                  '-w', str(speech), message], timeout=15)
-                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
-                                                           1, self.jobs, background='build')
-            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                if not self.tts_warned:
-                    self.tts_warned = True
-                    self.say('TTS unavailable or failed ({}); using sound fallback'.format(error))
+        def female_voice():
+            """Choose a configured female eSpeak voice for the conductor."""
+            voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',')
+                      if '+f' in voice.strip().lower()]
+            return random.choice(voices or ['en-us+f3'])
+        spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
+        message = 'Conductor reporting. {} completed {} tests.'.format(spoken_name, count)
+        duration = self.synthesize_announcement(path, message, female_voice, 50)
+        if duration is not None:
+            return duration
         return soundtrack.render(path, self.args.sound_theme, 'start', self.args.sound_volume, 1, self.jobs)
 
     def pause(self, seconds, label):
@@ -852,7 +908,8 @@ class Agent:
                 local = self.git('rev-parse', 'HEAD') if self.commit == 'unknown' else self.commit
                 changed = tip != local
                 self.say('FETCH OK | ' + ('new commit ' if changed else 'no new commits | ') + tip[:12])
-                self.sound('repo-new' if changed else 'repo-unchanged')
+                if not changed:
+                    self.sound('repo-unchanged')
                 if tip != failed_commit:
                     return tip
                 self.say('Waiting for a fix to ' + failed_commit[:12])
@@ -1040,6 +1097,10 @@ class Agent:
     def run(self):
         """Run update/build/test/wait loop; return exit status, or exec on self-update."""
         self.report_audio()
+        self.start_piper_download()
+        if (self.args.sound_demo or self.args.sound_preview) and self.piper_download_thread:
+            while self.piper_download_thread.is_alive() and not self.stopping.is_set():
+                self.piper_download_thread.join(timeout=.25)
         if self.args.sound_demo:
             self.say('SOUND DEMO | ' + self.args.sound_theme +
                      ' | volume ' + str(self.args.sound_volume))
@@ -1050,7 +1111,7 @@ class Agent:
                 sequence.insert(3, ('depart-perf', 1))
                 sequence.insert(4, ('depart-stress', 1))
                 sequence.insert(7, ('dispatch', 1))
-                sequence.extend([('repo-new', 1), ('repo-unchanged', 1),
+                sequence.extend([('repo-new', 1), ('repo-build', 1), ('repo-unchanged', 1),
                                  ('perf-progress', ('perf_release_64', 12)),
                                  ('build-clear', (0, 2, 4, 3, 7)),
                                  ('build-warning', (3, 5, 1, 7, 3)),
@@ -1108,6 +1169,7 @@ class Agent:
         state_path = self.home / 'success.json'
         startup_pending = True
         while True:
+            updated = False
             tip = self.fetch(failed)
             self.commit = self.git('rev-parse', 'HEAD')
             if tip != self.commit:
@@ -1116,7 +1178,11 @@ class Agent:
                 agent_changed = bool(self.git('diff', '--name-only', self.commit, tip, '--', 'tests/tagent'))
                 self.git('merge', '--ff-only', tip)
                 self.commit = tip
+                updated = True
                 if agent_changed:
+                    self.say('Updates applied; diverting freight to the build depot')
+                    self.sound('repo-build')
+                    self.wait_for_audio()
                     self.say('TAgent updated; restarting launcher. If restart fails, rerun run_tagent.sh.')
                     self.lock_file.close()
                     restart_args = list(sys.argv[1:])
@@ -1131,6 +1197,9 @@ class Agent:
             start_cycle = startup_pending and (self.args.startup == 'build' or self.args.resume_cycle)
             startup_pending = False
             if start_cycle or self.args.force or previous != key or failed:
+                if updated:
+                    self.say('Updates applied; diverting freight to the build depot')
+                    self.sound('repo-build')
                 result = self.cycle()
                 if result == 'updated':
                     self.args.force = True

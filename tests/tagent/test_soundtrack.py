@@ -14,6 +14,14 @@ import tagent
 class SoundtrackTests(unittest.TestCase):
     """Validate the steampunk sound bank and their supervisor integration."""
 
+    def setUp(self):
+        """Keep host Piper installations from changing unrelated fallback tests."""
+        self.piper_environment = patch.dict('os.environ', {
+            'PIPER_PYTHON': '/nonexistent/tagent-test-piper-python',
+            'PIPER_MODEL': '/nonexistent/tagent-test-piper.onnx'})
+        self.piper_environment.start()
+        self.addCleanup(self.piper_environment.stop)
+
     def test_banks(self):
         """Every event is valid mono PCM with bounded peaks."""
         with tempfile.TemporaryDirectory() as directory:
@@ -245,7 +253,7 @@ class SoundtrackTests(unittest.TestCase):
                  patch.object(agent, 'command', return_value='') as command, \
                  patch.object(tagent.random, 'choice', side_effect=AssertionError('random demo')):
                 self.assertEqual(agent.run(), 0)
-                self.assertEqual(command.call_count, 18)
+                self.assertEqual(command.call_count, 19)
                 with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
                     self.assertEqual(stream.getnchannels(), 1)
                     self.assertGreater(stream.getnframes() / stream.getframerate(), 5)
@@ -274,7 +282,7 @@ class SoundtrackTests(unittest.TestCase):
                  patch.object(tagent.shutil, 'which', return_value='/fake/afplay'), \
                  patch.object(agent, 'command', return_value='') as command:
                 self.assertEqual(agent.run(), 0)
-                self.assertEqual(command.call_count, 20)
+                self.assertEqual(command.call_count, 21)
                 self.assertEqual(events, ['depot', 'train'])
             with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
                 self.assertEqual(stream.getnchannels(), 1)
@@ -415,12 +423,145 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertIn('updates detected', command.call_args.args[0][-1])
                 agent.render_repo_report(output, False)
                 self.assertIn('No new updates', command.call_args.args[0][-1])
+                agent.render_repo_report(output, True, redirect=True)
+                self.assertIn('Freight train diverted to the build depot', command.call_args.args[0][-1])
             agent.tts_engine = None
             with patch.object(soundtrack, 'render', return_value=1) as render:
                 agent.render_repo_report(output, True)
                 self.assertEqual(render.call_args.args[2], 'build')
                 agent.render_repo_report(output, False)
                 self.assertEqual(render.call_args.args[2], 'idle')
+
+    def test_piper_preferred_and_falls_back_to_espeak(self):
+        """The configured Piper environment is preferred; errors fall back to eSpeak."""
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / 'voice.onnx'
+            model.write_bytes(b'model')
+            Path(str(model) + '.json').write_text('{}')
+            with patch('sys.argv', ['tagent', '--state-dir', directory, '--tts', 'auto',
+                                     '--piper-python', sys.executable, '--piper-model', str(model)]):
+                agent = tagent.Agent(tagent.arguments())
+            self.assertTrue(agent.piper_available)
+            agent.tts_engine = '/fake/espeak-ng'
+            calls = []
+            def synth(argv, **kwargs):
+                """Produce valid mono audio and record the engine used."""
+                calls.append(argv)
+                flag = '-f' if '-f' in argv else '-w'
+                with wave.open(argv[argv.index(flag) + 1], 'wb') as stream:
+                    stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                    stream.writeframes(b'\x10\x10' * 2205)
+            output = Path(directory) / 'report.wav'
+            with patch.object(agent, 'command', side_effect=synth):
+                agent.render_perf_progress(output, ('perf_release_64', 12))
+            self.assertEqual(calls[0][:3], [str(agent.piper_python), '-m', 'piper'])
+            self.assertEqual(calls[0][calls[0].index('-f') - 1], str(model))
+            self.assertIn('perf 64 completed 12 tests', calls[0][-1])
+            calls.clear()
+            def broken_piper(argv, **kwargs):
+                if argv[0] == str(agent.piper_python):
+                    raise tagent.CommandFailure('Piper failed')
+                return synth(argv, **kwargs)
+            with patch.object(agent, 'command', side_effect=broken_piper):
+                agent.render_perf_progress(output, ('perf_release_64', 12))
+            self.assertTrue(agent.piper_failed)
+            self.assertEqual(calls[0][0], '/fake/espeak-ng')
+            self.assertIn('falling back to eSpeak', (Path(directory) / 'agent.log').read_text())
+            with wave.open(str(output)) as stream:
+                self.assertEqual((stream.getnchannels(), stream.getframerate()), (1, 44100))
+            agent.piper_failed = False
+            calls.clear()
+            def corrupt_piper(argv, **kwargs):
+                if argv[0] == str(agent.piper_python):
+                    Path(argv[argv.index('-f') + 1]).write_bytes(b'invalid WAV')
+                else:
+                    synth(argv, **kwargs)
+            with patch.object(agent, 'command', side_effect=corrupt_piper):
+                agent.render_perf_progress(output, ('perf_release_64', 12))
+            self.assertTrue(agent.piper_failed)
+            self.assertEqual(calls[0][0], '/fake/espeak-ng')
+            agent.piper_failed = False
+            agent.tts_engine = None
+            expected = Path(directory) / 'recorded.wav'
+            soundtrack.render_dispatch(expected, agent.args.sound_volume)
+            with patch.object(agent, 'command', side_effect=tagent.CommandFailure('Piper failed')):
+                agent.render_dispatch(output, 4)
+            self.assertEqual(output.read_bytes(), expected.read_bytes())
+
+    def test_piper_requires_model_configuration(self):
+        """An incomplete voice installation is skipped without preventing startup."""
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / 'voice.onnx'
+            model.write_bytes(b'model')
+            with patch('sys.argv', ['tagent', '--state-dir', directory,
+                                     '--piper-python', sys.executable, '--piper-model', str(model)]):
+                agent = tagent.Agent(tagent.arguments())
+            self.assertFalse(agent.piper_available)
+
+    def test_missing_piper_voice_downloads_and_validates_in_background(self):
+        """A missing voice is staged and verified without blocking the caller."""
+        import threading
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / 'voices' / 'en_US-lessac-medium.onnx'
+            with patch('sys.argv', ['tagent', '--state-dir', directory, '--tts', 'auto',
+                                     '--piper-python', sys.executable, '--piper-model', str(model)]):
+                agent = tagent.Agent(tagent.arguments())
+            started, release = threading.Event(), threading.Event()
+            def command(argv, **kwargs):
+                """Emulate the downloader and Piper's WAV validation probe."""
+                if 'piper.download_voices' in argv:
+                    started.set()
+                    release.wait(5)
+                    staging = Path(argv[argv.index('--data-dir') + 1])
+                    (staging / model.name).write_bytes(b'complete model')
+                    (staging / (model.name + '.json')).write_text('{}')
+                else:
+                    with wave.open(argv[argv.index('-f') + 1], 'wb') as stream:
+                        stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                        stream.writeframes(b'\0\0' * 2205)
+            try:
+                with patch.object(agent, 'command', side_effect=command):
+                    agent.start_piper_download()
+                    self.assertTrue(started.wait(2))
+                    self.assertFalse(agent.piper_available)
+                    release.set()
+                    agent.piper_download_thread.join(5)
+                    self.assertFalse(agent.piper_download_thread.is_alive())
+                self.assertTrue(agent.piper_available)
+                self.assertEqual(model.read_bytes(), b'complete model')
+                self.assertTrue(Path(str(model) + '.json').is_file())
+            finally:
+                release.set()
+
+    def test_piper_voice_download_failure_preserves_fallback(self):
+        """A partial download is discarded and eSpeak remains available."""
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / 'voices' / 'en_US-lessac-medium.onnx'
+            with patch('sys.argv', ['tagent', '--state-dir', directory, '--tts', 'auto',
+                                     '--piper-python', sys.executable, '--piper-model', str(model)]):
+                agent = tagent.Agent(tagent.arguments())
+            agent.tts_engine = '/fake/espeak-ng'
+            def failed_download(argv, **kwargs):
+                staging = Path(argv[argv.index('--data-dir') + 1])
+                (staging / model.name).write_bytes(b'partial')
+                raise tagent.CommandFailure('offline')
+            with patch.object(agent, 'command', side_effect=failed_download):
+                agent.start_piper_download()
+                agent.piper_download_thread.join(5)
+            self.assertFalse(agent.piper_available)
+            self.assertFalse(model.exists())
+            self.assertEqual(agent.tts_engine, '/fake/espeak-ng')
+            self.assertIn('continuing with TTS fallback', (Path(directory) / 'agent.log').read_text())
+
+    def test_piper_voice_download_can_be_disabled(self):
+        """A user can opt out of downloading missing voices."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory, '--piper-python', sys.executable,
+                '--piper-model', str(Path(directory) / 'en_US-lessac-medium.onnx'),
+                '--no-piper-download']):
+            agent = tagent.Agent(tagent.arguments())
+            agent.start_piper_download()
+            self.assertIsNone(agent.piper_download_thread)
 
     def test_perf_progress_female_tts_and_fallback(self):
         """The conductor speaks the chosen variant/count or uses a neutral sound."""

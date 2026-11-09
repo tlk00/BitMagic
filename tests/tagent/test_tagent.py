@@ -193,11 +193,14 @@ class SupervisorTests(unittest.TestCase):
     def test_successful_fetch_reports_remote_status(self):
         """A fetch reports whether the remote tip matches the checked-out commit."""
         for tip, event, message in [('abc123', 'repo-unchanged', 'no new commits'),
-                                    ('def456', 'repo-new', 'new commit')]:
+                                    ('def456', None, 'new commit')]:
             with patch.object(self.agent, 'git', side_effect=['', tip]), \
                  patch.object(self.agent, 'sound') as sound:
                 self.assertEqual(self.agent.fetch(), tip)
-                sound.assert_called_once_with(event)
+                if event:
+                    sound.assert_called_once_with(event)
+                else:
+                    sound.assert_not_called()
             self.assertIn(message, (self.agent.home / 'agent.log').read_text())
 
     def test_remote_check_reports_no_changes(self):
@@ -237,8 +240,10 @@ class SupervisorTests(unittest.TestCase):
         git(remote, 'commit', '-am', 'second')
         self.agent.repo = checkout
         self.agent.args.once = True
-        with patch.object(self.agent, 'validate'), patch.object(self.agent, 'cycle', return_value=True) as cycle:
+        with patch.object(self.agent, 'validate'), patch.object(self.agent, 'sound') as sound, \
+             patch.object(self.agent, 'cycle', return_value=True) as cycle:
             self.assertEqual(self.agent.run(), 0)
+            sound.assert_any_call('repo-build')
             self.assertEqual(git(checkout, 'rev-parse', 'HEAD'), git(remote, 'rev-parse', 'HEAD'))
             self.assertEqual(self.agent.run(), 0)
             self.assertEqual(cycle.call_count, 2)
