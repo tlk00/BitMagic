@@ -425,6 +425,8 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertIn('No new updates', command.call_args.args[0][-1])
                 agent.render_repo_report(output, True, redirect=True)
                 self.assertIn('Freight train diverted to the build depot', command.call_args.args[0][-1])
+                agent.render_repo_report(output, True, restart=True)
+                self.assertIn('Dispatch to BitMagic. TAgent updated. Restarting the launcher', command.call_args.args[0][-1])
             agent.tts_engine = None
             with patch.object(soundtrack, 'render', return_value=1) as render:
                 agent.render_repo_report(output, True)
@@ -834,7 +836,7 @@ class SoundtrackTests(unittest.TestCase):
             agent.tts_engine = str(engine)
             output = Path(directory) / 'out.wav'
             agent.render_dispatch(output, 6)
-            self.assertEqual(message.read_text(), 'BitMagic freight rolling. 6 test crews at work.')
+            self.assertEqual(message.read_text(), 'Dispatch to BitMagic. Freight rolling. 6 test crews at work.')
             with wave.open(str(output), 'rb') as stream:
                 self.assertEqual(stream.getparams()[:3], (1, 2, 44100))
                 self.assertGreater(stream.getnframes(), 44100)

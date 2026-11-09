@@ -156,7 +156,7 @@ def arguments():
                         help='comma-separated eSpeak NG voices for build reports')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', choices=soundtrack.EVENTS + ('joker', 'all', 'perf-progress', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', choices=soundtrack.EVENTS + ('joker', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='Play one event, or all sounds when omitted, without Git/build validation')
     args = parser.parse_args()
     args.full_sound_preview = args.sound_preview == 'all'
@@ -939,7 +939,7 @@ class Agent:
         """
         count = max(1, int(workers))
         crew = 'crew' if count == 1 else 'crews'
-        text = 'BitMagic freight rolling. {} test {} at work.'.format(count, crew)
+        text = 'Dispatch to BitMagic. Freight rolling. {} test {} at work.'.format(count, crew)
         duration = self.synthesize_announcement(path, text, lambda: self.args.tts_voice, 40,
                                                 workers=count, background='train')
         if duration is not None:
@@ -963,8 +963,9 @@ class Agent:
                     return
             elif event == 'perf-progress':
                 duration = self.render_perf_progress(path, workers)
-            elif event in ('repo-new', 'repo-build', 'repo-unchanged'):
-                duration = self.render_repo_report(path, event != 'repo-unchanged', event == 'repo-build')
+            elif event in ('repo-new', 'repo-build', 'repo-unchanged', 'repo-restart'):
+                duration = self.render_repo_report(path, event != 'repo-unchanged',
+                                                   event == 'repo-build', event == 'repo-restart')
             elif event in ('depot', 'train-ambient'):
                 duration = depot.render_preview(path, self.args.sound_volume,
                                                 'depot' if event == 'depot' else 'train')
@@ -1007,9 +1008,10 @@ class Agent:
                 else:
                     self.say('Sound generation failed: {}; continuing tests'.format(error))
 
-    def render_repo_report(self, path, changed, redirect=False):
+    def render_repo_report(self, path, changed, redirect=False, restart=False):
         """Announce remote status with optional TTS and a distinct sound fallback."""
-        message = ('Dispatch to BitMagic. Updates received. Freight train diverted to the build depot.'
+        message = ('Dispatch to BitMagic. TAgent updated. Restarting the launcher and returning to the build depot.'
+                   if restart else 'Dispatch to BitMagic. Updates received. Freight train diverted to the build depot.'
                    if redirect else 'Dispatch to BitMagic. Remote updates detected.' if changed else
                    'Dispatch to BitMagic. No new updates. The line is clear.')
         duration = self.synthesize_announcement(path, message, self.dispatcher_voice, 50)
@@ -1327,7 +1329,7 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.home))
             return 0
         if self.args.sound_preview:
-            preview_count = ('Train engineer Joe here. ' + random.choice(self.joker_clock.lines)
+            preview_count = ('Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)
                              if self.args.sound_preview == 'joker' else ('perf_release_64', 12) if self.args.sound_preview == 'perf-progress' else
                              (0, 2, 4, 3, 7) if self.args.sound_preview == 'build-clear' else
                              (3, 5, 1, 7, 3) if self.args.sound_preview == 'build-warning' else
@@ -1360,7 +1362,7 @@ class Agent:
                 updated = True
                 if agent_changed:
                     self.say('Updates applied; diverting freight to the build depot')
-                    self.sound('repo-build')
+                    self.sound('repo-restart')
                     self.wait_for_audio()
                     self.say('TAgent updated; restarting launcher. If restart fails, rerun run_tagent.sh.')
                     self.lock_file.close()

@@ -16,7 +16,7 @@ class JokerTests(unittest.TestCase):
             self.assertIsNone(schedule.due())
             for _ in schedule.lines:
                 schedule.deadline = 0
-                heard.append(schedule.due().removeprefix('Train engineer Joe here. '))
+                heard.append(schedule.due().removeprefix('Train engineer Joe to BitMagic. '))
                 self.assertIsNone(schedule.due())
         self.assertEqual(len(heard), len(set(heard)))
 

@@ -30,6 +30,6 @@ class Schedule:
             if not self.deck:
                 self.deck = list(self.lines)
                 random.shuffle(self.deck)
-            prefix = 'Train engineer Joe here. ' if self.count % 4 == 0 else ''
+            prefix = 'Train engineer Joe to BitMagic. '
             self.count += 1
             return prefix + self.deck.pop()

@@ -369,7 +369,7 @@ and `--tts off` also silence it.
 The editable collection in `joker.txt` contains 240 original lines, including mild
 adult double entendres, obscure C++ humor, standards committee jokes, and Git commits. All lines are shuffled without replacement across cycles
 within one agent process: at least 40 hours before the deck repeats. Restarting
-TAgent reshuffles it. Joe identifies himself as train engineer every fourth report.
+TAgent reshuffles it. Joe identifies himself as train engineer at each report.
 Each test phase starts a fresh 10–20 minute timer; jokes wait until audio is idle.
 Preview with `./run_tagent.sh --sound-preview joker`.
 
@@ -378,3 +378,7 @@ Perf progress includes an approximate percentage of timed test elements, based o
 the total; this is not an estimate of elapsed time. Active runs are capped at 99%.
 If a run exceeds the baseline, the conductor announces a delay and its actual
 completed count instead of a percentage.
+
+Spoken update reports identify dispatch; a TAgent self-update announces that the
+launcher is restarting before it restarts. The prerecorded departure announcements
+remain station announcements.
