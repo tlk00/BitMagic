@@ -48,6 +48,7 @@ SAMPLES = \
     bvsample16 \
     bvsample17 \
     bvsample18 \
+    bvsample18a \
     bvsample19 \
     bvsample20 \
     bvsample21 \
@@ -61,6 +62,7 @@ SAMPLES = \
     bvsample01_64 \
     bvsetalgebra \
     bv3vlogic \
+    bmbsample01 \
     xsample01 \
     xsample02 \
     xsample03 \
@@ -76,11 +78,14 @@ SAMPLES = \
     xsample11 \
     strsvsample01 \
     strsvsample02 \
+    strsvsample02a \
     strsvsample03 \
     strsvsample04 \
     strsvsample05 \
     strsvsample06 \
     strsvsample07 \
+    strsvsample08 \
+    strsvsample09 \
     strsvsample10 \
     svfsample01 \
     svfsample02 \

@@ -431,3 +431,17 @@ check detects a new commit, then fetches, fast-forwards and restarts the launche
 for a fresh build and test cycle. Without it, active tests finish at their usual
 safe boundary. In-flight logs are retained. Checks during active work occur at
 subprocess heartbeats; Git/network recovery rules still apply.
+
+TAgent also recompiles the sample programs selected by `samples/Makefile` during
+the build phase. `xsample04b` is excluded. Samples are built but not executed.
+The shared CPU budget reserves up to two workers for perf and stress builds and
+uses the remaining workers for parallel sample compilation (at least one when
+samples run). Output is saved in `build-samples.log`; sample warnings are included
+in the combined diagnostics and live spoken reports. Any sample build failure
+stops the cycle before tests.
+
+`--fast` runs every stress variant in the runner's fast mode; perf execution is
+unchanged. With `--pedantic --fast`, perf retains pedantic coverage while all
+stress variants use fast mode (the stress runner cannot combine the flags).
+Fast runs have distinct saved success state so `--startup changed` does not
+confuse them with normal runs.

@@ -377,6 +377,8 @@ class SoundtrackTests(unittest.TestCase):
             self.assertIn('No compiler warnings so far', tagent.build_report_text(0))
             self.assertIn('1 compiler warning so far', tagent.build_report_text(1))
             self.assertIn('3 compiler warnings so far', tagent.build_report_text(3))
+            self.assertIn('Sample builds: 2 warnings so far',
+                          tagent.build_report_text(3, [1, 2, 3, 4, 2]))
 
     def test_build_report_tts_and_recorded_fallback(self):
         """Female voice receives an exact count; unavailable TTS uses safe fallback."""

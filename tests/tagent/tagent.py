@@ -101,10 +101,12 @@ def build_report_text(count, progress=None):
     """Return a railway-themed status, accurately scoped to warnings seen so far."""
     status = ''
     if progress is not None:
-        perf_ready, perf_pending, stress_ready, stress_pending = progress
+        perf_ready, perf_pending, stress_ready, stress_pending = progress[:4]
         status = (' Performance builds: {} ready, {} pending. '
                   'Stress builds: {} ready, {} pending.'.format(
                       perf_ready, perf_pending, stress_ready, stress_pending))
+        if len(progress) > 4:
+            status += ' Sample builds: {} warnings so far.'.format(progress[4])
     if count == 0:
         weather = random.choice((
             'Tracks are clear, no snowdrifts reported.',
@@ -131,7 +133,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs\n'
                 '  ./run_tagent.sh --sound-preview joker\n'
                 '  ./run_tagent.sh --once --jobs 4\n'
-                '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15\n\n'
+                '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
                 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
@@ -162,6 +164,7 @@ def arguments():
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; debug stress remains fast',
+        'fast': 'run all stress variants in fast mode; perf is unchanged',
         'avx512': 'build and test AVX-512 variants when supported',
         'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
         'check': 'validate local prerequisites only; do not fetch, build, or test',
@@ -307,6 +310,7 @@ class Agent:
         self.console_notice = False
         self.tts_warned = False
         self.build_warnings = WarningCounter()
+        self.sample_warnings = WarningCounter()
         self.build_lock = threading.Lock()
         self.build_logs = []
         self.build_targets = {}
@@ -494,7 +498,7 @@ class Agent:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
                 if log and self.pending_tip and (log.name == 'perf.log' or
-                        (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log'))):
+                        (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
                 env = dict(os.environ, GIT_TERMINAL_PROMPT='0',
@@ -523,7 +527,7 @@ class Agent:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
                     if self.stopping.is_set():
                         raise Failure('Job cancelled')
-                    if log and log.name in ('build-perf.log', 'build-stress.log'):
+                    if log and log.name in ('build-perf.log', 'build-stress.log', 'build-samples.log'):
                         self.build_progress(log)
                         if self.args.restart_on_update:
                             self.poll_remote()
@@ -962,6 +966,8 @@ class Agent:
             for path in self.build_logs or [log]:
                 if path.exists():
                     self.build_warnings.observe(path)
+                    if path.name == 'build-samples.log':
+                        self.sample_warnings.observe(path)
             count = self.build_warnings.count
             now = time.monotonic()
             if now >= self.next_build_report:
@@ -972,8 +978,12 @@ class Agent:
                     targets = self.build_targets.get(family, [])
                     ready = sum(path.is_file() and os.access(path, os.X_OK) for path in targets)
                     progress.extend((ready, len(targets) - ready))
-                self.say('BUILD STATUS: {} warning(s) | perf: {} ready, {} pending | '
-                         'stress: {} ready, {} pending'.format(count, *progress))
+                samples_active = any(path.name == 'build-samples.log' for path in self.build_logs)
+                self.say(('BUILD STATUS: {} warning(s) | perf: {} ready, {} pending | '
+                          'stress: {} ready, {} pending').format(count, *progress) +
+                         (' | samples: {} warning(s)'.format(self.sample_warnings.count) if samples_active else ''))
+                if samples_active:
+                    progress.append(self.sample_warnings.count)
                 if self.args.sound_theme == 'steampunk':
                     self.sound('build-clear' if count == 0 else 'build-warning',
                                workers=(count, *progress))
@@ -1294,15 +1304,16 @@ class Agent:
         run.mkdir()
         self.active_run = run
         self.build_warnings = WarningCounter()
+        self.sample_warnings = WarningCounter()
         if self.args.restart_on_update:
             self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
         self.build_report_interval = self.args.build_report_seconds
         self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
-                    'jobs': self.jobs, 'pedantic': self.args.pedantic, 'builds': {}}
+                    'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
-        self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress')]
+        self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples')]
         build_tasks = []
         for family in ('perf', 'stress'):
             directory = self.repo / 'tests' / family
@@ -1316,6 +1327,11 @@ class Agent:
             if family == 'perf' and self.args.pedantic:
                 argv.append('--pedantic')
             build_tasks.append((family, directory, names, argv, run / ('build-' + family + '.log')))
+        sample_jobs = max(1, self.jobs - 2)
+        sample_dir = self.repo / 'samples'
+        build_tasks.append(('samples', sample_dir, [],
+                            ['make', '-C', str(sample_dir), '-B', '-j', str(sample_jobs), 'all'],
+                            run / 'build-samples.log'))
         self.build_targets = {family: [directory / name for name in names]
                               for family, directory, names, _, _ in build_tasks}
         self.sound('building')
@@ -1330,10 +1346,12 @@ class Agent:
                 with self.build_lock:
                     if build_log.exists():
                         self.build_warnings.observe(build_log, final=True)
+                        if family == 'samples':
+                            self.sample_warnings.observe(build_log, final=True)
 
         failures = []
         interrupted_build = False
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, self.jobs)) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(3, self.jobs)) as pool:
             futures = [pool.submit(run_build, task) for task in build_tasks]
             for future in concurrent.futures.as_completed(futures):
                 try:
@@ -1356,6 +1374,7 @@ class Agent:
                     self.finish_build(False)
                     raise Failure('Expected build missing: ' + str(directory / name))
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
+        self.say('SAMPLES BUILD COMPLETE | warnings: {}'.format(self.sample_warnings.count))
         self.finish_build(True)
         self.sound('build')
         self.pending_tip = None
@@ -1407,7 +1426,7 @@ class Agent:
                         '--jobs', str(self.jobs), '--fail-fast',
                         '--order-file', str(self.home / 'stress-order.tsv'),
                         '--stop-file', str(self.stress_stop_file)]
-                if '_debug' in name:
+                if self.args.fast or '_debug' in name:
                     argv.append('--fast')
                 elif self.args.pedantic:
                     argv.append('--pedantic')
@@ -1569,6 +1588,8 @@ class Agent:
                     self.stop_children()
                     os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
+            if self.args.fast:
+                key['fast'] = True
             previous = json.loads(state_path.read_text()) if state_path.exists() else None
             start_cycle = startup_pending and (self.args.startup == 'build' or self.args.resume_cycle)
             startup_pending = False

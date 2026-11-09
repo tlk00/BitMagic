@@ -52,6 +52,10 @@ class SupervisorTests(unittest.TestCase):
                 (directory / 'run_all_pl.sh').write_text(
                     '#!/bin/bash\nset -eu\ncd "$(dirname "$0")"\n"$2" -ll\n"$2" -s\n')
 
+        samples = self.root / 'samples'
+        samples.mkdir()
+        (samples / 'Makefile').write_text('all:\n\t@true\n')
+
     def test_stress_failure_operator_report(self):
         """Expose the failed group, its assertion, and quoted copy paths."""
         work = self.root / 'stress_debug'
@@ -92,6 +96,20 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(ta.tempfile, 'TemporaryDirectory', side_effect=PermissionError('denied')):
             with self.assertRaisesRegex(ta.Failure, 'denied'):
                 ta.prepare_log_directory(destination, 0)
+
+    def test_samples_failure_and_warnings_stop_cycle(self):
+        """Sample diagnostics are counted and a build failure prevents tests."""
+        self.fixture()
+        (self.root / 'samples' / 'Makefile').write_text(
+            'all:\n\t@echo "sample.cpp:3: warning: sample warning"\n\t@false\n')
+        with self.assertRaises(ta.Failure) as error:
+            self.agent.cycle()
+        self.assertIn('build-samples.log', str(error.exception))
+        self.assertEqual(self.agent.sample_warnings.count, 1)
+        self.assertEqual(self.agent.build_warnings.count, 1)
+        run = next(self.agent.home.glob('*abc123'))
+        self.assertIn('sample warning', (run / 'build-samples.log').read_text())
+        self.assertFalse(list(run.glob('perf_*/perf.log')))
 
     def test_success_and_isolation(self):
         """All expected builds run with perf release-only and isolated stress files."""
@@ -154,6 +172,25 @@ class SupervisorTests(unittest.TestCase):
         for name, argv in calls:
             self.assertEqual('--fast' in argv, '_debug' in name)
             self.assertEqual('--pedantic' in argv, '_debug' not in name)
+
+    def test_fast_applies_to_all_stress_even_with_pedantic(self):
+        """Fast stress overrides pedantic stress while perf remains pedantic."""
+        self.fixture()
+        self.agent.args.fast = True
+        self.agent.args.pedantic = True
+        calls = []
+        original = self.agent.command
+        def command(argv, *args, **kwargs):
+            calls.append(list(argv))
+            return original(argv, *args, **kwargs)
+        with patch.object(self.agent, 'command', side_effect=command):
+            self.assertTrue(self.agent.cycle())
+        stress = [argv for argv in calls if '--order-file' in argv]
+        self.assertTrue(stress)
+        self.assertTrue(all('--fast' in argv and '--pedantic' not in argv for argv in stress))
+        perf_build = next(argv for argv in calls if str(argv[1]).endswith('/perf/build_all.sh'))
+        self.assertIn('--pedantic', perf_build)
+        self.assertNotIn('--fast', perf_build)
 
     def test_stress_variants_share_history_path_across_cycles(self):
         """Every isolated stress run receives the same persistent history path."""
