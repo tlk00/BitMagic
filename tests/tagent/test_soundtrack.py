@@ -579,7 +579,7 @@ class SoundtrackTests(unittest.TestCase):
     def test_conductor_setup_starts_before_builds(self):
         """Normal startup requests both voice preparations before validation/builds."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
-                'tagent', '--state-dir', directory, '--tts', 'auto']):
+                'tagent', '--state-dir', directory, '--tts', 'auto', '--no-joker']):
             agent = tagent.Agent(tagent.arguments())
             with patch.object(agent, 'report_audio'), \
                  patch.object(agent, 'start_piper_download') as primary, \

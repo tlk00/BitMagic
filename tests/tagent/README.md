@@ -356,3 +356,19 @@ five minutes. Neither missing eSpeak nor an unavailable sound device blocks test
 The demo also exports `demo-steampunk.wav` in the state
 directory, with short gaps between events. This allows listening later when the
 current host has no audio device. Demo files include SOS at the end.
+
+### Engineer Joe
+
+During perf and stress testing, Joe offers a short original railway, office, or
+BitMagic joke every randomly selected 10–20 minutes. His separate Piper voice is
+`en_US-danny-low`, automatically provisioned beside the dispatcher model. Missing
+Piper falls back to the English male eSpeak voice; missing audio does not stop tests.
+The usual ambient ducking applies. `--no-joker` disables the role; `--no-sound`
+and `--tts off` also silence it.
+
+The editable collection in `joker.txt` contains 240 original lines, including mild
+adult double entendres, obscure C++ humor, standards committee jokes, and Git commits. All lines are shuffled without replacement across cycles
+within one agent process: at least 40 hours before the deck repeats. Restarting
+TAgent reshuffles it. Joe identifies himself as train engineer every fourth report.
+Each test phase starts a fresh 10–20 minute timer; jokes wait until audio is idle.
+Preview with `./run_tagent.sh --sound-preview joker`.
