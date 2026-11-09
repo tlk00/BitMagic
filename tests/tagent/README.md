@@ -315,7 +315,10 @@ disables both engines. By default Piper uses `~/piper-demo/.venv/bin/python`
 and `~/piper-demo/en_US-lessac-medium.onnx` with its `.onnx.json` file alongside.
 The perf conductor uses `~/piper-demo/en_GB-southern_english_female-low.onnx`
 instead; configure it with `PIPER_CONDUCTOR_MODEL` or `--piper-conductor-model`.
-The conductor voice is prepared when perf starts, or before its sound preview.
+The conductor voice is prepared at startup, in the background during normal
+operation. TAgent reports when the files are present or downloaded, and logs
+which engine actually speaks the first conductor report (and any switch to the
+fallback). A sound preview waits for voice preparation before playing.
 Change `PIPER_PYTHON` and `PIPER_MODEL` in the launcher or environment, or use
 `--piper-python` and `--piper-model`, to select another installation or voice.
 When needed, TAgent creates the default user-local virtual environment and

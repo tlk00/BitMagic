@@ -538,10 +538,12 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertIn(str(primary), command.call_args.args[0])
                 agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release_64', 12))
                 self.assertIn(str(conductor), command.call_args.args[0])
+                self.assertIn('TTS: Conductor using Piper', (Path(directory) / 'agent.log').read_text())
                 agent.piper_conductor_available = False
                 agent.tts_engine = '/fake/espeak-ng'
                 agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release_64', 12))
                 self.assertEqual(command.call_args.args[0][0], '/fake/espeak-ng')
+                self.assertIn('TTS: Conductor using eSpeak NG fallback', (Path(directory) / 'agent.log').read_text())
 
     def test_missing_conductor_voice_downloads_separately(self):
         """The conductor model is downloaded without replacing the dispatch voice."""
@@ -573,6 +575,34 @@ class SoundtrackTests(unittest.TestCase):
             self.assertTrue(agent.piper_conductor_available)
             self.assertEqual(conductor.read_bytes(), b'conductor')
             self.assertEqual(primary.read_bytes(), b'primary')
+
+    def test_conductor_setup_starts_before_builds(self):
+        """Normal startup requests both voice preparations before validation/builds."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory, '--tts', 'auto']):
+            agent = tagent.Agent(tagent.arguments())
+            with patch.object(agent, 'report_audio'), \
+                 patch.object(agent, 'start_piper_download') as primary, \
+                 patch.object(agent, 'start_conductor_download') as conductor, \
+                 patch.object(agent, 'validate', side_effect=tagent.Failure('stop')):
+                with self.assertRaisesRegex(tagent.Failure, 'stop'):
+                    agent.run()
+            primary.assert_called_once_with()
+            conductor.assert_called_once_with()
+
+    def test_conductor_download_retries_after_failure(self):
+        """A failed startup download can be retried when the perf phase begins."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory, '--tts', 'auto',
+                '--piper-python', sys.executable,
+                '--piper-conductor-model', str(Path(directory) / 'en_GB-southern_english_female-low.onnx')]):
+            agent = tagent.Agent(tagent.arguments())
+            with patch.object(agent, 'download_piper_voice') as download:
+                agent.start_conductor_download()
+                agent.conductor_download_thread.join(5)
+                agent.start_conductor_download()
+                agent.conductor_download_thread.join(5)
+                self.assertEqual(download.call_count, 2)
 
     def test_missing_piper_voice_downloads_and_validates_in_background(self):
         """A missing voice is staged and verified without blocking the caller."""
