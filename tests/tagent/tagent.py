@@ -5,6 +5,7 @@ Owns subprocess groups and one checkout lock. Never discards repository changes.
 Build/test outputs live in persistent per-cycle directories for investigation.
 """
 import argparse
+import array
 import concurrent.futures
 import datetime
 import depot
@@ -134,9 +135,13 @@ def arguments():
                         help='comma-separated eSpeak NG voices for build reports')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('perf-progress', 'repo-new', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
-                        help='Play one event locally and exit without Git/build validation')
+    parser.add_argument('--sound-preview', nargs='?', const='all', choices=soundtrack.EVENTS + ('all', 'perf-progress', 'repo-new', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+                        help='Play one event, or all sounds when omitted, without Git/build validation')
     args = parser.parse_args()
+    args.full_sound_preview = args.sound_preview == 'all'
+    if args.full_sound_preview:
+        args.sound_demo = True
+        args.sound_preview = None
     if args.tts not in ('auto', 'off'):
         parser.error('TTS_MODE must be auto or off')
     if args.startup not in ('build', 'changed'):
@@ -1000,6 +1005,7 @@ class Agent:
                 self.stress_stop_file = work / 'stop-for-update'
                 argv = ['bash', str(runner), '--binary', './worker.sh',
                         '--jobs', str(self.jobs), '--fail-fast',
+                        '--order-file', str(self.home / 'stress-order.tsv'),
                         '--stop-file', str(self.stress_stop_file)]
                 if self.args.pedantic:
                     argv.append('--pedantic')
@@ -1050,17 +1056,31 @@ class Agent:
                                  ('build-warning', (3, 5, 1, 7, 3)),
                                  ('build-final-ok', (0, 3, True)),
                                  ('build-final-failed', (2, 3, False))])
+                if self.args.full_sound_preview:
+                    sequence.extend([('depot', 1), ('train-ambient', 1)])
             clips = []
             for event, workers in sequence:
                 self.say('DEMO ' + event + (' | workers ' + str(workers) if event == 'work' else ''))
                 self.sound(event, force=True, workers=workers)
                 if self.audio_thread:
-                    self.wait_for_audio()
+                    self.wait_for_audio(timeout=360 if self.args.full_sound_preview else 300)
                 suffix = '-' + str(workers) if event == 'work' else ''
                 clip = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
                 if not self.args.no_sound and self.args.sound_volume > 0 and clip.exists():
                     with wave.open(str(clip), 'rb') as stream:
-                        clips.append(stream.readframes(stream.getnframes()))
+                        rate = stream.getframerate()
+                        frames = stream.readframes(stream.getnframes())
+                    if rate == soundtrack.RATE // 2:
+                        # The background assets are 22.05 kHz mono; duplicate
+                        # samples for the 44.1 kHz combined demonstration.
+                        source = array.array('h', frames)
+                        converted = array.array('h')
+                        for value in source:
+                            converted.extend((value, value))
+                        frames = converted.tobytes()
+                    elif rate != soundtrack.RATE:
+                        raise Failure('Unsupported demo WAV sample rate: {}'.format(rate))
+                    clips.append(frames)
             if clips:
                 with wave.open(str(self.home / ('demo-' + self.args.sound_theme + '.wav')), 'wb') as stream:
                     stream.setparams((1, 2, soundtrack.RATE, 0, 'NONE', 'not compressed'))

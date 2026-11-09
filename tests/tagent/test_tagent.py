@@ -66,6 +66,44 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(len(list(runs[0].glob('stress_*/job.*/isolated-output'))), 8)
         self.assertTrue((runs[0] / 'manifest.json').exists())
 
+    def test_stress_variants_share_history_path_across_cycles(self):
+        """Every isolated stress run receives the same persistent history path."""
+        self.fixture()
+        calls = []
+        original = self.agent.command
+        def command(argv, *args, **kwargs):
+            if '--order-file' in argv:
+                calls.append(argv[argv.index('--order-file') + 1])
+            return original(argv, *args, **kwargs)
+        with patch.object(self.agent, 'command', side_effect=command):
+            self.assertTrue(self.agent.cycle())
+            self.assertTrue(self.agent.cycle())
+        self.assertEqual(len(calls), 2 * len(self.agent.builds('stress')))
+        self.assertEqual(set(calls), {str(self.agent.home / 'stress-order.tsv')})
+
+    def test_stress_runner_reuses_explicit_history(self):
+        """The real runner honors shared history in a separate script directory."""
+        runner = Path(__file__).resolve().parents[1] / 'stress' / 'run_all_pl.sh'
+        binary = self.root / 'worker.sh'
+        binary.write_text('#!/bin/bash\nif [ "$1" = -s ]; then sleep 1; fi\nexit 0\n')
+        binary.chmod(0o755)
+        history = self.root / 'shared' / 'order.tsv'
+        history.parent.mkdir()
+        for index, expected in enumerate((['-ll', '-s'], ['-s', '-ll'])):
+            isolated = self.root / ('isolated' + str(index))
+            isolated.mkdir()
+            copy = isolated / 'run_all_pl.sh'
+            copy.write_bytes(runner.read_bytes())
+            result = subprocess.run(['bash', str(copy), '--binary', str(binary), '--jobs', '1',
+                                     '--order-file', str(history), '-ll', '-s'],
+                                    text=True, capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            starts = [line for line in result.stdout.splitlines() if line.startswith('START  ')]
+            self.assertEqual([line.split()[1] for line in starts], expected)
+            self.assertFalse((isolated / 'logs/parallel/order.tsv').exists())
+        self.assertIn('-s ', history.read_text())
+        self.assertIn('-ll ', history.read_text())
+
     def test_test_failure_is_recoverable(self):
         """A nonzero perf result returns failure with logs rather than passing."""
         self.fixture(fail=True)

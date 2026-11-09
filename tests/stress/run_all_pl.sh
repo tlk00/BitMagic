@@ -13,6 +13,7 @@ RUN_NAME=""
 LOG_DIR="logs/parallel"
 FAIL_FAST=0
 STOP_FILE=""
+ORDER_FILE=""
 STOP_REQUESTED=0
 PEDANTIC_ARGS=()
 TESTS=()
@@ -45,8 +46,9 @@ Runner options:
   --fail-fast           Stop launching new groups after the first failure
   --heavy-first         Use learned longest-first order (also the default).
                         New selectors run first; missing selectors are ignored.
-                        History: ./logs/parallel/order.tsv, shared by all builds.
+                        Default history: ./logs/parallel/order.tsv.
                         Completed jobs update history, including failed runs.
+  --order-file FILE     Share learned timing history at FILE across runs.
   -h, --help            Display this help and exit
 
 Test selectors from t.cpp:
@@ -187,6 +189,11 @@ while [ "$#" -gt 0 ]; do
             # Compatibility option: learned scheduling is always enabled.
             shift
             ;;
+        --order-file)
+            [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
+            ORDER_FILE="$2"
+            shift 2
+            ;;
         -svfsteam)
             TESTS[${#TESTS[@]}]="-svfstream"
             shift
@@ -259,7 +266,7 @@ RUN_LOG_DIR="$(cd "$RUN_LOG_DIR" && pwd)" || exit 1
 
 # One learned order per suite, independent of binary and log-directory overrides.
 # Rows contain selector and latest elapsed seconds, sorted longest first.
-ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
+[ -n "$ORDER_FILE" ] || ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
 mkdir -p "$(dirname "$ORDER_FILE")" || exit 1
 touch "$ORDER_FILE" || exit 1
 

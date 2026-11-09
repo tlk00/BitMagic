@@ -35,7 +35,10 @@ initial targets are x86-64 Linux/WSL and Apple Silicon macOS, matching the curre
   serialization sweeps and debug/release perf SIMD variants as well.
 - Run perf first, with a shared worker limit; timing comparisons are not an
   acceptance criterion. Then run every stress build using the existing parallel
-  runner, one build at a time. All scheduled tests must succeed.
+  runner, one build at a time. All scheduled tests must succeed. Stress variants
+  share learned heavy-first timings across cycles in `TAgent-logs/stress-order.tsv`
+  (or `stress-order.tsv` under a custom state directory); individual test logs
+  remain in their cycle directories.
 - Default workers: max(1, available logical CPUs minus two). CPU availability
   respects affinity and Linux cgroup quotas where detectable. Allow an explicit
   worker override. This limits processes, rather than pinning/reserving cores.
@@ -138,6 +141,8 @@ message is a bundled mono voice/steam/wheel recording.
 ```sh
 # Demo only: no Git checks, fetching, builds or tests. Ctrl-C stops playback.
 bash tests/tagent/run_tagent.sh --sound-demo --sound-theme steampunk
+# All effects plus the full depot and five-minute train backgrounds.
+bash tests/tagent/run_tagent.sh --sound-preview
 
 # One sound, or normal operation with a chosen theme and volume (0..1).
 bash tests/tagent/run_tagent.sh --sound-preview depart --sound-theme steampunk

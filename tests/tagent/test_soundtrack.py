@@ -252,6 +252,35 @@ class SoundtrackTests(unittest.TestCase):
                 with wave.open(str(Path(directory) / 'sound-steampunk-dispatch.wav')) as stream:
                     self.assertEqual(stream.getnchannels(), 1)
 
+    def test_bare_sound_preview_plays_all_assets(self):
+        """A bare preview includes both backgrounds and produces a correctly timed demo."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--sound-preview', '--tts', 'off', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            events = []
+            def short_clip(path, theme, event, volume, workers, jobs, **kwargs):
+                with wave.open(str(path), 'wb') as stream:
+                    stream.setparams((1, 2, soundtrack.RATE, 0, 'NONE', 'not compressed'))
+                    stream.writeframes(b'\0' * (soundtrack.RATE // 10 * 2))
+                return .1
+            def background(path, volume, mode='depot'):
+                events.append(mode)
+                with wave.open(str(path), 'wb') as stream:
+                    stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                    stream.writeframes(b'\0' * (22050 // 5 * 2))
+                return .2
+            with patch.object(soundtrack, 'render', side_effect=short_clip), \
+                 patch.object(tagent.depot, 'render_preview', side_effect=background), \
+                 patch.object(tagent.shutil, 'which', return_value='/fake/afplay'), \
+                 patch.object(agent, 'command', return_value='') as command:
+                self.assertEqual(agent.run(), 0)
+                self.assertEqual(command.call_count, 20)
+                self.assertEqual(events, ['depot', 'train'])
+            with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
+                self.assertEqual(stream.getnchannels(), 1)
+                # Two 0.2-second backgrounds keep their duration after upsampling.
+                self.assertGreater(stream.getnframes() / stream.getframerate(), 7.5)
+
     def test_steam_train_schedule(self):
         """Departure starts the five-minute timer; other signals cannot reset it."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
