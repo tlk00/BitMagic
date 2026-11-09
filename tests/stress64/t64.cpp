@@ -188,8 +188,8 @@ void CycleSparseIndex(INDEX& index, bool comprehensive = false)
 
 
 
-#include "gena.h"
-#include "test_util.h"
+#include "../common/gena.h"
+#include "../common/test_util.h"
 
 
 #define POOL_SIZE 5000
@@ -199,8 +199,8 @@ void CycleSparseIndex(INDEX& index, bool comprehensive = false)
 bool is_silent = false;
 bool is_pedantic = false;
 
-#include "../sparse_serial_levels_tests.h"
-#include "../serialization_allocator_tests.h"
+#include "../common/sparse_serial_levels_tests.h"
+#include "../common/serialization_allocator_tests.h"
 
 template<class T> T* pool_allocate(T** pool, int& i, size_t n)
 {
@@ -359,104 +359,11 @@ private:
 void* pool_ptr_allocator::free_ptr_blocks_[POOL_SIZE];
 int pool_ptr_allocator::ptr_blocks_idx_ = 0;
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(__ARM_NEON__)
-#else
-# define MEM_DEBUG
-#endif
+// The checked allocators preserve backend alignment in scalar and SIMD builds.
+#define MEM_DEBUG
 
 #ifdef MEM_DEBUG
-
-
-class dbg_block_allocator
-{
-public:
-static size_t na_;
-static size_t nf_;
-
-    static bm::word_t* allocate(size_t n, const void *)
-    {
-        ++na_;
-        assert(n);
-        bm::word_t* p =
-            (bm::word_t*) ::malloc((n+2) * sizeof(bm::word_t));
-        if (!p)
-        {
-            std::cerr << "ERROR Failed allocation!" << endl;
-            assert(0); exit(1);
-        }
-        size_t* ptr = (size_t*)p;
-        *ptr = n;
-        p+=2;
-        return p;
-    }
-
-    static void deallocate(bm::word_t* p, size_t n)
-    {
-        ++nf_;
-        p-=2;
-        size_t* ptr = (size_t*)p;
-        if (*ptr != n)
-        {
-            cerr << "Block memory deallocation ERROR! n = " << n << ", block-control = " << *ptr << endl;
-            assert(0); exit(1);
-        }
-        ::free(p);
-    }
-
-    static size_t balance()
-    {
-        return nf_ - na_;
-    }
-};
-
-size_t dbg_block_allocator::na_ = 0;
-size_t dbg_block_allocator::nf_ = 0;
-
-class dbg_ptr_allocator
-{
-public:
-static size_t na_;
-static size_t nf_;
-
-    static void* allocate(size_t n, const void *)
-    {
-        ++na_;
-        assert(sizeof(size_t) == sizeof(void*));
-        void* p = ::malloc((n+1) * sizeof(void*));
-        if (!p)
-        {
-            std::cerr << "ERROR! Failed allocation!" << endl;
-            exit(1);
-        }
-        size_t* s = (size_t*) p;
-        *s = n;
-        return (void*)++s;
-    }
-
-    static void deallocate(void* p, size_t n)
-    {
-        ++nf_;
-        size_t* s = (size_t*) p;
-        --s;
-        if(*s != n)
-        {
-            printf("Ptr memory deallocation ERROR!\n");
-            assert(0);
-            exit(1);
-        }
-        ::free(s);
-    }
-
-    static size_t balance()
-    {
-        return nf_ - na_;
-    }
-
-};
-
-size_t dbg_ptr_allocator::na_ = 0;
-size_t dbg_ptr_allocator::nf_ = 0;
-
+#include "../common/debug_allocator.h"
 
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
 
@@ -26872,7 +26779,7 @@ void show_help()
         ;
 }
 
-#include "../neon_test.h"
+#include "../common/neon_test.h"
 
 bool         is_neon = false;
 bool         is_all = true;

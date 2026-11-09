@@ -39,4 +39,5 @@ DESTINATIONDIR=tests/stress64
 
 include ../../makefile.in
 
+$(CXXOBJECTS): $(wildcard ../common/*.h)
 

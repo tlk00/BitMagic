@@ -573,9 +573,42 @@ inline void CheckPeriodicIndexRanking()
     } // for diagnostics
 }
 
+/** Verify initialization, aggregation, and external-storage statistics. */
+inline void CheckStatisticsAggregation()
+{
+    bm::bv_statistics total;
+    bm::bv_statistics row;
+    for (unsigned i = 0; i < bm::gap_levels; ++i)
+    {
+        assert(total.gap_levels[i] == 0);
+        assert(total.gaps_by_level[i] == 0);
+        row.gap_levels[i] = bm::gap_word_t(100 + i);
+        row.gaps_by_level[i] = i + 1;
+    } // for i
+    total.add(row);
+    total.add(row);
+    for (unsigned i = 0; i < bm::gap_levels; ++i)
+    {
+        assert(total.gap_levels[i] == row.gap_levels[i]);
+        assert(total.gaps_by_level[i] == 2 * row.gaps_by_level[i]);
+    } // for i
+    row.gap_levels[0] = 200;
+    total.add(row);
+    assert(total.gap_levels[0] == 200);
+    row.keep_serialize_stat_only();
+    total.reset();
+    total.add(row);
+    for (unsigned i = 0; i < bm::gap_levels; ++i)
+    {
+        assert(total.gap_levels[i] == 0);
+        assert(total.gaps_by_level[i] == 0);
+    } // for i
+}
+
 inline void Run()
 {
     {
+        CheckStatisticsAggregation();
         CheckCodecWorkspaces();
         CheckWaveStateReuse();
         CheckRetainedScratch();

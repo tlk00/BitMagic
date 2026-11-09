@@ -39,4 +39,6 @@ DESTINATIONDIR=tests/perf64
 
 include ../../makefile.in
 
+$(CXXOBJECTS): $(wildcard ../common/*.h)
+
 

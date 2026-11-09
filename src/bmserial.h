@@ -9359,8 +9359,12 @@ size_t deserializer<BV, DEC>::deserialize_from(bvector_type& bv, IN& in)
 
     if (header_flag & BM_HM_HXOR) // XOR compression mode
     {
+        // Header-driven/index-only decoding can reach this without set_ref_vectors().
+        // Match its two-block workspace and the destructor's deallocation size;
+        // allocating one block here made XOR opcode profiling fail in -svser
+        // when the debug allocator checked the size supplied at destruction.
         if (!xor_block_)
-            xor_block_ = alloc_.alloc_bit_block();
+            xor_block_ = alloc_.alloc_bit_block(2);
     }
 
     bv.set_new_blocks_strat(bm::BM_GAP); // minimize deserialization footprint

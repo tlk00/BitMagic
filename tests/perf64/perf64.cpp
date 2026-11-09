@@ -51,8 +51,8 @@ For more information please visit:  http://bitmagic.io
 using namespace std;
 using namespace bm;
 
-#include "../stress64/gena.h"
-#include "../stress64/test_util.h"
+#include "../common/gena.h"
+#include "../common/test_util.h"
 
 //#include "bmdbg.h"
 

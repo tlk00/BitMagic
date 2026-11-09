@@ -209,152 +209,14 @@ void CycleSparseIndex(INDEX& index, bool comprehensive = false)
 bool is_silent = false;
 bool is_pedantic = false;
 
-#include "../sparse_serial_levels_tests.h"
-#include "../serialization_allocator_tests.h"
+#include "../common/sparse_serial_levels_tests.h"
+#include "../common/serialization_allocator_tests.h"
 
-#if defined(BMSSE2OPT) || defined(BMSSE42OPT) || defined(BMAVX2OPT) || defined(BMAVX512OPT) || defined(__ARM_NEON__)
-#else
-# define MEM_DEBUG
-#endif
- 
+// The checked allocators preserve backend alignment in scalar and SIMD builds.
+#define MEM_DEBUG
+
 #ifdef MEM_DEBUG
-
-#include "stacktrace_dbg.h"
-#include <unordered_map>
-
-
-
-// -------------------------------
-// memory profiler: very slow if defined
-//
-//#define BM_STACK_COLL
-
-// NOTE: ARM NEON compilation causes SIGBUS failure (Pi 32-bit)
-// (disabled as non-essential)
-
-#ifdef BM_STACK_COLL
-std::unordered_map<void*, std::string> g_alloc_trace_map;
-#endif
-std::mutex g_trace_lock;
-
-class dbg_block_allocator
-{
-public:
-    static inline size_t na_ = 0;
-    static inline size_t nf_ = 0;
-
-    static bm::word_t* allocate(size_t n, const void *)
-    {
-        #ifdef BM_STACK_COLL
-        std::string stack_str;
-        stack_str.reserve(2048);
-        get_stacktrace(stack_str);
-        #endif
-        g_trace_lock.lock();
-        ++na_;
-        assert(n);
-        bm::word_t* p =
-            (bm::word_t*) ::malloc((n+1) * sizeof(bm::word_t));
-        if (!p)
-        {
-            std::cerr << "ERROR Failed allocation!" << endl;
-            assert(0);exit(1);
-        }
-        *p = (bm::word_t)n;
-
-        #ifdef BM_STACK_COLL
-        g_alloc_trace_map.emplace(p, std::move(stack_str));
-        #endif
-        g_trace_lock.unlock();
-        return ++p;
-    }
-
-    static void deallocate(bm::word_t* p, size_t n)
-    {
-        g_trace_lock.lock();
-        ++nf_;
-        --p;
-        if (*p != n)
-        {
-            printf("Block memory deallocation ERROR! n = %i (expected %i)\n", (int)n, (int)*p);
-            #ifdef BM_STACK_COLL
-            std::string stack_str;
-            stack_str.reserve(2048);
-            get_stacktrace(stack_str);
-            cout << stack_str << endl;
-            #endif
-
-            assert(0);exit(1);
-        }
-        ::free(p);
-        #ifdef BM_STACK_COLL
-        g_alloc_trace_map.erase(p);
-        #endif
-        g_trace_lock.unlock();
-    }
-
-    static size_t balance() BMNOEXCEPT { return na_ - nf_; }
-};
-
-class dbg_ptr_allocator
-{
-public:
-    static inline size_t na_ = 0;
-    static inline size_t nf_ = 0;
-
-    static void* allocate(size_t n, const void *)
-    {
-        #ifdef BM_STACK_COLL
-        std::string stack_str;
-        stack_str.reserve(2048);
-        get_stacktrace(stack_str);
-        #endif
-
-        g_trace_lock.lock();
-        ++na_;
-        assert(sizeof(size_t) == sizeof(void*));
-        void* p = ::malloc((n+1) * sizeof(void*));
-        if (!p)
-        {
-            std::cerr << "ERROR! Failed allocation!" << endl;
-            exit(1);
-        }
-        size_t* s = (size_t*) p;
-        *s = n;
-
-        #ifdef BM_STACK_COLL
-        g_alloc_trace_map.emplace(p, std::move(stack_str));
-        #endif
-        g_trace_lock.unlock();
-
-        return (void*)++s;
-    }
-
-    static void deallocate(void* p, size_t n)
-    {
-        g_trace_lock.lock();
-        ++nf_;
-        size_t* s = (size_t*) p;
-        --s;
-        if(*s != n)
-        {
-            printf("Ptr memory deallocation ERROR!\n");
-            assert(0);
-            exit(1);
-        }
-        ::free(s);
-
-        #ifdef BM_STACK_COLL
-        g_alloc_trace_map.erase(s);
-        #endif
-        g_trace_lock.unlock();
-    }
-
-    static size_t balance() BMNOEXCEPT { return nf_ - na_; }
-
-};
-
-
+#include "../common/debug_allocator.h"
 
 typedef mem_alloc<dbg_block_allocator, dbg_ptr_allocator, alloc_pool<dbg_block_allocator, dbg_ptr_allocator> > dbg_alloc;
 
@@ -49568,7 +49430,7 @@ void show_help()
       ;
 }
 
-#include "../neon_test.h"
+#include "../common/neon_test.h"
 
 bool         is_neon = false;
 bool         is_all = true;

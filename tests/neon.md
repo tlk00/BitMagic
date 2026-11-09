@@ -40,7 +40,7 @@ from `bmfunc.h` and `encoding.h`.
 
 ## Correctness
 
-Both stress drivers include `tests/neon_test.h`. Native builds run its tests
+Both stress drivers include `tests/common/neon_test.h`. Native builds run its tests
 with `-neon`, `-ll`, or the default all-tests selection. Non-native builds
 reject `-neon` with a diagnostic. The historical SSE-specific `TestSIMDUtils()`
 remains unchanged; the NEON suite is independently compiled and invoked.
@@ -105,5 +105,5 @@ frequency effects; the output includes compiler and backend identity.
 For a translated baseline, compile this updated performance driver against a
 separate copy of the pre-change `src` headers. Do not toggle flags on an existing
 object directory and assume make will rebuild objects when flags change.
-The existing `tests/perf/build_all_arm.sh` and `tests/stress/build_all_arm.sh`
-continue to produce the same release executable names.
+The `tests/perf/build_all.sh` and `tests/stress/build_all.sh` scripts
+detect Apple silicon and produce NEON release executables.
