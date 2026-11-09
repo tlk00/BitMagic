@@ -372,3 +372,9 @@ within one agent process: at least 40 hours before the deck repeats. Restarting
 TAgent reshuffles it. Joe identifies himself as train engineer every fourth report.
 Each test phase starts a fresh 10–20 minute timer; jokes wait until audio is idle.
 Preview with `./run_tagent.sh --sound-preview joker`.
+
+Perf progress includes an approximate percentage of timed test elements, based on
+189 entries in a complete v10.0.1 log. Variants and future test changes can alter
+the total; this is not an estimate of elapsed time. Active runs are capped at 99%.
+If a run exceeds the baseline, the conductor announces a delay and its actual
+completed count instead of a percentage.

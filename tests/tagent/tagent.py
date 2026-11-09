@@ -30,6 +30,15 @@ import soundtrack
 import wave
 
 
+# Baseline from a complete v10.0.1 perf log; variants may differ.
+PERF_ESTIMATED_TESTS = 189
+
+
+def perf_estimated_percent(count):
+    """Estimate completed test elements, keeping active runs below 100 percent."""
+    return min(99, max(0, round(count * 100 / PERF_ESTIMATED_TESTS)))
+
+
 class Failure(RuntimeError):
     """An operational failure, or a failed build/test with its recorded command."""
 
@@ -789,8 +798,8 @@ class Agent:
                     self.say('PERF STATUS unavailable | {} | {}'.format(path, error))
                     continue
                 reports.append((path.parent.name, count))
-                self.say('PERF STATUS | {} | {} completed | last: {}'.format(
-                    path.parent.name, count, last or 'none yet'))
+                self.say('PERF STATUS | {} | {} completed | approximately {}% of test elements | last: {}'.format(
+                    path.parent.name, count, perf_estimated_percent(count), last or 'none yet'))
             self.next_perf_report = now + 600
             if reports:
                 report = reports[self.perf_report_index % len(reports)]
@@ -1018,7 +1027,12 @@ class Agent:
                       if '+f' in voice.strip().lower()]
             return random.choice(voices or ['en-us+f3'])
         spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
-        message = 'Conductor reporting. {} completed {} tests.'.format(spoken_name, count)
+        if count > PERF_ESTIMATED_TESTS:
+            message = ('Conductor reporting. The {} train is delayed. {} tests completed.'
+                       .format(spoken_name, count))
+        else:
+            message = ('Conductor reporting. {} completed {} tests. Approximately {} percent of test elements complete.'
+                       .format(spoken_name, count, perf_estimated_percent(count)))
         duration = self.synthesize_announcement(path, message, female_voice, 50, conductor=True)
         if duration is not None:
             return duration

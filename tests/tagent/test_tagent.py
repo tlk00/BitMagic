@@ -412,7 +412,7 @@ class SupervisorTests(unittest.TestCase):
             self.agent.report_perf_progress()
             sound.assert_called_with('perf-progress', workers=('perf_release_avx2', 2))
         output = (self.agent.home / 'agent.log').read_text()
-        self.assertIn('perf_release | 2 completed | last: second ; 1 min', output)
+        self.assertIn('perf_release | 2 completed | approximately 1% of test elements | last: second ; 1 min', output)
         self.assertNotIn('unfinished; 2 sec', output)
 
     def test_build_progress_counts_both_logs_once(self):

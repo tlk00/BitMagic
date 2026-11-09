@@ -767,6 +767,11 @@ class SoundtrackTests(unittest.TestCase):
                 argv = command.call_args.args[0]
                 self.assertEqual(argv[argv.index('-v') + 1], 'en-us+f4')
                 self.assertIn('perf avx2 completed 63 tests', argv[-1])
+                self.assertIn('Approximately 33 percent of test elements complete', argv[-1])
+                self.assertEqual(tagent.perf_estimated_percent(189), 99)
+                self.assertEqual(tagent.perf_estimated_percent(250), 99)
+                agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release_avx2', 250))
+                self.assertIn('perf avx2 train is delayed. 250 tests completed', command.call_args.args[0][-1])
                 agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release_64', 12))
                 self.assertIn('perf 64 completed 12 tests', command.call_args.args[0][-1])
             agent.tts_engine = None
