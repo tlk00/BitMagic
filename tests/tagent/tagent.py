@@ -442,7 +442,7 @@ class Agent:
                             stream.seek(max(0, log.stat().st_size - 16384))
                             tail = stream.read().decode(errors='replace')
                         if any(line.startswith('FAIL   ') for line in tail.splitlines()):
-                            raise CommandFailure('Stress group failed | ' + str(log))
+                            raise CommandFailure('Stress group failed\n' + self.stress_failure_details(log))
                     if timeout and time.monotonic() - started >= timeout:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
                     if self.stopping.is_set():
@@ -466,7 +466,8 @@ class Agent:
             if proc.returncode in allowed_exit_codes:
                 return str(proc.returncode)
             if proc.returncode:
-                detail = str(log) if log else (result or '')[-2000:]
+                detail = (self.stress_failure_details(log) if log and log.name == 'runner.log'
+                          else str(log) if log else (result or '')[-2000:])
                 raise CommandFailure('{} exited {} | {}'.format(shlex.join(map(str, argv)), proc.returncode, detail))
             return result or ''
         finally:
@@ -481,6 +482,40 @@ class Agent:
                     self.perf_logs.pop(proc, None)
             if log:
                 output.close()
+
+    def stress_failure_details(self, log):
+        """Describe failed parallel groups and provide operator-ready copy commands.
+
+        log is the stress runner log. Missing or incomplete details preserve the
+        runner path so diagnostics never hide the original process failure.
+        """
+        details = ['Stress variant: ' + log.parent.name, 'Runner log: ' + str(log)]
+        try:
+            lines = log.read_text(errors='replace').splitlines()
+            for index, line in enumerate(lines):
+                if not line.startswith('FAIL   '):
+                    continue
+                details.append('Failed group: ' + line[len('FAIL   '):].strip())
+                for following in lines[index + 1:index + 3]:
+                    if following.strip().startswith('Details: '):
+                        path = Path(following.strip()[len('Details: '):])
+                        details.append('Diagnostic log: ' + str(path))
+                        destination = 'TAgent-' + log.parent.name + '-' + path.name
+                        details.append('COPY: cp -- ' + shlex.quote(str(path)) + ' ' +
+                                       shlex.quote(destination))
+                        try:
+                            with path.open('rb') as stream:
+                                stream.seek(max(0, path.stat().st_size - 8192))
+                                tail = stream.read().decode(errors='replace').splitlines()[-12:]
+                            details.extend('  ' + entry for entry in tail)
+                        except OSError as error:
+                            details.append('Cannot read diagnostic log: ' + str(error))
+                        break
+        except OSError as error:
+            details.append('Cannot read runner log: ' + str(error))
+        details.append('COPY runner: cp -- ' + shlex.quote(str(log)) + ' ' +
+                       shlex.quote('TAgent-' + log.parent.name + '-runner.log'))
+        return '\n'.join(details)
 
     def git(self, *args):
         """Run a bounded noninteractive Git command and return stripped stdout."""
@@ -1080,7 +1115,9 @@ class Agent:
                 self.say('Fetch failed: ' + str(error))
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise Failure('Recovery window exhausted; operator intervention required')
+                context = ('; test failure details: ' + str(self.home / 'last-test-failure.txt')
+                           if failed_commit else '')
+                raise Failure('Recovery window exhausted; operator intervention required' + context)
             self.sound('fail')
             self.pause(min(delay, remaining), 'RECOVERY')
             delay = min(600, delay * 2)
@@ -1243,7 +1280,10 @@ class Agent:
                     return 'updated'
             return True
         except CommandFailure as error:
+            (self.home / 'last-test-failure.txt').write_text(
+                'Commit: ' + self.commit + '\n' + str(error) + '\n')
             self.say('TEST FAILURE ' + str(error))
+            self.say('Failure report: ' + str(self.home / 'last-test-failure.txt'))
             self.stopping.clear()
             self.sound('fail')
             return False

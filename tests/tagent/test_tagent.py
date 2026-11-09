@@ -52,6 +52,27 @@ class SupervisorTests(unittest.TestCase):
                 (directory / 'run_all_pl.sh').write_text(
                     '#!/bin/bash\nset -eu\ncd "$(dirname "$0")"\n"$2" -ll\n"$2" -s\n')
 
+    def test_stress_failure_operator_report(self):
+        """Expose the failed group, its assertion, and quoted copy paths."""
+        work = self.root / 'stress_debug'
+        work.mkdir()
+        diagnostic = work / 'group logs' / 'svser.log'
+        diagnostic.parent.mkdir()
+        diagnostic.write_text("Assertion allocator size failed\n")
+        runner = work / 'runner.log'
+        runner.write_text('START  -svser\nFAIL   -svser (exit 134, 00:00:13)\n'
+                          '       Details: ' + str(diagnostic) + '\n')
+        report = self.agent.stress_failure_details(runner)
+        self.assertIn('Stress variant: stress_debug', report)
+        self.assertIn('Failed group: -svser (exit 134', report)
+        self.assertIn('Assertion allocator size failed', report)
+        self.assertIn("COPY: cp -- '", report)
+        self.assertIn('TAgent-stress_debug-svser.log', report)
+        diagnostic.unlink()
+        self.assertIn('Cannot read diagnostic log', self.agent.stress_failure_details(runner))
+        runner.unlink()
+        self.assertIn('Cannot read runner log', self.agent.stress_failure_details(runner))
+
     def test_success_and_isolation(self):
         """All expected builds run with perf release-only and isolated stress files."""
         self.fixture()

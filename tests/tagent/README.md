@@ -382,3 +382,8 @@ completed count instead of a percentage.
 Spoken update reports identify dispatch; a TAgent self-update announces that the
 launcher is restarting before it restarts. The prerecorded departure announcements
 remain station announcements.
+
+On a parallel stress failure, TAgent prints the variant, failed group and exit
+status, diagnostic log path, its last 12 lines, and quoted copy commands. A compact
+`TAgent-logs/last-test-failure.txt` preserves the report; recovery exhaustion points
+to it so the original failure remains easy to find.
