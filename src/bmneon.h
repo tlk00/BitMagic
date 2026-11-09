@@ -24,7 +24,13 @@ For more information please visit:  http://bitmagic.io
     Whole-block operations consume set_block_size words, digest operations
     consume set_block_digest_wave_size words. Range endpoints are exclusive.
 */
+// Native MSVC ARM64 uses a different intrinsic header; Clang (including
+// clang-cl) and GCC provide arm_neon.h through their compiler headers.
+#if defined(_MSC_VER) && defined(_M_ARM64) && !defined(__clang__)
+#include <arm64_neon.h>
+#else
 #include <arm_neon.h>
+#endif
 #include <cstring>
 #include "bmdef.h"
 #include "bmconst.h"
