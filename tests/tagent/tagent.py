@@ -132,6 +132,9 @@ def arguments():
                         help='use local Piper or eSpeak NG when available')
     parser.add_argument('--piper-python', default=os.environ.get('PIPER_PYTHON', '~/piper-demo/.venv/bin/python'))
     parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL', '~/piper-demo/en_US-lessac-medium.onnx'))
+    parser.add_argument('--no-piper-install', action='store_true',
+                        default=os.environ.get('PIPER_INSTALL', 'yes') == 'no',
+                        help='do not create a user virtual environment or install Piper')
     parser.add_argument('--no-piper-download', action='store_true',
                         default=os.environ.get('PIPER_DOWNLOAD', 'yes') == 'no',
                         help='do not download a missing Piper voice')
@@ -504,23 +507,67 @@ class Agent:
                 self.say('TTS: eSpeak NG unavailable; using prerecorded voice')
 
     def start_piper_download(self):
-        """Download a missing named voice in the background when Piper is installed."""
+        """Prepare Piper and its voice asynchronously without delaying test work."""
         if (self.args.tts != 'auto' or self.args.no_sound or self.args.sound_volume == 0
-                or self.args.no_piper_download or self.args.check or self.piper_available
-                or not self.piper_python.is_file() or not os.access(self.piper_python, os.X_OK)):
+                or self.args.check):
+            return
+        python_exists = self.piper_python.is_file() and os.access(self.piper_python, os.X_OK)
+        if not python_exists:
+            root = self.piper_python.parent.parent
+            safe_new_venv = (self.piper_python.name in ('python', 'python3') and
+                             self.piper_python.parent.name == 'bin' and root.name == '.venv' and
+                             not root.exists())
+            if self.args.no_piper_install or not safe_new_venv:
+                self.say('Piper environment unavailable; continuing with TTS fallback')
+                return
+        if not self.piper_available and self.args.no_piper_download:
             return
         voice = self.piper_model.stem
         if self.piper_model.suffix != '.onnx' or not re.fullmatch(r'[A-Za-z]{2,3}_[A-Za-z]{2}-[A-Za-z0-9_]+-(?:x_low|low|medium|high)', voice):
             self.say('Piper voice path is not a downloadable voice name; using fallback')
             return
-        self.say('Piper voice missing; downloading {} in background'.format(voice))
+        self.say('Checking Piper environment and voice {} in background'.format(voice))
+        self.piper_available = False
         self.piper_download_thread = threading.Thread(target=self.download_piper_voice,
                                                       args=(voice,), daemon=True)
         self.piper_download_thread.start()
 
-    def download_piper_voice(self, voice):
-        """Stage and validate a voice before installing missing files; never block tests."""
+    def ensure_piper_engine(self):
+        """Check Piper and install it only into an explicitly user-owned venv."""
+        root = self.piper_python.parent.parent
+        if not self.piper_python.is_file():
+            if self.args.no_piper_install or root.exists():
+                raise Failure('Piper virtual environment unavailable')
+            root.parent.mkdir(parents=True, exist_ok=True)
+            self.say('Creating Piper virtual environment: ' + str(root))
+            self.command([sys.executable, '-m', 'venv', str(root)], timeout=120)
+        probe = [str(self.piper_python), '-c',
+                 'import importlib.util,sys; sys.exit(0 if importlib.util.find_spec("piper") else 1)']
         try:
+            self.command(probe, timeout=20)
+            return
+        except CommandFailure:
+            if self.args.no_piper_install or not (root / 'pyvenv.cfg').is_file():
+                raise Failure('Piper is not installed in a writable virtual environment')
+        self.say('Installing Piper in virtual environment: ' + str(root))
+        self.command([str(self.piper_python), '-m', 'pip', 'install',
+                      '--disable-pip-version-check', 'piper-tts'], timeout=300)
+        self.command(probe, timeout=20)
+
+    def download_piper_voice(self, voice):
+        """Prepare Piper and stage a missing voice; failures preserve TTS fallback."""
+        try:
+            self.ensure_piper_engine()
+            config_path = Path(str(self.piper_model) + '.json')
+            if (self.piper_model.is_file() and self.piper_model.stat().st_size > 0 and
+                    config_path.is_file() and config_path.stat().st_size > 0):
+                self.piper_available = True
+                self.piper_failed = False
+                self.say('TTS: Piper ready (' + str(self.piper_model) + ')')
+                return
+            if self.args.no_piper_download:
+                return
+            self.say('Piper voice missing; downloading {}'.format(voice))
             self.piper_model.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.TemporaryDirectory(prefix='.tagent-piper-', dir=self.piper_model.parent) as temp:
                 directory = Path(temp)
@@ -544,10 +591,11 @@ class Agent:
                 self.piper_available = (self.piper_model.is_file() and
                                         Path(str(self.piper_model) + '.json').is_file())
                 if self.piper_available:
+                    self.piper_failed = False
                     self.say('TTS: Piper voice ready (' + str(self.piper_model) + ')')
         except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
             if not self.stopping.is_set():
-                self.say('Piper voice download failed ({}); continuing with TTS fallback'.format(error))
+                self.say('Piper setup or voice download failed ({}); continuing with TTS fallback'.format(error))
 
     def wait_for_audio(self, timeout=300):
         """Wait in short interruptible steps for a bounded in-flight audio clip.

@@ -509,6 +509,8 @@ class SoundtrackTests(unittest.TestCase):
             started, release = threading.Event(), threading.Event()
             def command(argv, **kwargs):
                 """Emulate the downloader and Piper's WAV validation probe."""
+                if '-c' in argv:
+                    return ''
                 if 'piper.download_voices' in argv:
                     started.set()
                     release.wait(5)
@@ -542,6 +544,8 @@ class SoundtrackTests(unittest.TestCase):
                 agent = tagent.Agent(tagent.arguments())
             agent.tts_engine = '/fake/espeak-ng'
             def failed_download(argv, **kwargs):
+                if '-c' in argv:
+                    return ''
                 staging = Path(argv[argv.index('--data-dir') + 1])
                 (staging / model.name).write_bytes(b'partial')
                 raise tagent.CommandFailure('offline')
@@ -562,6 +566,86 @@ class SoundtrackTests(unittest.TestCase):
             agent = tagent.Agent(tagent.arguments())
             agent.start_piper_download()
             self.assertIsNone(agent.piper_download_thread)
+
+    def test_piper_bootstrap_creates_user_venv_and_installs_voice(self):
+        """A fresh target is provisioned in its own venv without system installs."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'piper-demo'
+            venv = root / '.venv'
+            python = venv / 'bin' / 'python'
+            model = root / 'en_US-lessac-medium.onnx'
+            with patch('sys.argv', ['tagent', '--state-dir', directory, '--tts', 'auto',
+                                     '--piper-python', str(python), '--piper-model', str(model)]):
+                agent = tagent.Agent(tagent.arguments())
+            calls, installed = [], [False]
+            def command(argv, **kwargs):
+                calls.append(argv)
+                if 'venv' in argv:
+                    python.parent.mkdir(parents=True)
+                    python.write_text('#!/bin/sh\nexit 0\n')
+                    python.chmod(0o755)
+                    (venv / 'pyvenv.cfg').write_text('home = /tmp\n')
+                elif '-c' in argv:
+                    if not installed[0]:
+                        raise tagent.CommandFailure('module missing')
+                elif 'pip' in argv:
+                    installed[0] = True
+                elif 'piper.download_voices' in argv:
+                    staging = Path(argv[argv.index('--data-dir') + 1])
+                    (staging / model.name).write_bytes(b'model')
+                    (staging / (model.name + '.json')).write_text('{}')
+                else:
+                    with wave.open(argv[argv.index('-f') + 1], 'wb') as stream:
+                        stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                        stream.writeframes(b'\0\0' * 2205)
+            with patch.object(agent, 'command', side_effect=command):
+                agent.start_piper_download()
+                agent.piper_download_thread.join(5)
+            self.assertTrue(agent.piper_available)
+            self.assertTrue(any('venv' in argv for argv in calls))
+            install = next(argv for argv in calls if 'pip' in argv)
+            self.assertEqual(install[0], str(python))
+            self.assertIn('piper-tts', install)
+
+    def test_piper_bootstrap_does_not_install_into_system_python(self):
+        """A configured interpreter outside a venv is never modified."""
+        with tempfile.TemporaryDirectory() as directory:
+            python = Path(directory) / 'system' / 'bin' / 'python'
+            python.parent.mkdir(parents=True)
+            python.write_text('#!/bin/sh\nexit 0\n')
+            python.chmod(0o755)
+            with patch('sys.argv', ['tagent', '--state-dir', directory, '--piper-python', str(python)]):
+                agent = tagent.Agent(tagent.arguments())
+            with patch.object(agent, 'command', side_effect=tagent.CommandFailure('missing')) as command:
+                with self.assertRaisesRegex(tagent.Failure, 'virtual environment'):
+                    agent.ensure_piper_engine()
+            self.assertEqual(command.call_count, 1)
+
+    def test_piper_bootstrap_install_failure_uses_fallback(self):
+        """A failed package installation cannot block or disable eSpeak fallback."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'piper-demo'
+            python = root / '.venv' / 'bin' / 'python'
+            model = root / 'en_US-lessac-medium.onnx'
+            with patch('sys.argv', ['tagent', '--state-dir', directory, '--tts', 'auto',
+                                     '--piper-python', str(python), '--piper-model', str(model)]):
+                agent = tagent.Agent(tagent.arguments())
+            agent.tts_engine = '/fake/espeak-ng'
+            def command(argv, **kwargs):
+                if 'venv' in argv:
+                    python.parent.mkdir(parents=True)
+                    python.write_text('#!/bin/sh\nexit 0\n')
+                    python.chmod(0o755)
+                    (root / '.venv' / 'pyvenv.cfg').write_text('home = /tmp\n')
+                else:
+                    raise tagent.CommandFailure('offline or missing module')
+            with patch.object(agent, 'command', side_effect=command):
+                agent.start_piper_download()
+                agent.piper_download_thread.join(5)
+            self.assertFalse(agent.piper_available)
+            self.assertEqual(agent.tts_engine, '/fake/espeak-ng')
+            self.assertFalse(model.exists())
+            self.assertIn('continuing with TTS fallback', (Path(directory) / 'agent.log').read_text())
 
     def test_perf_progress_female_tts_and_fallback(self):
         """The conductor speaks the chosen variant/count or uses a neutral sound."""

@@ -315,13 +315,16 @@ disables both engines. By default Piper uses `~/piper-demo/.venv/bin/python`
 and `~/piper-demo/en_US-lessac-medium.onnx` with its `.onnx.json` file alongside.
 Change `PIPER_PYTHON` and `PIPER_MODEL` in the launcher or environment, or use
 `--piper-python` and `--piper-model`, to select another installation or voice.
-If the Python environment exists but the named Piper voice is missing, TAgent
-downloads it in the background, validates it by generating a short WAV, and
-uses eSpeak or the existing sound fallback until it is ready. Downloads are
-bounded and failures do not stop tests. A standalone sound preview waits for
-the download attempt before playing. Set `PIPER_DOWNLOAD=no` or pass
-`--no-piper-download` to disable this behavior. Piper itself is not installed
-automatically. `TTS_VOICE=en-us+m3` selects the
+When needed, TAgent creates the default user-local virtual environment and
+installs `piper-tts` in the background; it does not use sudo or modify system
+Python. An existing configured interpreter is only modified if it belongs to a
+virtual environment. A missing named voice is downloaded into staging and
+validated by generating a short WAV before installation. TAgent uses eSpeak or
+the existing sound fallback until Piper is ready. Setup is bounded and failures
+do not stop tests. A standalone sound preview waits for the setup attempt.
+Set `PIPER_INSTALL=no` or pass `--no-piper-install` to disable engine installation;
+set `PIPER_DOWNLOAD=no` or pass `--no-piper-download` to disable voice downloads.
+`TTS_VOICE=en-us+m3` selects the
 eSpeak voice. These settings can be
 edited at the top of the launcher, set in the environment, or overridden by
 `--tts auto|off` and `--tts-voice NAME`. Synthesis runs in the audio thread, has

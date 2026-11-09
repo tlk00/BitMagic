@@ -16,6 +16,7 @@ SOUND_THEME=${SOUND_THEME:-steampunk}
 TTS_MODE=${TTS_MODE:-auto}      # auto | off
 PIPER_PYTHON=${PIPER_PYTHON:-$HOME/piper-demo/.venv/bin/python}
 PIPER_MODEL=${PIPER_MODEL:-$HOME/piper-demo/en_US-lessac-medium.onnx}
+PIPER_INSTALL=${PIPER_INSTALL:-yes}    # yes | no: install Piper in its user venv
 PIPER_DOWNLOAD=${PIPER_DOWNLOAD:-yes}  # yes | no: download a missing voice
 TTS_VOICE=${TTS_VOICE:-en-us+m3}
 DISPATCHER_VOICE=${DISPATCHER_VOICE:-en-us+f3,en-us+f4,en-us+m3}  # comma-separated
@@ -32,7 +33,7 @@ command -v "$PYTHON" >/dev/null || { echo 'Python 3.9+ is required' >&2; exit 1;
 TAGENT_TTS_ENGINE="$(command -v espeak-ng || true)"
 TAGENT_TTS_CHECKED=1
 export TAGENT_TTS_ENGINE TAGENT_TTS_CHECKED TTS_MODE TTS_VOICE DISPATCHER_VOICE BUILD_REPORT_SECONDS
-export PIPER_PYTHON PIPER_MODEL PIPER_DOWNLOAD
+export PIPER_PYTHON PIPER_MODEL PIPER_INSTALL PIPER_DOWNLOAD
 export SOUND_THEME SOUND_VOLUME DEPOT_SOUND
 export STARTUP LOG_RETENTION_DAYS
 export POLL_MINUTES RETRY_MINUTES RESERVE_CPUS JOBS MIN_FREE_GB REMOTE BRANCH SOUND PYTHON
