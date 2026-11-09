@@ -54,13 +54,14 @@ def render_dispatch(path, volume=0.35):
     return frames / RATE
 
 
-def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, background="train", voice_gain=1.0):
+def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, background="train", voice_gain=1.0, radio=False):
     """Mix mono 16-bit TTS with quiet procedural steam/wheels into a mono WAV.
 
     voice_path must be a nonempty, uncompressed, mono 16-bit PCM WAV; arbitrary
     positive sample rates are linearly resampled to RATE. volume is [0,1], and
     workers/budget control wheel cadence; background is train or quiet build steam.
-    voice_gain adjusts speech independently of the sound bed. Returns duration.
+    voice_gain adjusts speech independently of the sound bed. radio adds brief
+    static bursts at transmission boundaries. Returns duration.
     """
     if not math.isfinite(volume) or not 0 <= volume <= 1:
         raise ValueError('Volume must be between 0 and 1')
@@ -96,7 +97,13 @@ def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, backg
         bed = .04 * filtered
         if background == 'train':
             bed += .14 * wheel_clatter(t, rail_rate, filtered) + .02 * math.sin(2 * math.pi * 42 * t)
-        sample = round(32767 * volume * (.85 * voice_gain * spoken + fade * bed))
+        crackle = 0.0
+        if radio:
+            for start, end in ((.08, .22), (duration - .33, duration - .17)):
+                if start <= t < end:
+                    envelope = min(1, (t - start) / .015, (end - t) / .025)
+                    crackle += .17 * envelope * rng.uniform(-1, 1)
+        sample = round(32767 * volume * (.85 * voice_gain * spoken + fade * bed + crackle))
         result.append(max(-32768, min(32767, sample)))
     if sys.byteorder != 'little':
         result.byteswap()
@@ -135,7 +142,7 @@ def render_build_summary_fallback(path, errors, warnings, success, volume):
                     source.setpos(offset)
                     result.writeframes(source.readframes(length))
                     result.writeframes(b'\0' * (rate // 20 * 2))
-        return mix_dynamic_dispatch(voice, path, volume, 1, 1, background='build')
+        return mix_dynamic_dispatch(voice, path, volume, 1, 1, background='build', radio=True)
 
 
 def morse_intervals(text, unit=0.105, lead=0.3):

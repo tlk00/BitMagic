@@ -39,6 +39,15 @@ def perf_estimated_percent(count):
     return min(99, max(0, round(count * 100 / PERF_ESTIMATED_TESTS)))
 
 
+DISPATCH_JOKER_REPLIES = (
+    'Dispatch to Engineer Joe. Thank you. Please keep the radio clear for railway business.',
+    'Dispatch to Engineer Joe. That was noted. Radio silence, please.',
+    'Dispatch to Engineer Joe. This frequency is for train operations, not stand-up comedy.',
+    'Dispatch to Engineer Joe. Maintain radio discipline. The timetable is suffering enough.',
+    'Dispatch to Engineer Joe. Enough. One more joke and you can explain it to the yardmaster.',
+)
+
+
 class Failure(RuntimeError):
     """An operational failure, or a failed build/test with its recorded command."""
 
@@ -113,37 +122,77 @@ def build_report_text(count, progress=None):
 
 def arguments():
     """Return validated CLI configuration, defaulting to launcher environment."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    for name, default in [('poll-minutes', 5), ('retry-minutes', 60),
-                          ('reserve-cpus', 2), ('jobs', 0), ('min-free-gb', 5),
-                          ('log-retention-days', 7), ('build-report-seconds', 60)]:
-        parser.add_argument('--' + name, type=float, default=float(
-            os.environ.get(name.upper().replace('-', '_'), default)))
+    parser = argparse.ArgumentParser(
+        prog='run_tagent.sh',
+        description='Build and test BitMagic on new commits, with optional railway sounds.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=('Examples:\n'
+                '  ./run_tagent.sh --sound-volume 0.20\n'
+                '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs\n'
+                '  ./run_tagent.sh --sound-preview joker\n'
+                '  ./run_tagent.sh --once --jobs 4\n'
+                '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15\n\n'
+                'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'all', 'perf-progress',
+                'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
+                'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
+                'Defaults reflect launcher settings or environment variables; command-line options override them.'))
+    numeric_options = [
+        ('poll-minutes', 5, 'minutes between remote checks'),
+        ('retry-minutes', 60, 'recovery window in minutes for network errors or waiting for a fix'),
+        ('reserve-cpus', 2, 'CPUs reserved when calculating the automatic worker budget'),
+        ('jobs', 0, 'maximum parallel workers; 0 chooses available CPUs minus reserved CPUs'),
+        ('min-free-gb', 5, 'minimum free GiB required on both repository and log filesystems'),
+        ('log-retention-days', 7, 'remove eligible old cycle log directories after this many days'),
+        ('build-report-seconds', 60, 'initial build status interval; each subsequent interval grows by 10 seconds'),
+    ]
+    for name, default, description in numeric_options:
+        value = float(os.environ.get(name.upper().replace('-', '_'), default))
+        parser.add_argument('--' + name, type=float, default=value,
+                            help=description + ' (default: %(default)s)')
     for name, default in [('remote', 'origin'), ('branch', 'master')]:
-        parser.add_argument('--' + name, default=os.environ.get(name.upper(), default))
-    parser.add_argument('--state-dir', type=Path)
+        parser.add_argument('--' + name, default=os.environ.get(name.upper(), default),
+                            help='Git ' + name + ' to monitor (default: %(default)s)')
+    parser.add_argument('--log-dir', '--state-dir', dest='state_dir', type=Path,
+                        default=os.environ.get('LOG_DIR') or None,
+                        help='directory for logs and persistent state (default: LOG_DIR or repo/TAgent-logs)')
     parser.add_argument('--startup', choices=('build', 'changed'),
                         default=os.environ.get('STARTUP', 'build'),
-                        help='build on every manual start (default), or only when changed')
+                        help='build on every manual start, or only when changed (default: %(default)s)')
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
-    for name in ['pedantic', 'avx512', 'once', 'check', 'force']:
-        parser.add_argument('--' + name, action='store_true')
+    flags = {
+        'pedantic': 'run expanded perf and release stress coverage; debug stress remains fast',
+        'avx512': 'build and test AVX-512 variants when supported',
+        'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
+        'check': 'validate local prerequisites only; do not fetch, build, or test',
+        'force': 'force a build and test cycle even if the commit was already tested',
+        'restart-on-update': 'stop active builds/tests and restart launcher when a new commit is detected',
+    }
+    for name, description in flags.items():
+        parser.add_argument('--' + name, action='store_true', help=description)
     parser.add_argument('--no-sound', action='store_true',
-                        default=os.environ.get('SOUND', 'yes') == 'no')
+                        default=os.environ.get('SOUND', 'yes') == 'no',
+                        help='disable all local sound and speech')
     parser.add_argument('--no-depot', action='store_true',
                         default=os.environ.get('DEPOT_SOUND', 'yes') == 'no',
                         help='disable steampunk depot and train ambience')
     parser.add_argument('--sound-theme', choices=soundtrack.THEMES,
-                        default=os.environ.get('SOUND_THEME', 'steampunk'))
+                        default=os.environ.get('SOUND_THEME', 'steampunk'),
+                        help='sound theme (default: %(default)s)')
     parser.add_argument('--sound-volume', type=float,
-                        default=float(os.environ.get('SOUND_VOLUME', '0.35')))
+                        default=float(os.environ.get('SOUND_VOLUME', '0.35')),
+                        help='overall TAgent sound level from 0.0 (silent) to 1.0 (maximum); '
+                             'independent of system volume (default: %(default)s)')
     parser.add_argument('--tts', choices=('auto', 'off'),
                         default=os.environ.get('TTS_MODE', 'auto'),
-                        help='use local Piper or eSpeak NG when available')
-    parser.add_argument('--piper-python', default=os.environ.get('PIPER_PYTHON', '~/piper-demo/.venv/bin/python'))
-    parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL', '~/piper-demo/en_US-lessac-medium.onnx'))
+                        help='auto: use Piper then eSpeak NG when available; off: use prerecorded audio (default: %(default)s)')
+    parser.add_argument('--piper-python', default=os.environ.get('PIPER_PYTHON', '~/piper-demo/.venv/bin/python'),
+                        help='Python executable for Piper (default: %(default)s)')
+    parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL', '~/piper-demo/en_US-lessac-medium.onnx'),
+                        help='Piper dispatcher voice model (default: %(default)s)')
     parser.add_argument('--piper-conductor-model', default=os.environ.get(
-        'PIPER_CONDUCTOR_MODEL', '~/piper-demo/en_GB-southern_english_female-low.onnx'))
+        'PIPER_CONDUCTOR_MODEL', '~/piper-demo/en_GB-southern_english_female-low.onnx'),
+                        help='Piper conductor voice model (default: %(default)s)')
     parser.add_argument('--no-joker', action='store_true', help='disable engineer jokes')
     parser.add_argument('--no-piper-install', action='store_true',
                         default=os.environ.get('PIPER_INSTALL', 'yes') == 'no',
@@ -151,13 +200,14 @@ def arguments():
     parser.add_argument('--no-piper-download', action='store_true',
                         default=os.environ.get('PIPER_DOWNLOAD', 'yes') == 'no',
                         help='do not download a missing Piper voice')
-    parser.add_argument('--tts-voice', default=os.environ.get('TTS_VOICE', 'en-us+m3'))
+    parser.add_argument('--tts-voice', default=os.environ.get('TTS_VOICE', 'en-us+m3'),
+                        help='eSpeak voice for crew-count reports (default: %(default)s)')
     parser.add_argument('--dispatcher-voice', default=os.environ.get('DISPATCHER_VOICE', 'en-us+f3,en-us+f4,en-us+m3'),
-                        help='comma-separated eSpeak NG voices for build reports')
+                        help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', choices=soundtrack.EVENTS + ('joker', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
-                        help='Play one event, or all sounds when omitted, without Git/build validation')
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+                        help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.full_sound_preview = args.sound_preview == 'all'
     if args.full_sound_preview:
@@ -205,6 +255,29 @@ def available_cpus():
     return count
 
 
+def prepare_log_directory(path, min_free_gb):
+    """Create and probe log storage; reject unwritable or undersized destinations.
+
+    path is the resolved destination; min_free_gb is the required free-space
+    reserve. Probe creation, writing and removal using the current user's rights.
+    """
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.tagent-check-', dir=path) as probe:
+            test = Path(probe) / 'write-test'
+            with test.open('wb') as stream:
+                stream.write(b'TAgent storage check\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+            test.unlink()
+        free_gb = shutil.disk_usage(path).free / 1024**3
+        if free_gb < min_free_gb:
+            raise Failure('Log directory {} has {:.2f} GB free; requires {:.2f} GB'.format(
+                path, free_gb, min_free_gb))
+    except OSError as error:
+        raise Failure('Cannot create or write log directory {}: {}'.format(path, error)) from error
+
+
 class Agent:
     """Owns configuration, process lifetime, logs and update/recovery state."""
 
@@ -212,8 +285,8 @@ class Agent:
         """Initialize local paths and tracking; args is validated CLI configuration."""
         self.args = args
         self.repo = Path(__file__).resolve().parents[2]
-        self.home = (args.state_dir or self.repo / 'TAgent-logs').resolve()
-        self.home.mkdir(parents=True, exist_ok=True)
+        self.home = Path(args.state_dir or self.repo / 'TAgent-logs').expanduser().resolve()
+        prepare_log_directory(self.home, args.min_free_gb)
         self.children = set()
         self.mutex = threading.RLock()
         self.stopping = threading.Event()
@@ -226,6 +299,7 @@ class Agent:
         self.audio_thread = None
         self.audio_active = None
         self.audio_epoch = 0
+        self.joker_reply_thread = None
         self.audio_mutex = threading.Lock()
         self.depot = None
         self.audio_warned = False
@@ -358,9 +432,10 @@ class Agent:
                 self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
                 if tip != self.commit:
                     self.pending_tip = tip
-                    if self.stress_stop_file is not None:
+                    if self.stress_stop_file is not None and not self.args.restart_on_update:
                         self.stress_stop_file.touch()
-                    self.say('New commit ' + tip[:12] + '; waiting for current tests to finish')
+                    action = 'stopping active work for restart' if self.args.restart_on_update else 'waiting for current tests to finish'
+                    self.say('New commit ' + tip[:12] + '; ' + action)
                 else:
                     self.pending_tip = None
                     self.say('REMOTE CHECK OK | no new commits | ' + tip[:12])
@@ -418,7 +493,8 @@ class Agent:
             with self.mutex:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
-                if log and log.name == 'perf.log' and self.pending_tip:
+                if log and self.pending_tip and (log.name == 'perf.log' or
+                        (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
                 env = dict(os.environ, GIT_TERMINAL_PROMPT='0',
@@ -449,11 +525,18 @@ class Agent:
                         raise Failure('Job cancelled')
                     if log and log.name in ('build-perf.log', 'build-stress.log'):
                         self.build_progress(log)
+                        if self.args.restart_on_update:
+                            self.poll_remote()
+                            if self.pending_tip:
+                                return 'skipped-update'
                     else:
                         self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
                     if log and log.name in ('perf.log', 'runner.log'):
                         self.report_joker()
                         self.poll_remote()
+                        if self.args.restart_on_update and self.pending_tip:
+                            self.perf_skipped = True
+                            return 'skipped-update'
                         if log.name == 'perf.log':
                             self.report_perf_progress()
                         workers = len(self.perf_workers)
@@ -776,13 +859,43 @@ class Agent:
                 self.depot.mute()
             if self.stopping.is_set() or epoch != self.audio_epoch:
                 return
-            self.play_sound(event, workers)
+            played = self.play_sound(event, workers)
+            if event == 'fail' and played and self.args.tts == 'auto':
+                for distress_event in ('distress-engineer', 'distress-dispatch'):
+                    if self.stopping.wait(.7) or epoch != self.audio_epoch:
+                        break
+                    self.play_sound(distress_event, 1)
+            if event == 'joker' and played and epoch == self.audio_epoch:
+                self.joker_reply_thread = threading.Thread(
+                    target=self.queue_joker_reply, args=(epoch,), daemon=True)
+                self.joker_reply_thread.start()
         finally:
             if self.depot:
                 self.depot.unmute()
             with self.audio_mutex:
                 if self.audio_active is threading.current_thread():
                     self.audio_active = None
+
+    def queue_joker_reply(self, epoch):
+        """Schedule dispatcher chatter after a pause, unless interrupted or superseded."""
+        delay = random.uniform(3, 7)
+        deadline = time.monotonic() + delay
+        while not self.stopping.is_set() and epoch == self.audio_epoch:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            self.stopping.wait(min(.25, remaining))
+        if self.stopping.is_set() or epoch != self.audio_epoch:
+            return
+        # An important announcement already queued takes precedence over chatter.
+        with self.audio_mutex:
+            if epoch != self.audio_epoch or (self.audio_thread and self.audio_thread.is_alive()):
+                return
+            message = random.choice(DISPATCH_JOKER_REPLIES)
+            self.say('DISPATCH: ' + message)
+            self.audio_thread = threading.Thread(target=self.play_after,
+                args=(None, 'joker-reply', message, epoch), daemon=True)
+            self.audio_thread.start()
 
     def start_test_sound(self, phase='perf'):
         """Announce a test phase without resetting the shared five-minute clock."""
@@ -870,7 +983,7 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
-    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False):
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False):
         """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
 
         voice is a callable so eSpeak voice selection happens only when needed.
@@ -898,9 +1011,10 @@ class Agent:
                 try:
                     self.command([str(self.piper_python), '-m', 'piper', '-m', str(model),
                                   '-f', str(speech), '--', text], timeout=60)
-                    duration = soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                    duration = soundtrack.mix_dynamic_dispatch(speech, path,
+                                                               min(1.0, self.args.sound_volume * 1.25) if distress else self.args.sound_volume,
                                                                workers, self.jobs, background=background,
-                                                               voice_gain=.85)
+                                                               voice_gain=.85, radio=True)
                     if conductor and self.conductor_engine != 'piper':
                         self.conductor_engine = 'piper'
                         self.say('TTS: Conductor using Piper (' + str(model) + ')')
@@ -919,9 +1033,10 @@ class Agent:
                 try:
                     self.command([self.tts_engine, '-v', voice(), '-s', '145', '-p', str(pitch),
                                   '-w', str(speech), text], timeout=15)
-                    duration = soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                    duration = soundtrack.mix_dynamic_dispatch(speech, path,
+                                                               min(1.0, self.args.sound_volume * 1.25) if distress else self.args.sound_volume,
                                                                workers, self.jobs, background=background,
-                                                               voice_gain=.85)
+                                                               voice_gain=.85, radio=True)
                     if conductor and self.conductor_engine != 'espeak':
                         self.conductor_engine = 'espeak'
                         self.say('TTS: Conductor using eSpeak NG fallback')
@@ -945,7 +1060,7 @@ class Agent:
         asset = Path(soundtrack.__file__).resolve().parent / 'assets' / (
             'build-warning.wav' if count else 'build-clear.wav')
         return soundtrack.mix_dynamic_dispatch(asset, path, self.args.sound_volume,
-                                               1, self.jobs, background='build')
+                                               1, self.jobs, background='build', radio=True)
 
     def render_build_summary(self, path, result):
         """Announce final success and exact diagnostic counts, with offline fallback."""
@@ -996,6 +1111,26 @@ class Agent:
                                                         background='train', engineer=True)
                 if duration is None:
                     return
+            elif event == 'distress-engineer':
+                text = ('Train engineer to Dispatch. Mayday, mayday, mayday. '
+                        'BitMagic freight train derailed. Requesting an emergency response team. '
+                        'Please confirm. Mayday, mayday, over.')
+                duration = self.synthesize_announcement(path, text, lambda: 'en-us+m3', 40,
+                                                        background='train', engineer=True, distress=True)
+                if duration is None:
+                    return False
+            elif event == 'distress-dispatch':
+                text = ('Dispatch to BitMagic engineer. Mayday received and confirmed. '
+                        'Emergency response team is on the way. Stand by. Over.')
+                duration = self.synthesize_announcement(path, text, self.dispatcher_voice, 50,
+                                                        background='train', distress=True)
+                if duration is None:
+                    return False
+            elif event == 'joker-reply':
+                duration = self.synthesize_announcement(path, workers, self.dispatcher_voice, 50,
+                                                        background='train')
+                if duration is None:
+                    return False
             elif event == 'perf-progress':
                 duration = self.render_perf_progress(path, workers)
             elif event in ('repo-new', 'repo-build', 'repo-unchanged', 'repo-restart'):
@@ -1016,7 +1151,8 @@ class Agent:
                 duration = self.render_dispatch(path, workers)
             else:
                 duration = soundtrack.render(path, self.args.sound_theme, event,
-                                             self.args.sound_volume, workers, self.jobs)
+                                             min(1.0, self.args.sound_volume * 1.25) if event == 'fail' else self.args.sound_volume,
+                                             workers, self.jobs)
             rendered = True
             # Explicit demos/previews still export WAVs on a headless machine.
             if not self.audio_available:
@@ -1025,7 +1161,7 @@ class Agent:
                 if shutil.which(player):
                     try:
                         self.command([player, str(path)], timeout=duration + 2)
-                        return
+                        return True
                     except (OSError, Failure):
                         pass
             if not self.console_notice:
@@ -1045,7 +1181,7 @@ class Agent:
 
     def render_repo_report(self, path, changed, redirect=False, restart=False):
         """Announce remote status with optional TTS and a distinct sound fallback."""
-        message = ('Dispatch to BitMagic. TAgent updated. Restarting the launcher and returning to the build depot.'
+        message = ('Dispatch to BitMagic. Updates received. Restarting TAgent. Freight is redirected to the build depot for a fresh build and tests.'
                    if restart else 'Dispatch to BitMagic. Updates received. Freight train diverted to the build depot.'
                    if redirect else 'Dispatch to BitMagic. Remote updates detected.' if changed else
                    'Dispatch to BitMagic. No new updates. The line is clear.')
@@ -1158,6 +1294,8 @@ class Agent:
         run.mkdir()
         self.active_run = run
         self.build_warnings = WarningCounter()
+        if self.args.restart_on_update:
+            self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
         self.build_report_interval = self.args.build_report_seconds
         self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
@@ -1187,23 +1325,28 @@ class Agent:
             family, _, _, argv, build_log = task
             self.say('BUILD ' + family + ' | ' + str(run))
             try:
-                self.command(argv, build_log)
+                return self.command(argv, build_log)
             finally:
                 with self.build_lock:
                     if build_log.exists():
                         self.build_warnings.observe(build_log, final=True)
 
         failures = []
+        interrupted_build = False
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, self.jobs)) as pool:
             futures = [pool.submit(run_build, task) for task in build_tasks]
             for future in concurrent.futures.as_completed(futures):
                 try:
-                    future.result()
+                    if future.result() == 'skipped-update':
+                        interrupted_build = True
                 except Failure as error:
                     failures.append(error)
         for path in self.build_logs:
             if path.exists():
                 self.build_warnings.observe(path, final=True)
+        if interrupted_build and not failures:
+            self.say('Build interrupted for remote update; fetching before restart')
+            return 'updated'
         if failures:
             self.finish_build(False)
             raise failures[0]
@@ -1245,7 +1388,7 @@ class Agent:
                 self.args.force = True
                 return 'updated'
             self.start_test_sound('stress')
-            for name in manifest['builds']['stress']:
+            for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
                 if not self.supported(name):
                     self.say('SKIP unsupported ' + name)
                     continue
@@ -1264,12 +1407,17 @@ class Agent:
                         '--jobs', str(self.jobs), '--fail-fast',
                         '--order-file', str(self.home / 'stress-order.tsv'),
                         '--stop-file', str(self.stress_stop_file)]
-                if self.args.pedantic:
+                if '_debug' in name:
+                    argv.append('--fast')
+                elif self.args.pedantic:
                     argv.append('--pedantic')
                 self.say('STRESS ' + name + ' | ' + str(work))
                 status = self.command(argv, work / 'runner.log', work, fail_fast=True,
                                       allowed_exit_codes=(75,))
                 self.stress_stop_file = None
+                if status == 'skipped-update':
+                    self.args.force = True
+                    return 'updated'
                 if status == '75':
                     # A branch may have moved back while the workers drained.
                     # Rebuild even then, since this stress suite is incomplete.
@@ -1299,6 +1447,7 @@ class Agent:
 
     def run(self):
         """Run update/build/test/wait loop; return exit status, or exec on self-update."""
+        self.say('Log directory: ' + str(self.home))
         self.report_audio()
         self.start_piper_download()
         self.start_conductor_download()
@@ -1311,7 +1460,7 @@ class Agent:
                     self.download_piper_voice('en_US-danny-low', self.joker_model, engineer=True)
             engineer_thread = threading.Thread(target=prepare_engineer, daemon=True)
             engineer_thread.start()
-            if self.args.sound_preview == 'joker':
+            if self.args.sound_preview in ('joker', 'fail'):
                 while engineer_thread.is_alive() and not self.stopping.is_set():
                     engineer_thread.join(timeout=.25)
         if (self.args.sound_demo or self.args.sound_preview) and self.piper_download_thread:
@@ -1369,13 +1518,19 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.home))
             return 0
         if self.args.sound_preview:
-            preview_count = ('Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)
+            preview_count = (random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
+                             'Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)
                              if self.args.sound_preview == 'joker' else ('perf_release_64', 12) if self.args.sound_preview == 'perf-progress' else
                              (0, 2, 4, 3, 7) if self.args.sound_preview == 'build-clear' else
                              (3, 5, 1, 7, 3) if self.args.sound_preview == 'build-warning' else
                              (0, 3, True) if self.args.sound_preview == 'build-final-ok' else
                              (2, 3, False) if self.args.sound_preview == 'build-final-failed' else self.jobs)
             self.sound(self.args.sound_preview, force=True, workers=preview_count)
+            if self.args.sound_preview == 'joker':
+                self.wait_for_audio()
+                if self.joker_reply_thread:
+                    self.joker_reply_thread.join(timeout=8)
+                self.wait_for_audio()
             return 0
         self.validate()
         if self.args.check:
@@ -1400,7 +1555,7 @@ class Agent:
                 self.git('merge', '--ff-only', tip)
                 self.commit = tip
                 updated = True
-                if agent_changed:
+                if agent_changed or self.args.restart_on_update:
                     self.say('Updates applied; diverting freight to the build depot')
                     self.sound('repo-restart')
                     self.wait_for_audio()
@@ -1446,7 +1601,11 @@ class Agent:
 
 def main():
     """Start agent, handle signals, and guarantee child cleanup and lock release."""
-    agent = Agent(arguments())
+    try:
+        agent = Agent(arguments())
+    except (Failure, OSError, ValueError) as error:
+        print('TAgent startup ERROR: ' + str(error), file=sys.stderr, flush=True)
+        return 1
     def interrupted(signum, frame):
         """Convert termination signals to an interrupt handled by the owner."""
         agent.stopping.set()

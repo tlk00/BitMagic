@@ -73,6 +73,26 @@ class SupervisorTests(unittest.TestCase):
         runner.unlink()
         self.assertIn('Cannot read runner log', self.agent.stress_failure_details(runner))
 
+    def test_external_log_storage(self):
+        """Create nested storage and diagnose invalid, denied and full locations."""
+        destination = self.root / 'external drive' / 'TAgent-logs'
+        ta.prepare_log_directory(destination, 0)
+        self.assertEqual(list(destination.iterdir()), [])
+        with patch('sys.argv', ['tagent', '--log-dir', str(destination)]):
+            self.assertEqual(ta.arguments().state_dir, destination)
+        with patch.dict(os.environ, {'LOG_DIR': str(destination)}), patch('sys.argv', ['tagent']):
+            self.assertEqual(ta.arguments().state_dir, destination)
+        file = self.root / 'file'
+        file.write_text('not a directory')
+        with self.assertRaisesRegex(ta.Failure, 'Cannot create or write log directory'):
+            ta.prepare_log_directory(file, 0)
+        with patch.object(ta.shutil, 'disk_usage', return_value=type('Usage', (), {'free': 0})()):
+            with self.assertRaisesRegex(ta.Failure, 'requires 5.00 GB'):
+                ta.prepare_log_directory(destination, 5)
+        with patch.object(ta.tempfile, 'TemporaryDirectory', side_effect=PermissionError('denied')):
+            with self.assertRaisesRegex(ta.Failure, 'denied'):
+                ta.prepare_log_directory(destination, 0)
+
     def test_success_and_isolation(self):
         """All expected builds run with perf release-only and isolated stress files."""
         self.fixture()
@@ -86,6 +106,54 @@ class SupervisorTests(unittest.TestCase):
         self.assertFalse((runs[0] / 'perf_debug').exists())
         self.assertEqual(len(list(runs[0].glob('stress_*/job.*/isolated-output'))), 8)
         self.assertTrue((runs[0] / 'manifest.json').exists())
+
+    def test_restart_on_update_interrupts_build_and_preserves_logs(self):
+        """An update during a build returns to fetch without treating it as a failure."""
+        self.fixture()
+        self.agent.args.restart_on_update = True
+        self.agent.pending_tip = 'd' * 40
+        with patch.object(self.agent, 'command', return_value='skipped-update'):
+            self.assertEqual(self.agent.cycle(), 'updated')
+        self.assertTrue(list(self.agent.home.glob('*abc123/manifest.json')))
+        self.assertFalse((self.agent.home / 'last-test-failure.txt').exists())
+
+    def test_restart_on_update_stops_active_test(self):
+        """A running process is terminated after a remote update heartbeat."""
+        self.agent.args.restart_on_update = True
+        def found_update():
+            self.agent.pending_tip = 'd' * 40
+        with patch.object(self.agent, 'poll_remote', side_effect=found_update):
+            status = self.agent.command(['bash', '-c', 'sleep 30'], self.root / 'perf.log')
+        self.assertEqual(status, 'skipped-update')
+        self.assertFalse(self.agent.children)
+
+    def test_restart_on_update_skips_new_work(self):
+        """No new test or build process starts after a restart is requested."""
+        self.agent.args.restart_on_update = True
+        self.agent.pending_tip = 'd' * 40
+        for name in ('perf.log', 'runner.log', 'build-perf.log'):
+            log = self.root / name
+            self.assertEqual(self.agent.command(['/definitely/not/a/program'], log), 'skipped-update')
+
+    def test_stress_debug_runs_last_and_fast_in_pedantic_mode(self):
+        """Release variants precede fast debug variants without conflicting flags."""
+        self.fixture()
+        self.agent.args.pedantic = True
+        calls = []
+        original = self.agent.command
+        def command(argv, *args, **kwargs):
+            if '--order-file' in argv:
+                calls.append((Path(argv[1]).parent.name, list(argv)))
+            return original(argv, *args, **kwargs)
+        with patch.object(self.agent, 'command', side_effect=command):
+            self.assertTrue(self.agent.cycle())
+        names = [name for name, _ in calls]
+        self.assertTrue(names)
+        self.assertEqual(names, sorted(names, key=lambda name: '_debug' in name))
+        self.assertTrue(any('_debug' in name for name in names))
+        for name, argv in calls:
+            self.assertEqual('--fast' in argv, '_debug' in name)
+            self.assertEqual('--pedantic' in argv, '_debug' not in name)
 
     def test_stress_variants_share_history_path_across_cycles(self):
         """Every isolated stress run receives the same persistent history path."""

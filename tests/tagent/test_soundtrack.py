@@ -409,6 +409,56 @@ class SoundtrackTests(unittest.TestCase):
                 agent.render_build_report(output, 3)
                 self.assertEqual(Path(mix.call_args.args[0]).name, 'build-warning.wav')
 
+    def test_distress_sos_and_radio_exchange(self):
+        """SOS precedes engineer and dispatch; disabled TTS keeps the SOS."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            agent.audio_available = True
+            with patch.object(agent, 'play_sound', return_value=True) as play:
+                agent.play_after(None, 'fail', 1, agent.audio_epoch)
+                self.assertEqual([call.args[0] for call in play.call_args_list],
+                                 ['fail', 'distress-engineer', 'distress-dispatch'])
+                play.reset_mock()
+                agent.args.tts = 'off'
+                agent.play_after(None, 'fail', 1, agent.audio_epoch)
+                self.assertEqual([call.args[0] for call in play.call_args_list], ['fail'])
+            agent.args.tts = 'auto'
+            with patch.object(agent, 'synthesize_announcement', return_value=None) as synth:
+                agent.play_sound('distress-engineer', 1)
+                self.assertIn('Mayday, mayday, mayday', synth.call_args.args[1])
+                self.assertTrue(synth.call_args.kwargs['engineer'])
+                agent.play_sound('distress-dispatch', 1)
+                self.assertIn('Emergency response team is on the way', synth.call_args.args[1])
+                self.assertNotIn('engineer', synth.call_args.kwargs)
+                self.assertTrue(synth.call_args.kwargs['distress'])
+            agent.args.sound_volume = .4
+            with patch.object(soundtrack, 'render', return_value=1) as render, \
+                 patch.object(tagent.shutil, 'which', return_value='/fake/player'), \
+                 patch.object(agent, 'command'):
+                agent.play_sound('fail', 1)
+                self.assertAlmostEqual(render.call_args.args[3], .5)
+                agent.args.sound_volume = 1.0
+                agent.play_sound('fail', 1)
+                self.assertEqual(render.call_args.args[3], 1.0)
+
+    def test_joker_reply_scheduling_and_cancellation(self):
+        """Dispatch responds after the pause unless a failure supersedes it."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            with patch.object(tagent.random, 'uniform', return_value=0) as delay, \
+                 patch.object(agent, 'play_after') as play:
+                agent.queue_joker_reply(agent.audio_epoch)
+                agent.audio_thread.join(timeout=2)
+                delay.assert_called_once_with(3, 7)
+                self.assertEqual(play.call_args.args[1], 'joker-reply')
+                self.assertIn(play.call_args.args[2], tagent.DISPATCH_JOKER_REPLIES)
+                play.reset_mock()
+                agent.audio_epoch += 1
+                agent.queue_joker_reply(agent.audio_epoch - 1)
+                play.assert_not_called()
+
     def test_repo_report_tts_and_fallback(self):
         """Remote outcomes have distinct speech and work without an installed TTS engine."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -426,7 +476,7 @@ class SoundtrackTests(unittest.TestCase):
                 agent.render_repo_report(output, True, redirect=True)
                 self.assertIn('Freight train diverted to the build depot', command.call_args.args[0][-1])
                 agent.render_repo_report(output, True, restart=True)
-                self.assertIn('Dispatch to BitMagic. TAgent updated. Restarting the launcher', command.call_args.args[0][-1])
+                self.assertIn('Dispatch to BitMagic. Updates received. Restarting TAgent', command.call_args.args[0][-1])
             agent.tts_engine = None
             with patch.object(soundtrack, 'render', return_value=1) as render:
                 agent.render_repo_report(output, True)
@@ -802,7 +852,7 @@ class SoundtrackTests(unittest.TestCase):
             self.assertIn(spoken[0][spoken[0].index('-v') + 1], ('en-us+f3', 'en-us+f4', 'en-us+m3'))
             agent.tts_engine = None
             collected = []
-            def capture(voice, path, volume, workers, budget, background):
+            def capture(voice, path, volume, workers, budget, background, radio=False):
                 """Capture assembled offline speech before its temporary file is removed."""
                 with wave.open(str(voice), 'rb') as stream:
                     collected.append(stream.readframes(stream.getnframes()))

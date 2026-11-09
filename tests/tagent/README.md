@@ -387,3 +387,47 @@ On a parallel stress failure, TAgent prints the variant, failed group and exit
 status, diagnostic log path, its last 12 lines, and quoted copy commands. A compact
 `TAgent-logs/last-test-failure.txt` preserves the report; recovery exhaustion points
 to it so the original failure remains easy to find.
+
+### Log storage on another drive
+
+Use `--log-dir PATH` (also accepted as `--state-dir`) or set `LOG_DIR` at the
+top of `run_tagent.sh`. The command-line option overrides the environment.
+For Windows drive D under WSL, use the Linux mount path:
+
+```sh
+bash tests/tagent/run_tagent.sh --log-dir /mnt/d/TAgent-logs
+```
+
+TAgent creates missing directories and checks actual file creation, writing,
+removal, and available space before starting work. `--min-free-gb` sets the reserve
+(default 5 GB); periodic checks continue during operation. Startup prints the
+resolved directory. Logs, test working files, saved success state and learned
+stress timing history all use this location. Existing logs/state are not moved;
+stop TAgent and copy them yourself if needed. The option survives self-restarts.
+
+Stress release variants run before all debug variants. Debug variants use the
+runner `--fast` mode, including during `--pedantic` TAgent runs; release variants
+use `--pedantic` when requested. The runner cannot combine these two modes.
+
+After a played Joe announcement, Dispatch may reply after a random 3–7 second
+pause, choosing from five responses. A failure, shutdown, or another queued
+announcement cancels the response. Preview the reply with `--sound-preview
+joker-reply`; `--sound-preview joker` plays the exchange when local audio is available.
+
+When the SOS signal plays, available TTS follows it with an engineer mayday and
+a dispatcher confirmation that the emergency response team is on the way. Without
+TTS the SOS remains available. Preview the sequence with `--sound-preview fail`.
+
+SOS and both distress voices use 1.25 times the configured sound volume, capped
+at 1.0. The radio exchange has short static bursts at transmission boundaries and
+a brief pause before each call.
+
+Synthesized crew radio messages and prerecorded build-report fallbacks use short
+static bursts. Normal messages retain their configured volume; distress audio uses
+1.25 times that volume, capped at 1.0.
+
+`--restart-on-update` interrupts active build or test processes after a remote
+check detects a new commit, then fetches, fast-forwards and restarts the launcher
+for a fresh build and test cycle. Without it, active tests finish at their usual
+safe boundary. In-flight logs are retained. Checks during active work occur at
+subprocess heartbeats; Git/network recovery rules still apply.
