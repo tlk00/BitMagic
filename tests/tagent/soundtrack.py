@@ -372,6 +372,10 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=T
                 value *= 1 - 0.85 * (t / duration) ** 1.3
             else:
                 value *= math.sin(math.pi * t / duration) ** 0.45
+            # Long, smooth tail prevents the train ending with an audible cut.
+            tail = 5.0 if event == 'depart' else 2.0
+            remaining = min(1.0, max(0.0, (duration - t) / tail))
+            value *= remaining * remaining * (3 - 2 * remaining)
         else:
             pan = 0.08 * math.sin(2 * math.pi * 0.7 * t)
             left = 1 - pan
@@ -408,13 +412,18 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=T
                 raise ValueError('Empty station audio: ' + name)
             if sys.byteorder != 'little':
                 source_samples.byteswap()
-            for i in range(round(len(source_samples) * RATE / source_rate)):
+            output_frames = round(len(source_samples) * RATE / source_rate)
+            fade_seconds = 3.0 if name == 'station-march.wav' else .15
+            fade_frames = round(fade_seconds * RATE)
+            for i in range(output_frames):
                 position = i * source_rate / RATE
                 j = min(int(position), len(source_samples) - 1)
                 fraction = position - j
                 next_sample = source_samples[min(j + 1, len(source_samples) - 1)]
-                intro.append(round(volume * (source_samples[j] * (1 - fraction) +
-                                             next_sample * fraction)))
+                envelope = min(1.0, max(0.0, (output_frames - 1 - i) / fade_frames))
+                envelope = envelope * envelope * (3 - 2 * envelope)
+                intro.append(round(volume * envelope * (source_samples[j] * (1 - fraction) +
+                                                        next_sample * fraction)))
             intro.extend([0] * round(.3 * RATE))
         intro.extend(samples)
         samples = intro

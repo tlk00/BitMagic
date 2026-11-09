@@ -134,7 +134,7 @@ def arguments():
                         help='comma-separated eSpeak NG voices for build reports')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', choices=soundtrack.EVENTS + ('perf-progress', 'repo-new', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='Play one event locally and exit without Git/build validation')
     args = parser.parse_args()
     if args.tts not in ('auto', 'off'):
@@ -216,6 +216,10 @@ class Agent:
                            os.environ.get('TAGENT_TTS_CHECKED') == '1' else
                            shutil.which('espeak-ng'))
         self.perf_workers = set()
+        self.perf_logs = {}
+        self.perf_report_lock = threading.Lock()
+        self.next_perf_report = math.inf
+        self.perf_report_index = 0
         self.perf_skipped = False
         self.lock_file = None
         self.poll_lock = threading.Lock()
@@ -311,6 +315,10 @@ class Agent:
                     self.say('New commit ' + tip[:12] + '; waiting for current tests to finish')
                 else:
                     self.pending_tip = None
+                    self.say('REMOTE CHECK OK | no new commits | ' + tip[:12])
+                    self.sound('repo-unchanged')
+                if tip != self.commit:
+                    self.sound('repo-new')
             except CommandFailure as error:
                 now = time.monotonic()
                 if self.poll_failure_since is None:
@@ -373,6 +381,7 @@ class Agent:
                 self.children.add(proc)
                 if log and log.name == 'perf.log':
                     self.perf_workers.add(proc)
+                    self.perf_logs[proc] = log
             started = time.monotonic()
             while True:
                 try:
@@ -396,6 +405,8 @@ class Agent:
                         self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
                     if log and log.name in ('perf.log', 'runner.log'):
                         self.poll_remote()
+                        if log.name == 'perf.log':
+                            self.report_perf_progress()
                         workers = len(self.perf_workers)
                         if log.name == 'runner.log':
                             lines = log.read_text(errors='replace').splitlines()
@@ -418,6 +429,7 @@ class Agent:
                 with self.mutex:
                     self.children.discard(proc)
                     self.perf_workers.discard(proc)
+                    self.perf_logs.pop(proc, None)
             if log:
                 output.close()
 
@@ -558,10 +570,47 @@ class Agent:
         """Announce a test phase without resetting the shared five-minute clock."""
         if self.depot:
             self.depot.set_mode('train')
+        if phase == 'perf':
+            self.next_perf_report = time.monotonic() + 600
+            self.perf_report_index = 0
         if self.next_train_at == math.inf:
             self.next_train_at = time.monotonic() + 300
         if self.args.sound_theme == 'steampunk':
             self.sound('depart-' + phase)
+
+    def report_perf_progress(self):
+        """Print every active perf variant and announce one in round-robin order."""
+        if time.monotonic() < self.next_perf_report or not self.perf_report_lock.acquire(False):
+            return
+        try:
+            now = time.monotonic()
+            if now < self.next_perf_report:
+                return
+            with self.mutex:
+                logs = sorted(self.perf_logs.values(), key=lambda path: path.parent.name)
+            reports = []
+            pattern = re.compile(r';\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s+(?:ms|sec|min)\s*$')
+            for path in logs:
+                try:
+                    count, last = 0, None
+                    with path.open('r', errors='replace') as stream:
+                        for line in stream:
+                            if line.endswith('\n') and pattern.search(line):
+                                count += 1
+                                last = line.strip()
+                except OSError as error:
+                    self.say('PERF STATUS unavailable | {} | {}'.format(path, error))
+                    continue
+                reports.append((path.parent.name, count))
+                self.say('PERF STATUS | {} | {} completed | last: {}'.format(
+                    path.parent.name, count, last or 'none yet'))
+            self.next_perf_report = now + 600
+            if reports:
+                report = reports[self.perf_report_index % len(reports)]
+                self.perf_report_index += 1
+                self.sound('perf-progress', workers=report)
+        finally:
+            self.perf_report_lock.release()
 
     def build_progress(self, log):
         """Report aggregate warnings and completed target counts on a growing interval."""
@@ -680,7 +729,11 @@ class Agent:
         try:
             suffix = '-' + str(workers) if event == 'work' else ''
             path = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
-            if event in ('depot', 'train-ambient'):
+            if event == 'perf-progress':
+                duration = self.render_perf_progress(path, workers)
+            elif event in ('repo-new', 'repo-unchanged'):
+                duration = self.render_repo_report(path, event == 'repo-new')
+            elif event in ('depot', 'train-ambient'):
                 duration = depot.render_preview(path, self.args.sound_volume,
                                                 'depot' if event == 'depot' else 'train')
             elif event in ('depart-perf', 'depart-stress'):
@@ -722,6 +775,47 @@ class Agent:
                 else:
                     self.say('Sound generation failed: {}; continuing tests'.format(error))
 
+    def render_repo_report(self, path, changed):
+        """Announce remote status with optional TTS and a distinct sound fallback."""
+        if self.args.tts == 'auto' and self.tts_engine:
+            try:
+                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+                    speech = Path(temp) / 'speech.wav'
+                    message = ('Dispatch to BitMagic. Remote updates detected.' if changed else
+                               'Dispatch to BitMagic. No new updates. The line is clear.')
+                    self.command([self.tts_engine, '-v', self.dispatcher_voice(), '-s', '145',
+                                  '-w', str(speech), message], timeout=15)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           1, self.jobs, background='build')
+            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                if not self.tts_warned:
+                    self.tts_warned = True
+                    self.say('TTS unavailable or failed ({}); using sound fallback'.format(error))
+        return soundtrack.render(path, self.args.sound_theme, 'build' if changed else 'idle',
+                                 self.args.sound_volume, 1, self.jobs)
+
+    def render_perf_progress(self, path, report):
+        """Speak one variant and its observed count, or play a neutral fallback."""
+        name, count = report
+        if self.args.tts == 'auto' and self.tts_engine:
+            try:
+                with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+                    speech = Path(temp) / 'speech.wav'
+                    voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',')
+                              if '+f' in voice.strip().lower()]
+                    voice = random.choice(voices or ['en-us+f3'])
+                    spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
+                    message = 'Conductor reporting. {} completed {} tests.'.format(spoken_name, count)
+                    self.command([self.tts_engine, '-v', voice, '-s', '145',
+                                  '-w', str(speech), message], timeout=15)
+                    return soundtrack.mix_dynamic_dispatch(speech, path, self.args.sound_volume,
+                                                           1, self.jobs, background='build')
+            except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                if not self.tts_warned:
+                    self.tts_warned = True
+                    self.say('TTS unavailable or failed ({}); using sound fallback'.format(error))
+        return soundtrack.render(path, self.args.sound_theme, 'start', self.args.sound_volume, 1, self.jobs)
+
     def pause(self, seconds, label):
         """Wait interruptibly with resource checks and visible fetch heartbeat."""
         deadline = time.monotonic() + seconds
@@ -750,6 +844,10 @@ class Agent:
                              self.args.branch, self.args.remote, self.args.branch))
                 self.last_fetch = time.strftime('%H:%M:%S')
                 tip = self.git('rev-parse', self.args.remote + '/' + self.args.branch)
+                local = self.git('rev-parse', 'HEAD') if self.commit == 'unknown' else self.commit
+                changed = tip != local
+                self.say('FETCH OK | ' + ('new commit ' if changed else 'no new commits | ') + tip[:12])
+                self.sound('repo-new' if changed else 'repo-unchanged')
                 if tip != failed_commit:
                     return tip
                 self.say('Waiting for a fix to ' + failed_commit[:12])
@@ -926,6 +1024,7 @@ class Agent:
         finally:
             if self.depot:
                 self.depot.set_mode('depot')
+            self.next_perf_report = math.inf
             self.active_run = None
             self.stress_stop_file = None
             self.next_remote_poll = math.inf
@@ -945,7 +1044,9 @@ class Agent:
                 sequence.insert(3, ('depart-perf', 1))
                 sequence.insert(4, ('depart-stress', 1))
                 sequence.insert(7, ('dispatch', 1))
-                sequence.extend([('build-clear', (0, 2, 4, 3, 7)),
+                sequence.extend([('repo-new', 1), ('repo-unchanged', 1),
+                                 ('perf-progress', ('perf_release_64', 12)),
+                                 ('build-clear', (0, 2, 4, 3, 7)),
                                  ('build-warning', (3, 5, 1, 7, 3)),
                                  ('build-final-ok', (0, 3, True)),
                                  ('build-final-failed', (2, 3, False))])
@@ -967,7 +1068,8 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.home))
             return 0
         if self.args.sound_preview:
-            preview_count = ((0, 2, 4, 3, 7) if self.args.sound_preview == 'build-clear' else
+            preview_count = (('perf_release_64', 12) if self.args.sound_preview == 'perf-progress' else
+                             (0, 2, 4, 3, 7) if self.args.sound_preview == 'build-clear' else
                              (3, 5, 1, 7, 3) if self.args.sound_preview == 'build-warning' else
                              (0, 3, True) if self.args.sound_preview == 'build-final-ok' else
                              (2, 3, False) if self.args.sound_preview == 'build-final-failed' else self.jobs)

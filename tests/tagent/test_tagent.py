@@ -152,6 +152,27 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(self.agent.fetch(), 'new')
             self.assertEqual(pause.call_count, 1)
 
+    def test_successful_fetch_reports_remote_status(self):
+        """A fetch reports whether the remote tip matches the checked-out commit."""
+        for tip, event, message in [('abc123', 'repo-unchanged', 'no new commits'),
+                                    ('def456', 'repo-new', 'new commit')]:
+            with patch.object(self.agent, 'git', side_effect=['', tip]), \
+                 patch.object(self.agent, 'sound') as sound:
+                self.assertEqual(self.agent.fetch(), tip)
+                sound.assert_called_once_with(event)
+            self.assertIn(message, (self.agent.home / 'agent.log').read_text())
+
+    def test_remote_check_reports_no_changes(self):
+        """A successful unchanged test-phase check prints and signals the result."""
+        tip = 'a' * 40
+        self.agent.commit = tip
+        self.agent.next_remote_poll = 0
+        with patch.object(self.agent, 'git', return_value=tip + '\trefs/heads/master'), \
+             patch.object(self.agent, 'sound') as sound:
+            self.agent.poll_remote()
+            sound.assert_called_once_with('repo-unchanged')
+        self.assertIn('REMOTE CHECK OK | no new commits', (self.agent.home / 'agent.log').read_text())
+
     def test_timeout_cleans_process_group(self):
         """Timeout kills and reaps the launched process and releases ownership."""
         with self.assertRaisesRegex(ta.Failure, 'timed out'):
@@ -326,6 +347,30 @@ class SupervisorTests(unittest.TestCase):
                 "printf 'a.cpp:1:2: warning: first\\n'; sleep 11; printf 'b.cpp:3: warning: second\\n'"], log)
             sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
         self.assertEqual(self.agent.build_warnings.observe(log), 2)
+
+    def test_perf_progress_ignores_blank_and_rotates(self):
+        """Only completed timing lines count, and reports rotate across active variants."""
+        for name in ('perf_release', 'perf_release_avx2'):
+            directory = self.root / name
+            directory.mkdir()
+            (directory / 'perf.log').write_text(
+                'BitMagic Library\n\nSIMD code = 8\n\nfirst; 4.924 sec\n\n'
+                'InterpolativeCodingTest() OK\nsecond ; 1 min\nunfinished; 2 sec')
+        self.agent.perf_logs = {1: self.root / 'perf_release' / 'perf.log',
+                                2: self.root / 'perf_release_avx2' / 'perf.log'}
+        self.agent.next_perf_report = 0
+        with patch.object(ta.time, 'monotonic', return_value=100), \
+             patch.object(self.agent, 'sound') as sound:
+            self.agent.report_perf_progress()
+            sound.assert_called_once_with('perf-progress', workers=('perf_release', 2))
+            self.agent.report_perf_progress()
+            self.assertEqual(sound.call_count, 1)
+            self.agent.next_perf_report = 0
+            self.agent.report_perf_progress()
+            sound.assert_called_with('perf-progress', workers=('perf_release_avx2', 2))
+        output = (self.agent.home / 'agent.log').read_text()
+        self.assertIn('perf_release | 2 completed | last: second ; 1 min', output)
+        self.assertNotIn('unfinished; 2 sec', output)
 
     def test_build_progress_counts_both_logs_once(self):
         """Concurrent heartbeat reports observe both logs without double counting."""

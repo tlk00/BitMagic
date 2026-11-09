@@ -54,6 +54,26 @@ class SoundtrackTests(unittest.TestCase):
             self.assertFalse(any(pause))
             self.assertEqual(rest, departure)
 
+    def test_station_and_train_fade_out(self):
+        """March and both train effects taper smoothly towards silence."""
+        import math
+        def rms(values):
+            """Measure RMS in a nonempty mono sample window."""
+            return math.sqrt(sum(value * value for value in values) / len(values))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'sound.wav'
+            soundtrack.render(path, 'steampunk', 'depart', .35, station_music=True)
+            with wave.open(str(path)) as stream:
+                samples = array.array('h', stream.readframes(stream.getnframes()))
+            def window(start, end):
+                return samples[int(start * soundtrack.RATE):int(end * soundtrack.RATE)]
+            self.assertLess(rms(window(24.8, 25)), rms(window(22, 23)) * .1)
+            self.assertLess(rms(window(47.8, 48.2)), rms(window(42, 43)) * .1)
+            soundtrack.render(path, 'steampunk', 'work', .35)
+            with wave.open(str(path)) as stream:
+                samples = array.array('h', stream.readframes(stream.getnframes()))
+            self.assertLess(rms(window(10.2, 10.4)), rms(window(8, 9)) * .1)
+
     def test_phase_announcement_precedes_station_and_departure(self):
         """Both recorded announcements precede the same station/train sequence."""
         with tempfile.TemporaryDirectory() as directory:
@@ -225,7 +245,7 @@ class SoundtrackTests(unittest.TestCase):
                  patch.object(agent, 'command', return_value='') as command, \
                  patch.object(tagent.random, 'choice', side_effect=AssertionError('random demo')):
                 self.assertEqual(agent.run(), 0)
-                self.assertEqual(command.call_count, 15)
+                self.assertEqual(command.call_count, 18)
                 with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
                     self.assertEqual(stream.getnchannels(), 1)
                     self.assertGreater(stream.getnframes() / stream.getframerate(), 5)
@@ -327,6 +347,7 @@ class SoundtrackTests(unittest.TestCase):
                 'tagent', '--sound-theme', 'steampunk', '--state-dir', directory]):
             agent = tagent.Agent(tagent.arguments())
             agent.tts_engine = '/fake/espeak-ng'
+            agent.args.tts = 'auto'
             output = Path(directory) / 'report.wav'
             spoken = []
             def synth(argv, **kwargs):
@@ -350,6 +371,48 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertEqual(Path(mix.call_args.args[0]).name, 'build-clear.wav')
                 agent.render_build_report(output, 3)
                 self.assertEqual(Path(mix.call_args.args[0]).name, 'build-warning.wav')
+
+    def test_repo_report_tts_and_fallback(self):
+        """Remote outcomes have distinct speech and work without an installed TTS engine."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            agent.tts_engine = '/fake/espeak-ng'
+            agent.args.tts = 'auto'
+            output = Path(directory) / 'report.wav'
+            with patch.object(agent, 'command') as command, \
+                 patch.object(soundtrack, 'mix_dynamic_dispatch', return_value=1):
+                agent.render_repo_report(output, True)
+                self.assertIn('updates detected', command.call_args.args[0][-1])
+                agent.render_repo_report(output, False)
+                self.assertIn('No new updates', command.call_args.args[0][-1])
+            agent.tts_engine = None
+            with patch.object(soundtrack, 'render', return_value=1) as render:
+                agent.render_repo_report(output, True)
+                self.assertEqual(render.call_args.args[2], 'build')
+                agent.render_repo_report(output, False)
+                self.assertEqual(render.call_args.args[2], 'idle')
+
+    def test_perf_progress_female_tts_and_fallback(self):
+        """The conductor speaks the chosen variant/count or uses a neutral sound."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            agent.args.tts = 'auto'
+            agent.args.dispatcher_voice = 'en-us+m3,en-us+f4'
+            agent.tts_engine = '/fake/espeak-ng'
+            with patch.object(agent, 'command') as command, \
+                 patch.object(soundtrack, 'mix_dynamic_dispatch', return_value=1):
+                agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release_avx2', 63))
+                argv = command.call_args.args[0]
+                self.assertEqual(argv[argv.index('-v') + 1], 'en-us+f4')
+                self.assertIn('perf avx2 completed 63 tests', argv[-1])
+                agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release_64', 12))
+                self.assertIn('perf 64 completed 12 tests', command.call_args.args[0][-1])
+            agent.tts_engine = None
+            with patch.object(soundtrack, 'render', return_value=1) as render:
+                agent.render_perf_progress(Path(directory) / 'out.wav', ('perf_release', 2))
+                self.assertEqual(render.call_args.args[2], 'start')
 
     def test_build_final_tts_and_exact_recorded_numbers(self):
         """Success/failure and both diagnostic totals survive online and offline paths."""

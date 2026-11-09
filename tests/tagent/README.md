@@ -195,7 +195,9 @@ station announcement, with quiet radio static, followed by 25 seconds of Vasily
 Agapkin's march "Farewell of Slavianka" through a station-speaker filter and the
 existing 23-second departure: platform bell, steam whistle, then accelerating
 chuffs and bogie knocks as the train pulls away. Each sequence lasts about 54
-seconds and needs no TTS engine. Testing starts without waiting for playback;
+seconds and needs no TTS engine. The march fades over its last three seconds;
+the departure fades over its last five, and a passing train fades over its last
+two seconds. Testing starts without waiting for playback;
 the announcements are played once per phase, not per worker or build.
 The mono music excerpt is from the [United States Coast Guard Band recording](https://commons.wikimedia.org/wiki/File:Farewell_of_Slavianka_(USCGB).ogg),
 identified there as a U.S. government public-domain performance, with the
@@ -220,7 +222,29 @@ clip currently playing. The demo includes both low and full
 worker occupancy; use `--jobs 8` if demonstrating on a single-worker machine.
 
 The steampunk demo includes both phase departures, two passing trains, the dispatch
-message, clear/caution build reports, and successful/failed build summaries. The random choice applies to periodic test sounds, not to demo previews.
+message, remote update/no-update sounds, clear/caution build reports, and
+successful/failed build summaries. Each successful fetch or remote check prints
+the result. During tests a remote check detects commits without fetching or
+changing the checkout until a safe boundary. Optional TTS announces new updates
+or a clear line; without TTS, different short sound effects indicate each case.
+The random choice applies to periodic test sounds, not to demo previews.
+
+```sh
+bash tests/tagent/run_tagent.sh --sound-preview repo-new
+bash tests/tagent/run_tagent.sh --sound-preview repo-unchanged
+```
+
+While perf variants run, every ten minutes TAgent prints the progress of every
+active variant and announces one variant in rotation using a female conductor
+voice when eSpeak NG is available. Progress counts complete timing-result lines
+ending in `ms`, `sec` or `min`; blank lines, headers, informational lines and
+incomplete lines are excluded. These are observed benchmark results, not a
+prediction of the total number of tests. Without TTS, a short neutral sound
+plays and the exact count remains on the console. Preview a simulated report:
+
+```sh
+bash tests/tagent/run_tagent.sh --sound-preview perf-progress
+```
 
 
 ## Build dispatcher
