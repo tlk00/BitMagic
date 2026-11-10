@@ -4274,6 +4274,7 @@ bool sparse_vector_scanner<SV, S_FACTOR>::lower_bound_str(
     } // while
     
     BM_ASSERT(0);
+    pos = l;
     return false;
 }
 
