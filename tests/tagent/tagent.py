@@ -54,7 +54,7 @@ def perf_log_progress(path):
 
 ENGINEER_BUILD_REPLIES = (
     'Engineer Joe to Dispatch. Copy that. I am getting steamed up waiting to hit the rails. Over.',
-    'Engineer Joe to Dispatch. Build complete? Excellent. This locomotive has places to choo and people to see. Over.',
+    'Engineer Joe to Dispatch. One build complete? Excellent. This locomotive has places to choo and people to see. Over.',
     'Engineer Joe to Dispatch. Roger. I have been sitting on this track so long I am losing my train of thought. Over.',
     'Engineer Joe to Dispatch. Acknowledged. Let us get this freight moving before I grow roots at the depot. Over.',
     'Engineer Joe to Dispatch. Copy. I am ready to make tracks; even the timetable is getting impatient. Over.',
@@ -379,6 +379,7 @@ class Agent:
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
         self.samples_complete = False
+        self.engineer_build_replied = False
         self.build_lock = threading.Lock()
         self.build_logs = []
         self.build_targets = {}
@@ -1278,8 +1279,15 @@ class Agent:
                         progress.append(0)
                     progress.append(self.samples_complete)
                 if self.args.sound_theme == 'steampunk':
-                    self.sound('build-clear' if count == 0 else 'build-warning',
-                               workers=(count, *progress))
+                    completed = any(progress[i] > 0 and progress[i + 1] == 0
+                                    for i in (0, 2, 5) if i + 1 < len(progress))
+                    completed = completed or (samples_active and self.samples_complete)
+                    first = completed and not self.engineer_build_replied
+                    event = ('build-first-clear' if count == 0 else 'build-first-warning') if first else (
+                        'build-clear' if count == 0 else 'build-warning')
+                    self.sound(event, workers=(count, *progress))
+                    if first:
+                        self.queue_engineer_build_reply()
 
     def dispatcher_voice(self):
         """Choose a configured eSpeak voice for this announcement."""
@@ -1391,11 +1399,16 @@ class Agent:
             'COMPLETE' if success else 'FAILED', counts[0], counts[1]))
         if self.args.sound_theme == 'steampunk':
             self.sound('build-final-ok' if success else 'build-final-failed', workers=counts)
-            if success:
-                if not self.engineer_build_replies:
-                    self.engineer_build_replies = list(ENGINEER_BUILD_REPLIES)
-                    random.shuffle(self.engineer_build_replies)
-                self.sound('engineer-build-reply', workers=self.engineer_build_replies.pop())
+            if success and not self.engineer_build_replied:
+                self.queue_engineer_build_reply()
+
+    def queue_engineer_build_reply(self):
+        """Queue one rotating Joe reply after a build report for this cycle."""
+        self.engineer_build_replied = True
+        if not self.engineer_build_replies:
+            self.engineer_build_replies = list(ENGINEER_BUILD_REPLIES)
+            random.shuffle(self.engineer_build_replies)
+        self.sound('engineer-build-reply', workers=self.engineer_build_replies.pop())
 
     def render_dispatch(self, path, workers):
         """Create a live crew-count announcement, falling back to the bundled WAV.
@@ -1484,7 +1497,7 @@ class Agent:
                                              announcement=event.split('-')[1])
             elif event in ('build-final-ok', 'build-final-failed'):
                 duration = self.render_build_summary(path, workers)
-            elif event in ('build-clear', 'build-warning'):
+            elif event in ('build-clear', 'build-warning', 'build-first-clear', 'build-first-warning'):
                 duration = self.render_build_report(path, workers)
             elif event == 'dispatch':
                 duration = self.render_dispatch(path, workers)
@@ -1691,6 +1704,7 @@ class Agent:
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
         self.samples_complete = False
+        self.engineer_build_replied = False
         if self.args.restart_on_update:
             self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
         self.build_report_interval = self.args.build_report_seconds

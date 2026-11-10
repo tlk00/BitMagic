@@ -684,10 +684,28 @@ class SupervisorTests(unittest.TestCase):
             sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
         self.assertEqual(self.agent.build_warnings.observe(log), 2)
 
+    def test_joe_replies_after_first_completed_family(self):
+        """Queue Dispatch before one Joe reply and avoid repeats later in the cycle."""
+        log = self.root / 'build-perf.log'
+        log.write_text('')
+        target = self.root / 'perf'
+        target.write_text('ready')
+        target.chmod(0o755)
+        self.agent.build_targets = {'perf': [target], 'stress': [self.root / 'pending']}
+        self.agent.next_build_report = 0
+        with patch.object(self.agent, 'sound') as sound:
+            self.agent.build_progress(log)
+            self.assertEqual([x.args[0] for x in sound.call_args_list], ['build-first-clear', 'engineer-build-reply'])
+            self.agent.next_build_report = 0
+            self.agent.build_progress(log)
+            self.agent.finish_build(True)
+            self.assertEqual(sum(x.args[0] == 'engineer-build-reply' for x in sound.call_args_list), 1)
+
     def test_engineer_replies_follow_successful_build_without_repeats(self):
         """Dispatch precedes Joe, who does not joke after a build failure."""
         with patch.object(self.agent, 'sound') as sound:
             for _ in ta.ENGINEER_BUILD_REPLIES:
+                self.agent.engineer_build_replied = False
                 self.agent.finish_build(True)
             calls = sound.call_args_list
             self.assertEqual([c.args[0] for c in calls[::2]], ['build-final-ok'] * len(ta.ENGINEER_BUILD_REPLIES))
