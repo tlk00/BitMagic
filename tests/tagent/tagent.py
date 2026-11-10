@@ -40,6 +40,18 @@ def perf_estimated_percent(count):
     return min(99, max(0, round(count * 100 / PERF_ESTIMATED_TESTS)))
 
 
+def perf_log_progress(path):
+    """Count complete timed records, ignoring headers, blank and partial lines."""
+    pattern = re.compile(r';\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s+(?:ms|sec|min)\s*$')
+    count, last = 0, None
+    with path.open('r', errors='replace') as stream:
+        for line in stream:
+            if line.endswith('\n') and pattern.search(line):
+                count += 1
+                last = line.strip()
+    return count, last
+
+
 DISPATCH_JOKER_REPLIES = (
     'Dispatch to Engineer Joe. Thank you. Please keep the radio clear for railway business.',
     'Dispatch to Engineer Joe. That was noted. Radio silence, please.',
@@ -382,6 +394,10 @@ class Agent:
         self.piper_download_thread = None
         self.perf_workers = set()
         self.perf_logs = {}
+        self.perf_pending = set()
+        self.perf_completed = {}
+        self.perf_last_disclaimer = False
+        self.perf_last_announced = False
         self.perf_report_lock = threading.Lock()
         self.next_perf_report = math.inf
         self.perf_report_index = 0
@@ -1151,22 +1167,49 @@ class Agent:
                 return
             with self.mutex:
                 logs = sorted(self.perf_logs.values(), key=lambda path: path.parent.name)
+            with self.mutex:
+                pending = set(self.perf_pending)
+                completed = dict(self.perf_completed)
+            single = len(pending) == 1 and len(logs) == 1 and logs[0].parent.name in pending
             reports = []
-            pattern = re.compile(r';\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s+(?:ms|sec|min)\s*$')
             for path in logs:
                 try:
-                    count, last = 0, None
-                    with path.open('r', errors='replace') as stream:
-                        for line in stream:
-                            if line.endswith('\n') and pattern.search(line):
-                                count += 1
-                                last = line.strip()
+                    count, last = perf_log_progress(path)
                 except OSError as error:
                     self.say('PERF STATUS unavailable | {} | {}'.format(path, error))
                     continue
-                reports.append((path.parent.name, count))
-                self.say('PERF STATUS | {} | {} completed | approximately {}% of test elements | last: {}'.format(
-                    path.parent.name, count, perf_estimated_percent(count), last or 'none yet'))
+                name = path.parent.name
+                reference = None
+                if single and '_debug' in name:
+                    preferred = name.replace('_debug', '_release', 1)
+                    candidates = ([preferred] if preferred in completed else []) + [
+                        item for item in sorted(completed) if '_release' in item and item != preferred]
+                    for candidate in candidates:
+                        try:
+                            ref_count, _ = perf_log_progress(completed[candidate])
+                            if ref_count:
+                                reference = (candidate, ref_count)
+                                break
+                        except OSError:
+                            continue
+                if reference:
+                    ref_name, total = reference
+                    delayed = count > total
+                    detail = ('delayed' if delayed else 'approximately {}%'.format(min(99, round(count * 100 / total))))
+                    self.say('PERF STATUS | {} | {} completed | {} | reference {}: {} | debug fast; release {} | last: {}'.format(
+                        name, count, detail, ref_name, total, 'fast' if self.args.fast else 'normal', last or 'none yet'))
+                    disclaimer = not self.args.fast and not self.perf_last_disclaimer
+                    first = not self.perf_last_announced
+                    if first:
+                        self.say('PERF STATUS | all other perf tasks completed; waiting for ' + name)
+                        self.perf_last_announced = True
+                    reports.append((name, count, ref_name, total, disclaimer, first))
+                    if disclaimer:
+                        self.perf_last_disclaimer = True
+                else:
+                    self.say('PERF STATUS | {} | {} completed | approximately {}% of test elements | last: {}'.format(
+                        name, count, perf_estimated_percent(count), last or 'none yet'))
+                    reports.append((name, count))
             self.next_perf_report = now + 600
             if reports:
                 report = reports[self.perf_report_index % len(reports)]
@@ -1485,14 +1528,26 @@ class Agent:
 
     def render_perf_progress(self, path, report):
         """Speak one variant and its observed count, or play a neutral fallback."""
-        name, count = report
+        name, count = report[:2]
         def female_voice():
             """Choose a configured female eSpeak voice for the conductor."""
             voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',')
                       if '+f' in voice.strip().lower()]
             return random.choice(voices or ['en-us+f3'])
         spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
-        if count > PERF_ESTIMATED_TESTS:
+        if len(report) > 2:
+            ref_name, total, disclaimer = report[2:5]
+            if count > total:
+                message = ('Conductor reporting. The {} train is delayed. {} tests completed; {} completed {}.'
+                           .format(spoken_name, count, ref_name.replace('_', ' '), total))
+            else:
+                message = ('Conductor reporting. {} completed {} tests. Approximately {} percent, compared with {} tests on {}.'
+                           .format(spoken_name, count, min(99, round(count * 100 / total)), total, ref_name.replace('_', ' ')))
+            if len(report) > 5 and report[5]:
+                message = 'Conductor reporting. All other performance trains have arrived. ' + message.replace('Conductor reporting. ', '', 1)
+            if disclaimer:
+                message += ' Debug is running fast; the release reference ran on the normal schedule.'
+        elif count > PERF_ESTIMATED_TESTS:
             message = ('Conductor reporting. The {} train is delayed. {} tests completed.'
                        .format(spoken_name, count))
         else:
@@ -1693,6 +1748,12 @@ class Agent:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
                 futures = []
+                future_names = {}
+                with self.mutex:
+                    self.perf_pending = {n for n in manifest['builds']['perf'] if not (self.args.no_debug and '_debug' in n) and self.supported(n)}
+                    self.perf_completed = {}
+                    self.perf_last_disclaimer = False
+                    self.perf_last_announced = False
                 for name in manifest['builds']['perf']:
                     if self.args.no_debug and '_debug' in name:
                         self.say('SKIP debug perf ' + name)
@@ -1705,11 +1766,19 @@ class Agent:
                     perf_command = [str(self.repo / 'tests/perf' / name)]
                     if self.args.fast or '_debug' in name:
                         perf_command.append('--fast')
-                    futures.append(pool.submit(self.command, perf_command, work / 'perf.log', work,
-                                               test_allocator=True))
+                    future = pool.submit(self.command, perf_command, work / 'perf.log', work, test_allocator=True)
+                    futures.append(future)
+                    future_names[future] = (name, work / 'perf.log')
                 for future in concurrent.futures.as_completed(futures):
                     try:
-                        future.result()
+                        result = future.result()
+                        with self.mutex:
+                            name, path = future_names[future]
+                            self.perf_pending.discard(name)
+                            if result != 'skipped-update':
+                                self.perf_completed[name] = path
+                            if len(self.perf_pending) == 1:
+                                self.next_perf_report = 0
                     except BaseException:
                         self.stopping.set()
                         for pending in futures:

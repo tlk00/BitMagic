@@ -668,6 +668,30 @@ class SupervisorTests(unittest.TestCase):
             sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
         self.assertEqual(self.agent.build_warnings.observe(log), 2)
 
+    def test_final_debug_uses_successful_release_reference(self):
+        """Use matching release counts and issue the mode disclaimer once."""
+        debug = self.root / 'perf_debug_avx2' / 'perf.log'
+        release = self.root / 'perf_release_avx2' / 'perf.log'
+        debug.parent.mkdir()
+        release.parent.mkdir()
+        debug.write_text('header\na; 1 sec\n')
+        release.write_text('a; 1 sec\nb; 2 sec\n')
+        self.agent.perf_logs = {1: debug}
+        self.agent.perf_pending = {'perf_debug_avx2'}
+        self.agent.perf_completed = {'perf_release_avx2': release}
+        with patch.object(self.agent, 'sound') as sound:
+            self.agent.next_perf_report = 0
+            self.agent.report_perf_progress()
+            report = sound.call_args.kwargs['workers']
+            self.assertEqual(report, ('perf_debug_avx2', 1, 'perf_release_avx2', 2, True, True))
+            self.agent.next_perf_report = 0
+            debug.write_text('a; 1 sec\nb; 2 sec\nc; 3 sec\n')
+            self.agent.report_perf_progress()
+            self.assertEqual(sound.call_args.kwargs['workers'], ('perf_debug_avx2', 3, 'perf_release_avx2', 2, False, False))
+            with patch.object(self.agent, 'synthesize_announcement', return_value=1) as speak:
+                self.agent.render_perf_progress(self.root / 'out.wav', sound.call_args.kwargs['workers'])
+                self.assertIn('delayed', speak.call_args.args[1])
+
     def test_perf_progress_ignores_blank_and_rotates(self):
         """Only completed timing lines count, and reports rotate across active variants."""
         for name in ('perf_release', 'perf_release_avx2'):
