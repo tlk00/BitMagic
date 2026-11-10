@@ -407,8 +407,8 @@ struct bwt_bic_decoder
         \param dec Source positioned immediately after an already consumed
             bm::set_block_bwt_unpacked opcode (96). Advances past the payload
             even when reconstruction is skipped.
-        \param block Output array of bm::set_block_size words, overwritten with
-            the original pre-BWT bits. This is block restoration, not an OR
+        \param block SIMD-aligned output array of bm::set_block_size words,
+            overwritten with the original pre-BWT bits. This is block restoration, not an OR
             operation: the enclosing deserializer merges this output with the
             destination bvector. A null or other non-address BM sentinel
             (IS_VALID_ADDR(block) is false) requests payload consumption and
@@ -844,6 +844,7 @@ void bwt_bic_decoder<Alloc>::decode(DEC& dec, bm::word_t* block,
     bm::word_t* packed = nullptr;
     if (IS_VALID_ADDR(block))
     {
+        BM_ASSERT(bm::is_aligned(block));
         // Retain the staging block with the caller's workspace. Dry traversal
         // never sizes it; validation completes before modifying the output.
         workspace.last_column.resize(bm::set_block_size);

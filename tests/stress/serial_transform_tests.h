@@ -296,7 +296,11 @@ static void TestBWTUnpackedDecoding()
     const unsigned n = bm::gap_max_bits;
     const bm::word_t guard = 0xa5a55a5au, tail = 0x917bac32u;
     std::vector<bm::word_t> column(bm::set_block_size), expected(column.size());
-    std::vector<bm::word_t> actual(column.size() + 2);
+    // Whole-block guard regions preserve SIMD alignment at the output offset.
+    bm::heap_vector<bm::word_t, bm::bvector<>::allocator_type, true> actual;
+    actual.resize(3 * bm::set_block_size);
+    bm::word_t* output = actual.data() + bm::set_block_size;
+    TRANSFORM_CHECK(bm::is_aligned(output));
     std::vector<unsigned char> bytes(256 * 1024);
     std::mt19937 rng(seed);
     bm::bwt_full_workspace<> ws, decode_workspace;
@@ -333,16 +337,19 @@ static void TestBWTUnpackedDecoding()
             {
                 case_width = mode;
                 std::fill(actual.begin(), actual.end(), guard);
-                bm::word_t* target = mode == 0 ? actual.data() + 1 :
+                bm::word_t* target = mode == 0 ? output :
                     mode == 1 ? nullptr : FULL_BLOCK_FAKE_ADDR;
                 bm::decoder dec(bytes.data());
                 bm::bwt_bic_decoder<>::decode(dec, target, decode_workspace);
                 TRANSFORM_CHECK(dec.size() == payload_size);
                 TRANSFORM_CHECK(dec.get_32() == tail);
-                TRANSFORM_CHECK(actual.front() == guard && actual.back() == guard);
+                TRANSFORM_CHECK(std::all_of(actual.begin(), output,
+                    [](bm::word_t word) { return word == guard; }));
+                TRANSFORM_CHECK(std::all_of(output + bm::set_block_size, actual.end(),
+                    [](bm::word_t word) { return word == guard; }));
                 if (!mode)
                 {
-                    TRANSFORM_CHECK(std::equal(expected.begin(), expected.end(), actual.begin()+1));
+                    TRANSFORM_CHECK(std::equal(expected.begin(), expected.end(), output));
                 }
                 else
                 {
@@ -386,7 +393,7 @@ static void TestBWTUnpackedDecoding()
             bool rejected = false;
             try
             {
-                bm::bwt_bic_decoder<>::decode(dec, mode == 0 ? actual.data()+1 :
+                bm::bwt_bic_decoder<>::decode(dec, mode == 0 ? output :
                     mode == 1 ? nullptr : FULL_BLOCK_FAKE_ADDR, decode_workspace);
             }
             catch (const std::logic_error&)
