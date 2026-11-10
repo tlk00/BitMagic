@@ -508,3 +508,15 @@ not run the utility or download data.
 The utility binaries are named `bminv_debug`, `bminv_release`, and
 `bminv_{debug,release}_KERNEL`. Existing `bminv_reg` and `bminv_KERNEL` release
 names remain available for callers using the previous interface.
+
+### Optional jemalloc on Linux / WSL
+
+At startup (including `--check`), TAgent looks for `libjemalloc.so.2` using
+`ldconfig -p` and probes the library in a separate process. If usable, it adds
+its path to `LD_PRELOAD` for perf and stress tests. Stress runner children inherit
+this setting. Existing `LD_PRELOAD` entries are preserved after jemalloc.
+Builds, Git commands, and audio do not receive this additional preload.
+The allocator path is recorded in the cycle manifest and startup log.
+If unavailable or unusable, tests continue with the existing allocator settings.
+macOS does not use this Linux preload mechanism. No packages are installed.
+Jemalloc may change memory usage; it does not replace a suitable concurrency limit.

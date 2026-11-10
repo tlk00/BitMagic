@@ -311,6 +311,7 @@ class Agent:
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.voices_dir = self.home / 'piper-voices'
         self.voices_dir.mkdir(parents=True, exist_ok=True)
+        self.jemalloc = None
         self.children = set()
         self.mutex = threading.RLock()
         self.log_mutex = threading.RLock()
@@ -531,11 +532,12 @@ class Agent:
         for proc in processes:
             proc.wait()
 
-    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=()):
+    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=(), test_allocator=False):
         """Run argv in an owned group; return stdout or raise with log diagnostics.
 
         log optionally redirects combined output; cwd defaults to the checkout.
         timeout bounds operational commands. Every exit cleans the process group.
+        test_allocator enables the detected jemalloc only for test subprocesses.
         """
         output = log.open('w') if log else subprocess.PIPE
         proc = None
@@ -550,6 +552,8 @@ class Agent:
                 env = dict(os.environ, TMPDIR=str(self.temp_dir), TMP=str(self.temp_dir), TEMP=str(self.temp_dir),
                            GIT_TERMINAL_PROMPT='0',
                            GIT_SSH_COMMAND='ssh -oBatchMode=yes -oConnectTimeout=20')
+                if test_allocator:
+                    env = self.test_environment(env)
                 proc = subprocess.Popen(argv, cwd=cwd or self.repo, stdout=output,
                                         stderr=subprocess.STDOUT, text=True,
                                         start_new_session=True, env=env)
@@ -656,6 +660,50 @@ class Agent:
         """Run a bounded noninteractive Git command and return stripped stdout."""
         return self.command(['git', *args], timeout=120).strip()
 
+    def test_environment(self, env):
+        """Return a copied test environment, preserving existing preload libraries."""
+        env = dict(env)
+        if self.jemalloc:
+            previous = env.get('LD_PRELOAD', '')
+            env['LD_PRELOAD'] = self.jemalloc + (':' + previous if previous else '')
+        return env
+
+    def detect_jemalloc(self):
+        """Probe Linux's loader cache and validate preload; fall back without failing."""
+        self.jemalloc = None
+        if platform.system() != 'Linux':
+            self.say('ALLOCATOR: jemalloc preload is Linux-only; using system allocator')
+            return
+        ldconfig = shutil.which('ldconfig')
+        if not ldconfig:
+            ldconfig = next((p for p in ('/sbin/ldconfig', '/usr/sbin/ldconfig')
+                             if os.access(p, os.X_OK)), None)
+        if not ldconfig:
+            self.say('ALLOCATOR: ldconfig unavailable; using system allocator')
+            return
+        try:
+            listing = subprocess.run([ldconfig, '-p'], capture_output=True, text=True,
+                                     timeout=10, check=True).stdout
+            for line in listing.splitlines():
+                fields = line.split()
+                if not fields or fields[0] != 'libjemalloc.so.2' or '=>' not in fields:
+                    continue
+                library = fields[-1]
+                if not Path(library).is_file() or not os.access(library, os.R_OK):
+                    continue
+                # A separate process avoids loading a second allocator into Python.
+                self.jemalloc = library
+                probe = subprocess.run(['/bin/true'], env=self.test_environment(os.environ),
+                                       capture_output=True, text=True, timeout=10)
+                if probe.returncode == 0 and not probe.stderr.strip():
+                    self.say('ALLOCATOR: jemalloc enabled for perf/stress | ' + library)
+                    return
+                self.jemalloc = None
+            self.say('ALLOCATOR: usable libjemalloc.so.2 not found; using system allocator')
+        except (OSError, subprocess.SubprocessError) as error:
+            self.jemalloc = None
+            self.say('ALLOCATOR: jemalloc check failed; using system allocator | ' + str(error))
+
     def validate(self):
         """Validate platform, tools, checkout, lock and CPU instruction capabilities."""
         for tool in ('git', 'make', os.environ.get('CXX', 'c++'), 'bash'):
@@ -681,6 +729,7 @@ class Agent:
         if not self.arm:
             self.flags = set(Path('/proc/cpuinfo').read_text().lower().replace('.', '_').split())
         self.resource_check()
+        self.detect_jemalloc()
         self.say('Validated Python {} | {} workers | {}'.format(platform.python_version(), self.jobs, self.repo))
 
     def report_audio(self):
@@ -1519,7 +1568,7 @@ class Agent:
         self.build_report_interval = self.args.build_report_seconds
         self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
-                    'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast, 'builds': {}}
+                    'jemalloc': self.jemalloc, 'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
         self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples', 'inv_list')]
@@ -1614,7 +1663,8 @@ class Agent:
                     perf_command = [str(self.repo / 'tests/perf' / name)]
                     if self.args.fast or '_debug' in name:
                         perf_command.append('--fast')
-                    futures.append(pool.submit(self.command, perf_command, work / 'perf.log', work))
+                    futures.append(pool.submit(self.command, perf_command, work / 'perf.log', work,
+                                               test_allocator=True))
                 for future in concurrent.futures.as_completed(futures):
                     try:
                         future.result()
@@ -1653,7 +1703,7 @@ class Agent:
                     argv.append('--pedantic')
                 self.say('STRESS ' + name + ' | ' + str(work))
                 status = self.command(argv, work / 'runner.log', work, fail_fast=True,
-                                      allowed_exit_codes=(75,))
+                                      allowed_exit_codes=(75,), test_allocator=True)
                 self.stress_stop_file = None
                 if status == 'skipped-update':
                     self.args.force = True

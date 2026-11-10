@@ -37,6 +37,34 @@ class SupervisorTests(unittest.TestCase):
         self.agent.stop_children()
         self.temp.cleanup()
 
+    def test_jemalloc_detection_and_preload(self):
+        """Select a loadable library and preserve caller preloads without mutation."""
+        library = self.root / 'libjemalloc.so.2'
+        library.touch()
+        listing = subprocess.CompletedProcess([], 0, 'libjemalloc.so.2 (libc6) => ' + str(library), '')
+        probe = subprocess.CompletedProcess([], 0, '', '')
+        with patch.object(ta.platform, 'system', return_value='Linux'), \
+                patch.object(ta.shutil, 'which', return_value='/sbin/ldconfig'), \
+                patch.object(ta.subprocess, 'run', side_effect=[listing, probe]) as run:
+            self.agent.detect_jemalloc()
+        self.assertEqual(self.agent.jemalloc, str(library))
+        self.assertTrue(run.call_args.kwargs['env']['LD_PRELOAD'].startswith(str(library)))
+        original = {'LD_PRELOAD': '/existing.so'}
+        self.assertEqual(self.agent.test_environment(original)['LD_PRELOAD'], str(library) + ':/existing.so')
+        self.assertEqual(original, {'LD_PRELOAD': '/existing.so'})
+
+    def test_jemalloc_loader_rejection_falls_back(self):
+        """Loader warnings count as rejection even if the probe exits successfully."""
+        library = self.root / 'libjemalloc.so.2'
+        library.touch()
+        with patch.object(ta.platform, 'system', return_value='Linux'), \
+                patch.object(ta.shutil, 'which', return_value='/sbin/ldconfig'), \
+                patch.object(ta.subprocess, 'run', side_effect=[
+                    subprocess.CompletedProcess([], 0, 'libjemalloc.so.2 => ' + str(library), ''),
+                    subprocess.CompletedProcess([], 0, '', 'wrong ELF class')]):
+            self.agent.detect_jemalloc()
+        self.assertIsNone(self.agent.jemalloc)
+
     def fixture(self, fail=False):
         """Create build scripts that produce tiny executable jobs; fail selects perf failure."""
         for family in ('perf', 'stress'):
