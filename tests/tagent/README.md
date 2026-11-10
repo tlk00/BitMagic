@@ -312,9 +312,11 @@ bash tests/tagent/run_tagent.sh --sound-theme steampunk --sound-preview build-fi
 `TTS_MODE=auto` (default) prefers local Piper, falls back to `espeak-ng`, then
 to prerecorded audio or non-verbal effects if neither works. `TTS_MODE=off`
 disables both engines. By default Piper uses `~/piper-demo/.venv/bin/python`
-and `~/piper-demo/en_US-lessac-medium.onnx` with its `.onnx.json` file alongside.
-The perf conductor uses `~/piper-demo/en_GB-southern_english_female-low.onnx`
-instead; configure it with `PIPER_CONDUCTOR_MODEL` or `--piper-conductor-model`.
+and keeps the dispatcher voice under `LOG_DIR/piper-voices/en_US-lessac-medium.onnx`
+with its `.onnx.json` alongside. The conductor and engineer models are also
+stored in `LOG_DIR/piper-voices`; configure them with `PIPER_CONDUCTOR_MODEL` /
+`--piper-conductor-model` and `PIPER_ENGINEER_MODEL` / `--piper-engineer-model`.
+`LOG_DIR` means the selected `--log-dir` or the default `TAgent-logs`.
 The conductor voice is prepared at startup, in the background during normal
 operation. TAgent reports when the files are present or downloaded, and logs
 which engine actually speaks the first conductor report (and any switch to the
@@ -361,7 +363,7 @@ current host has no audio device. Demo files include SOS at the end.
 
 During perf and stress testing, Joe offers a short original railway, office, or
 BitMagic joke every randomly selected 10–20 minutes. His separate Piper voice is
-`en_US-danny-low`, automatically provisioned beside the dispatcher model. Missing
+`en_US-danny-low`, automatically provisioned under `LOG_DIR/piper-voices`. Missing
 Piper falls back to the English male eSpeak voice; missing audio does not stop tests.
 The usual ambient ducking applies. `--no-joker` disables the role; `--no-sound`
 and `--tts off` also silence it.
@@ -485,3 +487,12 @@ continues without the exchange.
 The engineer's Piper voice is prepared even with `--no-joker`, because emergency
 announcements also use it. The interrupt preview waits for voice setup. The first
 engineer utterance logs the engine and model actually used, or the eSpeak fallback.
+
+TAgent stores its generated audio, cycle logs, scratch files, and default Piper
+voice models under the configured log directory. Child processes receive a
+`TMPDIR`, `TMP`, and `TEMP` pointing to its `tmp` subdirectory. Voice models
+are retained when old cycle logs are removed. Explicit Piper model paths remain
+supported and may point elsewhere. The Piper virtual environment itself remains
+user-local by default so WSL log drives need not support executable venvs. Existing
+voices are not moved automatically; TAgent downloads missing models into the new
+location, or you can copy the `.onnx` and `.onnx.json` files there.

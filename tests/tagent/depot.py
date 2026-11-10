@@ -31,7 +31,7 @@ class StreamPlayer:
         """Start player and register its process so Ctrl-C also stops it."""
         self.agent = agent
         self.stop = stop
-        self.error_log = tempfile.TemporaryFile()
+        self.error_log = tempfile.TemporaryFile(dir=getattr(agent, 'temp_dir', getattr(agent, 'home', None)))
         self.process = None
         try:
             with agent.mutex:
@@ -187,7 +187,7 @@ class Depot:
             if not players:
                 return
             gain, position = 0.0, 0
-            with tempfile.TemporaryDirectory(prefix='depot-', dir=self.agent.home) as directory:
+            with tempfile.TemporaryDirectory(prefix='depot-', dir=getattr(self.agent, 'temp_dir', self.agent.home)) as directory:
                 chunk = Path(directory) / 'ambient.wav'
                 while not self.stop.is_set():
                     if self.agent.stopping.is_set():

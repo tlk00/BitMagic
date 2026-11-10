@@ -203,11 +203,12 @@ def arguments():
                         help='auto: use Piper then eSpeak NG when available; off: use prerecorded audio (default: %(default)s)')
     parser.add_argument('--piper-python', default=os.environ.get('PIPER_PYTHON', '~/piper-demo/.venv/bin/python'),
                         help='Python executable for Piper (default: %(default)s)')
-    parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL', '~/piper-demo/en_US-lessac-medium.onnx'),
-                        help='Piper dispatcher voice model (default: %(default)s)')
-    parser.add_argument('--piper-conductor-model', default=os.environ.get(
-        'PIPER_CONDUCTOR_MODEL', '~/piper-demo/en_GB-southern_english_female-low.onnx'),
-                        help='Piper conductor voice model (default: %(default)s)')
+    parser.add_argument('--piper-model', default=os.environ.get('PIPER_MODEL') or None,
+                        help='Piper dispatcher model (default: LOG_DIR/piper-voices/en_US-lessac-medium.onnx)')
+    parser.add_argument('--piper-conductor-model', default=os.environ.get('PIPER_CONDUCTOR_MODEL') or None,
+                        help='Piper conductor model (default: LOG_DIR/piper-voices/en_GB-southern_english_female-low.onnx)')
+    parser.add_argument('--piper-engineer-model', default=os.environ.get('PIPER_ENGINEER_MODEL') or None,
+                        help='Piper engineer model (default: LOG_DIR/piper-voices/en_US-danny-low.onnx)')
     parser.add_argument('--no-joker', action='store_true', help='disable engineer jokes')
     parser.add_argument('--no-piper-install', action='store_true',
                         default=os.environ.get('PIPER_INSTALL', 'yes') == 'no',
@@ -304,6 +305,10 @@ class Agent:
         self.repo = Path(__file__).resolve().parents[2]
         self.home = Path(args.state_dir or self.repo / 'TAgent-logs').expanduser().resolve()
         prepare_log_directory(self.home, args.min_free_gb)
+        self.temp_dir = self.home / 'tmp'
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.voices_dir = self.home / 'piper-voices'
+        self.voices_dir.mkdir(parents=True, exist_ok=True)
         self.children = set()
         self.mutex = threading.RLock()
         self.log_mutex = threading.RLock()
@@ -340,8 +345,9 @@ class Agent:
                            os.environ.get('TAGENT_TTS_CHECKED') == '1' else
                            shutil.which('espeak-ng'))
         self.piper_python = Path(args.piper_python).expanduser()
-        self.piper_model = Path(args.piper_model).expanduser()
-        self.piper_conductor_model = Path(args.piper_conductor_model).expanduser()
+        self.piper_model = Path(args.piper_model or self.voices_dir / 'en_US-lessac-medium.onnx').expanduser()
+        self.piper_conductor_model = Path(args.piper_conductor_model or self.voices_dir /
+                                           'en_GB-southern_english_female-low.onnx').expanduser()
         self.piper_available = (self.piper_python.is_file() and os.access(self.piper_python, os.X_OK)
                                 and self.piper_model.is_file() and self.piper_model.stat().st_size > 0
                                 and Path(str(self.piper_model) + '.json').is_file()
@@ -353,7 +359,7 @@ class Agent:
             Path(str(self.piper_conductor_model) + '.json').is_file() and
             Path(str(self.piper_conductor_model) + '.json').stat().st_size > 0)
         self.piper_conductor_failed = False
-        self.joker_model = self.piper_model.parent / 'en_US-danny-low.onnx'
+        self.joker_model = Path(args.piper_engineer_model or self.voices_dir / 'en_US-danny-low.onnx').expanduser()
         self.joker_available = (self.piper_python.is_file() and
             os.access(self.piper_python, os.X_OK) and self.joker_model.is_file() and
             self.joker_model.stat().st_size > 0 and
@@ -539,7 +545,8 @@ class Agent:
                         (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
-                env = dict(os.environ, GIT_TERMINAL_PROMPT='0',
+                env = dict(os.environ, TMPDIR=str(self.temp_dir), TMP=str(self.temp_dir), TEMP=str(self.temp_dir),
+                           GIT_TERMINAL_PROMPT='0',
                            GIT_SSH_COMMAND='ssh -oBatchMode=yes -oConnectTimeout=20')
                 proc = subprocess.Popen(argv, cwd=cwd or self.repo, stdout=output,
                                         stderr=subprocess.STDOUT, text=True,
@@ -742,7 +749,7 @@ class Agent:
                 raise Failure('Piper is not installed in a writable virtual environment')
         self.say('Installing Piper in virtual environment: ' + str(root))
         self.command([str(self.piper_python), '-m', 'pip', 'install',
-                      '--disable-pip-version-check', 'piper-tts'], timeout=300)
+                      '--disable-pip-version-check', '--no-cache-dir', 'piper-tts'], timeout=300)
         self.command(probe, timeout=20)
 
     def start_conductor_download(self):
@@ -1138,7 +1145,7 @@ class Agent:
             return None
         if callable(text):
             text = text()
-        with tempfile.TemporaryDirectory(prefix='tts-', dir=self.home) as temp:
+        with tempfile.TemporaryDirectory(prefix='tts-', dir=self.temp_dir) as temp:
             speech = Path(temp) / 'speech.wav'
             if available:
                 try:
@@ -1210,7 +1217,7 @@ class Agent:
         if duration is not None:
             return duration
         return soundtrack.render_build_summary_fallback(path, errors, warnings, success,
-                                                        self.args.sound_volume)
+                                                        self.args.sound_volume, temp_dir=self.temp_dir)
 
     def finish_build(self, success):
         """Print and announce final recognized error/warning line counts."""
@@ -1667,7 +1674,12 @@ class Agent:
                 if self.piper_download_thread:
                     self.piper_download_thread.join()
                 if not self.stopping.is_set():
-                    self.download_piper_voice('en_US-danny-low', self.joker_model, engineer=True)
+                    voice = self.joker_model.stem
+                    if not self.joker_available and (self.joker_model.suffix != '.onnx' or not re.fullmatch(
+                            r'[A-Za-z]{2,3}_[A-Za-z]{2}-[A-Za-z0-9_]+-(?:x_low|low|medium|high)', voice)):
+                        self.say('Engineer Piper voice path is not a downloadable voice name; using fallback')
+                        return
+                    self.download_piper_voice(voice, self.joker_model, engineer=True)
             engineer_thread = threading.Thread(target=prepare_engineer, daemon=True)
             engineer_thread.start()
             if self.args.sound_preview in ('joker', 'fail', 'interrupt'):

@@ -594,6 +594,53 @@ class SoundtrackTests(unittest.TestCase):
                 agent.render_build_report(output, 3)
                 self.assertEqual(Path(mix.call_args.args[0]).name, 'build-warning.wav')
 
+    def test_voice_defaults_and_explicit_overrides(self):
+        """Voice models follow the log directory unless explicitly overridden."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with patch.dict('os.environ', {'PIPER_MODEL': '', 'PIPER_CONDUCTOR_MODEL': '',
+                                          'PIPER_ENGINEER_MODEL': ''}), \
+                 patch('sys.argv', ['tagent', '--state-dir', str(root)]):
+                agent = tagent.Agent(tagent.arguments())
+            self.assertEqual(agent.piper_model, root / 'piper-voices/en_US-lessac-medium.onnx')
+            self.assertEqual(agent.piper_conductor_model, root / 'piper-voices/en_GB-southern_english_female-low.onnx')
+            self.assertEqual(agent.joker_model, root / 'piper-voices/en_US-danny-low.onnx')
+            self.assertEqual(agent.temp_dir, root / 'tmp')
+            self.assertEqual(agent.command([sys.executable, '-c',
+                'import os; print(os.environ["TMPDIR"])']).strip(), str(agent.temp_dir))
+            with patch('sys.argv', ['tagent', '--state-dir', str(root),
+                    '--piper-model', str(root / 'custom.onnx'),
+                    '--piper-engineer-model', str(root / 'engineer.onnx')]):
+                custom = tagent.Agent(tagent.arguments())
+            self.assertEqual(custom.piper_model, root / 'custom.onnx')
+            self.assertEqual(custom.joker_model, root / 'engineer.onnx')
+
+    def test_voice_downloads_use_log_directory(self):
+        """All three downloaded voices and their configs land beneath LOG_DIR."""
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict('os.environ', {'PIPER_MODEL': '', 'PIPER_CONDUCTOR_MODEL': '',
+                                       'PIPER_ENGINEER_MODEL': ''}), \
+             patch('sys.argv', ['tagent', '--state-dir', directory, '--piper-python', sys.executable]):
+            agent = tagent.Agent(tagent.arguments())
+            def command(argv, **kwargs):
+                if 'piper.download_voices' in argv:
+                    target = Path(argv[argv.index('--data-dir') + 1])
+                    self.assertEqual(target.parent, agent.voices_dir)
+                    (target / (argv[-1] + '.onnx')).write_bytes(b'model')
+                    (target / (argv[-1] + '.onnx.json')).write_text('{}')
+                else:
+                    with wave.open(argv[argv.index('-f') + 1], 'wb') as output:
+                        output.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                        output.writeframes(b'\0\0' * 32)
+            with patch.object(agent, 'ensure_piper_engine'), patch.object(agent, 'command', side_effect=command):
+                for model, kwargs in ((agent.piper_model, {}),
+                                      (agent.piper_conductor_model, {'conductor': True}),
+                                      (agent.joker_model, {'engineer': True})):
+                    agent.download_piper_voice(model.stem, model, **kwargs)
+                    self.assertTrue(model.is_file())
+                    self.assertTrue(Path(str(model) + '.json').is_file())
+            self.assertEqual(len(list(agent.voices_dir.iterdir())), 6)
+
     def test_interrupt_preview_waits_for_engineer_voice_with_joker_disabled(self):
         """Emergency preview waits for Danny even when jokes are disabled."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -622,7 +669,8 @@ class SoundtrackTests(unittest.TestCase):
             Path(str(model) + '.json').write_text('{}')
             primary = Path(directory) / 'en_US-lessac-medium.onnx'
             with patch('sys.argv', ['tagent', '--state-dir', directory,
-                                    '--piper-python', sys.executable, '--piper-model', str(primary)]):
+                                    '--piper-python', sys.executable, '--piper-model', str(primary),
+                                    '--piper-engineer-model', str(model)]):
                 agent = tagent.Agent(tagent.arguments())
             self.assertTrue(agent.joker_available)
             with patch.object(agent, 'command') as command, \

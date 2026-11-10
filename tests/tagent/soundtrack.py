@@ -113,7 +113,7 @@ def mix_dynamic_dispatch(voice_path, output_path, volume, workers, budget, backg
     return duration
 
 
-def render_build_summary_fallback(path, errors, warnings, success, volume):
+def render_build_summary_fallback(path, errors, warnings, success, volume, temp_dir=None):
     """Assemble exact decimal counts from recorded female-voice fragments.
 
     path is output WAV, counts are nonnegative integers and success is a boolean.
@@ -129,7 +129,7 @@ def render_build_summary_fallback(path, errors, warnings, success, volume):
     tokens = (['success' if success else 'failed', 'errors'] +
               [names[int(digit)] for digit in str(errors)] + ['warnings'] +
               [names[int(digit)] for digit in str(warnings)])
-    with tempfile.TemporaryDirectory(prefix='tagent-voice-') as directory:
+    with tempfile.TemporaryDirectory(prefix='tagent-voice-', dir=temp_dir) as directory:
         voice = Path(directory) / 'voice.wav'
         with wave.open(str(assets / 'build-summary-voice.wav'), 'rb') as source:
             if (source.getnchannels(), source.getsampwidth()) != (1, 2):
