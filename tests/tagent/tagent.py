@@ -1741,11 +1741,14 @@ class Agent:
         self.say('SAMPLES BUILD COMPLETE | warnings: {}'.format(self.sample_warnings.count))
         self.finish_build(True)
         self.sound('build')
-        self.pending_tip = None
         self.perf_skipped = False
-        self.poll_failure_since = None
-        self.poll_retry_delay = 60
-        self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
+        # Always check at the build/test boundary; do not defer an overdue check
+        # or discard an update or retry state detected during compilation.
+        if self.poll_failure_since is None and not self.pending_tip:
+            self.next_remote_poll = 0
+        if self.update_waiting():
+            self.args.force = True
+            return 'updated'
         self.memory_phase = 'perf'
         self.start_test_sound('perf')
         try:

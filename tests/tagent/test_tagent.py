@@ -90,6 +90,9 @@ class SupervisorTests(unittest.TestCase):
 
     def fixture(self, fail=False):
         """Create build scripts that produce tiny executable jobs; fail selects perf failure."""
+        poll = patch.object(self.agent, 'poll_remote')
+        poll.start()
+        self.addCleanup(poll.stop)
         for family in ('perf', 'stress'):
             directory = self.root / 'tests' / family
             directory.mkdir(parents=True)
@@ -218,6 +221,19 @@ class SupervisorTests(unittest.TestCase):
         run = next(self.agent.home.glob('*abc123'))
         self.assertIn('sample warning', (run / 'build-samples.log').read_text())
         self.assertFalse(list(run.glob('perf_*/perf.log')))
+
+    def test_remote_checked_before_perf_after_build(self):
+        """A new tip at the build boundary prevents any perf task from starting."""
+        self.fixture()
+        self.agent.next_remote_poll = float('inf')
+        def check():
+            self.assertEqual(self.agent.next_remote_poll, 0)
+            self.agent.pending_tip = 'd' * 40
+        self.agent.poll_remote.side_effect = check
+        self.assertEqual(self.agent.cycle(), 'updated')
+        run = next(self.agent.home.glob('*abc123'))
+        self.assertFalse(list(run.glob('perf_*/perf.log')))
+        self.assertTrue(self.agent.args.force)
 
     def test_success_and_isolation(self):
         """All expected builds run, including debug perf, with isolated stress files."""
