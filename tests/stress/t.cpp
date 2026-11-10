@@ -7078,9 +7078,8 @@ void RangeCopyTest()
                 CheckRangeCopy(bvect1, 0, i);
             } // for i
             cout << "Pass " << k << "-2" << endl;
-            auto to = to_max;
             for (unsigned i = 0; i != to_max;
-                 i = NextStressTestValue(i, to_max - 1, 16), to = to_max - i)
+                 i = NextStressTestValue(i, to_max - 1, 16))
             {
                 CheckRangeCopy(bvect1, i, to_max);
             } // for i
