@@ -1026,7 +1026,7 @@ void BitCountSparseTest()
 
 
     std::vector<bvect::size_type> sample_vec;
-    sample_vec.reserve(BSIZE*2);
+    sample_vec.reserve(g_perf_options.fast ? size_t(bv->count()) * 2 : BSIZE * 2);
     {
         auto en = bv->get_enumerator(0);
         auto prev = *en;
@@ -4945,7 +4945,8 @@ void SparseVectorScannerCmpTest()
     bvect bv_null;
     sparse_vector_u32 sv(bm::use_null);
 
-    generate_scanner_test_set(vect, bv_null, sv, BSIZE/4);
+    generate_scanner_test_set(vect, bv_null, sv,
+                              g_perf_options.fast ? 1000000u : BSIZE / 4);
 
     // generate a search vector for benchmarking
     std::vector<unsigned> search_vect;
@@ -5066,7 +5067,8 @@ void SparseVectorScannerSignedCmpTest()
     bvect bv_null;
     sparse_vector_i32 sv(bm::use_null);
 
-    generate_scanner_test_set(vect, bv_null, sv, BSIZE/4);
+    generate_scanner_test_set(vect, bv_null, sv,
+                              g_perf_options.fast ? 1000000u : BSIZE / 4);
 
     // generate a search vector for benchmarking
     std::vector<int> search_vect;
@@ -5186,7 +5188,8 @@ void SparseVectorScannerTest()
     bvect bv_null;
     sparse_vector_u32 sv(bm::use_null);
     
-    generate_scanner_test_set(vect, bv_null, sv, BSIZE/4);
+    generate_scanner_test_set(vect, bv_null, sv,
+                              g_perf_options.fast ? 1000000u : BSIZE / 4);
 
     // generate a search vector for benchmarking
     std::vector<unsigned> search_vect;
@@ -5307,7 +5310,7 @@ void GeneratePipelineTestData(std::vector<string>& str_coll,
 static
 void SparseVectorPipelineScannerTest()
 {
-   const unsigned max_coll = 8000000;
+   const unsigned max_coll = g_perf_options.fast ? 1000000u : 8000000u;
    std::vector<string> str_coll;
    str_svect_type      str_sv;
 
@@ -5504,7 +5507,7 @@ void SparseVectorSerializationTest()
     sparse_vector_u32 sv2(bm::use_null);
     sparse_vector_u32 sv3(bm::use_null);
 
-    unsigned sv_size = BSIZE;
+    unsigned sv_size = g_perf_options.fast ? 1000000u : BSIZE;
     if constexpr (sizeof(void*) == 4)
     {
         sv_size = sv_size / 2;
@@ -5591,7 +5594,7 @@ void SparseVectorRangeDeserializationTest()
     sparse_vector_u32 sv1(bm::use_null);
     sparse_vector_u32 sv2(bm::use_null);
 
-    unsigned sv_size = BSIZE;
+    unsigned sv_size = g_perf_options.fast ? 1000000u : BSIZE;
     if (bm::conditional<sizeof(void*) == 4>::test())
     {
         sv_size = sv_size / 2;
@@ -6281,7 +6284,8 @@ void StrSparseVectorGatherMMapDeserializationPerfTest()
     typedef bm::sparse_vector_deserializer<str_gather_svect_type> sv_deserializer_type;
     typedef sv_deserializer_type::deserialization_index_type deserialization_index_type;
 
-    const str_gather_svect_type::size_type sv_size = 128u * 1024u * 1024u;
+    const str_gather_svect_type::size_type sv_size =
+        g_perf_options.fast ? 8u * 1024u * 1024u : 128u * 1024u * 1024u;
     const str_gather_svect_type::size_type target_count =
         g_perf_options.fast ? 1024u : 1024u * 1024u;
     const unsigned island_lens[] = { 1, 4, 256, 4096 };
@@ -6806,7 +6810,7 @@ void SparseVectorANDDeserializationTest()
 static
 void StrSparseVectorTest()
 {
-    unsigned max_coll = 30000000;
+    unsigned max_coll = g_perf_options.fast ? 1000000u : 30000000u;
     if constexpr (sizeof(void*) == 4)
     {
         max_coll = max_coll / 2;
