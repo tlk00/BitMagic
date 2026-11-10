@@ -13,6 +13,7 @@ import fcntl
 import json
 import joker
 import math
+import memory_monitor
 import os
 from pathlib import Path
 import platform
@@ -311,6 +312,8 @@ class Agent:
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.voices_dir = self.home / 'piper-voices'
         self.voices_dir.mkdir(parents=True, exist_ok=True)
+        self.memory_monitor = None
+        self.memory_phase = 'startup'
         self.jemalloc = None
         self.children = set()
         self.mutex = threading.RLock()
@@ -730,6 +733,8 @@ class Agent:
             self.flags = set(Path('/proc/cpuinfo').read_text().lower().replace('.', '_').split())
         self.resource_check()
         self.detect_jemalloc()
+        self.memory_monitor = memory_monitor.MemoryMonitor(self)
+        self.memory_monitor.start()
         self.say('Validated Python {} | {} workers | {}'.format(platform.python_version(), self.jobs, self.repo))
 
     def report_audio(self):
@@ -1602,6 +1607,7 @@ class Agent:
                             run / 'build-samples.log'))
         self.build_targets = {family: [directory / name for name in names]
                               for family, directory, names, _, _ in build_tasks}
+        self.memory_phase = 'build'
         self.sound('building')
 
         def run_build(task):
@@ -1634,6 +1640,8 @@ class Agent:
             self.say('Build interrupted for remote update; fetching before restart')
             return 'updated'
         if failures:
+            if self.memory_monitor:
+                self.memory_monitor.snapshot('build-failure')
             self.finish_build(False)
             raise failures[0]
         for _, directory, names, _, _ in build_tasks:
@@ -1650,6 +1658,7 @@ class Agent:
         self.poll_failure_since = None
         self.poll_retry_delay = 60
         self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
+        self.memory_phase = 'perf'
         self.start_test_sound('perf')
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
@@ -1677,6 +1686,7 @@ class Agent:
             if self.update_waiting() or self.perf_skipped:
                 self.args.force = True
                 return 'updated'
+            self.memory_phase = 'stress'
             self.start_test_sound('stress')
             for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
                 if not self.supported(name):
@@ -1718,6 +1728,8 @@ class Agent:
                     return 'updated'
             return True
         except CommandFailure as error:
+            if self.memory_monitor:
+                self.memory_monitor.snapshot('test-failure')
             (self.home / 'last-test-failure.txt').write_text(
                 'Commit: ' + self.commit + '\n' + str(error) + '\n')
             self.say('TEST FAILURE ' + str(error))
@@ -1898,6 +1910,7 @@ class Agent:
                 failed = None
             if self.args.once:
                 return 0
+            self.memory_phase = 'waiting'
             self.sound('idle')
             self.pause(self.args.poll_minutes * 60, 'WAIT')
 
@@ -1920,6 +1933,8 @@ def main():
     try:
         return agent.run()
     except ReceivedSignal as error:
+        if agent.memory_monitor:
+            agent.memory_monitor.snapshot('signal')
         name = signal.Signals(error.signum).name
         agent.say('SIGNAL {} ({}) received; stopping all child jobs | {} | commit {} | cycle {} | children {} | interrupted {} | sender unavailable'.format(
             name, error.signum, agent.process_context(), error.commit, error.cycle or 'none',
@@ -1934,6 +1949,8 @@ def main():
         agent.sound('fail')
         return 3 if 'Recovery window exhausted' in str(error) else 1
     finally:
+        if agent.memory_monitor:
+            agent.memory_monitor.close()
         if not agent.stopping.is_set():
             agent.finish_audio()
         agent.stopping.set()

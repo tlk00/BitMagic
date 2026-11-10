@@ -520,3 +520,22 @@ The allocator path is recorded in the cycle manifest and startup log.
 If unavailable or unusable, tests continue with the existing allocator settings.
 macOS does not use this Linux preload mechanism. No packages are installed.
 Jemalloc may change memory usage; it does not replace a suitable concurrency limit.
+
+### Memory diagnostics
+
+TAgent samples memory every five seconds into `resources.jsonl` in the log
+directory (two rotating 2 MiB files). On Linux it records available RAM, swap,
+pressure and cgroup v2 limits and OOM counters where accessible. A warning is
+triggered below 15% or 2 GiB available, and critical below 5% or 768 MiB;
+the higher threshold in each pair applies. Cgroup headroom is used when its
+limit is smaller than system RAM. Escalation triggers an immediate snapshot;
+continued pressure can produce another after five minutes. Snapshots are stored
+in the active cycle's `diagnostics` directory, or in the log directory between
+cycles, with at most 20 per directory. They contain recent samples, ranked
+processes, swap, tracked jobs and available perf log paths.
+
+Test failures and handled signals also request a snapshot. OOM counters are
+evidence of a cgroup kill, not proof of which process was killed. On macOS
+the monitor reports total RAM and marks other metrics unavailable. Monitoring
+is best effort and does not stop or throttle tests. A sudden spike or OOM kill
+may prevent the latest sample or snapshot from being written.
