@@ -6241,7 +6241,7 @@ unsigned char serializer<BV>::encode_selection_block(
     BM_DECLARE_TEMP_BLOCK(transformed)
     unsigned short primary = 0;
     type = encode_bwt_block(blk, sub_stat, nb, enc,
-                 selection_compose_enabled_ ? transformed : 0,
+                 selection_compose_enabled_ ? transformed.begin() : nullptr,
                  selection_compose_enabled_ ? &primary : 0);
 #if BM_SERIALIZATION_DIAGNOSTICS
     selection_stats_.bwt_ns += bm::id64_t(
