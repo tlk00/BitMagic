@@ -13,13 +13,13 @@ echo
 echo
 echo RELEASE
 
-./perf_release || exit 1
+./perf_release "$@" || exit 1
 
 echo
 echo
 echo NEON
 
-./perf_release_neon || exit 1
+./perf_release_neon "$@" || exit 1
 
 echo
 echo "BitMagic Perf Test DONE"

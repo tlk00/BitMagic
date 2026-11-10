@@ -96,6 +96,7 @@ std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs 
 struct perf_run_options
 {
     simd_bench_options bench;
+    bool fast = false; ///< Use one timed repetition while retaining all benchmark sections.
     bool print_timings = true;
     bool print_space = false;
     bool silent = false;
@@ -109,13 +110,17 @@ void PrintUsage(const char* app_name)
 {
     cout << "Usage: " << app_name << " [options]" << endl
          << "Options:" << endl
-         << "  -bench-kernels / -bench-dense / -bench-gap  Select focused workloads." << endl
-         << "  -bench-repeats N  Sweeps per sample (default 200)." << endl
-         << "  -bench-blocks N   Blocks per input (1..4096; default 64)." << endl
-         << "  -bench-seed N     Reproducible input seed (default 1337)." << endl
-         << "  -mem       Print memory, serialized-size, and mask statistics." << endl
-         << "  -silent    Run correctness checks without timing or space output." << endl
-         << "  --help     Print this help and exit." << endl;
+         << "  -bench-kernels  Run focused SIMD bit-block kernel benchmarks." << endl
+         << "  -bench-dense    Run focused dense bvector benchmarks." << endl
+         << "  -bench-gap      Run focused GAP block benchmarks." << endl
+         << "                  Focused workloads can be combined; without one, run the full suite." << endl
+         << "  -bench-repeats N  Sweeps per focused sample (1..1000000000; default 200)." << endl
+         << "  -bench-blocks N   Blocks per focused input (1..4096; default 64)." << endl
+         << "  -bench-seed N     Focused input random seed (0..1000000000; default 1337)." << endl
+         << "  --fast    Run each timed repetition once with smaller large fixtures." << endl
+         << "  -mem      Print memory, serialized-size, and mask statistics." << endl
+         << "  -silent   Run correctness checks without timing or space output." << endl
+         << "  -h, --help  Print this help and exit." << endl;
 }
 
 /// @internal Parse perf-driver command-line options.
@@ -127,6 +132,8 @@ bool ParseCommandLine(int argc, char* argv[])
         const char* arg = argv[i];
         if (::strcmp(arg, "-bench-kernels") == 0)
             g_perf_options.bench.kernels = true;
+        else if (::strcmp(arg, "--fast") == 0)
+            g_perf_options.fast = true;
         else if (::strcmp(arg, "-bench-dense") == 0)
             g_perf_options.bench.dense = true;
         else if (::strcmp(arg, "-bench-gap") == 0)
@@ -175,6 +182,15 @@ bool ParseCommandLine(int argc, char* argv[])
         }
     }
     return true;
+}
+
+/// @internal Select the timed repetition count for the current run mode.
+/// @param repeats Normal-mode repetition count.
+/// @return One in fast mode, or the normal-mode count otherwise.
+static
+unsigned PerfRepeats(unsigned repeats)
+{
+    return g_perf_options.fast ? 1u : repeats;
 }
 
 /// @internal Run a measured section unless timing output is disabled.
@@ -421,8 +437,8 @@ void MemCpyTest()
 
     if (!platform_test)
     {
-    bm::chrono_taker<std::ostream> tt(cout, "Memory ADD transfer test", REPEATS * 4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "Memory ADD transfer test", PerfRepeats(REPEATS * 4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         for (j = 0; j < BSIZE/32; j+=4)
         {
@@ -436,8 +452,8 @@ void MemCpyTest()
     
     if (!platform_test)
     {
-    bm::chrono_taker<std::ostream> tt(cout, "memcpy transfer test", REPEATS * 4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "memcpy transfer test", PerfRepeats(REPEATS * 4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         memcpy(m1, m2, BSIZE/32 * sizeof(unsigned));
     }
@@ -469,8 +485,8 @@ void BitCountTest()
 
     //if (!platform_test)
     {
-        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::count() ", REPEATS*10);
-        for (unsigned i = 0; i < REPEATS*10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::count() ", PerfRepeats(REPEATS*10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
         {
             value+=bv->count();
         }
@@ -484,8 +500,8 @@ void BitCountTest()
 
     if (!platform_test)
     {
-    bm::chrono_taker<std::ostream> tt(cout, "BitCount. Random bitvector (STL)", REPEATS*2);
-    for (unsigned i = 0; i < REPEATS*2; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "BitCount. Random bitvector (STL)", PerfRepeats(REPEATS*2));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*2); ++i)
     {    
         value += (unsigned)bset->count();
     }
@@ -500,8 +516,8 @@ void BitCountTest()
     bv->freeze();
 
     {
-        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::count() (RO)", REPEATS*10);
-        for (unsigned i = 0; i < REPEATS*10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::count() (RO)", PerfRepeats(REPEATS*10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
         {
             value+=bv->count();
         }
@@ -577,9 +593,9 @@ void BitForEachTest()
     if (platform_test)
     {
         unsigned bit_list[32];
-        bm::chrono_taker<std::ostream> tt(cout, "BitScan-nibble (switch based)", REPEATS);
+        bm::chrono_taker<std::ostream> tt(cout, "BitScan-nibble (switch based)", PerfRepeats(REPEATS));
 
-        for (unsigned i = 0; i < REPEATS; ++i)
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             for (unsigned j = 0; j < value_to; ++j)
             {
@@ -593,9 +609,9 @@ void BitForEachTest()
     if (platform_test)
     {
         unsigned bit_list[32];
-        bm::chrono_taker<std::ostream> tt(cout, "BitScan-nibble (GCC goto)", REPEATS);
+        bm::chrono_taker<std::ostream> tt(cout, "BitScan-nibble (GCC goto)", PerfRepeats(REPEATS));
 
-        for (unsigned i = 0; i < REPEATS; ++i)
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             for (unsigned j = 0; j < value_to; ++j)
             {
@@ -610,8 +626,8 @@ void BitForEachTest()
     bm::id64_t sum3(0);
     {
         unsigned bit_list[32];
-        bm::chrono_taker<std::ostream> tt(cout, "BitScan-POPCNT ", REPEATS);
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "BitScan-POPCNT ", PerfRepeats(REPEATS));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
             {
@@ -624,8 +640,8 @@ void BitForEachTest()
     sum3 = 0;
     {
         unsigned bit_list[64];
-        bm::chrono_taker<std::ostream> tt(cout, "BitScan-POPCNT-64 ", REPEATS);
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "BitScan-POPCNT-64 ", PerfRepeats(REPEATS));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
             {
@@ -642,8 +658,8 @@ void BitForEachTest()
     bm::id64_t sum4(0);
     {
         unsigned bit_list[32];
-        bm::chrono_taker<std::ostream> tt(cout, "BitScan-BSF ", REPEATS);
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "BitScan-BSF ", PerfRepeats(REPEATS));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
             {
@@ -657,8 +673,8 @@ void BitForEachTest()
 
     {
         unsigned bit_list[32];
-        bm::chrono_taker<std::ostream> tt(cout, "BitScan-BSF-64 ", REPEATS);
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "BitScan-BSF-64 ", PerfRepeats(REPEATS));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             for (unsigned j = 0; j < value_to; j+=2)
             {
@@ -679,7 +695,7 @@ void BitForEachTest()
 static
 void WordSelectTest()
 {
-    const unsigned test_size = 50000000;
+    const unsigned test_size = g_perf_options.fast ? 1024u : 50000000u;
 
     std::vector<bm::id64_t> vect_v(test_size);
     std::vector<unsigned> vect_cnt(test_size);
@@ -995,8 +1011,8 @@ void BitCountSparseTest()
 */
     if (!platform_test)
     {
-        bm::chrono_taker<std::ostream> tt(cout, "BitCount: Sparse bitset (STL)", REPEATS*10);
-        for (unsigned int i = 0; i < REPEATS*10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "BitCount: Sparse bitset (STL)", PerfRepeats(REPEATS*10));
+        for (unsigned int i = 0; i < PerfRepeats(REPEATS*10); ++i)
         {    
             value += bset->count();
         }
@@ -1046,8 +1062,8 @@ void BitCountSparseTest()
 
 /*
     {
-        bm::chrono_taker<std::ostream> tt(cout, "BitCount: (GAP) Sparse bitset", REPEATS*100);
-        for (unsigned i = 0; i < REPEATS*100; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "BitCount: (GAP) Sparse bitset", PerfRepeats(REPEATS*100));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS*100); ++i)
         {    
             value3 += bv->count();
         }
@@ -1062,7 +1078,7 @@ void BitCountSparseTest()
 
 
 
-    unsigned rs_max = 100;
+    unsigned rs_max = PerfRepeats(100);
 
 
     {
@@ -1196,7 +1212,7 @@ void BitSwapTest()
     bv1->optimize();
     bv2->optimize();
 
-    const unsigned repeats = REPEATS * 100000;
+    const unsigned repeats = PerfRepeats(REPEATS * 100000);
 
     std::vector<unsigned> idx;
     for (unsigned i = 0; i < repeats; ++i)
@@ -1270,7 +1286,7 @@ void BitTestSparseTest()
     unique_ptr<test_bitset>  bset1(new test_bitset());
     unique_ptr<test_bitset>  bset2(new test_bitset());
 
-    const unsigned repeats = REPEATS * 300000;
+    const unsigned repeats = PerfRepeats(REPEATS * 300000);
 
     size_t value = 0;
 
@@ -1320,12 +1336,13 @@ void BitTestSparseTest()
 static
 void BitSetConditionalTest()
 {
-    const unsigned repeats = 10;
+    const unsigned repeats = PerfRepeats(10);
     std::random_device rd;
     std::mt19937 g(rd());
 
     std::vector<bvect::size_type> idx_vect;
-    for (bvect::size_type i = 0; i < bm::id_max-256; i+=100)
+    const bvect::size_type index_limit = g_perf_options.fast ? 100000u : bm::id_max-256;
+    for (bvect::size_type i = 0; i < index_limit; i+=100)
         idx_vect.push_back(i);
 
     std::shuffle(idx_vect.begin(), idx_vect.end(), g);
@@ -1400,7 +1417,7 @@ void EnumeratorGoToTest()
     unique_ptr<test_bitset>  bset1(new test_bitset());
     unique_ptr<test_bitset>  bset2(new test_bitset());
 
-    const unsigned repeats = REPEATS * 300000;
+    const unsigned repeats = PerfRepeats(REPEATS * 300000);
 
     bm::id64_t value = 0;
 
@@ -1469,8 +1486,8 @@ void BitCompareTest()
     SimpleFillSets(bset, *bv2, 0, BSIZE, 10);
 
     {
-    bm::chrono_taker<std::ostream> tt(cout, "BitCompare: Random bitvector", REPEATS*10);
-    for (unsigned int i = 0; i < REPEATS*10; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "BitCompare: Random bitvector", PerfRepeats(REPEATS*10));
+    for (unsigned int i = 0; i < PerfRepeats(REPEATS*10); ++i)
     {    
         value+=bv1->compare(*bv2);
     }
@@ -1484,7 +1501,7 @@ void BitCompareTest()
 
     if (platform_test) return;
 
-    unsigned cnt = REPEATS * 100000;
+    unsigned cnt = PerfRepeats(REPEATS * 100000);
     unsigned* arr1 = new unsigned[cnt];
     unsigned* arr2 = new unsigned[cnt];
 
@@ -1587,8 +1604,8 @@ void FindTest()
     unsigned i;
     unsigned pos_sum = 0;
     {
-        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::find_reverse()", REPEATS*100);
-        for (i = 0; i < REPEATS*100; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::find_reverse()", PerfRepeats(REPEATS*100));
+        for (i = 0; i < PerfRepeats(REPEATS*100); ++i)
         {
             bm::id_t pos;
             bool found;
@@ -1617,8 +1634,8 @@ void FindTest()
     g_fl_cnt += float(pos_sum); // to fool some smart compilers like ICC using global
 
     {
-        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::find()", REPEATS*100);
-        for (i = 0; i < REPEATS*100; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::find()", PerfRepeats(REPEATS*100));
+        for (i = 0; i < PerfRepeats(REPEATS*100); ++i)
         {
             bm::id_t pos;
             bool found;
@@ -1679,8 +1696,8 @@ void EnumeratorTest()
 
     {
         unsigned long long acc = 0; (void)acc;
-        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator", REPEATS/10);
-        for (i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator", PerfRepeats(REPEATS/10));
+        for (i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             {
                 bvect::enumerator en = bv1.first();
@@ -1724,8 +1741,8 @@ void EnumeratorTest()
     {
         unsigned long long acc = 0; (void)acc;
 
-        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::get_next()", REPEATS/10);
-        for (i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bvector<>::get_next()", PerfRepeats(REPEATS/10));
+        for (i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             if (bv1.any())
             {
@@ -1772,8 +1789,8 @@ void EnumeratorTest()
     
     
     {
-        bm::chrono_taker<std::ostream> tt(cout, "bm::visit_each_bit()", REPEATS/10);
-        for (i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bm::visit_each_bit()", PerfRepeats(REPEATS/10));
+        for (i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             bm::visit_each_bit(bv1, (void*)&v1, bit_visitor_func);
             bm::visit_each_bit(bv2, (void*)&v2, bit_visitor_func);
@@ -1790,8 +1807,8 @@ void EnumeratorTest()
     bv4.freeze();
 
     {
-        bm::chrono_taker<std::ostream> tt(cout, "bm::visit_each_bit() (RO)", REPEATS/10);
-        for (i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "bm::visit_each_bit() (RO)", PerfRepeats(REPEATS/10));
+        for (i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             bm::visit_each_bit(bv1, (void*)&v1, bit_visitor_func);
             bm::visit_each_bit(bv2, (void*)&v2, bit_visitor_func);
@@ -1819,8 +1836,8 @@ void EnumeratorTestGAP()
     unsigned k = 1;
     unsigned cnt = 0;
     {
-    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::get_next() (GAP) ", REPEATS*10*(k+1));
-    for (i = 0; i < REPEATS*10*(k+1); ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::get_next() (GAP) ", PerfRepeats(REPEATS*10*(k+1)));
+    for (i = 0; i < PerfRepeats(REPEATS*10*(k+1)); ++i)
     {
         if (bv->any())
         {
@@ -1836,8 +1853,8 @@ void EnumeratorTestGAP()
 
     unsigned v = 0;
     {
-    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator (GAP) ", REPEATS*10*(k+1));
-    for (i = 0; i < REPEATS*10*(k+1); ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator (GAP) ", PerfRepeats(REPEATS*10*(k+1)));
+    for (i = 0; i < PerfRepeats(REPEATS*10*(k+1)); ++i)
     {    
         bvect::enumerator en = bv->first();
         bvect::enumerator bend = bv->end();
@@ -1854,8 +1871,8 @@ void EnumeratorTestGAP()
 
     bv->freeze();
     {
-    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator (GAP) (RO)", REPEATS*10*(k+1));
-    for (i = 0; i < REPEATS*10*(k+1); ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "bvector<>::enumerator (GAP) (RO)", PerfRepeats(REPEATS*10*(k+1)));
+    for (i = 0; i < PerfRepeats(REPEATS*10*(k+1)); ++i)
     {
         bvect::enumerator en = bv->first();
         bvect::enumerator bend = bv->end();
@@ -1904,8 +1921,8 @@ void SerializationTest()
     size_t len, id_size; (void)len;
     len = id_size = 0;
     {
-    bm::chrono_taker<std::ostream> tt(cout, "Small bvector serialization", REPEATS*70000);
-    for (unsigned i = 0; i < REPEATS*70000; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "Small bvector serialization", PerfRepeats(REPEATS*70000));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*70000); ++i)
     {
         len += bm::serialize(bv_sparse, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
         id_size += cnt * (unsigned)sizeof(unsigned);
@@ -1923,8 +1940,8 @@ void SerializationTest()
     buf = new unsigned char[st.max_serialize_mem];
     
     {
-    bm::chrono_taker<std::ostream> tt(cout, "Large bvector serialization", REPEATS/3);
-    for (unsigned i = 0; i < REPEATS/3; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "Large bvector serialization", PerfRepeats(REPEATS/3));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS/3); ++i)
     {
         len += bm::serialize(*bv, buf, tb, bm::BM_NO_BYTE_ORDER|bm::BM_NO_GAP_LENGTH);
         id_size += cnt * (unsigned)sizeof(unsigned);
@@ -1948,8 +1965,8 @@ void InvertTest()
 
     SimpleFillSets(bset, *bv, 0, BSIZE, 2500);
     {
-    bm::chrono_taker<std::ostream> tt(cout, "Invert bvector", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "Invert bvector", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bv->flip();    
     }
@@ -1957,8 +1974,8 @@ void InvertTest()
 
     if (!platform_test)
     {
-    bm::chrono_taker<std::ostream> tt(cout, "Invert bvector (STL)", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "Invert bvector (STL)", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bset->flip();    
     }
@@ -1977,8 +1994,8 @@ void OrTest()
     generate_bvector(bv2, 40000000, false);
     
     {
-    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (2 operand) bvector test", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (2 operand) bvector test", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvt1 = bv1;
         bvt1 |= bv2;
@@ -1987,8 +2004,8 @@ void OrTest()
     }
     
     {
-    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (3 operand) bvector test", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (3 operand) bvector test", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvt2.bit_or(bv1, bv2, bvect::opt_compress);
     }
@@ -2005,8 +2022,8 @@ void OrTest()
     bv2.freeze();
 
     {
-    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (3 operand) bvector test (RO)", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "OR-optimize (3 operand) bvector test (RO)", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvt3.bit_or(bv1, bv2, bvect::opt_compress);
     }
@@ -2035,8 +2052,8 @@ void AndTest()
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
 
     {
-    bm::chrono_taker<std::ostream> tt(cout, "AND bvector test", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "AND bvector test", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         *bv1 &= *bv2;
     }
@@ -2044,8 +2061,8 @@ void AndTest()
 
     if (!platform_test)
     {
-    bm::chrono_taker<std::ostream> tt(cout, "AND bvector test(STL)", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "AND bvector test(STL)", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         *bset1 &= *bset2;
     }
@@ -2074,8 +2091,8 @@ void OrAndTest()
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
 
     {
-    bm::chrono_taker<std::ostream> tt(cout, "AND+OR bvector test", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "AND+OR bvector test", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvect bv;
         bv.bit_and(*bv1, *bv2);
@@ -2084,8 +2101,8 @@ void OrAndTest()
     }
 
     {
-    bm::chrono_taker<std::ostream> tt(cout, "AND_OR( fused) bvector test", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "AND_OR( fused) bvector test", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bv_res2.bit_or_and(*bv1, *bv2);
     }
@@ -2102,8 +2119,8 @@ void OrAndTest()
     bv2->freeze();
 
     {
-    bm::chrono_taker<std::ostream> tt(cout, "AND_OR( fused) bvector test (RO)", REPEATS*4);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<std::ostream> tt(cout, "AND_OR( fused) bvector test (RO)", PerfRepeats(REPEATS*4));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bv_res3.bit_or_and(*bv1, *bv2);
     }
@@ -2138,8 +2155,8 @@ void XorTest()
     SimpleFillSets(bset1, *bv2, 0, BSIZE, 100);
 
     {
-        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             *bv1 ^= *bv2;
         }
@@ -2148,8 +2165,8 @@ void XorTest()
     bv2->freeze();
 
     {
-        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test (RO)", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test (RO)", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             *bv1 ^= *bv2;
         }
@@ -2157,8 +2174,8 @@ void XorTest()
 
     if (!platform_test)
     {
-        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test(STL)", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<std::ostream> tt(cout, "XOR bvector test(STL)", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             *bset1 ^= *bset2;
         }
@@ -2180,8 +2197,8 @@ void SubTest()
     generate_bvector(bv2, 40000000, false);
     
     {
-    bm::chrono_taker<> tt(cout, "AND-NOT bvector test", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "AND-NOT bvector test", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvect bv_tmp(bv2);
         bv_tmp.invert();
@@ -2194,8 +2211,8 @@ void SubTest()
     }
     
     {
-    bm::chrono_taker<> tt(cout, "SUB-optimize (2 operand) bvector test", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "SUB-optimize (2 operand) bvector test", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvt1 = bv1;
         bvt1 -= bv2;
@@ -2204,8 +2221,8 @@ void SubTest()
     }
     
     {
-    bm::chrono_taker<> tt(cout, "SUB-optimize (3 operand) bvector test", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "SUB-optimize (3 operand) bvector test", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvt2.bit_sub(bv1, bv2, bvect::opt_compress);
     }
@@ -2214,8 +2231,8 @@ void SubTest()
     bv1.freeze();
     bv2.freeze();
     {
-    bm::chrono_taker<> tt(cout, "SUB-optimize (3 operand) bvector test (RO)", REPEATS*4);
-    for (unsigned i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "SUB-optimize (3 operand) bvector test (RO)", PerfRepeats(REPEATS*4));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bvt3.bit_sub(bv1, bv2, bvect::opt_compress);
     }
@@ -2263,8 +2280,8 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bv_tmp.clear();
         bv_tmp |= *bv1;
@@ -2276,8 +2293,8 @@ void XorCountTest()
     if (!platform_test)
     {
     test_bitset*  bset_tmp = new test_bitset();
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector (STL)", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector (STL)", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bset_tmp->reset();
         *bset_tmp |= *bset1;
@@ -2288,8 +2305,8 @@ void XorCountTest()
 
 
     {
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         count2 += bm::count_xor(*bv1, *bv2);
     }
@@ -2318,8 +2335,8 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bv_tmp.clear(false);
         bv_tmp |= *bv1;
@@ -2329,8 +2346,8 @@ void XorCountTest()
     }
 
     {
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector(opt1) test", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector(opt1) test", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
     }
@@ -2354,8 +2371,8 @@ void XorCountTest()
     if (!platform_test)
     {
     bvect bv_tmp;
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector test with TEMP vector", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         bv_tmp.clear(false);
         bv_tmp |= *bv1;
@@ -2365,8 +2382,8 @@ void XorCountTest()
     }
 
     {
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector(opt2) test", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector(opt2) test", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         count2 += (unsigned)bm::count_xor(*bv1, *bv2);
     }
@@ -2382,8 +2399,8 @@ void XorCountTest()
     bv2->freeze();
 
     {
-    bm::chrono_taker<> tt(cout, "XOR COUNT bvector(opt2) test (RO)", REPEATS*10);
-    for (i = 0; i < REPEATS*4; ++i)
+    bm::chrono_taker<> tt(cout, "XOR COUNT bvector(opt2) test (RO)", PerfRepeats(REPEATS*10));
+    for (i = 0; i < PerfRepeats(REPEATS*4); ++i)
     {
         count3 += (unsigned)bm::count_xor(*bv1, *bv2);
     }
@@ -2419,8 +2436,8 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             bv_tmp.clear(false);
             bv_tmp |= *bv1;
@@ -2432,8 +2449,8 @@ void AndCountTest()
     if (!platform_test)
     {
         test_bitset*  bset_tmp = new test_bitset();
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector (STL)", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector (STL)", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             bset_tmp->reset();
             *bset_tmp |= *bset1;
@@ -2444,8 +2461,8 @@ void AndCountTest()
 
 
     {
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector test", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector test", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             count2 += bm::count_and(*bv1, *bv2);
         }
@@ -2472,8 +2489,8 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             bv_tmp.clear(false);
             bv_tmp |= *bv1;
@@ -2483,8 +2500,8 @@ void AndCountTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector test", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector test", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             count2 += (unsigned)bm::count_and(*bv1, *bv2);
         }
@@ -2508,8 +2525,8 @@ void AndCountTest()
     if (!platform_test)
     {
         bvect bv_tmp;
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector test with TEMP vector", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             bv_tmp.clear(false);
             bv_tmp |= *bv1;
@@ -2519,8 +2536,8 @@ void AndCountTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector(opt) test", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector(opt) test", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             count2 += (unsigned)bm::count_and(*bv1, *bv2);
         }
@@ -2536,8 +2553,8 @@ void AndCountTest()
     bv2->freeze();
 
     {
-        bm::chrono_taker<> tt(cout, "AND COUNT bvector(opt) test (RO)", REPEATS * 10);
-        for (i = 0; i < REPEATS * 4; ++i)
+        bm::chrono_taker<> tt(cout, "AND COUNT bvector(opt) test (RO)", PerfRepeats(REPEATS * 10));
+        for (i = 0; i < PerfRepeats(REPEATS * 4); ++i)
         {
             count3 += (unsigned)bm::count_and(*bv1, *bv2);
         }
@@ -2574,8 +2591,8 @@ void TI_MetricTest()
     double ti1=0, ti2=0, ti3=0;
     double di1=0, di2=0;
     {
-    bm::chrono_taker<> tt(cout, "Tversky Index bvector test vector", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Tversky Index bvector test vector", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         count1 = bm::count_and(*bv1, *bv2);
         
@@ -2591,8 +2608,8 @@ void TI_MetricTest()
     {
     test_bitset*  bset_tmp = new test_bitset();
         double test_dice = 0; (void) test_dice;
-    bm::chrono_taker<> tt(cout, "Dice bvector test with TEMP vector(STL)", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Dice bvector test with TEMP vector(STL)", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         bset_tmp->reset();
         *bset_tmp |= *bset1;
@@ -2616,8 +2633,8 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;    
     
-    bm::chrono_taker<> tt(cout, "Tversky Index bvector test (pipeline)", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Tversky Index bvector test (pipeline)", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
                 
@@ -2648,8 +2665,8 @@ void TI_MetricTest()
 
     
     {
-    bm::chrono_taker<> tt(cout, "Dice metric bvector test", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Dice metric bvector test", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         count1 = bm::count_and(*bv1, *bv2);
         
@@ -2665,8 +2682,8 @@ void TI_MetricTest()
         bvect bv2_ro(*bv2, bm::finalization::READONLY);
 
         {
-        bm::chrono_taker<> tt(cout, "Dice metric bvector test (RO)", REPEATS);
-        for (i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<> tt(cout, "Dice metric bvector test (RO)", PerfRepeats(REPEATS));
+        for (i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             count1 = bm::count_and(bv1_ro, bv2_ro);
 
@@ -2693,8 +2710,8 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;    
     
-    bm::chrono_taker<> tt(cout, "Tversky Index bvector test(pipeline)", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Tversky Index bvector test(pipeline)", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
                 
@@ -2722,8 +2739,8 @@ void TI_MetricTest()
     bv1->optimize(tb);
 
     {
-    bm::chrono_taker<> tt(cout, "Tversky index bvector test", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Tversky index bvector test", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         count1 = bm::count_and(*bv1, *bv2);
         
@@ -2740,8 +2757,8 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;    
     
-    bm::chrono_taker<> tt(cout, "Tversky Index bvector test (pipeline)", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Tversky Index bvector test (pipeline)", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
                 
@@ -2768,8 +2785,8 @@ void TI_MetricTest()
     dmd[1].metric = bm::COUNT_SUB_AB;
     dmd[2].metric = bm::COUNT_SUB_BA;
 
-    bm::chrono_taker<> tt(cout, "Tversky Index bvector test (pipeline) (RO)", REPEATS);
-    for (i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Tversky Index bvector test (pipeline) (RO)", PerfRepeats(REPEATS));
+    for (i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         bm::distance_operation(*bv1, *bv2, &dmd[0], (&dmd[0])+3);
 
@@ -2823,16 +2840,16 @@ void BitBlockTransposeTest()
     unsigned cnt=0;
 /*
     {
-    TimeTaker tt("Bit-block transpose.", REPEATS*1000);
-    for (unsigned i = 0; i < REPEATS*1000; ++i)
+    TimeTaker tt("Bit-block transpose.", PerfRepeats(REPEATS*1000));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*1000); ++i)
     {
         bm::bit_block_transpose(block1, tmatrix1);
     }
     }
 
     {
-    TimeTaker tt("Bit-block trestore.", REPEATS*1000);
-    for (unsigned i = 0; i < REPEATS*1000; ++i)
+    TimeTaker tt("Bit-block trestore.", PerfRepeats(REPEATS*1000));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*1000); ++i)
     {
         bm::bit_block_trestore(tmatrix1, block2);
         cnt += block2[10];
@@ -2841,9 +2858,9 @@ void BitBlockTransposeTest()
     }
 
     {
-    TimeTaker tt("Bit-block transpose distance.", REPEATS*1000);
+    TimeTaker tt("Bit-block transpose distance.", PerfRepeats(REPEATS*1000));
     unsigned distance[bm::set_block_plain_cnt][bm::set_block_plain_cnt];
-    for (unsigned i = 0; i < REPEATS*1000; ++i)
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*1000); ++i)
     {
         bm::bit_block_tmatrix_distance(tmatrix1, distance);
         cnt += distance[1][1];
@@ -2854,10 +2871,10 @@ void BitBlockTransposeTest()
 
     unsigned d2[bm::set_block_plain_cnt][bm::set_block_plain_cnt];
     {
-    TimeTaker tt("Bit-block transpose+distance", 100000);
+    TimeTaker tt("Bit-block transpose+distance", PerfRepeats(100000));
     unsigned distance[bm::set_block_plain_cnt][bm::set_block_plain_cnt];
     unsigned idx = 0;
-    for (unsigned i = 0; i < 100000; ++i)
+    for (unsigned i = 0; i < PerfRepeats(100000); ++i)
     {
         bm::vect_bit_transpose<unsigned, 
                                bm::set_block_plain_cnt, 
@@ -2896,7 +2913,7 @@ void BitBlockRotateTest()
     bm::word_t blk0[bm::set_block_size] = { 0 };
     bm::word_t blk1[bm::set_block_size] = { 0 };
     unsigned i;
-    unsigned repeats = 20000000;
+    unsigned repeats = PerfRepeats(20000000);
 
     for (i = 0; i < bm::set_block_size; ++i)
     {
@@ -2935,7 +2952,7 @@ void BitBlockShiftTest()
     bm::word_t BM_VECT_ALIGN blk0[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
     bm::word_t BM_VECT_ALIGN blk1[bm::set_block_size] BM_VECT_ALIGN_ATTR = { 0 };
     unsigned i;
-    unsigned repeats = 20000000;
+    unsigned repeats = PerfRepeats(20000000);
     unsigned acc0, acc1;
 
     for (i = 0; i < bm::set_block_size; ++i)
@@ -3022,9 +3039,9 @@ void ptest()
     }
 
     {
-    bm::chrono_taker<> tt(cout, "Operation &= test", REPEATS * 10);
+    bm::chrono_taker<> tt(cout, "Operation &= test", PerfRepeats(REPEATS * 10));
         unsigned count = 0; (void)(count);
-    for (unsigned i = 0; i < REPEATS*10; ++i)
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
     {
         bvect t1(bm::BM_GAP);
         t1 = *bv_small;
@@ -3036,9 +3053,9 @@ void ptest()
 
 
     {
-    bm::chrono_taker<> tt(cout, "Operation &= with enumerator test", REPEATS * 10);
+    bm::chrono_taker<> tt(cout, "Operation &= with enumerator test", PerfRepeats(REPEATS * 10));
     unsigned count = 0; (void) count;
-    for (unsigned i = 0; i < REPEATS*10; ++i)
+    for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
     {
         bvect t1(bm::BM_GAP);
         bvect t2(bm::BM_GAP);
@@ -3152,8 +3169,8 @@ void SparseVectorAccessTest()
     {
         svect sv2, sv3;
         {
-            bm::chrono_taker<> tt(cout, "sparse_vector random element assignment test", REPEATS / 10);
-            for (unsigned i = 0; i < REPEATS / 10; ++i)
+            bm::chrono_taker<> tt(cout, "sparse_vector random element assignment test", PerfRepeats(REPEATS / 10));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS / 10); ++i)
             {
                 for (unsigned j = 256000; j < 19000000 / 2; ++j)
                 {
@@ -3163,8 +3180,8 @@ void SparseVectorAccessTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, "sparse_vector back_inserter test", REPEATS / 10);
-            for (unsigned i = 0; i < REPEATS / 10; ++i)
+            bm::chrono_taker<> tt(cout, "sparse_vector back_inserter test", PerfRepeats(REPEATS / 10));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS / 10); ++i)
             {
                 {
                     sv3.resize(256000);
@@ -3215,8 +3232,8 @@ void SparseVectorAccessTest()
 
     bm::id64_t sum1 = 0;
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector random element access test", REPEATS/10 );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector random element access test", PerfRepeats(REPEATS/10) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             for (unsigned j = gather_from; j < gather_to; ++j)
                 sum1 += sv1[j];
@@ -3226,8 +3243,8 @@ void SparseVectorAccessTest()
     std::vector<unsigned> target_v;
     target_v.resize(idx.size());
     {
-        bm::chrono_taker<> tt(cout, "sparse_vectot<>::gather() UNSORTED ", REPEATS/5 );
-        for (unsigned i = 0; i < REPEATS/5; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vectot<>::gather() UNSORTED ", PerfRepeats(REPEATS/5) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/5); ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
@@ -3246,9 +3263,9 @@ void SparseVectorAccessTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector<>::decode()", REPEATS / 5);
+        bm::chrono_taker<> tt(cout, "sparse_vector<>::decode()", PerfRepeats(REPEATS / 5));
         auto from = gather_from; (void) from;
-        for (unsigned i = 0; i < REPEATS; ++i)
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
             from += (dsize % 123);
@@ -3262,8 +3279,8 @@ void SparseVectorAccessTest()
 
     unsigned long long cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector const_iterator test", REPEATS );
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector const_iterator test", PerfRepeats(REPEATS) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             auto it = sv1.begin();
             auto it_end = sv1.end();
@@ -3277,8 +3294,8 @@ void SparseVectorAccessTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector for_each_sparse test", REPEATS );
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector for_each_sparse test", PerfRepeats(REPEATS) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             unsigned k = 0;
             auto visitor = [&](unsigned v, bool is_null, svect::size_type) -> int
@@ -3314,17 +3331,17 @@ void SparseVectorAccessTest()
     target_v.resize(idx.size());
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vectot<>::gather() UNSORTED (RO) ", REPEATS/5 );
-        for (unsigned i = 0; i < REPEATS/5; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vectot<>::gather() UNSORTED (RO) ", PerfRepeats(REPEATS/5) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/5); ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector<>::decode() (RO)", REPEATS / 5);
+        bm::chrono_taker<> tt(cout, "sparse_vector<>::decode() (RO)", PerfRepeats(REPEATS / 5));
         auto from = gather_from; (void)from;
-        for (unsigned i = 0; i < REPEATS ; ++i)
+        for (unsigned i = 0; i < PerfRepeats(REPEATS) ; ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
             from += (dsize % 123);
@@ -3332,8 +3349,8 @@ void SparseVectorAccessTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector const_iterator test (RO)", REPEATS );
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector const_iterator test (RO)", PerfRepeats(REPEATS) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             auto it = sv1.begin();
             auto it_end = sv1.end();
@@ -3347,8 +3364,8 @@ void SparseVectorAccessTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector for_each_sparse test (RO)", REPEATS );
-        for (unsigned i = 0; i < REPEATS; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector for_each_sparse test (RO)", PerfRepeats(REPEATS) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
         {
             unsigned k = 0;
             auto visitor = [&](unsigned v, bool is_null, svect::size_type) -> int
@@ -3396,8 +3413,8 @@ void SparseVectorSignedAccessTest()
     {
         sparse_vector_i32 sv2, sv3;
         {
-            bm::chrono_taker<> tt(cout, "sparse_vector<int> random element assignment test", REPEATS / 10);
-            for (unsigned i = 0; i < REPEATS / 10; ++i)
+            bm::chrono_taker<> tt(cout, "sparse_vector<int> random element assignment test", PerfRepeats(REPEATS / 10));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS / 10); ++i)
             {
                 for (unsigned j = 256000; j < 19000000 / 2; ++j)
                 {
@@ -3407,8 +3424,8 @@ void SparseVectorSignedAccessTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, "sparse_vector<int> back_inserter test", REPEATS / 10);
-            for (unsigned i = 0; i < REPEATS / 10; ++i)
+            bm::chrono_taker<> tt(cout, "sparse_vector<int> back_inserter test", PerfRepeats(REPEATS / 10));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS / 10); ++i)
             {
                 {
                     sv3.resize(256000);
@@ -3458,8 +3475,8 @@ void SparseVectorSignedAccessTest()
 
     long long sum1 = 0;
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector<int> random element access test", REPEATS/10 );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector<int> random element access test", PerfRepeats(REPEATS/10) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             for (unsigned j = gather_from; j < gather_to; ++j)
                 sum1 += sv1[j];
@@ -3469,8 +3486,8 @@ void SparseVectorSignedAccessTest()
     std::vector<int> target_v;
     target_v.resize(idx.size());
     {
-        bm::chrono_taker<> tt(cout, "sparse_vectot<int>::gather() UNSORTED ", REPEATS/5 );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vectot<int>::gather() UNSORTED ", PerfRepeats(REPEATS/5) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             sv1.gather(target_v.data(), idx.data(), unsigned(idx.size()), bm::BM_UNSORTED);
         }
@@ -3489,9 +3506,9 @@ void SparseVectorSignedAccessTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector<int>::decode()", REPEATS / 5);
+        bm::chrono_taker<> tt(cout, "sparse_vector<int>::decode()", PerfRepeats(REPEATS / 5));
         auto from = gather_from; (void) from;
-        for (unsigned i = 0; i < REPEATS / 10; ++i)
+        for (unsigned i = 0; i < PerfRepeats(REPEATS / 10); ++i)
         {
             auto dsize = sv1.decode(target_v.data(), gather_from, (unsigned)idx.size(), (i == 0));
             from += (dsize % 123);
@@ -3506,8 +3523,8 @@ void SparseVectorSignedAccessTest()
     sv1.decode(target1.data(), 0, unsigned(target1.size()), true);
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector<int> const_iterator test", REPEATS );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector<int> const_iterator test", PerfRepeats(REPEATS) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             auto it = sv1.begin();
             auto it_end = sv1.end();
@@ -3521,8 +3538,8 @@ void SparseVectorSignedAccessTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "sparse_vector<int> for_each_sparse test", REPEATS );
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "sparse_vector<int> for_each_sparse test", PerfRepeats(REPEATS) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             unsigned k = 0;
             auto visitor = [&](int v, bool is_null, sparse_vector_i32::size_type) -> int
@@ -3574,7 +3591,7 @@ void RSC_SparseVectorFillTest()
     rsc_sparse_vector_u32 csv2(bv);
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector() set values", REPEATS*1);
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector() set values", PerfRepeats(REPEATS*1));
 
         bvect::enumerator en = bv.get_enumerator(mid);
         for (;en.valid(); ++en)
@@ -3593,7 +3610,7 @@ void RSC_SparseVectorFillTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector() set values (rs-index)", REPEATS*1);
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector() set values (rs-index)", PerfRepeats(REPEATS*1));
         csv2.sync();
 
         bvect::enumerator en = bv.get_enumerator(mid);
@@ -3639,8 +3656,8 @@ void RSC_SparseVectorRandomAccesTest()
     sv2.sync();
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::sync() (BIT)", REPEATS*10 );
-        for (unsigned i = 0; i < REPEATS*10; ++i)
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::sync() (BIT)", PerfRepeats(REPEATS*10) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
         {
             sv1.sync(true, true);
         }
@@ -3675,7 +3692,7 @@ void RSC_SparseVectorRandomAccesTest()
     (void)sum1g_ro; (void) sum1d;
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::is_null()+get() (DENSE)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::is_null()+get() (DENSE)", PerfRepeats(REPEATS*10) );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3688,7 +3705,7 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::is_null()+get() (BIT)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::is_null()+get() (BIT)", PerfRepeats(REPEATS*10) );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3701,7 +3718,7 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::try_get_sync() (BIT)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::try_get_sync() (BIT)", PerfRepeats(REPEATS*10) );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3713,7 +3730,7 @@ void RSC_SparseVectorRandomAccesTest()
 
     {
         {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::gather() (BIT)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::gather() (BIT)", PerfRepeats(REPEATS*10) );
         unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
         c_acc += sz; // to fool optimizer a bit
@@ -3750,15 +3767,15 @@ void RSC_SparseVectorRandomAccesTest()
     sv1.optimize(tb);
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::sync() (GAP)", REPEATS*10 );
-        for (unsigned i = 0; i < REPEATS*10; ++i)
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::sync() (GAP)", PerfRepeats(REPEATS*10) );
+        for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
         {
             sv1.sync(true, true);
         }
     }
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::is_null()+get() (GAP)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::is_null()+get() (GAP)", PerfRepeats(REPEATS*10) );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3771,7 +3788,7 @@ void RSC_SparseVectorRandomAccesTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::try_get_sync() (GAP)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::try_get_sync() (GAP)", PerfRepeats(REPEATS*10) );
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3781,7 +3798,7 @@ void RSC_SparseVectorRandomAccesTest()
         }
     }
     {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::try_get() (GAP)", REPEATS * 10);
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::try_get() (GAP)", PerfRepeats(REPEATS * 10));
         for (unsigned i = 0; i < test_idx.size(); ++i)
         {
             idx = test_idx[i];
@@ -3794,7 +3811,7 @@ void RSC_SparseVectorRandomAccesTest()
     {
         sum1g = 0;
         {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::gather() (GAP)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::gather() (GAP)", PerfRepeats(REPEATS*10) );
         unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
         c_acc += sz; // to fool optimizer
@@ -3821,7 +3838,7 @@ void RSC_SparseVectorRandomAccesTest()
     {
         sum1g_ro = 0;
         {
-        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::gather() (GAP) (RO)", REPEATS*10 );
+        bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::gather() (GAP) (RO)", PerfRepeats(REPEATS*10) );
         unsigned sz = (unsigned)test_idx.size();
         sz = sv1.gather(test_arr.data(), test_idx.data(), idx_buf_vec.data(), sz, bm::BM_UNKNOWN);
         c_acc += sz; // to fool optimizer
@@ -3880,9 +3897,9 @@ void RSC_SparseVectorAccesTest()
         sv1.clear();
 
         {
-            bm::chrono_taker<> tt(cout, "rsc_sparse_vector()::decode() test (sparse)", REPEATS*10 );
+            bm::chrono_taker<> tt(cout, "rsc_sparse_vector()::decode() test (sparse)", PerfRepeats(REPEATS*10) );
             unsigned from = 0;
-            for (unsigned i = 0; i < REPEATS*10; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
             {
                 sz = csv1.decode(&vect[0], from, dec_size);
                 assert(sz); (void)sz;
@@ -3892,9 +3909,9 @@ void RSC_SparseVectorAccesTest()
             } // for
         }
         {
-            bm::chrono_taker<> tt(cout, "rsc_sparse_vector()::decode_buf() test (sparse)", REPEATS*10 );
+            bm::chrono_taker<> tt(cout, "rsc_sparse_vector()::decode_buf() test (sparse)", PerfRepeats(REPEATS*10) );
             unsigned from = 0;
-            for (unsigned i = 0; i < REPEATS*10; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
             {
                 sz1 = csv1.decode_buf(&vect1[0], &vect2[0], from, dec_size);
                 assert(sz); (void)sz;
@@ -3925,9 +3942,9 @@ void RSC_SparseVectorAccesTest()
         sv1.clear();
 
         {
-            bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::decode() test (dense)", REPEATS*10 );
+            bm::chrono_taker<> tt(cout, "rsc_sparse_vector<>::decode() test (dense)", PerfRepeats(REPEATS*10) );
             unsigned from = 0;
-            for (unsigned i = 0; i < REPEATS*10; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
             {
                 sz = csv1.decode(&vect[0], from, dec_size);
 
@@ -3938,9 +3955,9 @@ void RSC_SparseVectorAccesTest()
             } // for
         }
         {
-            bm::chrono_taker<> tt(cout, "rsc_sparse_vector()::decode_buf() test (dense)", REPEATS*10 );
+            bm::chrono_taker<> tt(cout, "rsc_sparse_vector()::decode_buf() test (dense)", PerfRepeats(REPEATS*10) );
             unsigned from = 0;
-            for (unsigned i = 0; i < REPEATS*10; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS*10); ++i)
             {
                 sz1 = csv1.decode_buf(&vect1[0], &vect2[0], from, dec_size);
                 assert(sz); (void)sz;
@@ -4027,16 +4044,16 @@ void AggregatorTest()
     std::unique_ptr<bvect> bv_target2(new bvect);
 
     {
-    bm::chrono_taker<> tt(cout, "Horizontal aggregator OR ", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Horizontal aggregator OR ", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_or_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
     } // for
     }
 
     {
-    bm::chrono_taker<> tt(cout, "aggregator OR", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "aggregator OR", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_or(*bv_target2, bv_arr, unsigned(bv_coll.size()));
     } // for
@@ -4052,16 +4069,16 @@ void AggregatorTest()
 
     // ------------------------------------------------------------------
     {
-    bm::chrono_taker<> tt(cout, "Horizontal aggregator AND", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Horizontal aggregator AND", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_and_horizontal(*bv_target1, bv_arr, unsigned(bv_coll.size()));
     } // for
     }
 
     {
-    bm::chrono_taker<> tt(cout, "aggregator AND", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "aggregator AND", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_and(*bv_target2, bv_arr, unsigned(bv_coll.size()));
     } // for
@@ -4076,8 +4093,8 @@ void AggregatorTest()
     }
 
     {
-    bm::chrono_taker<> tt(cout, "Horizontal aggregator AND-SUB", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "Horizontal aggregator AND-SUB", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_and_sub_horizontal(*bv_target1,
                                         bv_arr, unsigned(bv_coll.size()),
@@ -4094,8 +4111,8 @@ void AggregatorTest()
     }
 
     {
-    bm::chrono_taker<> tt(cout, "aggregator AND-SUB", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "aggregator AND-SUB", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_and_sub(*bv_target2,
                             bv_arr, unsigned(bv_coll.size()),
@@ -4120,8 +4137,8 @@ void AggregatorTest()
 
 
     {
-    bm::chrono_taker<> tt(cout, "aggregator AND-SUB (RO)", REPEATS);
-    for (unsigned i = 0; i < REPEATS; ++i)
+    bm::chrono_taker<> tt(cout, "aggregator AND-SUB (RO)", PerfRepeats(REPEATS));
+    for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
     {
         agg.combine_and_sub(*bv_target2,
                             bv_arr, unsigned(bv_coll.size()),
@@ -4153,8 +4170,8 @@ void BvectorShiftTest()
             return;
 
         {
-            bm::chrono_taker<> tt(cout, "bvector<>::shift_right() ", REPEATS);
-            for (unsigned i = 0; i < REPEATS; ++i)
+            bm::chrono_taker<> tt(cout, "bvector<>::shift_right() ", PerfRepeats(REPEATS));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
             {
                 for (unsigned k = 0; k < bv_coll.size(); ++k)
                 {
@@ -4172,8 +4189,8 @@ void BvectorShiftTest()
             return;
 
         {
-            bm::chrono_taker<> tt(cout, "bvector<>::shift_left() ", REPEATS);
-            for (unsigned i = 0; i < REPEATS; ++i)
+            bm::chrono_taker<> tt(cout, "bvector<>::shift_left() ", PerfRepeats(REPEATS));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
             {
                 for (unsigned k = 0; k < bv_coll.size(); ++k)
                 {
@@ -4197,8 +4214,8 @@ void BvectorShiftTest()
 
     {
         {
-            bm::chrono_taker<> tt(cout, "bvector<>::shift_right()+AND ", REPEATS);
-            for (unsigned i = 0; i < REPEATS; ++i)
+            bm::chrono_taker<> tt(cout, "bvector<>::shift_right()+AND ", PerfRepeats(REPEATS));
+            for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
             {
                 bvect bv(mask_bv);
                 for (unsigned k = 0; k < bv_coll1.size(); ++k)
@@ -4214,13 +4231,13 @@ void BvectorShiftTest()
         bm::aggregator<bvect> agg;
         
         {
-            bm::chrono_taker<> tt(cout, "aggregator::shift_right_and() ", REPEATS);
+            bm::chrono_taker<> tt(cout, "aggregator::shift_right_and() ", PerfRepeats(REPEATS));
             agg.add(&mask_bv);
             for (unsigned k = 0; k < bv_coll2.size(); ++k)
             {
                 agg.add(&bv_coll2[k]);
             }
-            for (unsigned i = 0; i < REPEATS; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS); ++i)
             {
                 bvect bv;
                 agg.combine_shift_right_and(bv);
@@ -4284,8 +4301,8 @@ void Set2SetTransformTest()
     bm::set2set_11_transform<svect> set2set;
     int cnt = 0;
     {
-        bm::chrono_taker<> tt(cout, "set2set_11_transform::run()", REPEATS/10);
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "set2set_11_transform::run()", PerfRepeats(REPEATS/10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             bvect bv_out;
             set2set.run(bv_sample, sv, bv_out);
@@ -4298,8 +4315,8 @@ void Set2SetTransformTest()
 
     int cnt2 = 0;
     {
-        bm::chrono_taker<> tt(cout, "set2set_11_transform::run() (RO)", REPEATS/10);
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        bm::chrono_taker<> tt(cout, "set2set_11_transform::run() (RO)", PerfRepeats(REPEATS/10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             bvect bv_out;
             set2set.run(bv_sample, sv, bv_out);
@@ -4312,9 +4329,9 @@ void Set2SetTransformTest()
 
     /*
     {
-    TimeTaker tt("set2set_11_transform::one_pass_run", REPEATS/10);
+    TimeTaker tt("set2set_11_transform::one_pass_run", PerfRepeats(REPEATS/10));
 
-        for (unsigned i = 0; i < REPEATS/10; ++i)
+        for (unsigned i = 0; i < PerfRepeats(REPEATS/10); ++i)
         {
             bvect bv_out;
             set2set.one_pass_run(bv_sample, sv, bv_out);
@@ -4335,8 +4352,8 @@ void RangeCopyTest()
     generate_bvector(bv, vect_max);
 
     {
-        bm::chrono_taker<> tt(cout, "bvector<>::copy_range()", REPEATS * 25);
-        for (unsigned i = 0; i < REPEATS * 25; ++i)
+        bm::chrono_taker<> tt(cout, "bvector<>::copy_range()", PerfRepeats(REPEATS * 25));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS * 25); ++i)
         {
             unsigned from = vect_max / 4;
             from = from * (unsigned)(rand() % 3);
@@ -4346,8 +4363,8 @@ void RangeCopyTest()
         } // for
     }
     {
-        bm::chrono_taker<> tt(cout, "bvector<>:: copy range constructor", REPEATS * 25);
-        for (unsigned i = 0; i < REPEATS * 25; ++i)
+        bm::chrono_taker<> tt(cout, "bvector<>:: copy range constructor", PerfRepeats(REPEATS * 25));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS * 25); ++i)
         {
             unsigned from = vect_max / 4;
             from = from * (unsigned)(rand() % 3);
@@ -4357,8 +4374,8 @@ void RangeCopyTest()
     }
 
     {
-        bm::chrono_taker<> tt(cout, "copy range with AND", REPEATS * 25);
-        for (unsigned i = 0; i < REPEATS * 25; ++i)
+        bm::chrono_taker<> tt(cout, "copy range with AND", PerfRepeats(REPEATS * 25));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS * 25); ++i)
         {
             unsigned from = vect_max / 4;
             from = from * (unsigned)(rand() % 3);
@@ -4397,7 +4414,7 @@ bool test_interval(const BV& bv,
 static
 void IntervalsTest()
 {
-    const unsigned vect_max = BSIZE * 2;
+    const unsigned vect_max = g_perf_options.fast ? 1000000u : BSIZE * 2;
     bvect bv, bv_inv;
 
     // generate the test vector
@@ -4440,7 +4457,7 @@ void IntervalsTest()
     for (unsigned pass = 0; pass < 2; ++pass)
     {
         {
-            bm::chrono_taker<> tt(cout, msg3, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg3, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4467,7 +4484,7 @@ void IntervalsTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, msg, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4494,7 +4511,7 @@ void IntervalsTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, msg4, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg4, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4530,7 +4547,7 @@ void IntervalsTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, msg5, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg5, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4564,7 +4581,7 @@ void IntervalsTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, msg2, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg2, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4592,7 +4609,7 @@ void IntervalsTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, msg6, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg6, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4614,7 +4631,7 @@ void IntervalsTest()
         }
 
         {
-            bm::chrono_taker<> tt(cout, msg7, REPEATS * 1);
+            bm::chrono_taker<> tt(cout, msg7, PerfRepeats(REPEATS * 1));
             bvect::size_type istart(0), ilen(0);
             for (istart = 0; istart < vect_max; )
             {
@@ -4637,9 +4654,9 @@ void IntervalsTest()
 
         bvect::size_type cnt_c = bv.count();
         {
-            bm::chrono_taker<> tt(cout, msg8, REPEATS * 10);
+            bm::chrono_taker<> tt(cout, msg8, PerfRepeats(REPEATS * 10));
    
-            for (unsigned i = 0; i < REPEATS * 10; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS * 10); ++i)
             {
                 bvect::size_type cnt = 0;
                 bm::interval_enumerator<bvect> ien(bv);
@@ -4661,9 +4678,9 @@ void IntervalsTest()
         }
         {
             bvect::size_type sum = 0;
-            bm::chrono_taker<> tt(cout, msg9, REPEATS/4);
+            bm::chrono_taker<> tt(cout, msg9, PerfRepeats(REPEATS/4));
 
-            for (unsigned i = 0; i < REPEATS/4; ++i)
+            for (unsigned i = 0; i < PerfRepeats(REPEATS/4); ++i)
             {
                 bvect::size_type cnt = 0;
                 bvect::enumerator en = bv.get_enumerator(0);
@@ -4721,16 +4738,16 @@ void RankCompressionTest()
     bv_i2.build_rs_index(bc2.get());
 
     {
-        bm::chrono_taker<> tt(cout, "Rank compression test", REPEATS * 10);
-        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        bm::chrono_taker<> tt(cout, "Rank compression test", PerfRepeats(REPEATS * 10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS * 10); ++i)
         {
             rc.compress(bv11, bv_i1, bv_s1);
             rc.compress(bv12, bv_i2, bv_s2);
         } // for
     }
     {
-        bm::chrono_taker<> tt(cout, "Rank compression (by source) test", REPEATS * 10);
-        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        bm::chrono_taker<> tt(cout, "Rank compression (by source) test", PerfRepeats(REPEATS * 10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS * 10); ++i)
         {
             rc.compress_by_source(bv21, bv_i1, *bc1, bv_s1);
             rc.compress_by_source(bv22, bv_i2, *bc2, bv_s2);
@@ -4738,8 +4755,8 @@ void RankCompressionTest()
     }
     
     {
-        bm::chrono_taker<> tt(cout, "Rank decompression test", REPEATS * 10);
-        for (unsigned i = 0; i < REPEATS * 10; ++i)
+        bm::chrono_taker<> tt(cout, "Rank decompression test", PerfRepeats(REPEATS * 10));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS * 10); ++i)
         {
             rc.decompress(bv11_s, bv_i1, bv11);
             rc.decompress(bv12_s, bv_i2, bv12);
@@ -4932,13 +4949,13 @@ void SparseVectorScannerCmpTest()
 
     // generate a search vector for benchmarking
     std::vector<unsigned> search_vect;
-    generate_search_samples(search_vect, REPEATS, vect);
+    generate_search_samples(search_vect, PerfRepeats(REPEATS), vect);
 
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
 
     bvect bv_res1, bv_res2, bv_res3, bv_res4;
 
-    unsigned search_repeats = REPEATS;
+    unsigned search_repeats = PerfRepeats(REPEATS);
 
     // run GT validation
     {
@@ -5053,13 +5070,13 @@ void SparseVectorScannerSignedCmpTest()
 
     // generate a search vector for benchmarking
     std::vector<int> search_vect;
-    generate_search_samples(search_vect, REPEATS, vect);
+    generate_search_samples(search_vect, PerfRepeats(REPEATS), vect);
 
     bm::sparse_vector_scanner<sparse_vector_i32> scanner;
 
     bvect bv_res1, bv_res2, bv_res3, bv_res4;
 
-    unsigned search_repeats = REPEATS;
+    unsigned search_repeats = PerfRepeats(REPEATS);
 
     // run GT validation
     {
@@ -5175,8 +5192,8 @@ void SparseVectorScannerTest()
     std::vector<unsigned> search_vect;
     {
         bm::bvector<> bv_tmp;
-        search_vect.reserve(REPEATS);
-        for (unsigned i = 0; i < REPEATS;)
+        search_vect.reserve(PerfRepeats(REPEATS));
+        for (unsigned i = 0; i < PerfRepeats(REPEATS);)
         {
             bm::id_t idx = bm::id_t(rand_dis(gen));
             if (!bv_tmp.test(idx)) // check if number is unique
@@ -5192,7 +5209,7 @@ void SparseVectorScannerTest()
 
     bvect bv_res1, bv_res2, bv_res3, bv_res4;
 
-    unsigned search_repeats = REPEATS;
+    unsigned search_repeats = PerfRepeats(REPEATS);
     {
         bm::chrono_taker<> tt(cout, "std::vector<> scan ", search_repeats);
         for (unsigned i = 0; i < search_repeats; ++i)
@@ -5303,7 +5320,7 @@ void SparseVectorPipelineScannerTest()
 
     //bm::print_svector_stat(str_sv);
 
-    unsigned test_runs = 10000;
+    unsigned test_runs = PerfRepeats(10000);
     std::vector<string> str_test_coll;
     for (bvect::size_type i = 0; i < test_runs; ++i)
     {
@@ -6265,10 +6282,11 @@ void StrSparseVectorGatherMMapDeserializationPerfTest()
     typedef sv_deserializer_type::deserialization_index_type deserialization_index_type;
 
     const str_gather_svect_type::size_type sv_size = 128u * 1024u * 1024u;
-    const str_gather_svect_type::size_type target_count = 1024u * 1024u;
+    const str_gather_svect_type::size_type target_count =
+        g_perf_options.fast ? 1024u : 1024u * 1024u;
     const unsigned island_lens[] = { 1, 4, 256, 4096 };
     const unsigned island_len_count = unsigned(sizeof(island_lens) / sizeof(island_lens[0]));
-    const unsigned repeats = 5;
+    const unsigned repeats = PerfRepeats(5);
     const bool profile_island_gather_only = false;
     const unsigned profile_island_len = 256;
     const char* fname = "bm_strsv_gather_mmap.tmp";
@@ -6623,7 +6641,7 @@ void StrSparseVectorGatherDeserializationTest()
             msg += variant.name;
             msg += " - ";
             msg += mask_names[case_id];
-            unsigned repeats = case_repeats[case_id];
+            unsigned repeats = PerfRepeats(case_repeats[case_id]);
             bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
             for (unsigned i = 0; i < repeats; ++i)
             {
@@ -6643,7 +6661,7 @@ void StrSparseVectorGatherDeserializationTest()
             msg += variant.name;
             msg += " - ";
             msg += mask_names[case_id];
-            unsigned repeats = case_repeats[case_id];
+            unsigned repeats = PerfRepeats(case_repeats[case_id]);
             bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
             for (unsigned i = 0; i < repeats; ++i)
             {
@@ -6663,7 +6681,7 @@ void SparseVectorANDDeserializationTest()
     cout << " ------------------------------ SparseVectorANDDeserializationTest()" << endl;
 
     const unsigned sv_size = 50000000;
-    const unsigned repeats = 100;
+    const unsigned repeats = PerfRepeats(100);
 
     sparse_vector_u32 sv1(bm::use_null);
     generate_and_deserialization_test_set(sv1, sv_size);
@@ -7317,7 +7335,7 @@ void SparseVectorFloatANDDeserializationTest()
             svf_deserializer_type sv_deserial_timed[source_count];
             std::string msg("bm::sparse_vector_float<> AND deserialization - mixed distributions - ");
             msg += mask_names[case_id];
-            unsigned repeats = case_repeats[case_id];
+            unsigned repeats = PerfRepeats(case_repeats[case_id]);
             bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
             for (unsigned i = 0; i < repeats; ++i)
             {
@@ -7341,7 +7359,7 @@ void SparseVectorFloatANDDeserializationTest()
             }
             std::string msg("bm::sparse_vector_float<> AND deserialization index-assist - mixed distributions - ");
             msg += mask_names[case_id];
-            unsigned repeats = case_repeats[case_id];
+            unsigned repeats = PerfRepeats(case_repeats[case_id]);
             bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
             for (unsigned i = 0; i < repeats; ++i)
             {
@@ -7558,7 +7576,7 @@ void SparseVectorFloatRSCANDDeserializationTest()
             svf_deserializer_type sv_deserial_timed[source_count];
             std::string msg("bm::sparse_vector_float<RSC> AND deserialization - mixed distributions - ");
             msg += mask_names[case_id];
-            unsigned repeats = case_repeats[case_id];
+            unsigned repeats = PerfRepeats(case_repeats[case_id]);
             bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
             for (unsigned i = 0; i < repeats; ++i)
             {
@@ -7582,7 +7600,7 @@ void SparseVectorFloatRSCANDDeserializationTest()
             }
             std::string msg("bm::sparse_vector_float<RSC> AND deserialization index-assist - mixed distributions - ");
             msg += mask_names[case_id];
-            unsigned repeats = case_repeats[case_id];
+            unsigned repeats = PerfRepeats(case_repeats[case_id]);
             bm::chrono_taker<> tt(cout, msg.c_str(), repeats);
             for (unsigned i = 0; i < repeats; ++i)
             {
@@ -7690,7 +7708,7 @@ void TestSVFForEachSparseSearchResults()
     typedef sparseVecFloat::bvector_type bvect_type;
 
     const sparseVecFloat::size_type N = 20000000;
-    const unsigned int tests = 1365;
+    const unsigned int tests = PerfRepeats(1365);
     const float upper = 1000000.0f;
     const float lower = -1000000.0f;
     const float lin_scale = 0.00123f;
@@ -7837,7 +7855,7 @@ void TestSVFRSCForEachSparseSearchResults()
     typedef sparseVecFloatRSC::bvector_type bvect_type;
 
     const sparseVecFloatRSC::size_type N = 20000000;
-    const unsigned int tests = 1365;
+    const unsigned int tests = PerfRepeats(1365);
     const float upper = 1000000.0f;
     const float lower = -1000000.0f;
     const float lin_scale = 0.00123f;
@@ -8007,7 +8025,7 @@ void TestSVFScanner()
     testSVF.import(linData.data(), N);
     testSVF.optimize(tb);
 
-    unsigned int tests = 1000;
+    unsigned int tests = PerfRepeats(1000);
 
     {
         sparseVecFloat::bvector_type xorSV;
@@ -8417,7 +8435,7 @@ void TestSVFScannerRSC()
     testSVF.optimize(tb);
     testSVF.sync(true, true);
 
-    unsigned int tests = 1000;
+    unsigned int tests = PerfRepeats(1000);
 
     {
         sparseVecFloatRSC::bvector_type xorRSC;
@@ -8798,7 +8816,7 @@ void TestSVFComparison()
             linData[i+N/2] = std::numeric_limits<float>::quiet_NaN();
         }
     }
-    unsigned int tests = 1000;
+    unsigned int tests = PerfRepeats(1000);
     std::vector<pair<float, float>> testRangesVector(tests);
     for (unsigned int i = 0; i < tests; i++)
     {
@@ -9130,7 +9148,7 @@ void TestSVFScannerSpike()
     sparseVecFloat::bvector_type::mem_pool_guard scan_result_guard(bv_pool, scanResult);
     bm::sparse_vector_scanner<sparseVecFloat> scan;
     
-    unsigned int numTests = 1000;
+    unsigned int numTests = PerfRepeats(1000);
     
     {
         bm::chrono_taker<> tt(cout, "Scanner time to find spikes", numTests);
@@ -9197,7 +9215,7 @@ void TestSVFScannerUnbounded()
     testSVF.import(linData.data(), N);
     testSVF.optimize(tb);
 
-    unsigned int tests = 1000;
+    unsigned int tests = PerfRepeats(1000);
 
     {
         sparseVecFloat::bvector_type xorSV;
@@ -9344,7 +9362,7 @@ void InterpolativeCodingTest()
 
     unsigned char buf[1024 * 200] = { 0, };
 
-    const unsigned code_repeats = 500000;
+    const unsigned code_repeats = PerfRepeats(500000);
     const unsigned test_size = 12000;
 
     vector<unsigned> sa; sa.resize(test_size);
@@ -9658,6 +9676,7 @@ int main(int argc, char* argv[])
 
     if (!ParseCommandLine(argc, argv))
         return 0;
+    g_perf_options.bench.repeats = PerfRepeats(g_perf_options.bench.repeats);
 
     //if (g_perf_options.print_space)
     {
@@ -9686,7 +9705,7 @@ int main(int argc, char* argv[])
         // One summary line keeps the established report easy to scan.
         simd_bench_options fast_bench;
         fast_bench.kernels = fast_bench.dense = fast_bench.gap = true;
-        fast_bench.repeats = 20000;
+        fast_bench.repeats = PerfRepeats(20000);
         cout << endl;
         if (g_perf_options.print_timings)
         {
@@ -9802,8 +9821,7 @@ int main(int argc, char* argv[])
 
         StrSparseVectorGatherDeserializationTest();
         cout << endl;
-        return 0;
-        
+
         SparseVectorFloatANDDeserializationTest();
         cout << endl;
         SparseVectorFloatRSCANDDeserializationTest();
