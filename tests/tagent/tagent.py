@@ -164,7 +164,7 @@ def arguments():
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
-        'fast': 'run all stress variants in fast mode; perf unchanged; incompatible with --pedantic',
+        'fast': 'run perf and all stress variants in fast mode; incompatible with --pedantic',
         'avx512': 'build and test AVX-512 variants when supported',
         'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
         'check': 'validate local prerequisites only; do not fetch, build, or test',
@@ -1294,6 +1294,8 @@ class Agent:
             else:
                 message += (' We are running the regular testing schedule. '
                             'Debug stress variants use reduced checks.')
+        elif self.args.fast:
+            message += ' Performance tests are running as an express service, with reduced repetitions and fixtures.'
         elif self.args.pedantic:
             message += ' We are running the extended inspection schedule. Please expect significant delays.'
         self.say('CONDUCTOR: ' + message)
@@ -1486,13 +1488,15 @@ class Agent:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
                 futures = []
                 for name in manifest['builds']['perf']:
-                    if (not self.args.pedantic and '_debug' in name) or not self.supported(name):
+                    if not self.supported(name):
                         self.say('SKIP perf ' + name)
                         continue
                     work = run / name
                     work.mkdir()
-                    futures.append(pool.submit(self.command,
-                        [str(self.repo / 'tests/perf' / name)], work / 'perf.log', work))
+                    perf_command = [str(self.repo / 'tests/perf' / name)]
+                    if self.args.fast or '_debug' in name:
+                        perf_command.append('--fast')
+                    futures.append(pool.submit(self.command, perf_command, work / 'perf.log', work))
                 for future in concurrent.futures.as_completed(futures):
                     try:
                         future.result()

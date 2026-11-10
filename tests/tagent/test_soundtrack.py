@@ -312,15 +312,16 @@ class SoundtrackTests(unittest.TestCase):
                     sound.assert_called_with('station-stress')
                 self.assertTrue(all(call.args == (600, 1200) for call in interval.call_args_list))
 
-    def test_station_announcements_use_conductor_and_express_only_for_fast_stress(self):
-        """Destinations are accurate and fast mode never claims perf is reduced."""
+    def test_station_announcements_use_conductor_and_express_for_both_fast_phases(self):
+        """Destinations and fast-mode workload messages match each testing phase."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
                 'tagent', '--state-dir', directory, '--fast']):
             agent = tagent.Agent(tagent.arguments())
             with patch.object(agent, 'synthesize_announcement', return_value=1) as speech:
                 agent.render_station_report(Path(directory) / 'out.wav', False)
                 self.assertIn('Performance Test Station', speech.call_args.args[1])
-                self.assertNotIn('express', speech.call_args.args[1])
+                self.assertIn('express service', speech.call_args.args[1])
+                self.assertIn('reduced repetitions and fixtures', speech.call_args.args[1])
                 self.assertTrue(speech.call_args.kwargs['conductor'])
                 agent.render_station_report(Path(directory) / 'out.wav', True)
                 self.assertIn('Stress Test Station', speech.call_args.args[1])

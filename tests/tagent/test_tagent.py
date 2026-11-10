@@ -112,7 +112,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertFalse(list(run.glob('perf_*/perf.log')))
 
     def test_success_and_isolation(self):
-        """All expected builds run with perf release-only and isolated stress files."""
+        """All expected builds run, including debug perf, with isolated stress files."""
         self.fixture()
         with patch.object(self.agent, 'start_test_sound', wraps=self.agent.start_test_sound) as departure:
             self.assertTrue(self.agent.cycle())
@@ -121,7 +121,8 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(self.agent.next_train_at, float('inf'))
         runs = list(self.agent.home.glob('*abc123'))
         self.assertEqual(len(runs), 1)
-        self.assertFalse((runs[0] / 'perf_debug').exists())
+        self.assertTrue((runs[0] / 'perf_debug' / 'perf.log').exists())
+        self.assertTrue((runs[0] / 'perf_debug_neon' / 'perf.log').exists())
         self.assertEqual(len(list(runs[0].glob('stress_*/job.*/isolated-output'))), 8)
         self.assertTrue((runs[0] / 'manifest.json').exists())
 
@@ -181,7 +182,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
 
     def test_fast_applies_to_all_stress(self):
-        """Fast applies to every stress variant and does not affect perf."""
+        """Fast applies to every executed perf and stress variant."""
         self.fixture()
         self.agent.args.fast = True
         calls = []
@@ -194,9 +195,31 @@ class SupervisorTests(unittest.TestCase):
         stress = [argv for argv in calls if '--order-file' in argv]
         self.assertTrue(stress)
         self.assertTrue(all('--fast' in argv and '--pedantic' not in argv for argv in stress))
+        perf_runs = [argv for argv in calls if Path(argv[0]).name.startswith('perf_release')]
+        self.assertTrue(perf_runs)
+        self.assertTrue(all(argv[1:] == ['--fast'] for argv in perf_runs))
         perf_build = next(argv for argv in calls if str(argv[1]).endswith('/perf/build_all.sh'))
         self.assertNotIn('--pedantic', perf_build)
         self.assertNotIn('--fast', perf_build)
+
+    def test_perf_debug_is_always_fast(self):
+        """Regular runs use fast for every debug perf binary but not release."""
+        self.fixture()
+        calls = []
+        original = self.agent.command
+        def command(argv, *args, **kwargs):
+            log = args[0] if args else kwargs.get('log')
+            if log and log.name == 'perf.log':
+                calls.append(list(argv))
+            return original(argv, *args, **kwargs)
+        with patch.object(self.agent, 'command', side_effect=command):
+            self.assertTrue(self.agent.cycle())
+        debug = [argv for argv in calls if '_debug' in Path(argv[0]).name]
+        release = [argv for argv in calls if '_release' in Path(argv[0]).name]
+        self.assertEqual(len(debug), 2)
+        self.assertEqual(len(release), 2)
+        self.assertTrue(all(argv[1:] == ['--fast'] for argv in debug))
+        self.assertTrue(all(len(argv) == 1 for argv in release))
 
     def test_stress_variants_share_history_path_across_cycles(self):
         """Every isolated stress run receives the same persistent history path."""

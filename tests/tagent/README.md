@@ -30,9 +30,10 @@ initial targets are x86-64 Linux/WSL and Apple Silicon macOS, matching the curre
 - Build through `tests/perf/build_all.sh` and `tests/stress/build_all.sh`. Build
   failures print a brief diagnostic and log location, signal distress and exit
   nonzero immediately.
-- Default coverage is perf release variants and every debug/release stress
-  variant of `tests/stress/t.cpp`. Exclude stress64. `--pedantic` enables stress
-  serialization sweeps and debug/release perf SIMD variants as well.
+- Default coverage runs all produced perf release and debug variants, and every
+  debug/release stress variant of `tests/stress/t.cpp`. Exclude stress64. Perf
+  debug variants always use `--fast`; `--pedantic` builds additional x86 perf
+  debug SIMD variants and enables release stress serialization sweeps.
 - Run perf first, with a shared worker limit; timing comparisons are not an
   acceptance criterion. Then run every stress build using the existing parallel
   runner, one build at a time. All scheduled tests must succeed. Stress variants
@@ -439,16 +440,16 @@ samples run). Output is saved in `build-samples.log`; sample warnings are includ
 in the combined diagnostics and live spoken reports. Any sample build failure
 stops the cycle before tests.
 
-`--fast` runs every stress variant in the runner's fast mode; perf execution is
-unchanged. `--fast` and `--pedantic` are mutually exclusive; TAgent rejects
+`--fast` runs every perf and stress variant in fast mode. Perf uses one timed
+repetition and smaller large fixtures; stress uses reduced checks. `--fast` and `--pedantic` are mutually exclusive; TAgent rejects
 the combination at startup.
 Fast runs have distinct saved success state so `--startup changed` does not
 confuse them with normal runs.
 
 At the start of each testing phase and at random 10–20 minute intervals while
 tests are running, the conductor announces the next destination:
-Performance Test Station or Stress Test Station. With `--fast`, the stress
-announcement describes express service with reduced checks; perf remains unchanged.
+Performance Test Station or Stress Test Station. With `--fast`, each
+announcement describes express service and the reduced workload for its phase.
 Preview with `--sound-preview station-perf` or `--sound-preview station-stress`
 (add `--fast` for the express announcement). Normal stress announces the regular
 schedule; `--pedantic` announces extended inspections and potential delays. Reports
@@ -465,3 +466,7 @@ queue to new messages and drains it; Ctrl-C still stops child processes promptly
 
 During foreground announcements the background ambience fades down to 10% of
 its normal level, then fades back up. Linux keeps its continuous audio stream.
+
+Every produced, supported perf debug binary runs with `--fast`, including in
+normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
+`--fast` option is supplied.
