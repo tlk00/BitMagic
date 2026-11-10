@@ -594,6 +594,64 @@ class SoundtrackTests(unittest.TestCase):
                 agent.render_build_report(output, 3)
                 self.assertEqual(Path(mix.call_args.args[0]).name, 'build-warning.wav')
 
+    def test_interrupt_preview_waits_for_engineer_voice_with_joker_disabled(self):
+        """Emergency preview waits for Danny even when jokes are disabled."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory, '--sound-preview', 'interrupt', '--no-joker']):
+            agent = tagent.Agent(tagent.arguments())
+            ready = threading.Event()
+            def download(voice, model, engineer=False):
+                self.assertEqual(voice, 'en_US-danny-low')
+                self.assertTrue(engineer)
+                ready.wait(.05)
+                ready.set()
+            def sound(*args, **kwargs):
+                self.assertTrue(ready.is_set(), 'preview started before engineer setup')
+            with patch.object(agent, 'report_audio'), \
+                 patch.object(agent, 'start_piper_download'), \
+                 patch.object(agent, 'start_conductor_download'), \
+                 patch.object(agent, 'download_piper_voice', side_effect=download), \
+                 patch.object(agent, 'sound', side_effect=sound):
+                self.assertEqual(agent.run(), 0)
+
+    def test_installed_engineer_model_is_selected_for_interrupt(self):
+        """Installed Danny is selected at startup and the actual engine is reported."""
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / 'en_US-danny-low.onnx'
+            model.write_bytes(b'model')
+            Path(str(model) + '.json').write_text('{}')
+            primary = Path(directory) / 'en_US-lessac-medium.onnx'
+            with patch('sys.argv', ['tagent', '--state-dir', directory,
+                                    '--piper-python', sys.executable, '--piper-model', str(primary)]):
+                agent = tagent.Agent(tagent.arguments())
+            self.assertTrue(agent.joker_available)
+            with patch.object(agent, 'command') as command, \
+                 patch.object(soundtrack, 'mix_dynamic_dispatch', return_value=1):
+                agent.play_sound('interrupt-engineer', 1)
+            self.assertIn(str(model), command.call_args_list[0].args[0])
+            self.assertIn('TTS: Engineer using Piper', (Path(directory) / 'agent.log').read_text())
+
+    def test_interrupt_exchange_stops_children_first(self):
+        """Interrupt speech follows child cleanup and uses separate crew voices."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            agent.audio_available = True
+            agent.stopping.set()
+            events = []
+            with patch.object(agent, 'stop_children', side_effect=lambda: events.append('stopped')), \
+                 patch.object(agent, 'play_sound', side_effect=lambda event, workers: events.append(event)):
+                agent.announce_interruption()
+            self.assertEqual(events, ['stopped', 'interrupt-engineer', 'interrupt-dispatch'])
+            self.assertTrue(agent.stopping.is_set())
+            with patch.object(agent, 'synthesize_announcement', return_value=None) as speech:
+                agent.play_sound('interrupt-engineer', 1)
+                self.assertIn('Emergency brakes applied', speech.call_args.args[1])
+                self.assertTrue(speech.call_args.kwargs['engineer'])
+                agent.play_sound('interrupt-dispatch', 1)
+                self.assertIn('Brakes acknowledged', speech.call_args.args[1])
+                self.assertNotIn('engineer', speech.call_args.kwargs)
+
     def test_distress_sos_and_radio_exchange(self):
         """SOS precedes engineer and dispatch; disabled TTS keeps the SOS."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -821,6 +879,7 @@ class SoundtrackTests(unittest.TestCase):
             with patch.object(agent, 'report_audio'), \
                  patch.object(agent, 'start_piper_download') as primary, \
                  patch.object(agent, 'start_conductor_download') as conductor, \
+                 patch.object(agent, 'download_piper_voice'), \
                  patch.object(agent, 'validate', side_effect=tagent.Failure('stop')):
                 with self.assertRaisesRegex(tagent.Failure, 'stop'):
                     agent.run()

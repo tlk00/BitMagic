@@ -475,3 +475,13 @@ At startup TAgent logs its PID, parent PID, process group, session and terminal.
 SIGINT, SIGTERM and SIGHUP are reported by name and number with current process
 context and cycle before child cleanup. Python's standard signal handler does not
 provide the sender identity; these fields do not identify who sent a signal.
+
+On a catchable interrupt, TAgent stops child jobs first, then, if TTS and audio
+are available, the engineer reports that emergency brakes are applied and
+Dispatch acknowledges. This announces a stop; a signal does not itself restart
+TAgent. Preview with `--sound-preview interrupt`. Without audio or TTS, shutdown
+continues without the exchange.
+
+The engineer's Piper voice is prepared even with `--no-joker`, because emergency
+announcements also use it. The interrupt preview waits for voice setup. The first
+engineer utterance logs the engine and model actually used, or the eSpeak fallback.

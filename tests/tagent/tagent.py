@@ -146,7 +146,7 @@ def arguments():
                 '  ./run_tagent.sh --sound-preview joker\n'
                 '  ./run_tagent.sh --once --jobs 4\n'
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
-                'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'station-perf', 'station-stress', 'all', 'perf-progress',
+                'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
                 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
@@ -221,7 +221,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     if args.fast and args.pedantic:
@@ -354,8 +354,13 @@ class Agent:
             Path(str(self.piper_conductor_model) + '.json').stat().st_size > 0)
         self.piper_conductor_failed = False
         self.joker_model = self.piper_model.parent / 'en_US-danny-low.onnx'
-        self.joker_available = False
+        self.joker_available = (self.piper_python.is_file() and
+            os.access(self.piper_python, os.X_OK) and self.joker_model.is_file() and
+            self.joker_model.stat().st_size > 0 and
+            Path(str(self.joker_model) + '.json').is_file() and
+            Path(str(self.joker_model) + '.json').stat().st_size > 0)
         self.joker_failed = False
+        self.engineer_engine = None
         self.joker_clock = joker.Schedule()
         self.conductor_engine = None
         self.conductor_download_thread = None
@@ -924,6 +929,11 @@ class Agent:
                             (build is not None and build != self.audio_build_generation))
             if self.stopping.is_set() or epoch != self.audio_epoch or obsolete:
                 return
+            if event == 'interrupt':
+                self.play_sound('interrupt-engineer', 1)
+                if not self.stopping.is_set() and epoch == self.audio_epoch:
+                    self.play_sound('interrupt-dispatch', 1)
+                return
             played = self.play_sound(event, workers)
             if event == 'fail' and played and self.args.tts == 'auto':
                 for distress_event in ('distress-engineer', 'distress-dispatch'):
@@ -983,6 +993,35 @@ class Agent:
         if self.args.sound_theme == 'steampunk':
             self.sound('depart-' + phase)
             self.sound('station-' + phase)
+
+    def announce_interruption(self):
+        """Stop existing audio, then play a bounded interrupt exchange if available."""
+        if self.args.no_sound or self.args.sound_volume == 0 or self.args.tts != 'auto' or not self.audio_available:
+            return
+        # The signal handler has set stopping; terminate children before any speech.
+        self.stop_children()
+        if self.depot:
+            self.depot.close()
+            self.depot = None
+        for thread in (self.audio_thread, self.joker_reply_thread):
+            if thread and thread.is_alive():
+                thread.join(timeout=5)
+                if thread.is_alive():
+                    self.say('Interrupt announcement skipped: previous audio did not stop')
+                    return
+        with self.audio_mutex:
+            self.audio_epoch += 1
+            self.audio_active = None
+            self.audio_thread = None
+            self.audio_pending.clear()
+            self.audio_failure_thread = None
+            self.audio_closing = False
+        self.stopping.clear()
+        try:
+            self.sound('interrupt', force=True)
+            self.finish_audio(timeout=90)
+        finally:
+            self.stopping.set()
 
     def report_station_status(self):
         """Repeat conductor destination reports every 10–20 minutes during tests."""
@@ -1109,6 +1148,9 @@ class Agent:
                                                                min(1.0, self.args.sound_volume * 1.25) if distress else self.args.sound_volume,
                                                                workers, self.jobs, background=background,
                                                                voice_gain=.85, radio=True)
+                    if engineer and self.engineer_engine != 'piper':
+                        self.engineer_engine = 'piper'
+                        self.say('TTS: Engineer using Piper (' + str(model) + ')')
                     if conductor and self.conductor_engine != 'piper':
                         self.conductor_engine = 'piper'
                         self.say('TTS: Conductor using Piper (' + str(model) + ')')
@@ -1131,6 +1173,9 @@ class Agent:
                                                                min(1.0, self.args.sound_volume * 1.25) if distress else self.args.sound_volume,
                                                                workers, self.jobs, background=background,
                                                                voice_gain=.85, radio=True)
+                    if engineer and self.engineer_engine != 'espeak':
+                        self.engineer_engine = 'espeak'
+                        self.say('TTS: Engineer using eSpeak NG fallback')
                     if conductor and self.conductor_engine != 'espeak':
                         self.conductor_engine = 'espeak'
                         self.say('TTS: Conductor using eSpeak NG fallback')
@@ -1207,6 +1252,20 @@ class Agent:
                                                         background='train', engineer=True)
                 if duration is None:
                     return
+            elif event == 'interrupt-engineer':
+                text = ('Train engineer to Dispatch. Emergency brakes applied. '
+                        'BitMagic freight is stopping. Standing by for restart instructions. Over.')
+                duration = self.synthesize_announcement(path, text, lambda: 'en-us+m3', 40,
+                                                        background='train', engineer=True)
+                if duration is None:
+                    return False
+            elif event == 'interrupt-dispatch':
+                text = ('Dispatch to BitMagic engineer. Brakes acknowledged. '
+                        'Hold position and stand by for restart instructions. Over.')
+                duration = self.synthesize_announcement(path, text, self.dispatcher_voice, 50,
+                                                        background='train')
+                if duration is None:
+                    return False
             elif event == 'distress-engineer':
                 text = ('Train engineer to Dispatch. Mayday, mayday, mayday. '
                         'BitMagic freight train derailed. Requesting an emergency response team. '
@@ -1602,7 +1661,7 @@ class Agent:
         self.report_audio()
         self.start_piper_download()
         self.start_conductor_download()
-        if not self.args.no_joker and not self.args.no_sound and self.args.tts == 'auto' and not self.args.check:
+        if not self.args.no_sound and self.args.tts == 'auto' and not self.args.check:
             def prepare_engineer():
                 """Reuse the shared engine after its startup provisioning completes."""
                 if self.piper_download_thread:
@@ -1611,7 +1670,7 @@ class Agent:
                     self.download_piper_voice('en_US-danny-low', self.joker_model, engineer=True)
             engineer_thread = threading.Thread(target=prepare_engineer, daemon=True)
             engineer_thread.start()
-            if self.args.sound_preview in ('joker', 'fail'):
+            if self.args.sound_preview in ('joker', 'fail', 'interrupt'):
                 while engineer_thread.is_alive() and not self.stopping.is_set():
                     engineer_thread.join(timeout=.25)
         if (self.args.sound_demo or self.args.sound_preview) and self.piper_download_thread:
@@ -1774,6 +1833,7 @@ def main():
         agent.say('SIGNAL {} ({}) received; stopping all child jobs | {} | commit {} | cycle {} | children {} | interrupted {} | sender unavailable'.format(
             name, error.signum, agent.process_context(), error.commit, error.cycle or 'none',
             error.children, error.location))
+        agent.announce_interruption()
         return 128 + error.signum
     except KeyboardInterrupt:
         agent.say('Interrupted; stopping all child jobs')
