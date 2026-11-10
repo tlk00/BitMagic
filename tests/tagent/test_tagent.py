@@ -668,6 +668,14 @@ class SupervisorTests(unittest.TestCase):
             sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
         self.assertEqual(self.agent.build_warnings.observe(log), 2)
 
+    def test_spoken_build_completion_and_pending(self):
+        """Completed targets use concise speech while in-progress counts remain."""
+        text = ta.build_report_text(0, (6, 0, 2, 3, 0, 8, 0))
+        self.assertIn('Performance build is complete.', text)
+        self.assertIn('Stress builds: 2 ready, 3 pending.', text)
+        self.assertIn('Inverted list build is complete.', text)
+        self.assertIn('Performance builds: 0 ready, 0 pending.', ta.build_report_text(0, (0, 0, 1, 1)))
+
     def test_final_debug_uses_successful_release_reference(self):
         """Use matching release counts and issue the mode disclaimer once."""
         debug = self.root / 'perf_debug_avx2' / 'perf.log'

@@ -127,13 +127,16 @@ def build_report_text(count, progress=None):
     status = ''
     if progress is not None:
         perf_ready, perf_pending, stress_ready, stress_pending = progress[:4]
-        status = (' Performance builds: {} ready, {} pending. '
-                  'Stress builds: {} ready, {} pending.'.format(
-                      perf_ready, perf_pending, stress_ready, stress_pending))
+        def target_status(name, ready, pending):
+            if ready and pending == 0:
+                return ' {} build is complete.'.format(name)
+            return ' {} builds: {} ready, {} pending.'.format(name, ready, pending)
+        status = target_status('Performance', perf_ready, perf_pending)
+        status += target_status('Stress', stress_ready, stress_pending)
         if len(progress) > 4:
             status += ' Sample builds: {} warnings so far.'.format(progress[4])
         if len(progress) > 6:
-            status += ' Inverted list builds: {} ready, {} pending.'.format(progress[5], progress[6])
+            status += target_status('Inverted list', progress[5], progress[6])
     if count == 0:
         weather = random.choice((
             'Tracks are clear, no snowdrifts reported.',
