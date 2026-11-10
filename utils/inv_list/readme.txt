@@ -1,59 +1,79 @@
-Test utility for benchmarking compression of test collections.
+inv_list: inverted-list compression and validation utility
 
+Build from utils/inv_list:
+    make
+On AArch64, select native ARM NEON with:
+    make neon
+Build and execution are separate. List supported CLI options with ./bminv --help.
 
-Input format as:
+INPUT AND OUTPUT
+Raw input is a sequence of lists in the Gov2 flat format: a little-endian
+32-bit length followed by that many sorted, unique unsigned 32-bit IDs.
+Input datasets remain under /Volumes/USB_1TB/int_set_bench/Gov2Flat by default
+in the current harness; local int_set_bench inputs are also preserved.
 
-Document identifier data set
-Packaged by D. Lemire on April 3rd 2014
-Based on data sets prepared by L. Boytsov
+BV output is a sequence of self-delimiting BitMagic bvector BLOBs without
+per-list length prefixes. An optional .idx sidecar stores BLOB boundaries for
+threaded verification and decoding. Older length-prefixed collections need
+to be regenerated. Retired -svin/-svout options fail explicitly; use the
+separate experiments/sparse_vector utility.
 
-The
-main data files are in a binary flat file format
-described simply as follows. They contain a sequence 
-of 32-bit unsigned integers (written in little endian
-mode). These integers make up lists of integers. Each list 
-starts with an integer indicating its length followed by 
-the corresponding number of integers in sorted order. 
+CURRENT GOV2 WORKFLOW
+See experiments/current/README.md for the full sorted/unsorted harness,
+USB output requirements, profiling, and focused validation commands.
+Compression presets 0..10 are selected with -level; the default is 6.
+See ../../docs/compression.md for the level table and terminology.
 
+Examples (run from utils/inv_list):
+    ./bminv -s -level 10 -threads 10 -u32in INPUT -bvout OUTPUT \
+        -bv-index-out OUTPUT.idx -progress-vectors 10000
+    ./bminv -s -threads 10 -u32in INPUT -bvin OUTPUT \
+        -bv-index-in OUTPUT.idx -verify
+    ./bminv -s -threads 10 -bvin OUTPUT -bv-index-in OUTPUT.idx -decode
 
-HOW TO BUILD (in-place make):
+Use -max-vectors N to bound input compression/verification. Use -threads 1
+for controlled single-worker timings. Omit -threads for the serial path.
+Threaded progress updates after N vectors or 30 seconds when enabled; the
+serial path currently uses vector-count boundaries.
 
-1. Export root path for the build (BitMagic root dir)
-run:
-> . ./bmenv.sh  ( from the root directory  dot is important!)
-OR just
->PROJECT_DIR=`pwd`; export PROJECT_DIR
+RESEARCH AND DIAGNOSTICS
+Cross-bvector (xbv) pair search, sharded search, reference evaluation, XOR stores,
+and RS clustering remain available in bminv. Their run_gov2_xbv_*.sh wrappers
+provide workflow-specific configuration. See experiments/RESEARCH_HISTORY.txt
+for historical rationale and experiment records; use --help and current
+scripts as the authority for supported arguments.
 
-2. build using:
+Generic opcode profiling and playlist survey/replay tools are documented in
+experiments/README.md. Inputs stay outside cleanup operations; generated
+collections and logs belong on the USB experiment drive.
 
-make BMOPTFLAGS=-DBMAVX2OPT
-OR
-make BMOPTFLAGS=-DBMSSE42OPT
-OR 
-make
+WORKSPACE AND DEVELOPMENT DIAGNOSTICS
+Serializers/deserializers retain scratch capacity; destroy them to release it.
+BM_SERIALIZATION_DIAGNOSTICS is enabled by inv_list.cpp for codec histories.
+Use a consistent macro value across translation units. Optional histories may
+grow during an operation; use bounded workloads for detailed diagnostics.
 
-2. HOW TO RUN
+RELEASE CLEANUP AND PORTABLE COLLECTION RUNNER
+Use run_collection.sh for Gov2, ClueWeb, scalar or SIMD variants:
+    bash run_collection.sh --bin ./bminv --input /data/gov2.sorted \
+        --out /results/gov2-sorted --levels 6,7,8,9,10 --threads 10
+The output directory must not exist; its parent must exist. Each level gets
+its own stream, index, compression/verification/decode logs and exact commands.
+Omit --threads for serial execution. Add --max-vectors 1000 for a smoke run.
+Repeat with another --input/--out for unsorted or ClueWeb collections, and
+another --bin/--out for SIMD comparisons. All streams are retained.
+This replaces run_gov2_{sorted,unsorted}[_arm].sh and run_clueweb_*.sh.
+The profiled full-Gov2 workflow in experiments/current remains available.
 
+xbv means cross-bvector: headers use inv_list_xbv_*, workflow runners use
+run_gov2_xbv_*, and Python analysis/plotting tools include xbv in their names.
+The established -pair-*, -rs-*, -ref-* and -xor-* CLI interfaces and output
+formats are unchanged. For the former run_complexity.sh example, use:
+    ./bminv -pair-search -bvin INPUT.bv -csv OUTPUT.csv -pair-limit 10000 \
+        -pair-min-pct 5 -pair-max-ratio 2 -pair-threads 4 -pair-inspect
 
-To run this test you need to download or prepare benchmark files (integer sets)
-
-
-2.1 Read the input set, create the output (bit-vector compressed format):
-
-./bminv -c -u32in /gov2.sorted -bvout /gov2.sorted.bv 
-
-2.2 Run validation comparison to make sure there are no errors
-./bminv -verify -u32in /gov2.sorted -bvin /gov2.sorted.bv 
-
-
-Help:
-./bminv -h
-
-
-
-
-
-
-
-
-
+Standalone wave/full BWT, periodic search, compose/multistep selection and
+start-reduction/first-start ablations have been retired from the CLI. Their
+switches now fail as unknown options; -diag/-d was ineffective and is removed.
+Use presets for normal compression. Step-2, interleaved step-1 and targeted
+codec controls remain for retained comparisons; library formats are unchanged.

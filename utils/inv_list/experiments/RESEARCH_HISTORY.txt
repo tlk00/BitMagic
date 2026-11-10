@@ -1,0 +1,630 @@
+Historical inv_list research notes. Paths, flags and commands may be obsolete.
+Use ../readme.txt and current/README.md for current instructions.
+
+PAIRWISE XOR ANALYSIS
+
+Build normally, then try the first 1000 vectors:
+
+./bminv -pair-search -bvin gov2.sorted.bv.cm6 -csv gov2-pairs.csv -pair-limit 1000 -pair-inspect
+
+Omit -pair-limit (or use 0) to load the whole collection. The limit selects
+exactly the first N records, not N pairs; any unread tail is not validated.
+Analyze each collection separately. IDs are zero-based input record numbers.
+The single-threaded search evaluates all N*(N-1)/2 unordered pairs in the
+loaded collection. Decoded RAM usage can exceed the input file size; loading
+reports bvector allocation estimates (not total process memory). No full
+collection RAM or overnight runtime guarantee is made.
+
+Scoring uses sample28's structural cost: 8192*bit_blocks + 2*gap_words +
+zero_spans + full_spans; empty vectors cost zero. The cheaper vector is the
+lead (lower ID breaks ties). Gain is target cost minus XOR cost; gain percent
+uses target cost as denominator. Both thresholds must pass: -pair-min-gain
+(default 256 structural units) and -pair-min-pct (default 10 percent).
+Only strictly positive gains qualify, even with zero thresholds. These are
+heuristic units, not predicted serialized bytes.
+
+Outputs (existing files are refused):
+  FILE             qualifying pairs, streamed in traversal order
+  FILE.best.csv    best qualifying lead per target, greatest gain then lowest ID
+  FILE.report.txt  settings, completion status and final summary
+  FILE.measured.csv  with -pair-inspect: best measured improving lead per measured
+                     target among inspected pairs, ranked by decreasing byte gain
+
+The report distinguishes distinct candidate targets from all participating
+vectors and includes a histogram of best-target percentage gains and the ten
+largest structural gains. Pair gains
+overlap and must not be added as achievable collection savings. A run limited
+to a prefix is marked explicitly. Partial pair CSVs remain useful if a run
+fails; a final 'Status: complete' in the report indicates successful completion
+of all requested analysis. Progress and periodic CSV flushes occur roughly
+every ten seconds (search checks time every 256 pairs); -silent suppresses
+progress, but retains the final summary.
+
+-pair-inspect additionally materializes, optimizes and serializes each best
+pair's XOR. Standalone serialization sizes are measured once during loading
+for every vector, including runs without -pair-inspect, and cached. -level selects the
+serializer level, consistently for both operands and the residual (default
+library level). The measured lead may differ from the heuristic lead; both
+IDs are recorded. Signed gain_bytes and pair_gain_pct include BLOB headers
+but exclude reference metadata. Inspection counts every positive measured
+gain, independently of the structural cutoffs. It tests selected best pairs
+only, so it does not measure all opportunities or predictor false negatives.
+No cooperative compression or reference graph is produced.
+
+SIZE DIAGNOSTICS
+
+Both pair CSVs include lead_bytes,target_bytes (matching the heuristic IDs),
+smaller_bytes,larger_bytes and size_ratio = larger_bytes/smaller_bytes. Sizes
+are freshly serialized with the selected -level, not taken from input BLOB
+lengths. Empty vectors still have nonzero BLOB headers. Size-ratio filtering
+is optional and disabled by default; structural thresholds remain unchanged.
+
+With -pair-inspect, best.csv also includes target_gain_pct: signed measured
+byte gain divided by the larger standalone serialized size, times 100.
+The existing pair_gain_pct uses the sum of the two standalone sizes instead.
+Measured gains exclude reference metadata; neither percentage is a new filter.
+The measured.csv output contains positive gains only, deduplicates by measured
+target, and orders by descending byte saving (then target ID). Ties for a
+lead prefer the lower ID. This ranks only the inspected structural-best
+pairs, not all qualifying pairs, and does not construct a compression graph.
+
+The report groups qualifying and inspected pairs into size-ratio buckets
+[1,2), [2,4), [4,8), [8,infinity), showing positive measured pair counts and
+sums of positive byte gains. These sums can overlap and are diagnostics, not
+achievable collection savings. Uninspected candidates and rejected heuristic
+pairs have unknown measured outcomes. The ten best deduplicated measured
+candidates are printed separately from the structural ranking.
+
+Example experiment (5 percent structural cutoff):
+./bminv -pair-search -bvin gov2.unsorted.bv.cm6 -csv gov2-size-5pct.csv -pair-limit 1000 -pair-min-pct 5 -pair-inspect
+
+OPTIONAL SIZE-RATIO PREFILTER
+
+-pair-max-ratio R skips a pair before XOR complexity evaluation when its
+larger/smaller standalone serialized size ratio is greater than R. Equality
+is retained. Use 0 (default) to disable, or a finite value >= 1; fractional
+values such as 1.5 are accepted. Negative values, (0,1), NaN and infinity
+are rejected. Sizes use the selected serializer level, as in the CSV.
+
+This is a heuristic speed/coverage tradeoff: skipped pairs have unknown gains.
+Progress counts all considered pairs (evaluated + skipped), and reports XOR
+evaluations and ratio skips separately. Pairs/s and ETA refer to considered
+pairs, so speed may vary as the proportion skipped changes. CSV outputs
+contain only candidates that pass both the prefilter and structural cutoffs.
+
+MULTI-THREADED PAIR EVALUATION
+
+-pair-threads N runs XOR complexity evaluation in N worker threads (default 1,
+maximum 256). The main thread applies the size-ratio prefilter, submits bounded
+chunks of 128 accepted pairs, writes CSV rows in original pair traversal order,
+updates best candidates, and reports progress while later tasks continue. At
+most 4*N tasks are active in
+one scheduling window, so task and result storage stays bounded. The loaded
+bvectors are shared read-only and are not copied into tasks.
+
+Progress distinguishes accepted pairs scheduled to workers, completed XOR
+evaluations, pending evaluations, and pairs skipped by the ratio prefilter.
+The final invariant is pairs considered = pairs completed + ratio skipped;
+pairs scheduled = pairs completed. Worker failure terminates the analysis and
+leaves the report marked incomplete. Final serialization inspection remains
+single-threaded. Multiple thread counts produce the same ordered CSV content.
+
+Example for a larger prefix with a 2x ratio and 5 percent structural cutoff:
+./bminv -pair-search -bvin gov2.unsorted.bv.cm6 -csv gov2-size-5pct-2x-5000.csv -pair-limit 5000 -pair-min-pct 5 -pair-max-ratio 2 -pair-threads 4 -pair-inspect
+
+
+SIZE-SORTED GREEDY SHARD SEARCH
+
+The optional -pair-index mode performs a low-memory first pass over the source
+collection. It decodes one vector at a time and records its original vector ID,
+source BLOB offset and length, fresh serialized size at the selected level,
+structural cost, cardinality, estimated decoded allocation, and super-sparse
+classification. The resulting CSV index is sorted by (serialized_bytes,ID).
+
+The indexing pass assigns permanent shard IDs. It first creates greedy size
+bands beginning at the smallest unassigned vector and ending when
+-pair-max-ratio would be exceeded. Each band is then split when either
+-pair-shard-vectors or -pair-shard-bytes would be exceeded. If the final split
+inside a band is smaller than -pair-shard-tail-pct percent of the preceding
+split, it is merged into that split. The merge may exceed a configured shard
+limit. Defaults are 15000 vectors, 3 GiB of summed serialized bytes, and 5
+percent.
+
+Example full-collection indexing pass:
+
+./bminv -pair-index -bvin gov2.unsorted.bv.cm6 -pair-index-out gov2.unsorted.pair-shards.csv -pair-max-ratio 2 -pair-shard-vectors 15000 -pair-shard-bytes 3221225472 -pair-shard-tail-pct 5 -level 6
+
+The index report lists every final shard, its size range, estimated decoded
+memory, internal pair count, and the number of deliberately omitted cross-shard
+pairs. Existing index and report files are refused.
+
+Pass the index to -pair-search to select the greedy sharded algorithm:
+
+./bminv -pair-search -bvin gov2.unsorted.bv.cm6 -pair-index-in gov2.unsorted.pair-shards.csv -csv gov2.unsorted.pairs.5pct.2x.csv -pair-min-pct 5 -pair-max-ratio 2 -pair-threads 8 -level 6
+
+The search loads one shard, runs its internal pair evaluations in the thread
+pool, and releases all shard bvectors before loading the next shard. It does
+not evaluate pairs across shard boundaries. Original vector IDs are retained
+in all result CSV files. The report states search coverage and cross-shard loss,
+peak loaded allocation, and evaluated and qualifying pair counts for
+normal-normal, mixed, and sparse-sparse pairs. Super-sparse vectors are
+classified for analysis but are not filtered. -pair-limit applies during index
+construction; an indexed search uses exactly the vectors present in its index.
+-pair-max-ratio is validated once against each indexed shard's minimum and
+maximum size. Internal pairs need no ratio prefilter and sharded progress does
+not report ratio skips. A tighter search ratio requires rebuilding the index.
+-pair-inspect remains available with the original in-memory search and is not
+supported by the sharded search.
+
+
+RS POPULATION SCREENING BENCHMARK
+
+Run both experiments (existing shard and byte-weighted stratified sample):
+
+sh run_gov2_xbv_rs_all.sh
+
+Or run either separately:
+
+sh run_gov2_xbv_rs_shard.sh
+sh run_gov2_xbv_rs_stratified.sh
+
+These scripts reuse gov2.unsorted.pair-shards.csv. They never clean up the XOR
+search/store outputs and refuse to overwrite existing raw benchmark outputs.
+They invoke analyze_xbv_rs_bench.py after each completed benchmark. Python 3 uses
+only its standard library; no packages are required. To repeat an experiment,
+choose a new RS_PREFIX. Run timing experiments when the earlier pair search has
+finished so the two runs do not compete for the same CPUs or memory bandwidth.
+
+Defaults: RS_SIZE=7000, RS_THREADS=8, RS_SEED=42, RS_REPEATS=2,
+RS_THRESHOLDS=0.1,0.25,0.5,1, RS_MIN_BYTES=4096, RS_BYTE_COVERAGE=90,
+RS_PREFIX=gov2.rs. BMINV, SOURCE, PAIR_INDEX, and PYTHON also accept environment
+overrides. RS_SHARD optionally selects an explicit original shard ID.
+
+Example:
+
+RS_PREFIX=gov2.rs.trial2 RS_THRESHOLDS=0.05,0.1,0.2,0.4,1 RS_REPEATS=3 sh run_gov2_xbv_rs_all.sh
+
+The sampling pool is the largest vectors accounting for 90% of the indexed
+collection's standalone bytes, further excluding vectors below RS_MIN_BYTES
+and those marked super_sparse in the index. This excludes them as both targets
+and arguments. The report gives excluded target bytes; that is not a bound on
+lost reference opportunities for retained targets. No high-density filter is
+applied. Set RS_BYTE_COVERAGE=100 and RS_MIN_BYTES=0 to relax size exclusions.
+
+For the shard set, auto-selection chooses the existing shard with the largest
+eligible byte total. If necessary, it randomly samples up to RS_SIZE eligible
+members. It may contain fewer than RS_SIZE. For the stratified set, sampling
+uses log2 serialized-size buckets, first drawing one member per eligible bucket
+(subject to sample capacity), then drawing buckets with weights proportional
+to their original eligible byte contribution and drawing members without
+replacement. Sampling uses a fixed seed; manifests record the exact original
+IDs. Reproducibility assumes the same index and C++ standard library.
+
+Neither benchmark uses pair-size-ratio filtering. All pairs in the selected
+set get exact XOR-complexity labels, including nonqualifying pairs and, for
+the stratified set, pairs crossing original shard boundaries and size ratios.
+Default qualification remains gain >=256 structural units and >=5% of target
+cost. These are structural labels, not measured serialized-byte savings.
+
+The RS sketch caches three regional populations per 65536-bit block, extracted
+from build_rs_index(): low 16 bits of sub_count(), next 16 bits, and the block
+total minus those two. The upper RS fields are not used because GAP blocks and
+bit blocks store different information there. Trailing absent blocks are zero.
+The full RS index is temporary; only the comparison population arrays remain
+cached. The raw regional L1 distance is a lower bound on XOR popcount. Screening
+rejects when L1 > threshold*(countA+countB), checking total-popcount difference
+first, then accumulating regional differences with early exit. Equality passes.
+This rejection is a compression heuristic, not a safe compression bound.
+
+Each repeat executes a baseline exact-scoring pass and one RS+exact pass for
+each threshold. Repeats alternate pass order. The threshold 1 control rejects
+nothing and measures the overhead of the screen. Threads, pair traversal, and
+result aggregation are the same; no detailed CSV I/O occurs inside timed passes.
+Each pass records wall time, evaluated/rejected/qualifying counts and checksums.
+Loading and RS construction/extraction have separate wall times. The analysis
+reports median/min/max times, search speedup, and derived speedups including RS
+construction and including common loading. Small fixture timings are not useful
+performance measurements. No per-pair clock calls distort the scoring loop.
+
+A separate bounded-buffer collection pass writes exact scores and RS distances
+for EVERY pair. It validates block_L1 <= region_L1 <= XOR_popcount and checks
+that timed pass counts/checksums match full labels. 7000 vectors produce
+24,496,500 pair rows per set, so allow several GB per detailed CSV. Overall
+experiment time includes this extra pass and CSV writing; it is not the search
+speedup measurement.
+
+Files under each prefix, e.g. gov2.rs.shard:
+  .report.txt          selection, byte-contribution, memory, stage timings, status
+  .histogram.csv       collection/eligible/sample byte totals by log2 size bucket
+  .vectors.csv         selected IDs, calc_stat and complexity features
+  .profiles.csv        exact three-region RS populations by vector and block
+  .pairs.csv           positives AND negatives, exact XOR cost/count, block and
+                       regional L1, normalized RS and normalized shape distance
+  .timings.csv         every baseline/screened timing pass and its checksums
+  .analysis.csv        confusion counts, precision/recall/F1, targets recovered,
+                       best per-target structural gain recovery, actual speedups
+  .feature-curves.csv  cutoff curves at 0.01 steps for population, block, region,
+                       shape, and serialized-size mismatch; RS target/gain curves
+  .analysis.txt        readable summary
+
+Shape distance is half the L1 difference between population-normalized regional
+profiles; -1 denotes an undefined value when either vector is empty. The Python
+analysis excludes those cases from shape curves. Zero-denominator recall or
+precision is reported as undefined, not perfect. These are exploratory results
+on sampled sets, not held-out validation or estimates of whole-collection gain.
+Per-target gain recovery is structural and does not represent additive bytes.
+
+Re-analyze existing data without rerunning C++:
+
+python3 analyze_xbv_rs_bench.py gov2.rs.shard gov2.rs.stratified --summary-json gov2.rs.analysis.json
+
+Direct bminv example:
+
+./bminv -rs-bench -bvin gov2.unsorted.bv.cm6 -pair-index-in gov2.unsorted.pair-shards.csv -rs-out gov2.rs.custom -rs-set stratified -rs-size 7000 -rs-seed 42 -rs-min-bytes 4096 -rs-byte-coverage 90 -rs-thresholds 0.1,0.25,0.5,1 -rs-repeats 2 -pair-threads 8 -pair-min-pct 5 -level 6
+
+Offline shard comparison using the completed stratified benchmark (no XOR
+re-evaluation, Python standard library only):
+
+python3 analyze_xbv_rs_shards.py gov2.rs.stratified --sizes 500,1000,2000 --overlap 0,0.1 --out gov2.rs.cluster-study
+
+The script makes balanced, disjoint primary groups from serialized size,
+superblock populations (256 bit blocks), 16-block populations, 8-block
+populations, or all three RS regions per bit block. RS grouping uses a
+deterministic farthest-sample initialization and one balanced centroid update;
+each vector is assigned exactly once before optional overlap. An overlap of
+0.1 adds the 10% of vectors nearest another group to that second group. It
+streams the full pair CSV once, writing .csv and .report.txt summaries.
+
+For a given cap, all methods have the same primary group sizes and thus the
+same primary pair budget. Overlap changes each method's exact pair budget, so
+compare coverage against pairs_evaluated as well as the requested overlap.
+The CSV reports qualifying-pair recall, recovered targets, best structural
+gain recovery, maximum group membership and decoded-memory estimate, and
+clustering time. It does not measure search runtime for the new groups or
+serialized byte gain. Try smaller caps on this 7K sample before considering
+7K groups across the whole collection.
+
+FULL GOV2 RS CLUSTER SEARCH
+
+The C++ -rs-cluster-plan mode reuses the existing size index for source offsets
+and eligibility data. It reads each eligible bvector once, builds a compact RS
+population profile, and assigns vectors to bounded clusters by distance to
+sampled centers. It does not construct an all-pairs distance matrix. Both
+regions3 (all three counts per bit block) and blocks8 (one population count per
+eight bit blocks) are available. The planner uses a vector cap and estimated
+decoded-memory cap, then writes a separate manifest with original vector IDs.
+The existing pair search loads one manifest cluster at a time and evaluates
+all internal pairs. No cross-cluster pair or extra RS cutoff is applied.
+
+Run the full collection using the existing gov2.unsorted.pair-shards.csv index:
+
+sh run_gov2_xbv_rs_cluster_search.sh
+
+Defaults: regions3, at most 7000 primary vectors and 8 GiB indexed decoded
+allocation per cluster, minimum 4096 serialized bytes, byte coverage 90%,
+seed 42, pair-search threads 8, serializer level 6, gain cutoff 5% and 256
+structural units. This is a potentially long search. The script prints two
+stage banners and stops if planning or search exits nonzero. It preserves old
+outputs by default; set RS_CLEAN=1 to remove only this script's output files.
+If the estimated memory cap prevents assignment, the planner increases the
+number of clusters until both count and memory limits are met.
+
+Try the coarser clustering with separate output names:
+
+RS_CLUSTER_FEATURE=blocks8 sh run_gov2_xbv_rs_cluster_search.sh
+
+Change RS_CLUSTER_PREFIX, RS_CLUSTER_VECTORS, or RS_CLUSTER_MEMORY_BYTES to
+run a different plan. The planner writes .manifest.csv and its .report.txt;
+search writes .pairs.csv, .pairs.csv.best.csv, and .pairs.csv.report.txt.
+The manifest covers only eligible vectors; source IDs remain unchanged. The
+planner reports omitted cross-cluster pairs and peak estimated cluster memory.
+Pair gains are structural heuristic units, not serialized byte savings.
+
+To replay the same C++ clustering algorithm on an existing completed RS
+benchmark without loading the source vectors again, use its profile prefix:
+
+./bminv -rs-cluster-plan -bvin gov2.unsorted.bv.cm6 -pair-index-in gov2.unsorted.pair-shards.csv -rs-cluster-profiles-in gov2.rs.stratified -rs-cluster-out trial.manifest.csv -rs-cluster-feature regions3 -rs-cluster-vectors 1000 -rs-cluster-memory 8589934592 -rs-cluster-seed 42 -level 6
+python3 xbv_evaluate_rs_cluster_manifests.py gov2.rs.stratified trial.manifest.csv --out trial.recall.csv
+
+The Python scorer compares internal cluster pairs with the completed all-pairs
+benchmark and reports exact pair budget, qualifying-pair and target recall,
+and recovered best structural gain. It uses only Python's standard library.
+
+
+REFERENCE-TABLE SERIALIZATION EXPERIMENT
+
+The offline -ref-eval mode reuses the qualifying-pair CSV from a completed
+pair search. It does not repeat the all-pairs complexity scan:
+
+./bminv -ref-eval -bvin gov2.unsorted.bv.cm6 -pairs-in gov2-5pct-2x-mt.csv -ref-csv gov2-ref-10k.csv -pair-limit 10000 -ref-top 4 -pair-threads 8 -level 6
+
+For each pair, the vector with the smaller standalone serialized BLOB is a
+candidate reference for the larger vector. Equal sizes use the lower ID as
+the candidate. This strict (standalone_bytes,ID) ordering makes the supplied
+dependency graph acyclic. The input CSV's structural XOR score ranks candidates
+and -ref-top N retains at most N per target (default 4, maximum 64). The retained
+candidates are then ordered by measured materialized-XOR BLOB size so the first
+candidate is the same reference used for the plain-XOR comparison.
+
+Each output row measures four forms for one target:
+  standalone_bytes  target serialized without a reference
+  plain_xor_bytes   best optimized and serialized target XOR candidate
+  ref1_bytes        selective BitMagic reference serialization with that candidate
+  refk_bytes        selective BitMagic reference serialization with all retained candidates
+
+Positive gain columns mean fewer target bytes than standalone. The
+refk_vs_plain_gain_bytes column is positive when the multi-reference BLOB is
+smaller than the best full materialized-XOR BLOB. All BLOB sizes include their
+own headers. Reference BLOB sizes also include block reference IDs, masks and
+chain tokens, but none of these per-target sizes includes storage for the
+referenced vectors.
+
+The serializer may choose ordinary encoding, one reference, or a reference
+chain independently for every block. The CSV reports reference-equality,
+reference-XOR and chain block counts for the multi-reference run. candidate_ids
+is the supplied dependency superset because serializer telemetry does not expose
+the exact set of row IDs selected in the final BLOB.
+
+Both one-reference and multi-reference BLOBs are deserialized immediately with
+their candidate tables and compared exactly with the target. A failed round trip
+fails the run. Model, serialization and deserialization times are reported per
+target in microseconds. -pair-threads controls bounded parallel target evaluation;
+rows remain in target-ID order. Existing output and report files are refused.
+
+The pair CSV must come from the same vector prefix and serializer level. The
+mode validates cached standalone sizes and structural costs against freshly
+loaded vectors, failing on a mismatch. Rows involving vectors beyond
+-pair-limit are ignored. The report records positive target-byte gain sums;
+these exclude collection framing and do not include the cost of keeping
+dependencies materialized during decoding.
+
+
+XOR COLLECTION BUILD AND VERIFICATION
+
+The experimental XOR store is split into three files. -xorout is a complete
+payload collection with one self-delimiting BLOB per vector. -xor-refs stores
+four nullable rank-select-compressed sparse vectors describing dependencies.
+-xor-index stores a sparse vector of N+1 absolute 64-bit payload offsets.
+
+Slot zero stores (reference_id << 1) for a materialized plain XOR residual, or
+(reference_id << 1) | 1 for selective reference-table serialization. For a
+reference table, slots one through three contain additional candidate IDs when
+present. A NULL slot zero means that the payload is an ordinary standalone
+BLOB. Reference candidates retain the acyclic (standalone_bytes,ID) ordering
+used by -ref-eval.
+
+Build a store directly from the qualifying-pair CSV and existing size/offset
+index. With -pair-index-in, the builder keeps only one target and its selected
+references decoded at a time. Without the index it uses the older all-vectors
+in-memory path. The indexed path is serial during candidate planning; the
+8-thread setting belongs to the pair-search phase.
+
+./bminv -xor-build -bvin gov2.unsorted.bv.cm6 -pair-index-in gov2.unsorted.pair-shards.csv -pairs-in gov2.unsorted.pairs.5pct.2x.csv -xorout gov2.unsorted.xor.bv -xor-refs gov2.unsorted.xor.refs -xor-index gov2.unsorted.xor.offsets -ref-top 4 -xor-memory 8589934592 -level 6
+
+For each target the
+builder chooses the smallest complete BLOB among standalone, best materialized
+XOR, one-reference serialization, and the retained reference group. Ties keep
+the form with fewer dependencies. The winning BLOBs are then serialized in
+vector-ID order, so the builder does not retain the complete output collection
+in memory.
+
+The build report is written next to the payload as FILE.report.txt. It reports
+standalone bytes at the selected level; payload bytes by encoding mode; RSC
+metadata and offset-index sizes; dependency counts; payload-only and net
+savings; total compression ratio; and index/metadata overhead. Existing output
+files are never overwritten.
+Bits per integer uses the same denominator as the original CM6 run: the sum
+of bvector popcounts (the input vectors are sorted and unique). Input CM6
+bits/int is 8*source_bytes/total_ints; complete XOR-store bits/int is
+8*(payload_bytes+reference_metadata_bytes+offset_index_bytes)/total_ints.
+The cluster-scope comparison derives these values from the existing pair
+index, so completed stores need not be rebuilt to obtain this metric.
+
+Verify the stored collection against the original collection:
+
+./bminv -xor-verify -bvin gov2.unsorted.bv.cm6 -pair-index-in gov2.unsorted.pair-shards.csv -xorin gov2.unsorted.xor.bv -xor-refs gov2.unsorted.xor.refs -xor-index gov2.unsorted.xor.offsets -xor-memory 8589934592 -level 6
+
+Verification checks the three file identities and sizes, offset boundaries,
+metadata modes and dependency IDs, and rejects duplicate references or cycles.
+It validates the dependency graph, requires exact BLOB consumption, and
+compares every restored vector with the corresponding source vector. With
+-pair-index-in it decodes one vector and its dependency closure at a time,
+releasing them after comparison. The memory limit is checked against indexed
+decoded-allocation estimates, not process RSS; the source oracle and temporary
+serializer buffers add to peak RSS.
+
+LARGE-SCOPE RS CLUSTER EXPERIMENT
+
+The completed 7K-cap search is the baseline. The following harness plans and
+runs a separate 3K-cap search if needed, builds and verifies a complete XOR
+store from each pair CSV, then compares actual store bytes and target overlap:
+
+bash run_gov2_xbv_cluster_scope.sh
+
+It expects gov2.rs.cluster.regions3 and gov2.rs.cluster.regions3.3k outputs.
+The original pair CSVs and reports are preserved. It uses the existing pair
+index and an 8 GiB estimated working-set limit. Set BASELINE_PREFIX,
+TRIAL_PREFIX, TRIAL_VECTORS, XOR_MEMORY_BYTES, REF_TOP, or SCOPE_REPORT to change inputs and
+outputs. Completed XOR builds and verifications are reused on a rerun; a
+partial XOR build stops with an error and must be removed explicitly before
+restarting. The summary is gov2.rs.cluster.scope.txt by default.
+
+CLUSTER-PARALLEL PAIR SEARCH EXPERIMENT
+
+Build for Apple Silicon with the BitMagic ARM NEON backend:
+
+cd utils/inv_list
+make -B BMOPTFLAGS=-DBMNEONOPT
+
+Run the completed 3K-cap manifest again with one whole cluster per BM
+thread-pool task, then compare the pair and best-pair CSVs byte-for-byte
+with the earlier in-cluster-parallel control:
+
+bash ./run_gov2_xbv_cluster_parallel.sh
+
+The script uses nine workers and a 24 GiB total estimated active-cluster
+memory budget. Set PAIR_THREADS or PAIR_CLUSTER_MEMORY_BYTES to change them.
+It requires the completed 3K manifest and control CSVs, checks nonzero
+exit status and completion reports, and writes a timing comparison to
+gov2.rs.cluster.regions3.3k.parallel-24g-9t.compare.txt. Completed parallel output
+can be rechecked; partial output is retained for inspection and stops the
+script. Input/output paths can be set with SOURCE, PAIR_INDEX, MANIFEST,
+CONTROL_CSV, PARALLEL_CSV, and COMPARISON_REPORT. The memory budget applies
+to summed per-cluster decoded-allocation estimates in the pair index;
+serializer buffers, match results, and other process memory add to RSS.
+
+The run_gov2_xbv_xor_search.sh, run_gov2_xbv_xor_build.sh, and
+run_gov2_xbv_xor_verify.sh scripts drive the three phases for the complete Gov2
+unsorted collection. The search script first creates the sorted
+gov2.unsorted.pair-shards.csv index and then runs the greedy internal-shard
+search. run_gov2_xbv_xor_all.sh runs all phases. They default to a 5 percent
+structural cutoff, a maximum size ratio of 2, 7000 vectors or 3 GiB per shard,
+a 5 percent small-tail merge, eight worker threads, four reference candidates,
+and serializer level 6. Environment variables in the scripts can override the
+executable, file names, and shard limits. Each phase checks that
+bminv is available, reports a nonzero bminv exit status, and exits with the same
+status. The aggregate script stops immediately and names the failed phase; it
+does not start build after a failed search or verification after a failed build.
+Before stage 1, the aggregate script removes its known index, pair-result, XOR
+store, and report outputs from an earlier run. It prints every file it removes
+and refuses cleanup if any configured output resolves to the source collection
+or the bminv executable. Running an individual phase script does not perform
+this aggregate pre-cleanup.
+
+Experimental horizontal (within-block) similarity serialization
+--------------------------------------------------------------
+Disabled by default. -horizontal enables forward-only XOR residual prediction
+between waves of an existing BIT block. GAP inputs are never deoptimized.
+Existing superblock encodings are retained. Reference-vector XOR is mutually
+exclusive. Experimental output requires the matching updated decoder.
+
+  -horizontal-variants N   maximum complete trial encodings/block (default 64)
+  -horizontal-depth N      maximum predictor arguments, 1..8 (default 2)
+  -horizontal-effort N     argument beam width, 1..64 (default 8)
+  -horizontal-functions M  bitmask XOR=1, XOR-of-OR=2, XOR-of-AND=4 (default 7)
+  -horizontal-diag        collect search funnel, graph-family, and block-size counters
+  -max-vectors N           process at most N input vectors in compression/verification
+  -progress-vectors N      print live progress every N vectors (default off)
+
+Depth 1 tests pair XOR. Depth 2 includes A^B^C, A^(B|C), and A^(B&C).
+Higher depths extend the predictor reduction over more argument waves. Rotation
+is deferred. The ordinary serializer path remains unchanged when disabled.
+The variant limit is a ceiling; fewer candidates can be available. The initial
+search generator supplies best-function and function-specific graphs and their
+gain-ranked prefixes (at most 252 slots before duplicate removal).
+Diagnostics report heuristic-improving target waves, candidate blocks, full
+trial graph families, accepted families and saved bytes, and ordinary-block-size
+buckets. Pair/compound target counts describe the best heuristic candidate;
+graph-family counts describe the complete trial and accepted block. They are
+different stages of the search. The trial-cap count means the cap was reached,
+not necessarily that untried candidates existed.
+
+Use the opt-in harness with a fresh output prefix:
+
+  sh run_horizontal.sh ./bminv ./int_set_bench/Gov2Flat/gov2.unsorted \
+      /path/to/results/unsorted-d2-e8-v64 -level 6 \
+      -horizontal-depth 2 -horizontal-effort 8 -horizontal-variants 64
+
+Repeat for gov2.sorted, or change depth/effort/functions/variants with a new
+prefix. The harness runs ordinary and experimental compression and the existing
+-verify cycle for each. It refuses existing outputs and stops on any failure.
+PREFIX.plain.log and PREFIX.horizontal.log contain conversion timing and size;
+PREFIX.*.verify.log contain verification results. The experimental report adds
+blocks searched/accepted, predictor evaluations, trial encodings, net saved
+bytes, accepted residual bytes, and formula/framing bytes (including padding).
+For a short exploratory run, use the separate execution harness
+run_gov2_unsorted.sh with --max-vectors 1000 --progress 10 after building bminv
+with make. It compares both encodings on the same prefix, verifies each, times
+decode-only reads, and reports actual consumed input bytes plus evaluations per
+vector and per second. The application emits progress even with -silent when
+-progress-vectors is specified.
+
+Transform discovery and its forward DAG live in src/bmhorizontal.h. Arguments
+are strictly increasing and greater than the target. Restore descending after
+decoding the residual and its post-block formula, before merging into the target.
+Formula encoding adaptively chooses gamma/bounded-binary arguments, sparse/bitmap
+targets, and fixed/prefix function codes. Complete candidates are trial-encoded
+in scratch storage; only strictly smaller results replace ordinary block bytes.
+No existing stress test enables this experiment.
+
+Experimental binary BWT of BIT-block waves
+------------------------------------------
+-bwt applies a binary Burrows-Wheeler transform independently to each of the
+64 waves of an existing BIT block, then tries the ordinary block encoders on
+the transformed result. A candidate is accepted only when its complete record
+(including 80 packed primary-index bytes and framing) is smaller. GAP input
+blocks are left alone. -bwt is exclusive with horizontal and reference XOR.
+The matching updated decoder is required for accepted BWT records.
+
+  -bwt                       enable the experiment (default off)
+  -bwt-sample N              evaluate every Nth eligible BIT block (default 1)
+
+The sample setting is deterministic over eligible BIT blocks in input order;
+unselected blocks use ordinary encoding. BWT diagnostics report the number of
+eligible, evaluated, and accepted blocks, gross payload savings before index
+overhead, net saved bytes, and GAP counts before and after transformation.
+GAP counts use bit_block_change32() on each complete sampled BIT block. These
+complexity counts include candidates ultimately rejected by byte comparison.
+The first implementation builds an explicit 1 MiB rotation matrix, reused for
+each wave. It makes no horizontal function search.
+
+-bwt-full is a separate whole-block control: it applies one binary cyclic BWT
+to all 65,536 bits of each eligible BIT block, then asks the ordinary level-6
+encoder to encode the transformed block. The complete framed candidate carries
+one 16-bit primary index and is kept only if its actual bytes beat the original
+block encoding. It does not search horizontal functions or convert GAP input
+blocks. A prefix-doubling cyclic sorter uses O(block bits) scratch space instead
+of allocating the 4 GiB explicit byte rotation matrix. BWT BIC counters report
+the ordinary and transformed payloads selected by BIC codecs, and accepted
+blocks for which both payloads used BIC. The mode is disabled by default and
+exclusive with -bwt, -bwt-xor, -horizontal, and reference XOR.
+
+  ./bminv -t -s -level 6 -u32in ./int_set_bench/Gov2Flat/gov2.unsorted \
+    -bvout ./gov2-bwt-full.bv -bwt-full -threads 8 \
+    -max-vectors 100 -progress-vectors 10
+
+Use run_gov2_bwt_full.sh in the Codex horizontal output directory for a
+baseline/BWT-full comparison with retained BLOBs, verification, decoding,
+timing, and a statistics report. Build the app separately with make.
+
+The follow-up -bwt-xor experiment searches horizontal XOR on both the original
+block and the BWT-transformed block. It stores a nested horizontal record and
+the 64 packed BWT primary indexes only when the complete BWT+XOR record is
+strictly smaller than the best original-domain XOR record. Decompression
+restores horizontal XOR first, then reverses BWT. -bwt-xor is exclusive with
+-bwt and -horizontal and requires the XOR-only function mask (1, selected by
+default in this mode). -horizontal-depth, -horizontal-effort,
+-horizontal-variants, and -horizontal-diag configure both searches. The BWT
+"saved" count is incremental over XOR alone. "xor_candidates" counts BWT-domain
+XOR results that beat their BWT-only payload; "accepted" counts complete
+BWT+XOR records that also beat original-domain XOR, including BWT metadata.
+The horizontal trial/evaluation totals in this combined mode include both
+original-domain and transformed-domain searches.
+
+  ./bminv -t -s -level 6 -u32in ./int_set_bench/Gov2Flat/gov2.unsorted \
+    -bvout ./gov2-bwt-xor.bv -bwt-xor -horizontal-depth 1 \
+    -horizontal-effort 8 -horizontal-variants 64 -horizontal-diag \
+    -threads 8 -max-vectors 1000 -progress-vectors 50
+
+The separate Codex run_gov2_bwt_xor.sh harness compares ordinary, XOR-only,
+and combined encodings with the same worker count and verifies every BLOB.
+
+The optional templated multi-threaded compression engine supports ordinary,
+BWT, and horizontal-function-search serialization. Specify -threads N (1..256)
+to use the existing BM thread pool for the selected compression mode. The
+default input window is 512 vectors, bounded also by 512 MiB of raw input;
+-batch-vectors N (1..512) can lower that limit. The main thread reads and
+validates input, then writes completed self-delimiting BLOBs in input order
+and aggregates mode-specific statistics. Workers own their serializers and
+bit-vectors. The pool path evaluates every BWT-eligible BIT block and rejects
+BWT sample rates above 1; omitting -threads retains the sequential behavior.
+
+  ./bminv -t -s -level 6 -u32in ./int_set_bench/Gov2Flat/gov2.unsorted \
+    -bvout ./gov2-bwt-mt.bv -bwt -threads 8 -max-vectors 10000 \
+    -progress-vectors 100
+
+For retained baseline and BWT collections plus verification, use the separate
+run_gov2_bwt.sh harness in the Codex horizontal output directory with
+--threads (8 by default), optionally --threads N and --batch-vectors N. The
+harness runs both compression modes through the same parallel engine and
+thread count, making their compression timings comparable.

@@ -1,0 +1,684 @@
+{
+  "source": "/Volumes/DATAFAT32/BitMagic-experiments/2026-11-02/runs/inv_list/gov2-all-op98-20261102-191605",
+  "format": "Original positive-only opcode 98, before leading polarity bit",
+  "datasets": {
+    "sorted": {
+      "vectors": 1107205,
+      "ids": 5979715441,
+      "size": 2644388979,
+      "timings": [
+        1036.87,
+        67.65,
+        59.049
+      ],
+      "profile": {
+        "blobs": 1107205,
+        "bytes": 2644388979,
+        "header_bytes": 1107205,
+        "id_list_bytes": 0,
+        "records": 3956072,
+        "opcode_bytes": 3956072,
+        "payload_bytes": 2639325702,
+        "ids": 5979715441,
+        "id_list_ids": 0,
+        "groups": [
+          {
+            "name": "BIT transforms",
+            "count": 157922,
+            "opcode_bytes": 157922,
+            "payload_bytes": 313290138,
+            "bytes": 313448060
+          },
+          {
+            "name": "BIT/arrays",
+            "count": 311685,
+            "opcode_bytes": 311685,
+            "payload_bytes": 451092730,
+            "bytes": 451404415
+          },
+          {
+            "name": "GAP",
+            "count": 260024,
+            "opcode_bytes": 260024,
+            "payload_bytes": 32239556,
+            "bytes": 32499580
+          },
+          {
+            "name": "GAP-XOR",
+            "count": 170216,
+            "opcode_bytes": 170216,
+            "payload_bytes": 58635804,
+            "bytes": 58806020
+          },
+          {
+            "name": "framing",
+            "count": 1107205,
+            "opcode_bytes": 1107205,
+            "payload_bytes": 0,
+            "bytes": 1107205
+          },
+          {
+            "name": "superblocks",
+            "count": 1763606,
+            "opcode_bytes": 1763606,
+            "payload_bytes": 1784011508,
+            "bytes": 1785775114
+          },
+          {
+            "name": "zero/full runs",
+            "count": 185414,
+            "opcode_bytes": 185414,
+            "payload_bytes": 55966,
+            "bytes": 241380
+          }
+        ],
+        "rows": [
+          {
+            "code": 97,
+            "name": "set_sblock_bienc_wave_adaptive",
+            "count": 512954,
+            "opcode_bytes": 512954,
+            "payload_bytes": 665470580,
+            "bytes": 665983534,
+            "ids": 765954021,
+            "bits_per_int": 6.955859132437403,
+            "payload_bits_per_int": 6.950501588919787
+          },
+          {
+            "code": 68,
+            "name": "set_sblock_bienc_v3",
+            "count": 692757,
+            "opcode_bytes": 692757,
+            "payload_bytes": 453105988,
+            "bytes": 453798745,
+            "ids": 372010656,
+            "bits_per_int": 9.758833252346406,
+            "payload_bits_per_int": 9.743935679089795
+          },
+          {
+            "code": 65,
+            "name": "set_block_arr_bienc_v3s",
+            "count": 242579,
+            "opcode_bytes": 242579,
+            "payload_bytes": 423660852,
+            "bytes": 423903431,
+            "ids": 878520825,
+            "bits_per_int": 3.8601560162219264,
+            "payload_bits_per_int": 3.857947039559364
+          },
+          {
+            "code": 98,
+            "name": "set_sblock_bienc_large",
+            "count": 6150,
+            "opcode_bytes": 6150,
+            "payload_bytes": 367434116,
+            "bytes": 367440266,
+            "ids": 678719410,
+            "bits_per_int": 4.330982854903177,
+            "payload_bits_per_int": 4.330910365448367
+          },
+          {
+            "code": 90,
+            "name": "set_sblock_bienc_wave1024",
+            "count": 543503,
+            "opcode_bytes": 543503,
+            "payload_bytes": 266174688,
+            "bytes": 266718191,
+            "ids": 266880544,
+            "bits_per_int": 7.995133313277419,
+            "payload_bits_per_int": 7.978841290131663
+          },
+          {
+            "code": 72,
+            "name": "set_block_bwt",
+            "count": 102374,
+            "opcode_bytes": 102374,
+            "payload_bytes": 216131922,
+            "bytes": 216234296,
+            "ids": 664969842,
+            "bits_per_int": 2.6014328150538892,
+            "payload_bits_per_int": 2.6002011922820403
+          },
+          {
+            "code": 96,
+            "name": "set_block_bwt_unpacked",
+            "count": 55548,
+            "opcode_bytes": 55548,
+            "payload_bytes": 97158216,
+            "bytes": 97213764,
+            "ids": 513701218,
+            "bits_per_int": 1.513934724600945,
+            "payload_bits_per_int": 1.5130696614388794
+          },
+          {
+            "code": 94,
+            "name": "set_block_gap_xor_framed",
+            "count": 170216,
+            "opcode_bytes": 170216,
+            "payload_bytes": 58635804,
+            "bytes": 58806020,
+            "ids": 243063630,
+            "bits_per_int": 1.9354938457884465,
+            "payload_bits_per_int": 1.9298914938446365
+          },
+          {
+            "code": 92,
+            "name": "set_sblock_bienc_adaptive",
+            "count": 8242,
+            "opcode_bytes": 8242,
+            "payload_bytes": 31826136,
+            "bytes": 31834378,
+            "ids": 48371103,
+            "bits_per_int": 5.265024119875869,
+            "payload_bits_per_int": 5.263660991976966
+          },
+          {
+            "code": 61,
+            "name": "set_block_gap_bienc_v3",
+            "count": 179560,
+            "opcode_bytes": 179560,
+            "payload_bytes": 29190348,
+            "bytes": 29369908,
+            "ids": 142919222,
+            "bits_per_int": 1.6440004410323477,
+            "payload_bits_per_int": 1.633949448731256
+          },
+          {
+            "code": 63,
+            "name": "set_block_arr_bienc_v3",
+            "count": 18459,
+            "opcode_bytes": 18459,
+            "payload_bytes": 22474924,
+            "bytes": 22493383,
+            "ids": 37425428,
+            "bits_per_int": 4.808149795908814,
+            "payload_bits_per_int": 4.8042040294101644
+          },
+          {
+            "code": 66,
+            "name": "set_block_arr_bienc_inv_v3s",
+            "count": 728,
+            "opcode_bytes": 728,
+            "payload_bytes": 3589656,
+            "bytes": 3590384,
+            "ids": 29933000,
+            "bits_per_int": 0.959578792636889,
+            "payload_bits_per_int": 0.95938422476865
+          },
+          {
+            "code": 62,
+            "name": "set_block_gap_bienc_v3s",
+            "count": 39577,
+            "opcode_bytes": 39577,
+            "payload_bytes": 2660428,
+            "bytes": 2700005,
+            "ids": 77706538,
+            "bits_per_int": 0.27796940329525427,
+            "payload_bits_per_int": 0.2738948941464874
+          },
+          {
+            "code": 0,
+            "name": "set_block_end",
+            "count": 1044824,
+            "opcode_bytes": 1044824,
+            "payload_bytes": 0,
+            "bytes": 1044824,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 11,
+            "name": "set_block_bit",
+            "count": 103,
+            "opcode_bytes": 103,
+            "payload_bytes": 843776,
+            "bytes": 843879,
+            "ids": 3318054,
+            "bits_per_int": 2.034635964333311,
+            "payload_bits_per_int": 2.034387626000059
+          },
+          {
+            "code": 67,
+            "name": "set_block_gap_egamma_v3",
+            "count": 40887,
+            "opcode_bytes": 40887,
+            "payload_bytes": 388780,
+            "bytes": 429667,
+            "ids": 170055054,
+            "bits_per_int": 0.020213077583686515,
+            "payload_bits_per_int": 0.018289606376532624
+          },
+          {
+            "code": 22,
+            "name": "set_block_bit_0runs",
+            "count": 36,
+            "opcode_bytes": 36,
+            "payload_bytes": 266786,
+            "bytes": 266822,
+            "ids": 1022656,
+            "bits_per_int": 2.0872864384504664,
+            "payload_bits_per_int": 2.0870048188247075
+          },
+          {
+            "code": 64,
+            "name": "set_block_arr_bienc_inv_v3",
+            "count": 64,
+            "opcode_bytes": 64,
+            "payload_bytes": 157304,
+            "bytes": 157368,
+            "ids": 3947132,
+            "bits_per_int": 0.3189515830734822,
+            "payload_bits_per_int": 0.3188218686377856
+          },
+          {
+            "code": 19,
+            "name": "set_block_bit_1bit",
+            "count": 49716,
+            "opcode_bytes": 49716,
+            "payload_bytes": 99432,
+            "bytes": 149148,
+            "ids": 49716,
+            "bits_per_int": 24.0,
+            "payload_bits_per_int": 16.0
+          },
+          {
+            "code": 128,
+            "name": "packed_zero_run",
+            "count": 122871,
+            "opcode_bytes": 122871,
+            "payload_bytes": 0,
+            "bytes": 122871,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 9,
+            "name": "set_block_azero",
+            "count": 62381,
+            "opcode_bytes": 62381,
+            "payload_bytes": 0,
+            "bytes": 62381,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 3,
+            "name": "set_block_8zero",
+            "count": 30008,
+            "opcode_bytes": 30008,
+            "payload_bytes": 30008,
+            "bytes": 60016,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 5,
+            "name": "set_block_16zero",
+            "count": 11523,
+            "opcode_bytes": 11523,
+            "payload_bytes": 23046,
+            "bytes": 34569,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 1,
+            "name": "set_block_1zero",
+            "count": 17123,
+            "opcode_bytes": 17123,
+            "payload_bytes": 0,
+            "bytes": 17123,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 4,
+            "name": "set_block_8one",
+            "count": 2912,
+            "opcode_bytes": 2912,
+            "payload_bytes": 2912,
+            "bytes": 5824,
+            "ids": 1017118720,
+            "bits_per_int": 4.580782860824742e-05,
+            "payload_bits_per_int": 2.290391430412371e-05
+          },
+          {
+            "code": 2,
+            "name": "set_block_1one",
+            "count": 977,
+            "opcode_bytes": 977,
+            "payload_bytes": 0,
+            "bytes": 977,
+            "ids": 64028672,
+            "bits_per_int": 0.0001220703125,
+            "payload_bits_per_int": 0.0
+          }
+        ]
+      },
+      "stream_sha256": "797723fa4358bbd6cbb49262075795519984a28091744a4c89b0f341d11ff1c8"
+    },
+    "unsorted": {
+      "vectors": 1107205,
+      "ids": 5979715441,
+      "size": 5429693606,
+      "timings": [
+        1378.067,
+        68.105,
+        63.154
+      ],
+      "profile": {
+        "blobs": 1107205,
+        "bytes": 5429693606,
+        "header_bytes": 1107205,
+        "id_list_bytes": 0,
+        "records": 4592462,
+        "opcode_bytes": 4592462,
+        "payload_bytes": 5423993939,
+        "ids": 5979715441,
+        "id_list_ids": 0,
+        "groups": [
+          {
+            "name": "BIT transforms",
+            "count": 28251,
+            "opcode_bytes": 28251,
+            "payload_bytes": 136693947,
+            "bytes": 136722198
+          },
+          {
+            "name": "BIT/arrays",
+            "count": 1033515,
+            "opcode_bytes": 1033515,
+            "payload_bytes": 2277112975,
+            "bytes": 2278146490
+          },
+          {
+            "name": "GAP",
+            "count": 144510,
+            "opcode_bytes": 144510,
+            "payload_bytes": 49446832,
+            "bytes": 49591342
+          },
+          {
+            "name": "GAP-XOR",
+            "count": 61021,
+            "opcode_bytes": 61021,
+            "payload_bytes": 30891765,
+            "bytes": 30952786
+          },
+          {
+            "name": "framing",
+            "count": 1107205,
+            "opcode_bytes": 1107205,
+            "payload_bytes": 0,
+            "bytes": 1107205
+          },
+          {
+            "name": "superblocks",
+            "count": 2176148,
+            "opcode_bytes": 2176148,
+            "payload_bytes": 2929839200,
+            "bytes": 2932015348
+          },
+          {
+            "name": "zero/full runs",
+            "count": 41812,
+            "opcode_bytes": 41812,
+            "payload_bytes": 9220,
+            "bytes": 51032
+          }
+        ],
+        "rows": [
+          {
+            "code": 68,
+            "name": "set_sblock_bienc_v3",
+            "count": 2163601,
+            "opcode_bytes": 2163601,
+            "payload_bytes": 2209334668,
+            "bytes": 2211498269,
+            "ids": 1467976630,
+            "bits_per_int": 12.05195354642669,
+            "payload_bits_per_int": 12.040162617575186
+          },
+          {
+            "code": 65,
+            "name": "set_block_arr_bienc_v3s",
+            "count": 988171,
+            "opcode_bytes": 988171,
+            "payload_bytes": 2207515596,
+            "bytes": 2208503767,
+            "ids": 3216737148,
+            "bits_per_int": 5.492531507271293,
+            "payload_bits_per_int": 5.490073933762399
+          },
+          {
+            "code": 98,
+            "name": "set_sblock_bienc_large",
+            "count": 6505,
+            "opcode_bytes": 6505,
+            "payload_bytes": 700133460,
+            "bytes": 700139965,
+            "ids": 716476707,
+            "bits_per_int": 7.817588018252211,
+            "payload_bits_per_int": 7.8175153850465655
+          },
+          {
+            "code": 72,
+            "name": "set_block_bwt",
+            "count": 26623,
+            "opcode_bytes": 26623,
+            "payload_bytes": 128758875,
+            "bytes": 128785498,
+            "ids": 247621094,
+            "bits_per_int": 4.160727857861738,
+            "payload_bits_per_int": 4.159867737277665
+          },
+          {
+            "code": 11,
+            "name": "set_block_bit",
+            "count": 7881,
+            "opcode_bytes": 7881,
+            "payload_bytes": 64561152,
+            "bytes": 64569033,
+            "ids": 214924969,
+            "bits_per_int": 2.4034074142404553,
+            "payload_bits_per_int": 2.403114065355524
+          },
+          {
+            "code": 61,
+            "name": "set_block_gap_bienc_v3",
+            "count": 140748,
+            "opcode_bytes": 140748,
+            "payload_bytes": 49410940,
+            "bytes": 49551688,
+            "ids": 42122075,
+            "bits_per_int": 9.411063058977982,
+            "payload_bits_per_int": 9.38433161234341
+          },
+          {
+            "code": 94,
+            "name": "set_block_gap_xor_framed",
+            "count": 61021,
+            "opcode_bytes": 61021,
+            "payload_bytes": 30891765,
+            "bytes": 30952786,
+            "ids": 27512729,
+            "bits_per_int": 9.000280851819534,
+            "payload_bits_per_int": 8.98253750109631
+          },
+          {
+            "code": 97,
+            "name": "set_sblock_bienc_wave_adaptive",
+            "count": 5011,
+            "opcode_bytes": 5011,
+            "payload_bytes": 20227944,
+            "bytes": 20232955,
+            "ids": 17861352,
+            "bits_per_int": 9.062227764169252,
+            "payload_bits_per_int": 9.059983365201022
+          },
+          {
+            "code": 96,
+            "name": "set_block_bwt_unpacked",
+            "count": 1628,
+            "opcode_bytes": 1628,
+            "payload_bytes": 7935072,
+            "bytes": 7936700,
+            "ids": 15306972,
+            "bits_per_int": 4.148018301725514,
+            "payload_bits_per_int": 4.147167447617988
+          },
+          {
+            "code": 63,
+            "name": "set_block_arr_bienc_v3",
+            "count": 1951,
+            "opcode_bytes": 1951,
+            "payload_bytes": 3244976,
+            "bytes": 3246927,
+            "ids": 3923057,
+            "bits_per_int": 6.6212180959899385,
+            "payload_bits_per_int": 6.6172395659813255
+          },
+          {
+            "code": 66,
+            "name": "set_block_arr_bienc_inv_v3s",
+            "count": 165,
+            "opcode_bytes": 165,
+            "payload_bytes": 1223300,
+            "bytes": 1223465,
+            "ids": 7332660,
+            "bits_per_int": 1.334811650887945,
+            "payload_bits_per_int": 1.3346316343591549
+          },
+          {
+            "code": 0,
+            "name": "set_block_end",
+            "count": 1088095,
+            "opcode_bytes": 1088095,
+            "payload_bytes": 0,
+            "bytes": 1088095,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 22,
+            "name": "set_block_bit_0runs",
+            "count": 89,
+            "opcode_bytes": 89,
+            "payload_bytes": 497435,
+            "bytes": 497524,
+            "ids": 1766571,
+            "bits_per_int": 2.2530608732963464,
+            "payload_bits_per_int": 2.252657832603388
+          },
+          {
+            "code": 90,
+            "name": "set_sblock_bienc_wave1024",
+            "count": 1031,
+            "opcode_bytes": 1031,
+            "payload_bytes": 143128,
+            "bytes": 144159,
+            "ids": 108826,
+            "bits_per_int": 10.597394005109074,
+            "payload_bits_per_int": 10.521603293330639
+          },
+          {
+            "code": 19,
+            "name": "set_block_bit_1bit",
+            "count": 35258,
+            "opcode_bytes": 35258,
+            "payload_bytes": 70516,
+            "bytes": 105774,
+            "ids": 35258,
+            "bits_per_int": 24.0,
+            "payload_bits_per_int": 16.0
+          },
+          {
+            "code": 67,
+            "name": "set_block_gap_egamma_v3",
+            "count": 3756,
+            "opcode_bytes": 3756,
+            "payload_bytes": 35660,
+            "bytes": 39416,
+            "ids": 8964,
+            "bits_per_int": 35.17715305667113,
+            "payload_bits_per_int": 31.82507809013833
+          },
+          {
+            "code": 128,
+            "name": "packed_zero_run",
+            "count": 33141,
+            "opcode_bytes": 33141,
+            "payload_bytes": 0,
+            "bytes": 33141,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 9,
+            "name": "set_block_azero",
+            "count": 19110,
+            "opcode_bytes": 19110,
+            "payload_bytes": 0,
+            "bytes": 19110,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 5,
+            "name": "set_block_16zero",
+            "count": 2674,
+            "opcode_bytes": 2674,
+            "payload_bytes": 5348,
+            "bytes": 8022,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 3,
+            "name": "set_block_8zero",
+            "count": 3872,
+            "opcode_bytes": 3872,
+            "payload_bytes": 3872,
+            "bytes": 7744,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 1,
+            "name": "set_block_1zero",
+            "count": 2125,
+            "opcode_bytes": 2125,
+            "payload_bytes": 0,
+            "bytes": 2125,
+            "ids": 0,
+            "bits_per_int": null,
+            "payload_bits_per_int": null
+          },
+          {
+            "code": 62,
+            "name": "set_block_gap_bienc_v3s",
+            "count": 6,
+            "opcode_bytes": 6,
+            "payload_bytes": 232,
+            "bytes": 238,
+            "ids": 429,
+            "bits_per_int": 4.438228438228438,
+            "payload_bits_per_int": 4.326340326340326
+          }
+        ]
+      },
+      "stream_sha256": "74c06f08fc190258ed2952f8c4129b936a689fa96518a4a4f4a96894a3063b11"
+    }
+  }
+}

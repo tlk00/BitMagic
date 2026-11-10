@@ -39,4 +39,35 @@ DESTINATIONDIR=utils/inv_list
 
 include ../../makefile.in
 
+# Shared serializer settings must rebuild the app even without generated dependencies.
+$(CXXOBJECTS): $(wildcard inv_list*.h)
 
+# Build this utility with BitMagic's native AArch64 NEON backend. Force the
+# object rebuild because changing BMOPTFLAGS alone does not update timestamps.
+.PHONY: neon
+neon:
+	@case "$$(uname -m)" in arm64|aarch64) ;; \
+	    *) echo "NEON build requires an AArch64 host" >&2; exit 1 ;; esac
+	$(MAKE) --no-print-directory -B BMOPTFLAGS=-DBMNEONOPT $(DESTINATION)
+
+# Standalone sparse-vector collection experiment; it is not part of bminv.
+.PHONY: svexp-neon
+svexp-neon:
+	@case "$$(uname -m)" in arm64|aarch64) ;; \
+	    *) echo "NEON build requires an AArch64 host" >&2; exit 1 ;; esac
+	$(CXX) $(CXXFLAGS) -DBMNEONOPT $(DBGFLAGS) \
+	    experiments/sparse_vector/svexp.cpp -o svexp $(LDFLAGS)
+
+# Standalone block-composition scanner for raw Gov2 collections.
+.PHONY: gov2-block-stats-neon
+gov2-block-stats-neon:
+	@case "$$(uname -m)" in arm64|aarch64) ;; \
+	    *) echo "NEON build requires an AArch64 host" >&2; exit 1 ;; esac
+	$(CXX) $(CXXFLAGS) -DBMNEONOPT $(DBGFLAGS) \
+	    experiments/block_stats/gov2_block_stats.cpp -o gov2_block_stats $(LDFLAGS)
+
+# Serialized bvector playlists for opcode survey/replay experiments.
+.PHONY: gov2-playlist-neon
+gov2-playlist-neon:
+	$(CXX) $(CXXFLAGS) -DBMNEONOPT $(DBGFLAGS) \
+	    experiments/opcode_playlist/playlist.cpp -o gov2_playlist $(LDFLAGS)

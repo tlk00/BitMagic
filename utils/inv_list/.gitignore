@@ -1,0 +1,17 @@
+# Local datasets and build products, never release source.
+/int_set_bench/
+/bminv
+/bminv_*
+/svexp
+/gov2_block_stats
+/gov2_playlist
+/Debug/
+/Release/
+/depend.d*
+__pycache__/
+*.pyc
+# Conventional generated collection and cross-vector result names.
+/*.bv
+/*.bv.*
+/*.idx
+/*.csv

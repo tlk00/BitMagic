@@ -1,0 +1,47 @@
+Variant | Encode s | Decode s | Wall s | Bytes
+1-before | 118.639 | 43.735 | 189.200 | 3563136636
+2-after | 114.974 | 43.971 | 187.752 | 3563136636
+3-after | 115.129 | 44.003 | 188.243 | 3563136636
+4-before | 118.137 | 43.645 | 190.899 | 3563136636
+Encode means: before=118.388s after=115.051s reduction=2.82% speedup=1.029x
+All four streams round-trip verified and SHA256 identical.
+
+2026-11-01: native ARM NEON, C++17, -O2; one thread, ABBA order.
+Input: first 10,000 raw Gov2.unsorted vectors, 4,818,820,706 IDs.
+Output: 3,563,136,636 bytes in every pass.
+SHA256: f54060dc16eaa286034b0e1c434262fc763d20f9bc08fc6ba04f158f67424848
+
+Measured serialize() calls only. Input reading, bvector construction/optimization,
+validation and disk writes were outside the encode timer. Level 6 with exact
+endpoint selection; optional BWT/chains/GAP-XOR and adaptive superblock searches
+were omitted to isolate this serializer change. All arrays use the shared u16
+writer, so this measures the net effect of that refactor and endpoint dry scoring.
+This is not a measurement of the full highest-compression pipeline.
+
+Mean wall time: old 190.049 s, new 187.998 s (1.08% reduction).
+Decode means: old 43.690 s, new 43.987 s. Decoder source is unchanged;
+these timing differences should not be interpreted as a decoder regression.
+
+Change: write the heuristic layout, bounded exact count of alternative header
+and BIC bits, rounded to 32-bit words, rewrite only on a strict byte win.
+The counter stops when the alternative cannot win. No heuristic replacement,
+wire-format changes, decoder changes or default-setting changes. Removed the
+64 KiB per-serializer endpoint trial buffer and its speculative payload writes.
+
+Focused ASan/UBSan: every delta16s value, 4,000 structured BIC layouts and
+bounded/tie/padding decisions, plus random serializer round trips: PASS.
+All four 10K streams decoded and compared with their optimized source vectors;
+full-stream SHA256 equality confirms byte identity with the previous encoder.
+
+Full benchmark logs and output streams:
+/Volumes/USB_1TB/BitMagic-experiments/2026-11-01/runs/inv_list/gov2-op65-dry-isolated-10k
+The earlier CLI attempts under gov2-op65-dry-10k and gov2-op65-dry-10k-v2
+were incomplete and excluded from results. The CLI requires BWT search for this
+option, so the standalone driver was used for isolated serializer timings.
+
+All-options smoke: first 2 vectors of BOTH sorted and unsorted, 10 workers,
+raw-ID verification, independent decode and opcode-byte accounting: PASS.
+Sorted 1,842,358 bytes; unsorted 6,173,674 bytes; 25,120,402 IDs per dataset.
+Logs: /Volumes/USB_1TB/BitMagic-experiments/2026-11-01/runs/inv_list/gov2-op65-dry-highest-smoke
+Full collection validation remains for the user to run.
+Both all-options smoke hashes also match the pre-change gov2-cleanup-highest-smoke run.
