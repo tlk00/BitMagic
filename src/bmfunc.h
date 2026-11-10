@@ -2849,7 +2849,7 @@ bool gap_split(const T* buf, unsigned len,
         {
             const T* pcurr = tbuf+1;
             dsize = (*tbuf >> 3);
-            const T* pend = pcurr + dsize;
+            const T* pend = tbuf + dsize;
             unsigned is_set = (*tbuf & 1u);
 
             T delta = *pcurr;
@@ -2897,7 +2897,7 @@ bool gap_split(const T* buf, unsigned len,
         {
             const T* pcurr = tbuf+1;
             //unsigned dsize = (*tbuf >> 3);
-            const T* pend = pcurr + (*tbuf >> 3);
+            const T* pend = tbuf + (*tbuf >> 3);
             unsigned is_set = (*tbuf & 1u);
 
             T delta = *pcurr;

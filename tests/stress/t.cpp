@@ -21248,6 +21248,58 @@ void SerializationCompressionLevelsTest()
    cout << " ----------------------------------- SerializationCompressionLevelsTest() OK" << endl;
 }
 
+/**
+    @brief Check GAP split scan bounds and the reported singleton serialization.
+
+    Uses exact-sized scratch storage so ASan/Valgrind detects a read beyond the
+    terminal GAP endpoint. Both polarities exercise the two exception passes.
+    No parameters or return value; all temporary storage is owned locally.
+*/
+void GAPSplitBoundsTest()
+{
+    cout << " ----------------------------------- GAPSplitBoundsTest()" << endl;
+    for (unsigned polarity = 0; polarity < 2; ++polarity)
+    {
+        // Singleton bits at 1 and 51579 (or singleton holes when inverted).
+        bm::gap_word_t gap[] = {bm::gap_word_t((5u << 3) | polarity),
+                               0, 1, 51578, 51579, 65535};
+        unsigned hist0[3] = {}, hist1[3] = {};
+        bm::gap_calc_hist(gap, 5, hist0, hist1, 3);
+
+        // Do not add padding: the old inclusive end pointer read scratch[6].
+        std::unique_ptr<bm::gap_word_t[]> scratch(new bm::gap_word_t[6]);
+        bm::gap_word_t ex0[6] = {}, ex1[6] = {};
+        unsigned ex0_cnt = 0, ex1_cnt = 0;
+        bool ex0_first = bm::gap_split(gap, 5, 2, hist0, hist1,
+                                      scratch.get(), ex0, ex1,
+                                      ex0_cnt, ex1_cnt);
+        assert(ex0_first == bool(polarity));
+        assert(ex0_cnt == (polarity ? 2u : 0u));
+        assert(ex1_cnt == (polarity ? 0u : 2u));
+        const bm::gap_word_t* exceptions = polarity ? ex0 : ex1;
+        assert(exceptions[0] == 1 && exceptions[1] == 51579);
+        assert(bm::gap_length(scratch.get()) == 2);
+        assert((scratch[0] & 1u) == polarity);
+        assert(scratch[1] == 65535);
+    } // for polarity
+
+    // Original report: one singleton in each of two blocks. Current codec
+    // selection can bypass gap_split(), hence the direct checks above.
+    bvect bv(bm::BM_GAP);
+    bv.set(1);
+    bv.set(117115);
+    bvect::statistics stat;
+    bv.calc_stat(&stat);
+    std::vector<unsigned char> buffer(stat.max_serialize_mem);
+    BM_DECLARE_TEMP_BLOCK(tb)
+    size_t size = bm::serialize(bv, buffer.data(), tb, bm::BM_NO_BYTE_ORDER);
+    assert(size <= buffer.size());
+    bvect restored;
+    bm::deserialize(restored, buffer.data());
+    assert(restored == bv);
+    cout << " ----------------------------------- GAPSplitBoundsTest() OK" << endl;
+}
+
 void GAPSerializationTest0()
 {
    cout << " ----------------------------------- GAPSerializationTest0()" << endl;
@@ -55551,6 +55603,9 @@ return 0;
 
         SerializationCompressionLevelsTest();
          CheckAllocLeaks(false);
+
+        GAPSplitBoundsTest();
+        CheckAllocLeaks(false);
 
         GAPSerializationTest0();
          CheckAllocLeaks(false);
