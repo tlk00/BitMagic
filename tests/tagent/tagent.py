@@ -180,6 +180,7 @@ def arguments():
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
         'fast': 'run perf and all stress variants in fast mode; incompatible with --pedantic',
+        'no-debug': 'skip debug perf and stress execution; debug builds are still compiled (default: run debug tests)',
         'avx512': 'build and test AVX-512 variants when supported',
         'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
         'check': 'validate local prerequisites only; do not fetch, build, or test',
@@ -308,6 +309,7 @@ class Agent:
         self.repo = Path(__file__).resolve().parents[2]
         self.home = Path(args.state_dir or self.repo / 'TAgent-logs').expanduser().resolve()
         prepare_log_directory(self.home, args.min_free_gb)
+        self.audio_dir = self.home / 'generated-audio'
         self.temp_dir = self.home / 'tmp'
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.voices_dir = self.home / 'piper-voices'
@@ -406,6 +408,33 @@ class Agent:
             print('\r' + line, flush=True)
             with (self.home / 'agent.log').open('a') as stream:
                 stream.write(line + '\n')
+
+    def prepare_generated_audio(self):
+        """Move old generated WAVs without overwriting files or blocking tests."""
+        try:
+            self.audio_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            self.say('Generated audio directory unavailable; using log root: ' + str(error))
+            self.audio_dir = self.home
+            return
+        for pattern in ('sound-steampunk-*.wav', 'demo-steampunk.wav'):
+            for source in self.home.glob(pattern):
+                destination = self.audio_dir / source.name
+                try:
+                    # Exclusive creation prevents replacing an existing destination.
+                    with source.open('rb') as src:
+                        with destination.open('xb') as dst:
+                            try:
+                                shutil.copyfileobj(src, dst)
+                            except OSError:
+                                dst.close()
+                                destination.unlink(missing_ok=True)
+                                raise
+                    source.unlink()
+                except FileExistsError:
+                    self.say('Generated audio migration conflict; leaving ' + str(source))
+                except OSError as error:
+                    self.say('Generated audio migration failed for {}: {}'.format(source, error))
 
     def process_context(self):
         """Describe this process and terminal without claiming a signal sender."""
@@ -1316,7 +1345,7 @@ class Agent:
         rendered = False
         try:
             suffix = '-' + str(workers) if event == 'work' else ''
-            path = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
+            path = self.audio_dir / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
             if event == 'joker':
                 duration = self.synthesize_announcement(path, workers, lambda: 'en-us+m3', 40,
                                                         background='train', engineer=True)
@@ -1404,7 +1433,7 @@ class Agent:
             if not self.audio_warned:
                 self.audio_warned = True
                 if rendered:
-                    self.say('Local audio unavailable; continuing without sound. Generated WAV files: ' + str(self.home))
+                    self.say('Local audio unavailable; continuing without sound. Generated WAV files: ' + str(self.audio_dir))
                 else:
                     self.say('Sound generation failed: {}; continuing tests'.format(error))
 
@@ -1573,7 +1602,8 @@ class Agent:
         self.build_report_interval = self.args.build_report_seconds
         self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
-                    'jemalloc': self.jemalloc, 'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast, 'builds': {}}
+                    'jemalloc': self.jemalloc, 'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast,
+                    'no_debug': self.args.no_debug, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
         self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples', 'inv_list')]
@@ -1664,6 +1694,9 @@ class Agent:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
                 futures = []
                 for name in manifest['builds']['perf']:
+                    if self.args.no_debug and '_debug' in name:
+                        self.say('SKIP debug perf ' + name)
+                        continue
                     if not self.supported(name):
                         self.say('SKIP perf ' + name)
                         continue
@@ -1689,6 +1722,9 @@ class Agent:
             self.memory_phase = 'stress'
             self.start_test_sound('stress')
             for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
+                if self.args.no_debug and '_debug' in name:
+                    self.say('SKIP debug stress ' + name)
+                    continue
                 if not self.supported(name):
                     self.say('SKIP unsupported ' + name)
                     continue
@@ -1755,6 +1791,7 @@ class Agent:
     def run(self):
         """Run update/build/test/wait loop; return exit status, or exec on self-update."""
         self.say('Log directory: ' + str(self.home))
+        self.prepare_generated_audio()
         self.say('Process context: ' + self.process_context())
         self.report_audio()
         self.start_piper_download()
@@ -1808,7 +1845,7 @@ class Agent:
                 if self.audio_thread:
                     self.wait_for_audio(timeout=360 if self.args.full_sound_preview else 300)
                 suffix = '-' + str(workers) if event == 'work' else ''
-                clip = self.home / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
+                clip = self.audio_dir / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
                 if not self.args.no_sound and self.args.sound_volume > 0 and clip.exists():
                     with wave.open(str(clip), 'rb') as stream:
                         rate = stream.getframerate()
@@ -1825,10 +1862,10 @@ class Agent:
                         raise Failure('Unsupported demo WAV sample rate: {}'.format(rate))
                     clips.append(frames)
             if clips:
-                with wave.open(str(self.home / ('demo-' + self.args.sound_theme + '.wav')), 'wb') as stream:
+                with wave.open(str(self.audio_dir / ('demo-' + self.args.sound_theme + '.wav')), 'wb') as stream:
                     stream.setparams((1, 2, soundtrack.RATE, 0, 'NONE', 'not compressed'))
                     stream.writeframes((b'\0' * (soundtrack.RATE // 3 * 2)).join(clips))
-            self.say('Sound demo complete | WAV files: ' + str(self.home))
+            self.say('Sound demo complete | WAV files: ' + str(self.audio_dir))
             return 0
         if self.args.sound_preview:
             preview_count = (random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
@@ -1882,6 +1919,8 @@ class Agent:
                     self.stop_children()
                     os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
+            if self.args.no_debug:
+                key['no_debug'] = True
             if self.args.fast:
                 key['fast'] = True
             previous = json.loads(state_path.read_text()) if state_path.exists() else None

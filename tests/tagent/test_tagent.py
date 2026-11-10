@@ -65,6 +65,29 @@ class SupervisorTests(unittest.TestCase):
             self.agent.detect_jemalloc()
         self.assertIsNone(self.agent.jemalloc)
 
+    def test_generated_audio_migration_and_conflict(self):
+        """Move legacy files while preserving both copies of conflicting names."""
+        old = self.agent.home / 'sound-steampunk-dispatch.wav'
+        old.write_bytes(b'old')
+        demo = self.agent.home / 'demo-steampunk.wav'
+        demo.write_bytes(b'demo')
+        conflict = self.agent.home / 'sound-steampunk-start.wav'
+        conflict.write_bytes(b'legacy')
+        self.agent.audio_dir.mkdir()
+        (self.agent.audio_dir / conflict.name).write_bytes(b'existing')
+        self.agent.prepare_generated_audio()
+        self.assertFalse(old.exists())
+        self.assertEqual((self.agent.audio_dir / old.name).read_bytes(), b'old')
+        self.assertEqual((self.agent.audio_dir / demo.name).read_bytes(), b'demo')
+        self.assertEqual(conflict.read_bytes(), b'legacy')
+        self.assertEqual((self.agent.audio_dir / conflict.name).read_bytes(), b'existing')
+
+    def test_generated_audio_directory_failure_falls_back(self):
+        """Inaccessible audio directories do not stop the agent."""
+        with patch.object(Path, 'mkdir', side_effect=PermissionError('denied')):
+            self.agent.prepare_generated_audio()
+        self.assertEqual(self.agent.audio_dir, self.agent.home)
+
     def fixture(self, fail=False):
         """Create build scripts that produce tiny executable jobs; fail selects perf failure."""
         for family in ('perf', 'stress'):
@@ -258,6 +281,20 @@ class SupervisorTests(unittest.TestCase):
         for name, argv in calls:
             self.assertEqual('--fast' in argv, '_debug' in name)
             self.assertEqual('--pedantic' in argv, '_debug' not in name)
+
+    def test_no_debug_skips_execution_but_keeps_builds(self):
+        """Pedantic release runs remain enabled while debug binaries are built."""
+        self.fixture()
+        self.agent.args.no_debug = True
+        self.agent.args.pedantic = True
+        self.assertTrue(self.agent.cycle())
+        run = next(self.agent.home.glob('*abc123'))
+        self.assertTrue((self.root / 'tests/perf/perf_debug').exists())
+        self.assertTrue((self.root / 'tests/stress/stress_debug').exists())
+        self.assertFalse((run / 'perf_debug').exists())
+        self.assertFalse((run / 'stress_debug').exists())
+        self.assertTrue((run / 'perf_release/perf.log').exists())
+        self.assertTrue((run / 'stress_release/runner.log').exists())
 
     def test_fast_and_pedantic_are_rejected(self):
         """Conflicting workload modes fail before an agent starts."""

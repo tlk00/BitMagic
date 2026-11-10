@@ -158,7 +158,7 @@ bash tests/tagent/run_tagent.sh --sound-volume 0.25
 `SOUND_THEME` and `SOUND_VOLUME` are editable launcher defaults with environment
 and CLI overrides. `--no-sound` disables all playback. Audio targets the test
 machine, trying afplay, PipeWire, PulseAudio and ALSA, then the local console bell.
-Unavailable audio does not prevent testing. Generated WAVs remain in the state
+Unavailable audio does not prevent testing. Generated WAVs remain in the `generated-audio` subdirectory of the state
 directory for inspection.
 
 During normal steampunk operation, a quiet depot ambience loops in the background.
@@ -539,3 +539,13 @@ evidence of a cgroup kill, not proof of which process was killed. On macOS
 the monitor reports total RAM and marks other metrics unavailable. Monitoring
 is best effort and does not stop or throttle tests. A sudden spike or OOM kill
 may prevent the latest sample or snapshot from being written.
+
+On startup, legacy generated steampunk WAVs in the log root are moved to
+`generated-audio`. Existing destinations are never overwritten; conflicts and
+migration failures are reported without stopping testing.
+
+Use `--no-debug` to skip execution of debug perf and stress variants; debug
+binaries are still built and checked. Debug execution is enabled by default.
+This option can be combined with `--fast` or `--pedantic`; in pedantic mode
+release coverage is still expanded. Changing this option triggers a new cycle
+when using `--startup changed`.
