@@ -454,6 +454,9 @@ public:
         }
     }
 
+    /** Return the reference bitmap capacity in bits; does not modify state. */
+    size_type size() const { return m_size; }
+
     const unsigned* get_buf() const { return m_buf; }
     unsigned mem_used() const
     {

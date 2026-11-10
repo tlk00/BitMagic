@@ -38,13 +38,17 @@ the normal workload; pedantic workloads are unchanged. Random generators retain
 their existing seeding and distributions; fewer trials consume fewer random
 numbers, so subsequent cases need not reproduce a normal run.
 
-Fast budgets cap operation and aggregator trials at eight, except the 64-bit
+Fast budgets cap 32-bit operation/aggregator trials at eight. The 64-bit
+aggregator uses two complete random fixtures per operation, retaining every
+argument-ladder query and all fixed full-universe unit cases. The 64-bit
 operation test uses six trials, retaining both allocation strategies and the
 four-trial clear cycle followed by reuse. Its generated-vector checks still
-cycle through all compression levels. Repeated identical wide-vector
-serialization pairs run once rather than twice per 64-bit operation trial. Shift/AND aggregation
-uses two collections and eight repeated checks per collection. Deserialization
-keeps six trials to exercise its five-trial clear cycle and subsequent reuse.
+cycle through all compression levels. The 64-bit operation test samples one
+wide-vector serialization pair per trial, rotating through both sources and both wide patterns across four trials;
+normal/pedantic runs retain all eight calls per trial, including duplicates.
+Shift/AND aggregation uses two collections and eight repeated checks per collection in the 32-bit driver; the 64-bit driver keeps one complete 20-vector
+collection and two identical queries, preserving reset/reuse and both count modes.
+Deserialization keeps six trials to exercise its five-trial clear cycle and subsequent reuse.
 Compressed collection tests keep eight trials. The 32-bit driver also reduces
 Kleene logic trials to eight, randomized block splitting to 256 trials, randomized
 delta tests to 16 passes, and interpolation coding to 256 trials per pattern.
@@ -68,7 +72,7 @@ Additional audited fast workloads:
 | GAP stress densities / array encoder inputs (32-bit driver) | Sample the original domain; retain full validation and original buffer capacities |
 | Bulk insertion spacings | Sample boundary spacings; retain the original range, including the 64-bit driver's indices above 2^32, and the fully populated spacing-1 case |
 | Repeated aggregation on a shift collection | 8 checks of the original collection |
-| Large-vector insertion / erasure | 8 operations; original generated vectors retained |
+| Large-vector insertion / erasure | 8 operations in the 32-bit driver; 2 in the 64-bit driver, retaining both inserted bit values and post-optimization erasure; original generated vectors retained |
 | Repeated large-vector shifts (32-bit driver) | 65 shifts, crossing both word widths; the 64-bit driver's existing 33-shift case stays unchanged |
 | Block-change patterns, 32-/64-bit bitscan patterns, long log2 sweep, AVX2 unsigned comparison (32-bit driver) | Sample the original input domain, retaining endpoints and power-of-two neighbors |
 | Sparse-vector increments | Sample counter values across the full original range; restore skipped pre-increment values at every original index, including indices above 2^32 in the 64-bit driver |
@@ -80,7 +84,7 @@ Additional audited fast workloads:
 | Sparse interval-shift/join stress | Sample original offsets through the upper endpoint; keep full fixtures, the detailed first pass and an ordinary pass |
 | Simple random fill (32-bit driver) | Keep every fill/clear operation and original index range; sample expensive index/range checks, always including the last mutation |
 | Range copy | Sample repeated ascending/descending and moving-endpoint queries; preserve source vectors, both optimization passes, fixed cases, sparse-fixture transitions, and high-index word boundaries |
-| Random subsets of the full inverted universe | The 32-bit driver keeps empty, small, and full-copy trials and omits huge fractional trials in fast mode. The 64-bit driver keeps empty, singleton, and 256-bit requests, reducing repeated full-universe index builds. Populated fixtures with at most one million set bits retain all fractional/complement checks; larger populations keep 0/1/2/15/full-copy requests. The 32-bit full-universe fixture keeps all original small requests. |
+| Random subsets of the full inverted universe | The 32-bit driver keeps empty, small, and full-copy trials and omits huge fractional trials in fast mode. The 64-bit driver keeps empty, singleton, and 256-bit requests, reducing repeated full-universe index builds. Populated fixtures with at most one million set bits retain all fractional/complement checks; larger populations keep 0/1/2/15/full-copy requests. The 32-bit full-universe fixture keeps all original small requests. AND/OR target cross-checks omit repeated half-population subset requests above one million bits, retaining both full-source targets; smaller populations keep all four target cases. |
 
 The shared input sampler preserves dense low/end values and power-of-two
 neighbors in addition to samples across the original domain. Outside fast mode
@@ -93,13 +97,16 @@ apply in debug builds too; machine speed and parallel contention affect runtime.
 Float scanner distributions run 8 complete reference queries on the original
 fixtures; all original random query bounds are still generated. Rank splitting,
 GT/EQ scanner queries, basic rank validation, string comparisons and
-deserialization ranges, sparse gather-deserialization
+deserialization ranges, sparse-vector range partitions, sparse gather-deserialization
 ranges (including both bookmark passes of the large 32-bit RSC fixture),
 and 32-bit merge split positions sample their original query domains.
 Full block-number rank-index checks in the 64-bit driver also sample queries.
 The 32-bit singleton shift sweeps restore the equivalent pre-shift singleton at
 sampled positions and check each resulting shift, including high positions and
-right-shift overflow. Normal and pedantic traversal remains exhaustive.
+right-shift overflow. The 64-bit singleton left-shift sweep similarly restores
+sampled positions throughout its original 100,001-position high-index window.
+Its 33 shifts of the complete large vector remain unchanged.
+Normal and pedantic traversal remains exhaustive.
 
 Import stress samples original input sizes, including the original maximum;
 sparse gather queries and signed EQ values sample their full original domains.
@@ -134,16 +141,35 @@ checks the complete NULL layout without scanning every NULL position. Sparse
 interval-shift and join offsets sample the original range through 9,999,999;
 selected fixtures retain their full spans and complete reference comparisons.
 
-Other passes that grow fixtures or sweep positions remain unchanged, including rank
-compression size sweeps. Full debug
+The large integer serialization stress fixture keeps every legacy XOR on/off and
+optimization pass. Fast mode runs its identical stream companion once per fixture
+rather than four times; normal and pedantic companion calls remain unchanged.
+
+The 64-bit filter unit fixture retains its high indices and complete value/NULL
+plane comparison against a fixed expected vector; fast mode samples redundant
+point queries across the full logical span. Normal/pedantic point sweeps stay
+exhaustive.
+
+Rank-compression stress retains both original 64-bit sizes (over 8 and 17 billion
+positions), full ordinary compression/decompression and both optimization passes.
+Fast mode uses the existing 100-bit random-subset queries for the per-source
+compressor on each complete index; full dense per-source queries remain in normal
+and pedantic runs. Basic rank-compressor unit tests remain unchanged.
+Other passes that grow fixtures or sweep positions remain unchanged. Full debug
 runtime therefore still depends on these large workloads; fast mode has no
 wall-clock cutoff.
 
 Fast mode also samples independent inner position checks in the 32-bit block
 first-difference and insertion/erasure sweeps; cumulative outer mutations remain
 intact. Range-visitor steps cover at most roughly 16 full-range query spacings.
-Known remaining costs include full matrix/string fixture construction and
-serialization cases whose pass number changes the populated fixture.
+Known remaining costs include full matrix/string fixture construction, fixed
+full-universe aggregator unit cases, and serialization cases whose pass number
+changes the populated fixture.
+
+The 64-bit constant sparse-vector range-partition stress fixture also has an
+existing bound mismatch: `sv_from` is near the maximum index while the query-loop
+upper bound is 120,000, so those query loops do not run. This pass preserves that
+normal/pedantic behavior; the separate linear fixture and high-index unit cases run.
 
 The 64-bit `RangeCopyTest()` has a separate existing coverage gap: its inverted
 T4/T5 start expressions subtract `to_max == bm::id_max - 1` and then another

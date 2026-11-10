@@ -12204,6 +12204,14 @@ void StressTestAggregatorShiftAND(unsigned repeats)
 }
 
 
+/** Cross-check AND/OR operations with sampled and full-source targets.
+    @param rsub Borrowed random subset generator; used for fractional targets.
+    @param count Original population used to choose half-population requests.
+    @param bvect_full1 Borrowed first source; not modified.
+    @param bvect_full2 Borrowed second source; not modified.
+    Fast mode omits fractional requests above one million bits, retaining both
+    full-source targets. Other modes retain every request and random draw.
+*/
 static
 void TestAND_OR(bm::random_subset<bvect>& rsub,
                 bvect::size_type count,
@@ -12212,12 +12220,21 @@ void TestAND_OR(bm::random_subset<bvect>& rsub,
     cout << "AND-OR tests..." << flush;
     bvect bv_sub1;
     auto sample_count = count / 2;
-    if (sample_count)
-        rsub.sample(bv_sub1, bvect_full1, sample_count);
-    CheckBV_AND_OR(bv_sub1, bvect_full1, bvect_full2);
-    if (sample_count)
-        rsub.sample(bv_sub1, bvect_full2, sample_count);
-    CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
+    // Large fractional requests are independent stress trials. Keep them on
+    // smaller populations; full-source targets below still run at every size.
+    if (!is_fast || count <= 1000000)
+    {
+        if (sample_count)
+        {
+            rsub.sample(bv_sub1, bvect_full1, sample_count);
+        }
+        CheckBV_AND_OR(bv_sub1, bvect_full1, bvect_full2);
+        if (sample_count)
+        {
+            rsub.sample(bv_sub1, bvect_full2, sample_count);
+        }
+        CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
+    }
     bv_sub1 = bvect_full1;
     CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
     bv_sub1 = bvect_full2;
@@ -22253,6 +22270,7 @@ void generate_serialization_test_set(SV&   sv,
     } // for i
 }
 
+/** Verify data-frame XOR layouts, optimization passes and stream round trips. */
 static
 void TestSparseVectorSerialization2()
 {
@@ -22489,7 +22507,13 @@ void TestSparseVectorSerialization2()
             {
                 sv_serializer.set_xor_ref(false); // disable XOR compression
                 sv_serializer.serialize(sv1, sv_lay);
-                CheckSparseVectorStringStream(sv1);
+                // The stream companion uses the same source and XOR policy on
+                // every pass. Keep one full companion check in fast mode;
+                // all legacy XOR and optimization cases still run below.
+                if (!is_fast || !k)
+                {
+                    CheckSparseVectorStringStream(sv1);
+                }
             }
 
             buf = sv_lay.buf();
@@ -22541,7 +22565,10 @@ void TestSparseVectorSerialization2()
         {
             sv_serializer.set_xor_ref(true); // enable XOR compression
             sv_serializer.serialize(sv1, sv_lay);
-            CheckSparseVectorStringStream(sv1);
+            if (!is_fast)
+            {
+                CheckSparseVectorStringStream(sv1);
+            }
         }
 
         buf = sv_lay.buf();
@@ -49124,6 +49151,7 @@ void TestCompressSparseSignedVector()
 
 
 
+/** Verify complete compressed-vector fixtures and independent range/gather decodes. */
 static
 void TestCompressSparseVectorSerial()
 {
@@ -53871,7 +53899,8 @@ void sparseVecFloatRSCScannerTests()
 {
     // Reference paths scan values for each query; bound N * queries so -svf1
     // remains practical independently of serialization pedantry.
-    cout << "RSC float scanner budget: 2 Mi elements, 64 queries per distribution." << endl;
+    cout << "RSC float scanner budget: 2 Mi elements, "
+         << StressRepetitions(64, 8) << " queries per distribution." << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloatRSC::size_type N = 2u * 1024u * 1024u + 131u;

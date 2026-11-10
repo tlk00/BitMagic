@@ -1074,9 +1074,17 @@ bool TestEqualSparseVectors(const SV& sv1, const SV& sv2, bool detailed = true)
 
 
 
+/** Compare every string value and sequential iterator with an independent collection.
+    @tparam SSV String sparse-vector type.
+    @param str_sv Borrowed vector; not modified.
+    @param str_coll Borrowed expected values; must have the same size.
+    @param fast Sample repeated scanner queries and independent iterator creation
+        on large vectors; all value and sequential iterator checks remain complete.
+        Defaults to the original exhaustive checks. Does not consume randomness.
+*/
 template<typename SSV>
 void CompareStrSparseVector(const SSV& str_sv,
-                            const std::vector<string>& str_coll)
+                            const std::vector<string>& str_coll, bool fast = false)
 {
     assert(str_sv.size() == str_coll.size());
     
@@ -1089,8 +1097,11 @@ void CompareStrSparseVector(const SSV& str_sv,
 
     typename SSV::const_iterator it = str_sv.begin();
     string str;
+    const auto size = str_sv.size();
+    const auto stride = size / 32 ? size / 32 : 1;
     for (typename SSV::size_type i = 0; i < str_sv.size(); ++i, ++it)
     {
+        const bool query = !fast || size <= 65536 || i % stride == 0 || i + 1 == size;
         assert (it.valid());
         assert (it != str_sv.end());
         
@@ -1110,15 +1121,18 @@ void CompareStrSparseVector(const SSV& str_sv,
                      << endl;
                 exit(1);
             }
-            typename SSV::const_iterator it2 = str_sv.get_const_iterator(i);
-            assert(it == it2);
-            s = *it2;
-            cmp = ::strcmp(s, str_control.c_str());
-            if (cmp != 0)
+            if (query)
             {
-                cerr << "2. Iterator comparison failed! " << s << " != " << str_control
-                     << endl;
-                exit(1);
+                typename SSV::const_iterator it2 = str_sv.get_const_iterator(i);
+                assert(it == it2);
+                s = *it2;
+                cmp = ::strcmp(s, str_control.c_str());
+                if (cmp != 0)
+                {
+                    cerr << "2. Iterator comparison failed! " << s << " != " << str_control
+                         << endl;
+                    exit(1);
+                }
             }
         }
         int cmp = str_sv.compare(i, str_control.c_str());
@@ -1150,14 +1164,17 @@ void CompareStrSparseVector(const SSV& str_sv,
             }
         }
         
-       typename SSV::size_type pos;
-       bool found = scanner.find_eq_str(str_sv, str_control.c_str(), pos);
-       if (!found)
-       {
-            cerr << "Scanner search failed! " << str_control << endl;
-            exit(1);
-       }
-       assert(pos == i);
+        if (query)
+        {
+            typename SSV::size_type pos;
+            bool found = scanner.find_eq_str(str_sv, str_control.c_str(), pos);
+            if (!found)
+            {
+                cerr << "Scanner search failed! " << str_control << endl;
+                exit(1);
+            }
+            assert(pos == i);
+        }
         if (i % 100000 == 0)
         {
             cout << "\r" << i << " / " << str_sv.size() << flush;

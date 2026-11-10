@@ -8287,6 +8287,7 @@ void ShiftRight(bvect*  bv, bvect::size_type shift)
 
 
 
+/** Verify shift boundaries and complete large-vector/aggregator results. */
 static
 void BvectorShiftTest()
 {
@@ -8500,9 +8501,23 @@ void BvectorShiftTest()
     
     s = std::chrono::steady_clock::now();
 
-    for( ; start; --start)
+    // Restore sampled singleton positions throughout the original window.
+    // Offset by two to align samples with absolute word/block boundaries:
+    // the starting position is 2^48 - 2, rather than a power of two.
+    for (; start; start = is_fast ? bm::id_max + 1 - NextStressTestValue(
+             bm::id_max + 1 - start, bvect::size_type(100002), 16, 1) : start - 1)
     {
+        if (is_fast)
+        {
+            bv.clear();
+            bv.set(start);
+        }
         bool carry_over = bv.shift_left();
+        if (is_fast)
+        {
+            assert(!carry_over);
+            assert(bv.count() == 1 && bv.get_first() == start - 1);
+        }
         if (carry_over)
         {
             cout << "CO at " << start << endl;
@@ -8696,6 +8711,7 @@ void BVectorInsert(bvect*  bv, bvect::size_type pos, bool value)
 }
 
 
+/** Verify fixed insertion cases and repeated full-fixture mutations. */
 static
 void BvectorInsertTest()
 {
@@ -8783,7 +8799,8 @@ void BvectorInsertTest()
         generate_bvector(bv, bm::id_max32+65536, true);
         bvect bv_control(bv);
         
-        unsigned max_shifts = StressRepetitions(100, 8);
+        // Retain inserting both bit values on the complete generated vector.
+        unsigned max_shifts = StressRepetitions(100, 2);
         for (unsigned i = 0; i < max_shifts; ++i)
         {
             bvect bv2(bm::BM_GAP);
@@ -8838,6 +8855,7 @@ void BVectorErase(bvect*  bv, bvect::size_type pos)
 }
 
 
+/** Verify fixed erasure cases and complete generated-vector results. */
 static
 void BvectorEraseTest()
 {
@@ -8965,7 +8983,8 @@ void BvectorEraseTest()
         
         bvect bv_c(bv);
         
-        unsigned max_erase = StressRepetitions(256, 8);
+        // Exercise the initial and optimized states on the complete fixture.
+        unsigned max_erase = StressRepetitions(256, 2);
         
         for(unsigned k = 0; k < max_erase; ++k)
         {
@@ -9112,6 +9131,7 @@ void AddressResolverTest()
 
 }
 
+/** Verify fixed rank-compression cases and full-size randomized index fixtures. */
 static
 void TestRankCompress()
 {
@@ -9243,22 +9263,28 @@ void TestRankCompress()
                 cmp = bv_sr.compare(bv_s);
                 assert(cmp == 0);
 
+                // Full per-bit rank queries on these dense fixtures are stress
+                // repetitions. Fast mode retains full compress/decompress above
+                // and the random-subset queries below on each complete index.
+                if (!is_fast)
                 {
-                chrono_taker<std::ostream> ct(cout, "c2");
-                rc.compress_by_source(bv2, bv_i, bc, bv_s);
-                rc.decompress(bv_sr, bv_i, bv2);
-                }
-                assert(bv2.count() == bv_s.count());
-                cmp = bv_sr.compare(bv_s);
-                assert(cmp == 0);
+                    {
+                        bm::chrono_taker<std::ostream> ct(cout, "c2");
+                        rc.compress_by_source(bv2, bv_i, bc, bv_s);
+                        rc.decompress(bv_sr, bv_i, bv2);
+                    }
+                    assert(bv2.count() == bv_s.count());
+                    cmp = bv_sr.compare(bv_s);
+                    assert(cmp == 0);
 
-                cmp = bv2.compare(bv1);
-                if (cmp!=0)
-                {
-                    DetailedCompareBVectors(bv1, bv2);
-                    exit(1);
+                    cmp = bv2.compare(bv1);
+                    if (cmp!=0)
+                    {
+                        DetailedCompareBVectors(bv1, bv2);
+                        exit(1);
+                    }
+                    assert(cmp == 0);
                 }
-                assert(cmp == 0);
 
                 {
                     bm::random_subset<bvect> rsub;
@@ -9279,7 +9305,7 @@ void TestRankCompress()
                     rc.decompress(bv_sr, bv_i, bv2);
                     }
                     assert(bv2.count() == bv_subset.count());
-                    
+
                     cmp = bv2.compare(bv1);
                     assert(cmp == 0);
 
@@ -12735,6 +12761,14 @@ void AndOrOperationsTest(bool detailed)
     cout << "----------------------------------- AndOrOperationTest OK" << endl;
 }
 
+/** Cross-check AND/OR operations with sampled and full-source targets.
+    @param rsub Borrowed random subset generator; used for fractional targets.
+    @param count Original population used to choose half-population requests.
+    @param bvect_full1 Borrowed first source; not modified.
+    @param bvect_full2 Borrowed second source; not modified.
+    Fast mode omits fractional requests above one million bits, retaining both
+    full-source targets. Other modes retain every request and random draw.
+*/
 static
 void TestAND_OR(bm::random_subset<bvect>& rsub,
                 bvect::size_type count,
@@ -12744,12 +12778,21 @@ void TestAND_OR(bm::random_subset<bvect>& rsub,
         cout << "AND-OR tests..." << flush;
     bvect bv_sub1;
     auto sample_count = count / 2;
-    if (sample_count)
-        rsub.sample(bv_sub1, bvect_full1, sample_count);
-    CheckBV_AND_OR(bv_sub1, bvect_full1, bvect_full2);
-    if (sample_count)
-        rsub.sample(bv_sub1, bvect_full2, sample_count);
-    CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
+    // Large fractional requests are independent stress trials. Keep them on
+    // smaller populations; full-source targets below still run at every size.
+    if (!is_fast || count <= 1000000)
+    {
+        if (sample_count)
+        {
+            rsub.sample(bv_sub1, bvect_full1, sample_count);
+        }
+        CheckBV_AND_OR(bv_sub1, bvect_full1, bvect_full2);
+        if (sample_count)
+        {
+            rsub.sample(bv_sub1, bvect_full2, sample_count);
+        }
+        CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
+    }
     bv_sub1 = bvect_full1;
     CheckBV_AND_OR(bv_sub1, bvect_full2, bvect_full1);
     bv_sub1 = bvect_full2;
@@ -13949,10 +13992,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
 #endif
                 if (!is_silent)
                     cout << "48-wide vectors checks.." << endl;
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
+                if (!is_fast || i % 4 == 0)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_OR, true);
+                }
+                if (!is_fast || i % 4 == 1)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -13962,10 +14011,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                     SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_OR, true);
                 }
                 
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
+                if (!is_fast || i % 4 == 2)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_OR, true);
+                }
+                if (!is_fast || i % 4 == 3)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_OR, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14016,10 +14071,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 //
                 if (!is_silent)
                     cout << "48-wide vectors checks.." << endl;
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
+                if (!is_fast || i % 4 == 0)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_SUB, true);
+                }
+                if (!is_fast || i % 4 == 1)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14029,10 +14090,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                     SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_SUB, true);
                 }
                 
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
+                if (!is_fast || i % 4 == 2)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_SUB, true);
+                }
+                if (!is_fast || i % 4 == 3)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_SUB, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14084,10 +14151,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 //
                 if (!is_silent)
                     cout << "48-wide vectors checks.." << endl;
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
+                if (!is_fast || i % 4 == 0)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_XOR, true);
+                }
+                if (!is_fast || i % 4 == 1)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14097,10 +14170,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                     SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_XOR, true);
                 }
                 
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
+                if (!is_fast || i % 4 == 2)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_XOR, true);
+                }
+                if (!is_fast || i % 4 == 3)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_XOR, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14164,10 +14243,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                 //
                 if (!is_silent)
                     cout << "48-wide vectors checks.." << endl;
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
+                if (!is_fast || i % 4 == 0)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p0, set_AND, true);
+                }
+                if (!is_fast || i % 4 == 1)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14177,10 +14262,16 @@ void StressTest(unsigned repetitions, int set_operation = -1)
                     SerializationOperation(&bv_target_s, *bvect_full2, bv_p0, set_AND, true);
                 }
                 
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
-                bv_target_s.clear();
-                SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
+                if (!is_fast || i % 4 == 2)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full1, bv_p1, set_AND, true);
+                }
+                if (!is_fast || i % 4 == 3)
+                {
+                    bv_target_s.clear();
+                    SerializationOperation(&bv_target_s, *bvect_full2, bv_p1, set_AND, true);
+                }
                 // The preceding pair already checks these same inputs in fast mode.
                 if (!is_fast)
                 {
@@ -14908,10 +14999,16 @@ void AggregatorTest()
 }
 
 
+/** Verify OR aggregation ladders on complete random and wide fixtures.
+    @param repetitions Original trial count; fast mode alone applies its cap.
+    Consumes the existing random generators; every selected trial retains its
+    original argument count and complete comparisons.
+*/
 static
 void StressTestAggregatorOR(unsigned repetitions)
 {
-    repetitions = StressRepetitions(repetitions, 8);
+    // Two full random fixtures; retain every argument-ladder query and variant.
+    repetitions = StressRepetitions(repetitions, 2);
 
   bvect::size_type BITVECT_SIZE =
     bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
@@ -15033,10 +15130,16 @@ void StressTestAggregatorOR(unsigned repetitions)
 }
 
 
+/** Verify AND aggregation ladders on complete random and wide fixtures.
+    @param repetitions Original trial count; fast mode alone applies its cap.
+    Consumes the existing random generators; every selected trial retains its
+    original argument count and complete comparisons.
+*/
 static
 void StressTestAggregatorAND(unsigned repetitions)
 {
-    repetitions = StressRepetitions(repetitions, 8);
+    // Two full random fixtures; retain every argument-ladder query and variant.
+    repetitions = StressRepetitions(repetitions, 2);
 
    bvect::size_type BITVECT_SIZE =
       bvect::size_type(bm::id_max32) + (bvect::size_type(bm::id_max32) / 2);
@@ -15215,10 +15318,16 @@ void GenerateTestCollection(std::vector<bvect>* target,
 }
 
 
+/** Verify SHIFT/AND aggregation, count-only mode and reset/reuse.
+    @param repeats Original number of complete collections to generate.
+    Fast mode caps collections and identical queries, retaining every vector
+    in each selected collection and both count modes. Consumes generator state.
+*/
 static
 void StressTestAggregatorShiftAND(unsigned repeats)
 {
-    repeats = StressRepetitions(repeats, 2);
+    // One complete 20-vector fixture; repeated queries below retain reset/reuse.
+    repeats = StressRepetitions(repeats, 1);
 
   bvect::size_type BITVECT_SIZE =
     bvect::size_type(bm::id_max32) + ( bvect::size_type(bm::id_max32) / 2);
@@ -15243,7 +15352,8 @@ void StressTestAggregatorShiftAND(unsigned repeats)
         bm::aggregator<bvect> agg;
         agg.set_optimization();
 
-        unsigned shift_repeats = StressRepetitions(65536 / 15, 8);
+        // Inputs are unchanged between queries; execute twice to check reuse.
+        unsigned shift_repeats = StressRepetitions(65536 / 15, 2);
         for (unsigned i = 0; i < shift_repeats; ++i)
         {
             bvect bv_target0(mask_bv0);
@@ -18444,6 +18554,7 @@ void TestCompressSparseVectorSerial()
 }
 
 
+/** Verify data-frame XOR layouts, optimization passes and stream round trips. */
 static
 void TestSparseVectorSerialization2()
 {
@@ -18571,7 +18682,13 @@ void TestSparseVectorSerialization2()
             {
                 sv_serializer.set_xor_ref(false); // disable XOR compression
                 sv_serializer.serialize(sv1, sv_lay);
-                CheckSparseVectorStringStream(sv1);
+                // The stream companion uses the same source and XOR policy on
+                // every pass. Keep one full companion check in fast mode;
+                // all legacy XOR and optimization cases still run below.
+                if (!is_fast || !k)
+                {
+                    CheckSparseVectorStringStream(sv1);
+                }
             }
 
             buf = sv_lay.buf();
@@ -18599,7 +18716,10 @@ void TestSparseVectorSerialization2()
         {
             sv_serializer.set_xor_ref(true); // enable XOR compression
             sv_serializer.serialize(sv1, sv_lay);
-            CheckSparseVectorStringStream(sv1);
+            if (!is_fast)
+            {
+                CheckSparseVectorStringStream(sv1);
+            }
         }
 
         buf = sv_lay.buf();
@@ -19328,6 +19448,7 @@ void CheckSparseVectorRange(const SV& sv,
     }
 }
 
+/** Verify fixed range partitions and independent full-fixture copy queries. */
 static
 void TestSparseVectorRange()
 {
@@ -19411,7 +19532,8 @@ void TestSparseVectorRange()
         }
         
         cout << "Phase 2-1.." << endl;
-        for (bvect::size_type i = 0; i < sv_max; ++i)
+        for (bvect::size_type i = 0; i < sv_max;
+             i = NextStressTestValue(i, sv_max - 1, 8, 1))
         {
             CheckSparseVectorRange(sv, i, i);
             CheckSparseVectorRange(sv, 0, i);
@@ -19422,7 +19544,8 @@ void TestSparseVectorRange()
         
         cout << "\nPhase 2-2.." << endl;
         bvect::size_type k = sv_max;
-        for (bvect::size_type i = 0; i < k; ++i, --k)
+        for (bvect::size_type i = 0; i < k;
+             i = NextStressTestValue(i, sv_max / 2 - 1, 8, 1), k = sv_max - i)
         {
             CheckSparseVectorRange(sv, i, k);
         }
@@ -19475,6 +19598,7 @@ void CheckSparseVectorFilter(const SV& sv, typename SV::size_type factor)
 }
 
 
+/** Verify filter values and NULL layout, including indices beyond 32 bits. */
 static
 void TestSparseVectorFilter()
 {
@@ -19492,8 +19616,19 @@ void TestSparseVectorFilter()
         sparse_vector_u32::bvector_type bv_mask { 2, 7, 256, bm::id_max32+5 };
         
         sv.filter(bv_mask);
-        
-        for (bvect::size_type i = 0; i < sv.size(); ++i)
+        if (is_fast)
+        {
+            // Check every result bit and NULL position against the fixed oracle;
+            // sample redundant point queries across the complete 64-bit span.
+            sparse_vector_u32 expected(bm::use_null);
+            expected.set(2, 25);
+            expected.set(7, 75);
+            expected.set(bm::id_max32 + 5, 301);
+            assert(sv.equal(expected));
+            assert(*sv.get_null_bvector() == *expected.get_null_bvector());
+        }
+        for (bvect::size_type i = 0; i < sv.size();
+             i = NextStressTestValue(i, sv.size() - 1, 16))
         {
             auto v = sv.get(i);
             bool is_null = sv.is_null(i);
@@ -21642,6 +21777,12 @@ void TestSparseVector_Stress(unsigned count)
 }
 
 
+/** Compare independent string pairs against their ordinary lexical ordering.
+    @tparam STR_SV String sparse-vector type.
+    @param str_sv Borrowed source; not modified.
+    @param limit Exclusive comparison endpoint; zero uses the source size.
+    Fast mode samples independent pair queries; other modes keep every query.
+*/
 template<class STR_SV>
 void CheckStrSVCompare(const STR_SV& str_sv,
                         typename STR_SV::size_type limit = 0)
@@ -21653,21 +21794,41 @@ void CheckStrSVCompare(const STR_SV& str_sv,
     i = j = 0;
     auto it1 = str_sv.begin();
     auto it_end = str_sv.end();
-    for (; it1 != it_end; ++it1, ++i)
+    for (; it1 != it_end;)
     {
         const char* s1 = *it1;
         auto it2 = str_sv.begin();
         it2.go_to(i);
-        for (j = i; j < limit; ++it2, ++j)
+        for (j = i; j < limit;)
         {
             assert(it2 != it_end);
             const char* s2 = *it2;
             int r2 = ::strcmp(s1, s2);
             int r1 = str_sv.compare(i, j);
             assert (r1 == r2 || (r1 < 0 && r2 < 0) || (r1 > 0 && r2 > 0));
+            if (is_fast)
+            {
+                j = NextStressTestValue(j, limit - 1, 8, 1);
+                it2.go_to(j);
+            }
+            else
+            {
+                ++it2;
+                ++j;
+            }
         } // for j
         if ((!is_silent) && ((i & 0xFF) == 0))
             cout << "\r   " << i << " / " << (limit ? limit : str_sv.size()) << flush;
+        if (is_fast)
+        {
+            i = NextStressTestValue(i, str_sv.size() - 1, 8, 1);
+            it1.go_to(i);
+        }
+        else
+        {
+            ++it1;
+            ++i;
+        }
     } // for i
     cout << endl << endl;
 }
@@ -23158,6 +23319,7 @@ void TestSignedSparseSort()
 
 // -----------------------------------------------------------------------
 
+/** Verify full random string fixtures, serialization, prefix and search queries. */
 static
 void StressTestStrSparseVector()
 {
@@ -23207,7 +23369,7 @@ void StressTestStrSparseVector()
 
     cout << "ok. \n Verification..." << endl;
 
-    CompareStrSparseVector(str_sv, str_coll);
+    CompareStrSparseVector(str_sv, str_coll, is_fast);
     
     cout << "Memory optimization" << endl;
     
@@ -23217,10 +23379,10 @@ void StressTestStrSparseVector()
 
     cout << "ok. \n Verification..." << endl;
 
-    CompareStrSparseVector(str_sv, str_coll);
+    CompareStrSparseVector(str_sv, str_coll, is_fast);
 
     cout << "ok. \n Verification of remap vector..." << endl;
-    CompareStrSparseVector(str_sv_remap, str_coll_sorted);
+    CompareStrSparseVector(str_sv_remap, str_coll_sorted, is_fast);
     
     cout << "Memory optimization" << endl;
     
@@ -23228,7 +23390,7 @@ void StressTestStrSparseVector()
 
     cout << "ok. \n Verification of remap vector..." << endl;
     
-    CompareStrSparseVector(str_sv_remap, str_coll_sorted);
+    CompareStrSparseVector(str_sv_remap, str_coll_sorted, is_fast);
 
 
     // serialization check
@@ -23247,7 +23409,7 @@ void StressTestStrSparseVector()
             cerr << "De-Serialization error" << endl;
             exit(1);
         }
-        CompareStrSparseVector(str_sv2, str_coll);
+        CompareStrSparseVector(str_sv2, str_coll, is_fast);
         bool equal = str_sv.equal(str_sv2);
         assert(equal);
    }
@@ -23267,7 +23429,7 @@ void StressTestStrSparseVector()
             cerr << "De-Serialization error" << endl;
             exit(1);
         }
-        CompareStrSparseVector(str_sv2, str_coll_sorted);
+        CompareStrSparseVector(str_sv2, str_coll_sorted, is_fast);
         bool equal = str_sv_remap.equal(str_sv2);
         assert(equal);
    }
@@ -23285,10 +23447,12 @@ void StressTestStrSparseVector()
     if (test_size > 20000)
         test_size = 20000;
 
-    for (unsigned i = 0; i < test_size; ++i)
+    for (unsigned i = 0; i < test_size;
+         i = NextStressTestValue(i, test_size - 1, 8, 1))
     {
         str_sv_sorted.get(i, &str1[0], str_size);
-        for (unsigned j = 0; j < test_size; ++j)
+        for (unsigned j = 0; j < test_size;
+             j = NextStressTestValue(j, test_size - 1, 8, 1))
         {
             str_sv_sorted.get(j, &str2[0], str_size);
             unsigned octet_idx = 0;
@@ -23335,7 +23499,8 @@ void StressTestStrSparseVector()
         bm::sparse_vector_scanner<str_svect_type> scanner2;
         scanner2.bind(str_sv_remap, true); // bind sorted vector
 
-        for (unsigned i = 0; i < unsigned(str_coll_sorted.size()); ++i)
+        for (unsigned i = 0; i < unsigned(str_coll_sorted.size());
+             i = NextStressTestValue(i, unsigned(str_coll_sorted.size() - 1), 16, 1))
         {
             const string& s = str_coll_sorted[i];
             bvect::size_type pos1, pos2, pos3, pos4;
@@ -25512,7 +25677,8 @@ void sparseVecFloatRSCScannerTests()
 {
     // Reference paths scan values for each query; bound N * queries so -svf1
     // remains practical independently of serialization pedantry.
-    cout << "RSC float scanner budget: 2 Mi elements, 64 queries per distribution." << endl;
+    cout << "RSC float scanner budget: 2 Mi elements, "
+         << StressRepetitions(64, 8) << " queries per distribution." << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloatRSC::size_type N = 2u * 1024u * 1024u + 131u;
