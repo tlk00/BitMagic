@@ -684,6 +684,31 @@ class SupervisorTests(unittest.TestCase):
             sound.assert_called_once_with('build-warning', workers=(1, 0, 0, 0, 0))
         self.assertEqual(self.agent.build_warnings.observe(log), 2)
 
+    def test_samples_spoken_completion_and_global_warnings(self):
+        """Sample completion is explicit; warnings aggregate across all families."""
+        logs = []
+        for family in ('perf', 'stress', 'inv_list', 'samples'):
+            path = self.root / ('build-' + family + '.log')
+            path.write_text('file.cpp:1: warning: example\n')
+            logs.append(path)
+        self.agent.build_logs = logs
+        self.agent.build_targets = {'perf': [], 'stress': [], 'inv_list': [], 'samples': []}
+        self.agent.next_build_report = 0
+        self.agent.samples_complete = True
+        with patch.object(self.agent, 'sound') as sound:
+            self.agent.build_progress(logs[0])
+        report = sound.call_args.kwargs['workers']
+        self.assertEqual(report[0], 4)
+        self.assertEqual(self.agent.sample_warnings.count, 1)
+        self.assertIn('Sample build is complete.', ta.build_report_text(report[0], report[1:]))
+        self.agent.samples_complete = False
+        self.agent.next_build_report = 0
+        with patch.object(self.agent, 'sound') as sound:
+            self.agent.build_progress(logs[0])
+        report = sound.call_args.kwargs['workers']
+        self.assertIn('Sample build is in progress.', ta.build_report_text(report[0], report[1:]))
+        self.assertEqual(report[0], 4)
+
     def test_spoken_build_completion_and_pending(self):
         """Completed targets use concise speech while in-progress counts remain."""
         text = ta.build_report_text(0, (6, 0, 2, 3, 0, 8, 0))

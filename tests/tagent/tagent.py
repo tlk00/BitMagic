@@ -134,7 +134,10 @@ def build_report_text(count, progress=None):
         status = target_status('Performance', perf_ready, perf_pending)
         status += target_status('Stress', stress_ready, stress_pending)
         if len(progress) > 4:
-            status += ' Sample builds: {} warnings so far.'.format(progress[4])
+            if len(progress) > 7 and progress[7]:
+                status += ' Sample build is complete.'
+            else:
+                status += ' Sample build is in progress.'
         if len(progress) > 6:
             status += target_status('Inverted list', progress[5], progress[6])
     if count == 0:
@@ -359,6 +362,7 @@ class Agent:
         self.tts_warned = False
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
+        self.samples_complete = False
         self.build_lock = threading.Lock()
         self.build_logs = []
         self.build_targets = {}
@@ -1252,6 +1256,10 @@ class Agent:
                     if not samples_active:
                         progress.append(0)
                     progress.extend((ready, len(targets) - ready))
+                if samples_active:
+                    while len(progress) < 7:
+                        progress.append(0)
+                    progress.append(self.samples_complete)
                 if self.args.sound_theme == 'steampunk':
                     self.sound('build-clear' if count == 0 else 'build-warning',
                                workers=(count, *progress))
@@ -1655,6 +1663,7 @@ class Agent:
         self.active_run = run
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
+        self.samples_complete = False
         if self.args.restart_on_update:
             self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
         self.build_report_interval = self.args.build_report_seconds
@@ -1703,7 +1712,11 @@ class Agent:
             family, _, _, argv, build_log = task
             self.say('BUILD ' + family + ' | ' + str(run))
             try:
-                return self.command(argv, build_log)
+                result = self.command(argv, build_log)
+                if family == 'samples' and result != 'skipped-update':
+                    with self.build_lock:
+                        self.samples_complete = True
+                return result
             finally:
                 with self.build_lock:
                     if build_log.exists():
