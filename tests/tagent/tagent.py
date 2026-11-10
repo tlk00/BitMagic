@@ -52,6 +52,22 @@ def perf_log_progress(path):
     return count, last
 
 
+ENGINEER_BUILD_REPLIES = (
+    'Engineer Joe to Dispatch. Copy that. I am getting steamed up waiting to hit the rails. Over.',
+    'Engineer Joe to Dispatch. Build complete? Excellent. This locomotive has places to choo and people to see. Over.',
+    'Engineer Joe to Dispatch. Roger. I have been sitting on this track so long I am losing my train of thought. Over.',
+    'Engineer Joe to Dispatch. Acknowledged. Let us get this freight moving before I grow roots at the depot. Over.',
+    'Engineer Joe to Dispatch. Copy. I am ready to make tracks; even the timetable is getting impatient. Over.',
+    'Engineer Joe to Dispatch. All aboard? Good. I have run out of excuses to stay on this siding. Over.',
+    'Engineer Joe to Dispatch. Assembly is nearly complete. The crew has begun disassembly to find out why. Over.',
+    'Engineer Joe to Dispatch. The assembly crew says everything is working. The disassembly crew says that is not what the code does. Over.',
+    'Engineer Joe to Dispatch. We assembled the locomotive twice. The compiler insists on doing it one instruction at a time. Over.',
+    'Engineer Joe to Dispatch. The crew found some loose instructions. They are not sure whether to assemble them or put them back in the register. Over.',
+    'Engineer Joe to Dispatch. The mechanic asked for an assembly drawing. I gave him the disassembly. We are no longer on speaking terms. Over.',
+    'Engineer Joe to Dispatch. The engine passed inspection, but the optimizer removed the caboose. Apparently nobody was using it. Over.',
+)
+
+
 DISPATCH_JOKER_REPLIES = (
     'Dispatch to Engineer Joe. Thank you. Please keep the radio clear for railway business.',
     'Dispatch to Engineer Joe. That was noted. Radio silence, please.',
@@ -141,17 +157,17 @@ def build_report_text(count, progress=None):
         if len(progress) > 6:
             status += target_status('Inverted list', progress[5], progress[6])
     if count == 0:
-        weather = random.choice((
-            'Tracks are clear, no snowdrifts reported.',
-            'The mountain pass is clear of snow and avalanches.',
-            'Clear signals ahead and fair weather on the line.',
-            'The snowplough reports clear tracks all the way to the junction.',
-            'No ice on the rails and no delays at the crossing.',
-            'The line is open, and the points are set for a clear run.',
+        depot_status = random.choice((
+            'The workshop crew reports smooth running in the depot.',
+            'The fitters report all is well in the engine shed.',
+            'Assembly is proceeding smoothly at the depot.',
+            'The repair crew reports no trouble at the workbench.',
+            'The locomotive is coming together nicely in the shed.',
+            'The depot crew reports a clear inspection so far.',
         ))
-        return 'Dispatch to BitMagic. Build in progress. No compiler warnings so far.' + status + ' ' + weather
+        return 'Dispatch to BitMagic. Build in progress. No compiler warnings so far.' + status + ' ' + depot_status
     word = 'warning' if count == 1 else 'warnings'
-    return ('Dispatch to BitMagic. Caution on the line. {} compiler {} so far.'.format(count, word)
+    return ('Dispatch to BitMagic. Attention in the depot. {} compiler {} so far.'.format(count, word)
             + status + ' Please check the build log.')
 
 
@@ -394,6 +410,7 @@ class Agent:
             Path(str(self.joker_model) + '.json').stat().st_size > 0)
         self.joker_failed = False
         self.engineer_engine = None
+        self.engineer_build_replies = []
         self.joker_clock = joker.Schedule()
         self.conductor_engine = None
         self.conductor_download_thread = None
@@ -1374,6 +1391,11 @@ class Agent:
             'COMPLETE' if success else 'FAILED', counts[0], counts[1]))
         if self.args.sound_theme == 'steampunk':
             self.sound('build-final-ok' if success else 'build-final-failed', workers=counts)
+            if success:
+                if not self.engineer_build_replies:
+                    self.engineer_build_replies = list(ENGINEER_BUILD_REPLIES)
+                    random.shuffle(self.engineer_build_replies)
+                self.sound('engineer-build-reply', workers=self.engineer_build_replies.pop())
 
     def render_dispatch(self, path, workers):
         """Create a live crew-count announcement, falling back to the bundled WAV.
@@ -1432,6 +1454,11 @@ class Agent:
                         'Emergency response team is on the way. Stand by. Over.')
                 duration = self.synthesize_announcement(path, text, self.dispatcher_voice, 50,
                                                         background='train', distress=True)
+                if duration is None:
+                    return False
+            elif event == 'engineer-build-reply':
+                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+m3', 40,
+                                                        background='build', engineer=True)
                 if duration is None:
                     return False
             elif event == 'joker-reply':

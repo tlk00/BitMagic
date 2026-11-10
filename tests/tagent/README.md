@@ -282,7 +282,7 @@ With Piper or eSpeak NG, the dispatcher announces the exact warning and build-ta
 counts. For eSpeak, the voice is selected from `DISPATCHER_VOICE` (default
 `en-us+f3,en-us+f4,en-us+m3`; set one voice or a comma-separated list via the
 launcher or `--dispatcher-voice`). At zero warnings, randomized reports mention
-clear tracks, weather, snow, avalanches or signals; above zero the dispatcher
+workshop and depot progress; above zero the dispatcher
 calls caution on the line.
 The wording is railway-themed fiction, not a real dispatcher instruction.
 At the end of the build, success or failure, TAgent prints the recognized
