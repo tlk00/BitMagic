@@ -699,13 +699,12 @@ class SupervisorTests(unittest.TestCase):
             self.agent.next_build_report = 0
             self.agent.build_progress(log)
             self.agent.finish_build(True)
-            self.assertEqual(sum(x.args[0] == 'engineer-build-reply' for x in sound.call_args_list), 1)
+            self.assertEqual(sum(x.args[0] == 'engineer-build-reply' for x in sound.call_args_list), 2)
 
     def test_engineer_replies_follow_successful_build_without_repeats(self):
         """Dispatch precedes Joe, who does not joke after a build failure."""
         with patch.object(self.agent, 'sound') as sound:
             for _ in ta.ENGINEER_BUILD_REPLIES:
-                self.agent.engineer_build_replied = False
                 self.agent.finish_build(True)
             calls = sound.call_args_list
             self.assertEqual([c.args[0] for c in calls[::2]], ['build-final-ok'] * len(ta.ENGINEER_BUILD_REPLIES))

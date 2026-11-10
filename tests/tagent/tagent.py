@@ -379,7 +379,7 @@ class Agent:
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
         self.samples_complete = False
-        self.engineer_build_replied = False
+        self.engineer_completed_families = set()
         self.build_lock = threading.Lock()
         self.build_logs = []
         self.build_targets = {}
@@ -1279,14 +1279,16 @@ class Agent:
                         progress.append(0)
                     progress.append(self.samples_complete)
                 if self.args.sound_theme == 'steampunk':
-                    completed = any(progress[i] > 0 and progress[i + 1] == 0
-                                    for i in (0, 2, 5) if i + 1 < len(progress))
-                    completed = completed or (samples_active and self.samples_complete)
-                    first = completed and not self.engineer_build_replied
-                    event = ('build-first-clear' if count == 0 else 'build-first-warning') if first else (
+                    completed = {name for name, i in (('perf', 0), ('stress', 2), ('inv_list', 5))
+                                 if i + 1 < len(progress) and progress[i] > 0 and progress[i + 1] == 0}
+                    if samples_active and self.samples_complete:
+                        completed.add('samples')
+                    newly_completed = completed - self.engineer_completed_families
+                    self.engineer_completed_families.update(newly_completed)
+                    event = ('build-first-clear' if count == 0 else 'build-first-warning') if newly_completed else (
                         'build-clear' if count == 0 else 'build-warning')
                     self.sound(event, workers=(count, *progress))
-                    if first:
+                    for _ in sorted(newly_completed):
                         self.queue_engineer_build_reply()
 
     def dispatcher_voice(self):
@@ -1399,12 +1401,11 @@ class Agent:
             'COMPLETE' if success else 'FAILED', counts[0], counts[1]))
         if self.args.sound_theme == 'steampunk':
             self.sound('build-final-ok' if success else 'build-final-failed', workers=counts)
-            if success and not self.engineer_build_replied:
+            if success:
                 self.queue_engineer_build_reply()
 
     def queue_engineer_build_reply(self):
-        """Queue one rotating Joe reply after a build report for this cycle."""
-        self.engineer_build_replied = True
+        """Queue a rotating Joe reply after a build report."""
         if not self.engineer_build_replies:
             self.engineer_build_replies = list(ENGINEER_BUILD_REPLIES)
             random.shuffle(self.engineer_build_replies)
@@ -1704,7 +1705,7 @@ class Agent:
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
         self.samples_complete = False
-        self.engineer_build_replied = False
+        self.engineer_completed_families = set()
         if self.args.restart_on_update:
             self.next_remote_poll = time.monotonic() + self.args.poll_minutes * 60
         self.build_report_interval = self.args.build_report_seconds
