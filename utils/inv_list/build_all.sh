@@ -34,18 +34,29 @@ build()
     mv -f ./bminv "./$output"
 }
 
-
+# Preserve historical names used by existing scripts while exposing the same
+# debug/release naming convention as the perf and stress build families.
+build bminv_debug DEBUG=YES
+build bminv_release
+cp -f ./bminv_release ./bminv_reg
 if [ "$platform" = arm ]; then
-    build bminv_neon BMOPTFLAGS=-DBMNEONOPT
+    build bminv_debug_neon DEBUG=YES BMOPTFLAGS=-DBMNEONOPT
+    build bminv_release_neon BMOPTFLAGS=-DBMNEONOPT
+    cp -f ./bminv_release_neon ./bminv_neon
 else
-    build bminv_sse2 BMOPTFLAGS=-DBMSSE2OPT
-    build bminv_sse42 BMOPTFLAGS=-DBMSSE42OPT
-    build bminv_avx2 BMOPTFLAGS=-DBMAVX2OPT
+    for kernel in sse2 sse42 avx2; do
+        case "$kernel" in
+            sse2) flags=-DBMSSE2OPT ;;
+            sse42) flags=-DBMSSE42OPT ;;
+            avx2) flags=-DBMAVX2OPT ;;
+        esac
+        build "bminv_debug_$kernel" DEBUG=YES "BMOPTFLAGS=$flags"
+        build "bminv_release_$kernel" "BMOPTFLAGS=$flags"
+        cp -f "./bminv_release_$kernel" "./bminv_$kernel"
+    done
     if [ "$avx512" -eq 1 ]; then
-        build bminv_avx512 BMOPTFLAGS=-DBMAVX512OPT
+        build bminv_debug_avx512 DEBUG=YES BMOPTFLAGS=-DBMAVX512OPT
+        build bminv_release_avx512 BMOPTFLAGS=-DBMAVX512OPT
+        cp -f ./bminv_release_avx512 ./bminv_avx512
     fi
 fi
-# Build the scalar executable last for callers that use its ordinary name.
-echo "Building bminv_reg"
-make rebuild
-mv -f ./bminv ./bminv_reg

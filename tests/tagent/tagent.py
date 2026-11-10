@@ -119,6 +119,8 @@ def build_report_text(count, progress=None):
                       perf_ready, perf_pending, stress_ready, stress_pending))
         if len(progress) > 4:
             status += ' Sample builds: {} warnings so far.'.format(progress[4])
+        if len(progress) > 6:
+            status += ' Inverted list builds: {} ready, {} pending.'.format(progress[5], progress[6])
     if count == 0:
         weather = random.choice((
             'Tracks are clear, no snowdrifts reported.',
@@ -542,7 +544,7 @@ class Agent:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
                 if log and self.pending_tip and (log.name == 'perf.log' or
-                        (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log'))):
+                        (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
                 env = dict(os.environ, TMPDIR=str(self.temp_dir), TMP=str(self.temp_dir), TEMP=str(self.temp_dir),
@@ -572,7 +574,7 @@ class Agent:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
                     if self.stopping.is_set():
                         raise Failure('Job cancelled')
-                    if log and log.name in ('build-perf.log', 'build-stress.log', 'build-samples.log'):
+                    if log and log.name in ('build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'):
                         self.build_progress(log)
                         if self.args.restart_on_update:
                             self.poll_remote()
@@ -1114,6 +1116,13 @@ class Agent:
                          (' | samples: {} warning(s)'.format(self.sample_warnings.count) if samples_active else ''))
                 if samples_active:
                     progress.append(self.sample_warnings.count)
+                if 'inv_list' in self.build_targets:
+                    targets = self.build_targets['inv_list']
+                    ready = sum(path.is_file() and os.access(path, os.X_OK) for path in targets)
+                    self.say('BUILD INV_LIST | {} ready, {} pending'.format(ready, len(targets) - ready))
+                    if not samples_active:
+                        progress.append(0)
+                    progress.extend((ready, len(targets) - ready))
                 if self.args.sound_theme == 'steampunk':
                     self.sound('build-clear' if count == 0 else 'build-warning',
                                workers=(count, *progress))
@@ -1486,6 +1495,16 @@ class Agent:
                     names += ['perf_debug_64']
         return names
 
+    def inv_builds(self):
+        """Return expected debug/release inverted-list executables for this platform."""
+        names = ['bminv_debug', 'bminv_release']
+        suffixes = ['neon'] if self.arm else ['sse2', 'sse42', 'avx2']
+        if not self.arm and self.args.avx512:
+            suffixes.append('avx512')
+        for suffix in suffixes:
+            names.extend('bminv_' + mode + '_' + suffix for mode in ('debug', 'release'))
+        return names
+
     def cycle(self):
         """Build exact current commit; return False on test failure, True on success."""
         if self.depot:
@@ -1503,7 +1522,7 @@ class Agent:
                     'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast, 'builds': {}}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
-        self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples')]
+        self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples', 'inv_list')]
         build_tasks = []
         for family in ('perf', 'stress'):
             directory = self.repo / 'tests' / family
@@ -1517,7 +1536,17 @@ class Agent:
             if family == 'perf' and self.args.pedantic:
                 argv.append('--pedantic')
             build_tasks.append((family, directory, names, argv, run / ('build-' + family + '.log')))
-        sample_jobs = max(1, self.jobs - 2)
+        inv_dir = self.repo / 'utils' / 'inv_list'
+        inv_names = self.inv_builds()
+        manifest['builds']['inv_list'] = inv_names
+        (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
+        for name in inv_names:
+            (inv_dir / name).unlink(missing_ok=True)
+        inv_command = ['bash', str(inv_dir / 'build_all.sh')]
+        if self.args.avx512:
+            inv_command.append('--avx512')
+        build_tasks.append(('inv_list', inv_dir, inv_names, inv_command, run / 'build-inv_list.log'))
+        sample_jobs = max(1, self.jobs - 3)
         sample_dir = self.repo / 'samples'
         build_tasks.append(('samples', sample_dir, [],
                             ['make', '-C', str(sample_dir), '-B', '-j', str(sample_jobs), 'all'],
@@ -1541,7 +1570,7 @@ class Agent:
 
         failures = []
         interrupted_build = False
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(3, self.jobs)) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, self.jobs)) as pool:
             futures = [pool.submit(run_build, task) for task in build_tasks]
             for future in concurrent.futures.as_completed(futures):
                 try:

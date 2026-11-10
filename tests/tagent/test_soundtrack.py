@@ -562,6 +562,8 @@ class SoundtrackTests(unittest.TestCase):
             self.assertIn('3 compiler warnings so far', tagent.build_report_text(3))
             self.assertIn('Sample builds: 2 warnings so far',
                           tagent.build_report_text(3, [1, 2, 3, 4, 2]))
+            self.assertIn('Inverted list builds: 4 ready, 6 pending',
+                          tagent.build_report_text(3, [1, 2, 3, 4, 2, 4, 6]))
 
     def test_build_report_tts_and_recorded_fallback(self):
         """Female voice receives an exact count; unavailable TTS uses safe fallback."""
@@ -585,6 +587,9 @@ class SoundtrackTests(unittest.TestCase):
             self.assertIn('3 compiler warnings so far', spoken[0][-1])
             self.assertIn('Performance builds: 2 ready, 4 pending', spoken[0][-1])
             self.assertIn('Stress builds: 5 ready, 7 pending', spoken[0][-1])
+            with patch.object(agent, 'command', side_effect=synth):
+                agent.render_build_report(output, (3, 2, 4, 5, 7, 1, 4, 6))
+            self.assertIn('Inverted list builds: 4 ready, 6 pending', spoken[-1][-1])
             with wave.open(str(output)) as stream:
                 self.assertEqual(stream.getnchannels(), 1)
             agent.tts_engine = None

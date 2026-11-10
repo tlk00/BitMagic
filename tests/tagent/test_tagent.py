@@ -52,6 +52,13 @@ class SupervisorTests(unittest.TestCase):
                 (directory / 'run_all_pl.sh').write_text(
                     '#!/bin/bash\nset -eu\ncd "$(dirname "$0")"\n"$2" -ll\n"$2" -s\n')
 
+        inv = self.root / 'utils' / 'inv_list'
+        inv.mkdir(parents=True)
+        lines = ['#!/bin/bash', 'set -eu', 'cd "$(dirname "$0")"']
+        for name in self.agent.inv_builds():
+            lines += ['touch ' + name, 'chmod +x ' + name]
+        (inv / 'build_all.sh').write_text('\n'.join(lines) + '\n')
+
         samples = self.root / 'samples'
         samples.mkdir()
         (samples / 'Makefile').write_text('all:\n\t@true\n')
@@ -96,6 +103,56 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(ta.tempfile, 'TemporaryDirectory', side_effect=PermissionError('denied')):
             with self.assertRaisesRegex(ta.Failure, 'denied'):
                 ta.prepare_log_directory(destination, 0)
+
+    def test_inverted_list_build_script_variants_and_legacy_names(self):
+        """Exercise the actual script's x86 and ARM matrices with a fake compiler."""
+        root = self.root / 'inv-build'
+        root.mkdir()
+        script = root / 'build_all.sh'
+        script.write_bytes((Path(__file__).resolve().parents[2] / 'utils/inv_list/build_all.sh').read_bytes())
+        tools = root / 'tools'
+        tools.mkdir()
+        (tools / 'uname').write_text('#!/bin/sh\ncase "$1" in -s) echo "$MOCK_OS";; -m) echo "$MOCK_ARCH";; esac\n')
+        (tools / 'make').write_text('#!/bin/sh\nprintf "%s\n" "$*" > bminv\n')
+        for name in ('uname', 'make'):
+            (tools / name).chmod(0o755)
+        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+                   MOCK_OS='Linux', MOCK_ARCH='x86_64')
+        subprocess.run(['bash', str(script), '--avx512'], env=env, check=True,
+                       stdout=subprocess.DEVNULL)
+        for suffix in ('sse2', 'sse42', 'avx2', 'avx512'):
+            for mode in ('debug', 'release'):
+                self.assertTrue((root / ('bminv_' + mode + '_' + suffix)).is_file())
+            self.assertEqual((root / ('bminv_' + suffix)).read_bytes(),
+                             (root / ('bminv_release_' + suffix)).read_bytes())
+        self.assertEqual((root / 'bminv_reg').read_bytes(), (root / 'bminv_release').read_bytes())
+        env.update(MOCK_OS='Darwin', MOCK_ARCH='arm64')
+        subprocess.run(['bash', str(script)], env=env, check=True, stdout=subprocess.DEVNULL)
+        self.assertTrue((root / 'bminv_debug_neon').is_file())
+        self.assertEqual((root / 'bminv_neon').read_bytes(), (root / 'bminv_release_neon').read_bytes())
+        result = subprocess.run(['bash', str(script), '--avx512'], env=env,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_inverted_list_build_failure_and_matrix(self):
+        """Track all variant binaries and stop before tests when the utility fails."""
+        self.fixture()
+        self.assertEqual(self.agent.inv_builds(), ['bminv_debug', 'bminv_release',
+                         'bminv_debug_neon', 'bminv_release_neon'])
+        (self.root / 'utils/inv_list/build_all.sh').write_text(
+            '#!/bin/bash\necho "inv.cpp:1: warning: sample"\nexit 1\n')
+        with self.assertRaises(ta.Failure) as error:
+            self.agent.cycle()
+        self.assertIn('build-inv_list.log', str(error.exception))
+        self.assertEqual(self.agent.build_warnings.count, 1)
+        run = next(self.agent.home.glob('*abc123'))
+        self.assertIn('sample', (run / 'build-inv_list.log').read_text())
+        self.assertFalse(list(run.glob('perf_*/perf.log')))
+        self.agent.arm = False
+        self.agent.args.avx512 = True
+        for suffix in ('sse2', 'sse42', 'avx2', 'avx512'):
+            for mode in ('debug', 'release'):
+                self.assertIn('bminv_' + mode + '_' + suffix, self.agent.inv_builds())
 
     def test_samples_failure_and_warnings_stop_cycle(self):
         """Sample diagnostics are counted and a build failure prevents tests."""
@@ -299,7 +356,7 @@ class SupervisorTests(unittest.TestCase):
                       (self.agent.home / 'agent.log').read_text())
 
     def test_single_worker_serializes_builds(self):
-        """A one-worker budget never runs both build families at once."""
+        """A one-worker budget serializes all four build families."""
         self.fixture()
         self.agent.jobs = 1
         active = [0, 0]
@@ -307,7 +364,7 @@ class SupervisorTests(unittest.TestCase):
         original = self.agent.command
         def command(argv, log=None, *args, **kwargs):
             """Record overlap while the synthetic builds run."""
-            if not log or log.name not in ('build-perf.log', 'build-stress.log'):
+            if not log or log.name not in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log'):
                 return original(argv, log, *args, **kwargs)
             with mutex:
                 active[0] += 1

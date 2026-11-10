@@ -436,7 +436,7 @@ subprocess heartbeats; Git/network recovery rules still apply.
 
 TAgent also recompiles the sample programs selected by `samples/Makefile` during
 the build phase. `xsample04b` is excluded. Samples are built but not executed.
-The shared CPU budget reserves up to two workers for perf and stress builds and
+The shared CPU budget reserves up to three workers for perf, stress and inv_list builds and
 uses the remaining workers for parallel sample compilation (at least one when
 samples run). Output is saved in `build-samples.log`; sample warnings are included
 in the combined diagnostics and live spoken reports. Any sample build failure
@@ -496,3 +496,15 @@ supported and may point elsewhere. The Piper virtual environment itself remains
 user-local by default so WSL log drives need not support executable venvs. Existing
 voices are not moved automatically; TAgent downloads missing models into the new
 location, or you can copy the `.onnx` and `.onnx.json` files there.
+
+Each build cycle also compiles `utils/inv_list` alongside perf, stress and
+samples, within the shared worker budget. It builds scalar and platform SIMD
+debug/release variants: NEON on Apple ARM; SSE2, SSE4.2 and AVX2 on x86 Linux,
+plus AVX-512 with `--avx512`. The build log is `build-inv_list.log`; warnings
+join the combined console and spoken build reports. TAgent reports completed and
+pending utility binaries and stops before testing if this build fails. It does
+not run the utility or download data.
+
+The utility binaries are named `bminv_debug`, `bminv_release`, and
+`bminv_{debug,release}_KERNEL`. Existing `bminv_reg` and `bminv_KERNEL` release
+names remain available for callers using the previous interface.
