@@ -164,10 +164,9 @@ During normal steampunk operation, a quiet depot ambience loops in the backgroun
 When perf or stress tests start, it transitions to a five-minute mono moving-train
 loop with recorded wheel sounds and occasional quiet tonal Morse for BITMAGIC.
 At the end of the tests, the background returns to the depot.
-It fades to silence over about two seconds before each sound event, then returns
+It fades to 10% over about two seconds before each sound event, then returns
 over about three seconds. On Linux, both backgrounds use a continuous PCM stream
-to one player; the stream drains and releases the audio device before each sound
-event, then restarts afterwards. Linux tries PipeWire, PulseAudio and ALSA in
+to one player, including while foreground announcements play. Linux tries PipeWire, PulseAudio and ALSA in
 that order. On macOS, playback uses one-second WAV chunks with short tapers at
 the boundaries. The background is independent of builds and tests;
 an unavailable player disables the ambience without stopping work. Set
@@ -441,7 +440,28 @@ in the combined diagnostics and live spoken reports. Any sample build failure
 stops the cycle before tests.
 
 `--fast` runs every stress variant in the runner's fast mode; perf execution is
-unchanged. With `--pedantic --fast`, perf retains pedantic coverage while all
-stress variants use fast mode (the stress runner cannot combine the flags).
+unchanged. `--fast` and `--pedantic` are mutually exclusive; TAgent rejects
+the combination at startup.
 Fast runs have distinct saved success state so `--startup changed` does not
 confuse them with normal runs.
+
+At the start of each testing phase and at random 10–20 minute intervals while
+tests are running, the conductor announces the next destination:
+Performance Test Station or Stress Test Station. With `--fast`, the stress
+announcement describes express service with reduced checks; perf remains unchanged.
+Preview with `--sound-preview station-perf` or `--sound-preview station-stress`
+(add `--fast` for the express announcement). Normal stress announces the regular
+schedule; `--pedantic` announces extended inspections and potential delays. Reports
+wait for foreground audio to finish and can be delayed by subprocess heartbeats.
+When TTS is unavailable the phase
+departure sound still plays.
+
+Foreground audio is serialized. Repeated routine status messages coalesce while
+queued; phase-specific messages are discarded if their test phase has ended,
+and pending build-status reports are discarded when the build finishes. Repeated
+failure signals do not interrupt an already queued or active SOS and distress
+exchange. Before normal shutdown or launcher restart, TAgent closes the audio
+queue to new messages and drains it; Ctrl-C still stops child processes promptly.
+
+During foreground announcements the background ambience fades down to 10% of
+its normal level, then fades back up. Linux keeps its continuous audio stream.

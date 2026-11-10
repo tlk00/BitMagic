@@ -158,7 +158,7 @@ class Depot:
         self.thread.start()
 
     def mute(self):
-        """Fade out and wait briefly until the background player is silent."""
+        """Fade to 10 percent and wait until the reduced background is playing."""
         self.pause.set()
         while self.thread and self.thread.is_alive() and not self.agent.stopping.is_set():
             if self.quiet.wait(.2):
@@ -197,13 +197,12 @@ class Depot:
                         current = self.mode
                         rate, samples = read_loop(current)
                         position = 0
-                    if self.pause.is_set() and gain <= 0:
+                    if self.pause.is_set() and self.mode == current and gain <= .1:
                         self.quiet.set()
-                        self.stop.wait(.1)
-                        continue
-                    self.quiet.clear()
-                    target = 0.0 if self.pause.is_set() or self.mode != current else 1.0
-                    end_gain = max(target, gain - .5) if target == 0 else min(target, gain + 1 / 3)
+                    elif not self.pause.is_set():
+                        self.quiet.clear()
+                    target = 0.0 if self.mode != current else (.1 if self.pause.is_set() else 1.0)
+                    end_gain = max(target, gain - .5) if gain > target else min(target, gain + 1 / 3)
                     volume = self.agent.args.sound_volume / .35 * 1.15
                     data = array.array('h')
                     edge = max(1, round(rate * .004))
@@ -270,18 +269,15 @@ class Depot:
                         stream.close()
                         stream = None
                     rate, position = new_rate, 0
-                if self.pause.is_set() and gain <= 0:
-                    if stream:
-                        stream.close()
-                        stream = None
+                if self.pause.is_set() and self.mode == current and gain <= .1:
                     self.quiet.set()
-                    self.stop.wait(.1)
-                    continue
-                self.quiet.clear()
-                target = 0.0 if self.pause.is_set() or self.mode != current else 1.0
+                elif not self.pause.is_set():
+                    self.quiet.clear()
+                target = 0.0 if self.mode != current else (.1 if self.pause.is_set() else 1.0)
                 count = max(1, rate // 4)
                 elapsed = count / rate
-                end_gain = max(target, gain - elapsed / 2) if target == 0 else min(target, gain + elapsed / 3)
+                end_gain = (max(target, gain - elapsed / 2) if gain > target
+                            else min(target, gain + elapsed / 3))
                 volume = self.agent.args.sound_volume / .35 * 1.15
                 data = array.array('h')
                 for i in range(count):

@@ -1,6 +1,7 @@
 """PCM synthesis and nonblocking local playback checks; no audio device needed."""
 import array
 import tempfile
+import threading
 import sys
 import unittest
 import wave
@@ -133,6 +134,134 @@ class SoundtrackTests(unittest.TestCase):
             finally:
                 release.set()
 
+    def test_stale_phase_chatter_is_dropped_and_repeats_coalesce(self):
+        """Pending old-phase reports never play, and repeated reports share one slot."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            started, release = threading.Event(), threading.Event()
+            played = []
+            def play(event, workers):
+                played.append(event)
+                if event == 'building':
+                    started.set()
+                    release.wait(3)
+            try:
+                with patch.object(agent, 'play_sound', side_effect=play):
+                    agent.sound('building')
+                    self.assertTrue(started.wait(2))
+                    agent.sound('station-perf')
+                    pending = agent.audio_thread
+                    for _ in range(100):
+                        agent.sound('station-perf')
+                    self.assertIs(agent.audio_thread, pending)
+                    with agent.audio_mutex:
+                        agent.audio_phase_generation += 1
+                    agent.sound('station-stress')
+                    release.set()
+                    self.assertTrue(agent.wait_for_audio())
+                    self.assertEqual(played, ['building', 'station-stress'])
+            finally:
+                release.set()
+
+    def test_build_status_expires_when_build_finishes(self):
+        """A queued old build report cannot follow the final build summary."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            started, release = threading.Event(), threading.Event()
+            played = []
+            def play(event, workers):
+                played.append(event)
+                if event == 'building':
+                    started.set()
+                    release.wait(3)
+            try:
+                with patch.object(agent, 'play_sound', side_effect=play):
+                    agent.sound('building')
+                    self.assertTrue(started.wait(2))
+                    agent.sound('build-warning', workers=1)
+                    agent.finish_build(True)
+                    release.set()
+                    self.assertTrue(agent.wait_for_audio())
+                    self.assertEqual(played, ['building', 'build-final-ok'])
+            finally:
+                release.set()
+
+    def test_repeated_failure_preserves_distress_exchange(self):
+        """A second failure does not cancel an SOS already queued or playing."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            started, release = threading.Event(), threading.Event()
+            played = []
+            def play(event, workers):
+                played.append(event)
+                if event == 'fail':
+                    started.set()
+                    release.wait(3)
+                return True
+            try:
+                with patch.object(agent, 'play_sound', side_effect=play):
+                    agent.sound('fail')
+                    self.assertTrue(started.wait(2))
+                    distress = agent.audio_thread
+                    agent.sound('fail')
+                    self.assertIs(agent.audio_thread, distress)
+                    release.set()
+                    self.assertTrue(agent.wait_for_audio())
+                    self.assertEqual(played, ['fail', 'distress-engineer', 'distress-dispatch'])
+            finally:
+                release.set()
+
+    def test_finish_audio_drains_active_exchange_and_rejects_new_chatter(self):
+        """Shutdown waits for foreground work while closing admission atomically."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            started, release, finished = threading.Event(), threading.Event(), threading.Event()
+            played = []
+            def play(event, workers):
+                played.append(event)
+                started.set()
+                release.wait(3)
+            def finish():
+                agent.finish_audio()
+                finished.set()
+            try:
+                with patch.object(agent, 'play_sound', side_effect=play):
+                    agent.sound('build')
+                    self.assertTrue(started.wait(2))
+                    thread = threading.Thread(target=finish)
+                    thread.start()
+                    for _ in range(100):
+                        with agent.audio_mutex:
+                            if agent.audio_closing:
+                                break
+                        threading.Event().wait(.01)
+                    self.assertTrue(agent.audio_closing)
+                    agent.sound('repo-unchanged')
+                    self.assertFalse(finished.is_set())
+                    release.set()
+                    thread.join(2)
+                    self.assertTrue(finished.is_set())
+                    self.assertEqual(played, ['build'])
+            finally:
+                release.set()
+
+    def test_finish_audio_cancels_delayed_joker_reply(self):
+        """Shutdown closes the queue before a delayed reply can enqueue audio."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            self.assertTrue(agent.finish_audio())
+            with patch.object(tagent.random, 'uniform', return_value=0), \
+                 patch.object(agent, 'play_after') as play:
+                agent.queue_joker_reply(agent.audio_epoch, agent.audio_phase_generation)
+                agent.sound('build')
+                play.assert_not_called()
+                self.assertIsNone(agent.audio_thread)
+
     def test_foreground_sound_mutes_depot(self):
         """Foreground playback starts after the depot fades and then restores it."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -151,6 +280,59 @@ class SoundtrackTests(unittest.TestCase):
                 agent.audio_thread.join(2)
             self.assertEqual(order, ['muted', 'sound', 'resumed'])
 
+    def test_station_reports_repeat_at_random_intervals(self):
+        """Each phase uses a bounded timer and waits for foreground audio."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            agent.audio_available = True
+            with patch.object(tagent.time, 'monotonic', return_value=100), \
+                 patch.object(tagent.random, 'uniform', return_value=750) as interval, \
+                 patch.object(agent, 'sound') as sound, \
+                 patch.object(agent, 'start_conductor_download'):
+                agent.start_test_sound('perf')
+                self.assertEqual(agent.next_station_report, 850)
+                agent.report_station_status()
+                self.assertEqual(sound.call_count, 2)
+                with patch.object(tagent.time, 'monotonic', return_value=850):
+                    with patch.object(agent, 'audio_thread') as active_audio:
+                        active_audio.is_alive.return_value = True
+                        agent.report_station_status()
+                        self.assertEqual(sound.call_count, 2)
+                        self.assertEqual(agent.next_station_report, 850)
+                    agent.report_station_status()
+                    sound.assert_called_with('station-perf')
+                    self.assertEqual(agent.next_station_report, 1600)
+                    agent.report_station_status()
+                    self.assertEqual(sound.call_count, 3)
+                agent.start_test_sound('stress')
+                self.assertEqual(agent.station_phase, 'stress')
+                with patch.object(tagent.time, 'monotonic', return_value=850):
+                    agent.report_station_status()
+                    sound.assert_called_with('station-stress')
+                self.assertTrue(all(call.args == (600, 1200) for call in interval.call_args_list))
+
+    def test_station_announcements_use_conductor_and_express_only_for_fast_stress(self):
+        """Destinations are accurate and fast mode never claims perf is reduced."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
+                'tagent', '--state-dir', directory, '--fast']):
+            agent = tagent.Agent(tagent.arguments())
+            with patch.object(agent, 'synthesize_announcement', return_value=1) as speech:
+                agent.render_station_report(Path(directory) / 'out.wav', False)
+                self.assertIn('Performance Test Station', speech.call_args.args[1])
+                self.assertNotIn('express', speech.call_args.args[1])
+                self.assertTrue(speech.call_args.kwargs['conductor'])
+                agent.render_station_report(Path(directory) / 'out.wav', True)
+                self.assertIn('Stress Test Station', speech.call_args.args[1])
+                self.assertIn('express service, with reduced checks', speech.call_args.args[1])
+                agent.args.fast = False
+                agent.render_station_report(Path(directory) / 'out.wav', True)
+                self.assertNotIn('express', speech.call_args.args[1])
+                self.assertIn('regular testing schedule', speech.call_args.args[1])
+                agent.args.pedantic = True
+                agent.render_station_report(Path(directory) / 'out.wav', True)
+                self.assertIn('expect significant delays', speech.call_args.args[1])
+
     def test_phase_change_keeps_train_timer(self):
         """Both phases announce while the periodic five-minute clock is preserved."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -162,7 +344,7 @@ class SoundtrackTests(unittest.TestCase):
                 agent.start_test_sound('stress')
                 self.assertEqual(agent.next_train_at, 400)
                 self.assertEqual([call.args[0] for call in sound.call_args_list],
-                                 ['depart-perf', 'depart-stress'])
+                                 ['depart-perf', 'station-perf', 'depart-stress', 'station-stress'])
 
     def test_long_audio_wait_is_interruptible_and_not_cut_at_55_seconds(self):
         """A slow station/departure clip can finish; individual waits stay short."""
@@ -303,23 +485,23 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertIsNone(agent.audio_thread)  # No train outside a test cycle.
                 agent.start_test_sound()
                 agent.audio_thread.join()
-                self.assertEqual(played, ['depart-perf'])
+                self.assertEqual(played, ['depart-perf', 'station-perf'])
                 clock[0] = 399
                 agent.sound('work')
-                self.assertEqual(played, ['depart-perf'])
+                self.assertEqual(played, ['depart-perf', 'station-perf'])
                 agent.sound('build')
                 agent.audio_thread.join()
                 clock[0] = 400
                 agent.sound('work')
                 agent.audio_thread.join()
-                self.assertEqual(played, ['depart-perf', 'build', 'work'])
+                self.assertEqual(played, ['depart-perf', 'station-perf', 'build', 'work'])
                 clock[0] = 699
                 agent.sound('work')
                 self.assertEqual(played.count('work'), 1)
                 clock[0] = 700
                 agent.sound('work')
                 agent.audio_thread.join()
-                self.assertEqual(played, ['depart-perf', 'build', 'work', 'dispatch'])
+                self.assertEqual(played, ['depart-perf', 'station-perf', 'build', 'work', 'dispatch'])
                 self.assertEqual(coin.call_count, 2)
 
     def test_dispatch_asset_mono_and_volume(self):

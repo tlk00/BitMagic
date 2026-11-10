@@ -134,7 +134,7 @@ def arguments():
                 '  ./run_tagent.sh --sound-preview joker\n'
                 '  ./run_tagent.sh --once --jobs 4\n'
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
-                'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'all', 'perf-progress',
+                'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
                 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
@@ -163,8 +163,8 @@ def arguments():
                         help='build on every manual start, or only when changed (default: %(default)s)')
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
-        'pedantic': 'run expanded perf and release stress coverage; debug stress remains fast',
-        'fast': 'run all stress variants in fast mode; perf is unchanged',
+        'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
+        'fast': 'run all stress variants in fast mode; perf unchanged; incompatible with --pedantic',
         'avx512': 'build and test AVX-512 variants when supported',
         'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
         'check': 'validate local prerequisites only; do not fetch, build, or test',
@@ -209,9 +209,11 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
+    if args.fast and args.pedantic:
+        parser.error('--fast and --pedantic are mutually exclusive')
     args.full_sound_preview = args.sound_preview == 'all'
     if args.full_sound_preview:
         args.sound_demo = True
@@ -302,6 +304,11 @@ class Agent:
         self.audio_thread = None
         self.audio_active = None
         self.audio_epoch = 0
+        self.audio_phase_generation = 0
+        self.audio_build_generation = 0
+        self.audio_closing = False
+        self.audio_pending = {}
+        self.audio_failure_thread = None
         self.joker_reply_thread = None
         self.audio_mutex = threading.Lock()
         self.depot = None
@@ -346,6 +353,9 @@ class Agent:
         self.perf_report_lock = threading.Lock()
         self.next_perf_report = math.inf
         self.perf_report_index = 0
+        self.station_report_lock = threading.Lock()
+        self.station_phase = None
+        self.next_station_report = math.inf
         self.perf_skipped = False
         self.lock_file = None
         self.poll_lock = threading.Lock()
@@ -536,6 +546,7 @@ class Agent:
                     else:
                         self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
                     if log and log.name in ('perf.log', 'runner.log'):
+                        self.report_station_status()
                         self.report_joker()
                         self.poll_remote()
                         if self.args.restart_on_update and self.pending_tip:
@@ -803,6 +814,12 @@ class Agent:
             thread.join(timeout=min(1, remaining))
         return not thread or not thread.is_alive()
 
+    def finish_audio(self, timeout=300):
+        """Reject new chatter, then drain the current serialized audio queue."""
+        with self.audio_mutex:
+            self.audio_closing = True
+        return self.wait_for_audio(timeout)
+
     def sound(self, event, force=False, workers=1):
         """Schedule local themed audio without delaying jobs; workers sets cadence.
 
@@ -816,6 +833,17 @@ class Agent:
         if not self.audio_available and not (self.args.sound_demo or self.args.sound_preview):
             return
         with self.audio_mutex:
+            if self.audio_closing:
+                return
+            self.audio_pending = {key: thread for key, thread in self.audio_pending.items() if thread.is_alive()}
+            if event == 'fail' and self.audio_failure_thread and self.audio_failure_thread.is_alive():
+                return
+            coalesced = ('station-perf', 'station-stress', 'perf-progress', 'joker', 'work',
+                         'dispatch', 'repo-unchanged', 'build-clear', 'build-warning')
+            phase_events = ('station-perf', 'station-stress', 'perf-progress', 'joker', 'work', 'dispatch')
+            pending_key = (event, self.audio_phase_generation if event in phase_events else None)
+            if event in coalesced and pending_key in self.audio_pending:
+                return
             now = time.monotonic()
             if event == 'work' and not force:
                 due = self.next_train_at
@@ -836,11 +864,17 @@ class Agent:
             if event == 'work' and not force and self.args.sound_theme == 'steampunk':
                 selected = random.choice(('work', 'dispatch'))
                 self.say('STEAMPUNK SOUND ' + ('passing train' if selected == 'work' else 'dispatch'))
+            phase = self.audio_phase_generation if selected in phase_events else None
+            build = self.audio_build_generation if selected in ('build-clear', 'build-warning') else None
             self.audio_thread = threading.Thread(target=self.play_after,
-                                                args=(previous, selected, workers, epoch), daemon=True)
+                                                args=(previous, selected, workers, epoch, phase, build), daemon=True)
+            if event in coalesced:
+                self.audio_pending[pending_key] = self.audio_thread
+            if event == 'fail':
+                self.audio_failure_thread = self.audio_thread
             self.audio_thread.start()
 
-    def play_after(self, previous, event, workers, epoch):
+    def play_after(self, previous, event, workers, epoch, phase=None, build=None):
         """Play queued audio after its predecessor without blocking test work.
 
         epoch invalidates queued clips when a failure signal takes precedence.
@@ -853,7 +887,8 @@ class Agent:
         if self.stopping.is_set() or epoch != self.audio_epoch:
             return
         with self.audio_mutex:
-            if epoch != self.audio_epoch:
+            if (epoch != self.audio_epoch or (phase is not None and phase != self.audio_phase_generation) or
+                    (build is not None and build != self.audio_build_generation)):
                 return
             self.audio_active = threading.current_thread()
         try:
@@ -861,7 +896,10 @@ class Agent:
                 return
             if self.depot:
                 self.depot.mute()
-            if self.stopping.is_set() or epoch != self.audio_epoch:
+            with self.audio_mutex:
+                obsolete = ((phase is not None and phase != self.audio_phase_generation) or
+                            (build is not None and build != self.audio_build_generation))
+            if self.stopping.is_set() or epoch != self.audio_epoch or obsolete:
                 return
             played = self.play_sound(event, workers)
             if event == 'fail' and played and self.args.tts == 'auto':
@@ -871,7 +909,7 @@ class Agent:
                     self.play_sound(distress_event, 1)
             if event == 'joker' and played and epoch == self.audio_epoch:
                 self.joker_reply_thread = threading.Thread(
-                    target=self.queue_joker_reply, args=(epoch,), daemon=True)
+                    target=self.queue_joker_reply, args=(epoch, phase), daemon=True)
                 self.joker_reply_thread.start()
         finally:
             if self.depot:
@@ -880,7 +918,7 @@ class Agent:
                 if self.audio_active is threading.current_thread():
                     self.audio_active = None
 
-    def queue_joker_reply(self, epoch):
+    def queue_joker_reply(self, epoch, phase=None):
         """Schedule dispatcher chatter after a pause, unless interrupted or superseded."""
         delay = random.uniform(3, 7)
         deadline = time.monotonic() + delay
@@ -893,17 +931,24 @@ class Agent:
             return
         # An important announcement already queued takes precedence over chatter.
         with self.audio_mutex:
-            if epoch != self.audio_epoch or (self.audio_thread and self.audio_thread.is_alive()):
+            if (self.audio_closing or epoch != self.audio_epoch or
+                    (phase is not None and phase != self.audio_phase_generation) or
+                    (self.audio_thread and self.audio_thread.is_alive())):
                 return
             message = random.choice(DISPATCH_JOKER_REPLIES)
             self.say('DISPATCH: ' + message)
             self.audio_thread = threading.Thread(target=self.play_after,
-                args=(None, 'joker-reply', message, epoch), daemon=True)
+                args=(None, 'joker-reply', message, epoch, phase), daemon=True)
             self.audio_thread.start()
 
     def start_test_sound(self, phase='perf'):
         """Announce a test phase without resetting the shared five-minute clock."""
         self.joker_clock.start()
+        with self.audio_mutex:
+            self.audio_phase_generation += 1
+        with self.station_report_lock:
+            self.station_phase = phase
+            self.next_station_report = time.monotonic() + random.uniform(600, 1200)
         if self.depot:
             self.depot.set_mode('train')
         if phase == 'perf':
@@ -914,6 +959,22 @@ class Agent:
             self.next_train_at = time.monotonic() + 300
         if self.args.sound_theme == 'steampunk':
             self.sound('depart-' + phase)
+            self.sound('station-' + phase)
+
+    def report_station_status(self):
+        """Repeat conductor destination reports every 10–20 minutes during tests."""
+        if self.args.no_sound or self.args.sound_volume == 0 or self.args.tts != 'auto':
+            return
+        if not self.audio_available or self.args.sound_theme != 'steampunk':
+            return
+        with self.station_report_lock:
+            now = time.monotonic()
+            if self.station_phase is None or now < self.next_station_report:
+                return
+            if self.audio_thread and self.audio_thread.is_alive():
+                return
+            self.next_station_report = now + random.uniform(600, 1200)
+            self.sound('station-' + self.station_phase)
 
     def report_joker(self):
         """Offer occasional engineer chatter only while test jobs are running."""
@@ -1085,6 +1146,8 @@ class Agent:
 
     def finish_build(self, success):
         """Print and announce final recognized error/warning line counts."""
+        with self.audio_mutex:
+            self.audio_build_generation += 1
         counts = (self.build_warnings.errors, self.build_warnings.count, success)
         self.say('BUILD {} | diagnostic errors: {} | warnings: {}'.format(
             'COMPLETE' if success else 'FAILED', counts[0], counts[1]))
@@ -1139,6 +1202,10 @@ class Agent:
             elif event == 'joker-reply':
                 duration = self.synthesize_announcement(path, workers, self.dispatcher_voice, 50,
                                                         background='train')
+                if duration is None:
+                    return False
+            elif event in ('station-perf', 'station-stress'):
+                duration = self.render_station_report(path, event == 'station-stress')
                 if duration is None:
                     return False
             elif event == 'perf-progress':
@@ -1200,6 +1267,38 @@ class Agent:
             return duration
         return soundtrack.render(path, self.args.sound_theme, 'build' if changed else 'idle',
                                  self.args.sound_volume, 1, self.jobs)
+
+    def render_station_report(self, path, stress):
+        """Announce the next destination and fast stress service when requested."""
+        if stress:
+            messages = (
+                'Conductor to BitMagic. Next stop, Stress Test Station.',
+                'Conductor reporting. Our next destination is Stress Test Station.',
+                'Conductor to the crew. We are bound for Stress Test Station.',
+                'Conductor reporting. The freight is headed for Stress Test Station.',
+            )
+        else:
+            messages = (
+                'Conductor to BitMagic. Next stop, Performance Test Station.',
+                'Conductor reporting. Our next destination is Performance Test Station.',
+                'Conductor to the crew. We are bound for Performance Test Station.',
+                'Conductor reporting. The freight is headed for Performance Test Station.',
+            )
+        message = random.choice(messages)
+        if stress:
+            if self.args.fast:
+                message += ' Stress tests are running as an express service, with reduced checks.'
+            elif self.args.pedantic:
+                message += (' We are running the extended inspection schedule. '
+                            'Please expect significant delays.')
+            else:
+                message += (' We are running the regular testing schedule. '
+                            'Debug stress variants use reduced checks.')
+        elif self.args.pedantic:
+            message += ' We are running the extended inspection schedule. Please expect significant delays.'
+        self.say('CONDUCTOR: ' + message)
+        return self.synthesize_announcement(path, message, lambda: 'en-us+f3', 50,
+                                            background='train', conductor=True)
 
     def render_perf_progress(self, path, report):
         """Speak one variant and its observed count, or play a neutral fallback."""
@@ -1458,6 +1557,11 @@ class Agent:
             if self.depot:
                 self.depot.set_mode('depot')
             self.next_perf_report = math.inf
+            with self.audio_mutex:
+                self.audio_phase_generation += 1
+            with self.station_report_lock:
+                self.station_phase = None
+                self.next_station_report = math.inf
             self.active_run = None
             self.stress_stop_file = None
             self.next_remote_poll = math.inf
@@ -1577,7 +1681,7 @@ class Agent:
                 if agent_changed or self.args.restart_on_update:
                     self.say('Updates applied; diverting freight to the build depot')
                     self.sound('repo-restart')
-                    self.wait_for_audio()
+                    self.finish_audio()
                     self.say('TAgent updated; restarting launcher. If restart fails, rerun run_tagent.sh.')
                     self.lock_file.close()
                     restart_args = list(sys.argv[1:])
@@ -1644,8 +1748,8 @@ def main():
         agent.sound('fail')
         return 3 if 'Recovery window exhausted' in str(error) else 1
     finally:
-        if agent.audio_thread and not agent.stopping.is_set():
-            agent.wait_for_audio()
+        if not agent.stopping.is_set():
+            agent.finish_audio()
         agent.stopping.set()
         if agent.depot:
             agent.depot.close()

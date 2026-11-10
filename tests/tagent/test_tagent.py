@@ -173,11 +173,17 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual('--fast' in argv, '_debug' in name)
             self.assertEqual('--pedantic' in argv, '_debug' not in name)
 
-    def test_fast_applies_to_all_stress_even_with_pedantic(self):
-        """Fast stress overrides pedantic stress while perf remains pedantic."""
+    def test_fast_and_pedantic_are_rejected(self):
+        """Conflicting workload modes fail before an agent starts."""
+        with patch.object(sys, 'argv', ['tagent', '--fast', '--pedantic']):
+            with self.assertRaises(SystemExit) as error:
+                ta.arguments()
+        self.assertEqual(error.exception.code, 2)
+
+    def test_fast_applies_to_all_stress(self):
+        """Fast applies to every stress variant and does not affect perf."""
         self.fixture()
         self.agent.args.fast = True
-        self.agent.args.pedantic = True
         calls = []
         original = self.agent.command
         def command(argv, *args, **kwargs):
@@ -189,7 +195,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(stress)
         self.assertTrue(all('--fast' in argv and '--pedantic' not in argv for argv in stress))
         perf_build = next(argv for argv in calls if str(argv[1]).endswith('/perf/build_all.sh'))
-        self.assertIn('--pedantic', perf_build)
+        self.assertNotIn('--pedantic', perf_build)
         self.assertNotIn('--fast', perf_build)
 
     def test_stress_variants_share_history_path_across_cycles(self):

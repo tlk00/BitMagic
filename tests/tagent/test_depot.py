@@ -82,8 +82,8 @@ class DepotTests(unittest.TestCase):
                 finally:
                     worker.close()
 
-    def test_fades_to_silence_and_resumes(self):
-        """A foreground clip waits until the background player has stopped."""
+    def test_fades_to_ten_percent_and_resumes(self):
+        """A foreground clip waits for the reduced background, which continues playing."""
         with tempfile.TemporaryDirectory() as directory:
             plays = []
             edges = []
@@ -109,7 +109,7 @@ class DepotTests(unittest.TestCase):
                     self.assertTrue(worker.quiet.is_set())
                     count = len(plays)
                     time.sleep(.15)
-                    self.assertEqual(len(plays), count)
+                    self.assertGreater(len(plays), count)
                     played.clear()
                     worker.unmute()
                     self.assertTrue(played.wait(2))
@@ -165,8 +165,8 @@ class DepotTests(unittest.TestCase):
                     worker.close()
             self.assertFalse(worker.thread.is_alive())
 
-    def test_linux_uses_one_stream_and_restarts_after_announcement(self):
-        """Linux streams continuously, drains for a foreground clip, then resumes."""
+    def test_linux_uses_one_stream_through_announcement(self):
+        """Linux keeps one stream playing at 10% and restores it after a clip."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = root / 'player.py'
@@ -210,12 +210,18 @@ class DepotTests(unittest.TestCase):
                     worker.mute()
                     self.assertTrue(worker.quiet.is_set())
                     self.assertTrue(train_loaded.is_set())
-                    self.assertFalse(agent.children)
+                    self.assertTrue(agent.children)
+                    offset = raw.stat().st_size
+                    time.sleep(.8)
+                    muted = array.array('h', raw.read_bytes()[offset:])
+                    self.assertTrue(muted)
+                    self.assertGreater(len(muted), 2205)
+                    self.assertTrue(all(1100 <= value <= 1200 for value in muted[-2205:]))
                     worker.unmute()
-                    deadline = time.monotonic() + 3
-                    while len(launches.read_text().splitlines()) < 2 and time.monotonic() < deadline:
-                        time.sleep(.05)
-                    self.assertEqual(len(launches.read_text().splitlines()), 2)
+                    time.sleep(2)
+                    restored = array.array('h', raw.read_bytes())
+                    self.assertGreater(sum(restored[-2205:]) / 2205, 5000)
+                    self.assertEqual(len(launches.read_text().splitlines()), 1)
                 finally:
                     worker.close()
             self.assertFalse(worker.thread.is_alive())
