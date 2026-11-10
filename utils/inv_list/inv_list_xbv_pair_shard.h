@@ -218,7 +218,14 @@ std::vector<pair_index_entry> pair_read_shard_index(bool& source_complete,
     std::size_t previous_shard = 0; bool first = true;
     for (std::size_t line_no = 2; std::getline(in, line); ++line_no)
     {
-        if (!line.empty() && line.back() == '\r') line.pop_back(); if (line.empty()) continue;
+        if (!line.empty() && line.back() == '\r')
+        {
+            line.pop_back();
+        }
+        if (line.empty())
+        {
+            continue;
+        }
         const auto f = inv_list_csv::split(line);
         if (f.size() <= required) throw std::runtime_error("Short pair index row at line " + std::to_string(line_no));
         pair_index_entry e;
