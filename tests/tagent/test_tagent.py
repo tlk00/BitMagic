@@ -719,10 +719,56 @@ class SupervisorTests(unittest.TestCase):
             proc.send_signal(signal.SIGINT)
             self.assertEqual(proc.wait(timeout=10), 130)
             self.assertFalse(marker.exists())
+            log = (self.root / 'interrupt-state' / 'agent.log').read_text()
+            self.assertIn('SIGNAL SIGINT (2) received', log)
+            self.assertIn('sender unavailable', log)
+            self.assertIn('pid=', log)
+            self.assertIn('ppid=', log)
         finally:
             if proc.poll() is None:
                 proc.kill()
                 proc.wait()
+
+    def test_termination_signals_are_reported(self):
+        """SIGTERM and SIGHUP retain their identity and conventional exit codes."""
+        import signal
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            state = self.root / sig.name
+            ready = self.root / (sig.name + '.ready')
+            code = (
+                'import sys,time; sys.path.insert(0, ' + repr(str(Path(__file__).parent.resolve())) + '); '
+                'import tagent; '
+                'sys.argv=["tagent", "--no-sound", "--state-dir", ' + repr(str(state)) + ']; '
+                'tagent.Agent.run=lambda self: (open(' + repr(str(ready)) + ', "w").close(), time.sleep(30)); '
+                'sys.exit(tagent.main())')
+            proc = subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.DEVNULL)
+            try:
+                deadline = time.monotonic() + 5
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(.01)
+                self.assertTrue(ready.exists())
+                proc.send_signal(sig)
+                self.assertEqual(proc.wait(timeout=10), 128 + sig)
+                self.assertIn('SIGNAL ' + sig.name, (state / 'agent.log').read_text())
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+
+    def test_concurrent_log_entries_remain_intact(self):
+        """Concurrent workers cannot interleave lines in the shared agent log."""
+        def write(worker):
+            for number in range(30):
+                self.agent.say('worker={} entry={}'.format(worker, number))
+        threads = [threading.Thread(target=write, args=(n,)) for n in range(8)]
+        with patch('builtins.print'):
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        lines = (self.agent.home / 'agent.log').read_text().splitlines()
+        self.assertEqual(len(lines), 240)
+        self.assertEqual(len(set(line[20:] for line in lines)), 240)
 
     def test_pedantic_matrix(self):
         """x86 pedantic perf includes debug/release for every SIMD suffix."""

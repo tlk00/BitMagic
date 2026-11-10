@@ -470,3 +470,8 @@ its normal level, then fades back up. Linux keeps its continuous audio stream.
 Every produced, supported perf debug binary runs with `--fast`, including in
 normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
 `--fast` option is supplied.
+
+At startup TAgent logs its PID, parent PID, process group, session and terminal.
+SIGINT, SIGTERM and SIGHUP are reported by name and number with current process
+context and cycle before child cleanup. Python's standard signal handler does not
+provide the sender identity; these fields do not identify who sent a signal.

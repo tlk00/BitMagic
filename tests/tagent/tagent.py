@@ -52,6 +52,18 @@ class Failure(RuntimeError):
     """An operational failure, or a failed build/test with its recorded command."""
 
 
+class ReceivedSignal(KeyboardInterrupt):
+    """Termination signal captured for logging outside the signal handler."""
+
+    def __init__(self, signum, commit, cycle, children, location):
+        """Remember signal and active work before stack unwinding changes it."""
+        self.signum = signum
+        self.commit = commit
+        self.cycle = cycle
+        self.children = children
+        self.location = location
+
+
 class CommandFailure(Failure):
     """A child command returned nonzero; test phases may wait for a fix."""
 
@@ -294,6 +306,7 @@ class Agent:
         prepare_log_directory(self.home, args.min_free_gb)
         self.children = set()
         self.mutex = threading.RLock()
+        self.log_mutex = threading.RLock()
         self.stopping = threading.Event()
         self.jobs = args.jobs or max(1, available_cpus() - args.reserve_cpus)
         self.last_fetch = 'never'
@@ -372,9 +385,19 @@ class Agent:
     def say(self, message):
         """Print and persist a timestamped lifecycle message."""
         line = time.strftime('%Y-%m-%d %H:%M:%S ') + message
-        print('\r' + line, flush=True)
-        with (self.home / 'agent.log').open('a') as stream:
-            stream.write(line + '\n')
+        with self.log_mutex:
+            print('\r' + line, flush=True)
+            with (self.home / 'agent.log').open('a') as stream:
+                stream.write(line + '\n')
+
+    def process_context(self):
+        """Describe this process and terminal without claiming a signal sender."""
+        try:
+            tty = os.ttyname(0)
+        except OSError:
+            tty = 'none'
+        return 'pid={} ppid={} pgid={} sid={} tty={}'.format(
+            os.getpid(), os.getppid(), os.getpgrp(), os.getsid(0), tty)
 
     def resource_check(self):
         """Raise Failure if configured storage reserve is unavailable."""
@@ -1575,6 +1598,7 @@ class Agent:
     def run(self):
         """Run update/build/test/wait loop; return exit status, or exec on self-update."""
         self.say('Log directory: ' + str(self.home))
+        self.say('Process context: ' + self.process_context())
         self.report_audio()
         self.start_piper_download()
         self.start_conductor_download()
@@ -1736,14 +1760,21 @@ def main():
         print('TAgent startup ERROR: ' + str(error), file=sys.stderr, flush=True)
         return 1
     def interrupted(signum, frame):
-        """Convert termination signals to an interrupt handled by the owner."""
+        """Capture the signal and let normal exception cleanup stop children."""
         agent.stopping.set()
-        agent.stop_children()
-        raise KeyboardInterrupt
+        raise ReceivedSignal(signum, agent.commit, agent.active_run, len(agent.children),
+                             frame.f_code.co_name if frame else 'unknown')
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
+    signal.signal(signal.SIGHUP, interrupted)
     try:
         return agent.run()
+    except ReceivedSignal as error:
+        name = signal.Signals(error.signum).name
+        agent.say('SIGNAL {} ({}) received; stopping all child jobs | {} | commit {} | cycle {} | children {} | interrupted {} | sender unavailable'.format(
+            name, error.signum, agent.process_context(), error.commit, error.cycle or 'none',
+            error.children, error.location))
+        return 128 + error.signum
     except KeyboardInterrupt:
         agent.say('Interrupted; stopping all child jobs')
         return 130
