@@ -88,7 +88,7 @@ INDEXED READ MEMORY AND UNIX MAPPING
 Threaded verify/decode now reads adjacent indexed BLOBs in one sequential batch,
 then workers decode bounded RAM slices. Full raw-ID comparison is retained.
 -read-memory-mib N budgets raw IDs plus encoded bytes per batch (default 512 MiB,
-maximum 8192 MiB). -batch-vectors also bounds records per batch (default 512).
+positive MiB, limited by platform address/stream sizes). -batch-vectors also bounds records per batch (default 512).
 The budget excludes the index, worker decoder/bitvector/comparison workspaces,
 optional diagnostic records and filesystem cache. Leave RAM for those users.
 A single vector exceeding the budget fails before allocating its raw payload;

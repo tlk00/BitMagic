@@ -45,6 +45,7 @@ For more information please visit:  http://bitmagic.io
 #include <array>
 #include <queue>
 #include <cstdint>
+#include <cstddef>
 #include <cstring>
 #include <random>
 #include <atomic>
@@ -112,7 +113,7 @@ void show_help()
         << "-bwt-min-gain N             -- require N complete-record bytes saved by BWT (default 16; 0 disables)" << std::endl
         << "-periodic-step1-interleaved N -- BIC start/end pairs: 1 fixed, 4 gamma-vs-fixed formula choice" << std::endl
         << "-threads N                  -- parallel compression pool (1..256; omitted = sequential)" << std::endl
-        << "-read-memory-mib N          -- indexed read batch budget, raw + encoded (1..8192, default 512)" << std::endl
+        << "-read-memory-mib N          -- indexed read batch budget, raw + encoded (positive MiB, default 512)" << std::endl
         << "-read-mmap                  -- Unix read-only windows with read-ahead hints" << std::endl
         << "-batch-vectors N            -- MT input window (default 512; maximum 512)" << std::endl
         << "-level N                    -- compression level 0..10 (default 6)"     << std::endl
@@ -332,9 +333,13 @@ int parse_args(int argc, char *argv[])
                 throw std::runtime_error("Invalid integer for " + arg);
             }
             const auto mib = std::stoull(value);
-            if (!mib || mib > 8192)
+            const bm::id64_t max_bytes = std::min(
+                bm::id64_t((std::numeric_limits<size_t>::max)()),
+                std::min(bm::id64_t((std::numeric_limits<std::ptrdiff_t>::max)()),
+                         bm::id64_t((std::numeric_limits<std::streamsize>::max)())));
+            if (!mib || mib > max_bytes / (1024 * 1024))
             {
-                throw std::runtime_error("-read-memory-mib must be 1..8192");
+                throw std::runtime_error("-read-memory-mib must be positive and fit platform address/stream limits");
             }
             read_memory_bytes = mib * 1024 * 1024;
             read_options_specified = true;

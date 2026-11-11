@@ -8,10 +8,25 @@ bash run_inv_test_pl.sh --bin ./bminv_neon \
   -j 8 --out /Volumes/USB_1TB/inv-test-full-$(date +%Y%m%d-%H%M%S)
 ```
 
-| Mode | Work for every sorted/unsorted level 1–10 |
+| Mode | Work for every selected sorted/unsorted level |
 |---|---|
 | Normal | Check saved reference integrity; threaded and serial raw-ID verification; independent decode; rebuild into `--out`; repeat both verifications and decode on rebuilt streams. |
 | `--fast` | Full threaded raw-ID verification only. Reads every ID; skips checksum/history audits, rebuilding and decode-only passes. |
+
+Use `--start-level 6` to test levels 6–10 inclusive for both datasets (10 cases).
+The default is level 1, covering all 20 cases. For a reduced-I/O fast run:
+
+```bash
+bash run_inv_test_pl.sh --bin ./bminv \
+  --reference /Volumes/USB_1TB/gov2-reference-Nov-2026 \
+  --fast --start-level 6 -j 10 --read-memory-mib 8192 \
+  --out "/Volumes/USB_1TB/inv-test-level6-$(date +%Y%m%d-%H%M%S)"
+```
+
+Fast mode opens only the selected level streams and indices. Every selected case
+still compares all raw IDs. Summaries report the actual case count; `test.json`
+records the level range and count. Normal mode also accepts `--start-level` and
+retains its reference integrity audits, including the final all-file checksum scan.
 
 The raw inputs must be `<reference>/Gov2Flat/gov2.sorted` and `gov2.unsorted`,
 Normal mode checks their recorded input hashes; fast mode directly tests decoding
@@ -59,8 +74,10 @@ structured progress remains available to existing harnesses.
 ## Indexed verification I/O
 
 Threaded verification and decode use sequential adjacent-BLOB batches by default.
-Use `--read-memory-mib 8192` to allow up to 8 GiB of combined raw-ID and encoded
-batch data, or keep the 512 MiB default on smaller machines. The index, worker
+Use `--read-memory-mib 8192` for an 8 GiB budget, or `--read-memory-mib 16384`
+for 16 GiB of combined raw-ID and encoded batch data. Positive MiB values are
+limited by platform address/stream sizes. The default remains 512 MiB.
+The setting is an upper bound; batches allocate only the data they contain. The index, worker
 bitvectors/decoder/comparison workspaces and filesystem cache need additional RAM.
 The existing 512-vector batch limit can result in smaller batches.
 

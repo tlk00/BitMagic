@@ -169,7 +169,7 @@ def validate_index(path, size, count):
 
 
 def execute(args, references, binary):
-    """Test all references, then rebuild each case in normal mode with both readers."""
+    """Test selected references, then rebuild each case in normal mode with both readers."""
     rows = []
     reserve = int(args.reserve_gib * 1024**3)
     progress = ['-progress-vectors', str(args.progress)]
@@ -244,8 +244,10 @@ def parse():
     parser.add_argument('--out', required=True, type=Path, help='Fresh test directory outside reference tree')
     parser.add_argument('-j', '--threads', dest='j', type=int, default=max(1, (os.cpu_count() or 1)-2))
     parser.add_argument('--silent', action='store_true', help='Suppress console progress; retain full logs, final results and errors')
-    parser.add_argument('--fast', action='store_true', help='Threaded full raw-ID validation of all 20 references; no checksum audit or rebuild')
-    parser.add_argument('--read-memory-mib', type=int, default=512, help='Raw plus encoded indexed-read batch budget (1..8192 MiB)')
+    parser.add_argument('--fast', action='store_true', help='Threaded full raw-ID validation of selected levels; no checksum audit or rebuild')
+    parser.add_argument('--start-level', type=int, choices=range(1, 11), default=1,
+                        help='First compression level to test, inclusive through level 10 (default 1)')
+    parser.add_argument('--read-memory-mib', type=int, default=512, help='Raw plus encoded indexed-read batch budget in positive MiB (default 512)')
     parser.add_argument('--read-mmap', action='store_true', help='Use Unix read-only BLOB mapping windows')
     parser.add_argument('--progress', type=int, default=1000)
     parser.add_argument('--reserve-gib', type=float, default=8)
@@ -260,8 +262,8 @@ def main():
     protect_paths(args.reference, args.out)
     if args.out.exists():
         raise TestFailure('Require a fresh --out directory', 2)
-    if not 1 <= args.read_memory_mib <= 8192 or (args.read_mmap and os.name != 'posix'):
-        raise TestFailure('Read budget must be 1..8192 MiB; mapping requires Unix', 2)
+    if not 1 <= args.read_memory_mib <= sys.maxsize // (1024 * 1024) or (args.read_mmap and os.name != 'posix'):
+        raise TestFailure('Read budget must be positive and fit host address limits; mapping requires Unix', 2)
     if not 1 <= args.j <= 256 or args.progress <= 0 or args.reserve_gib < 0:
         raise TestFailure('Invalid threads, progress or reserve', 2)
     found = shutil.which(args.bin)
@@ -275,6 +277,7 @@ def main():
     expected = {(f'Gov2.{dataset}', level) for dataset in ('sorted', 'unsorted') for level in range(1, 11)}
     if len(table) != 20 or {(row['dataset'], int(row['compression_level'])) for row in table} != expected:
         raise TestFailure('Reference matrix must contain exactly both datasets at levels 1–10', 2)
+    table = [row for row in table if int(row['compression_level']) >= args.start_level]
     # Explicit local logs are created only after path checks. No reference writes occur.
     args.out.mkdir(parents=True)
     snapshots = {}
@@ -336,6 +339,7 @@ def main():
                    reference=str(args.reference), mode='fast' if args.fast else 'normal', workers=args.j,
                    reference_integrity_audit=not args.fast, silent_progress=args.silent,
                    read_memory_mib=args.read_memory_mib, read_mmap=args.read_mmap,
+                   start_level=args.start_level, end_level=10, case_count=len(references),
                    platform=platform.platform(), started_utc=datetime.now(timezone.utc).isoformat()))
         execute(args, references, binary)
         if not args.fast:
@@ -344,10 +348,11 @@ def main():
             for path, checksum in snapshots.items():
                 if digest(path) != checksum:
                     raise TestFailure(f'Reference changed during testing: {path}')
-        message = ('All 20 raw-ID comparisons passed; reference integrity audit omitted.\n' if args.fast else
-                   'All 20 reference cases passed; reference checksums unchanged.\n')
+        case_count = len(references)
+        message = (f'All {case_count} raw-ID comparisons passed; reference integrity audit omitted.\n' if args.fast else
+                   f'All {case_count} reference cases passed; reference checksums unchanged.\n')
         (args.out / 'PASS.txt').write_text(message)
-        print(f'ALL PASS: 20 cases; reports: {args.out / "summary.tsv"}', flush=True)
+        print(f'ALL PASS: {case_count} cases; reports: {args.out / "summary.tsv"}', flush=True)
     except BaseException as error:
         (args.out / 'FAILURE.txt').write_text(str(error) + '\n')
         raise

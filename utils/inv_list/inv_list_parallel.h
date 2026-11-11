@@ -549,8 +549,8 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                     }
                 }
                 const bm::id64_t next_raw = bm::id64_t(pending_length) * sizeof(unsigned);
-                const bm::id64_t required = raw_bytes + next_raw + end - batch_begin;
-                if (required > read_memory_bytes)
+                if (next_raw > read_memory_bytes - raw_bytes ||
+                    end - batch_begin > read_memory_bytes - raw_bytes - next_raw)
                 {
                     if (jobs.empty())
                     {

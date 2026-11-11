@@ -72,7 +72,8 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
         run([*common, '-decode'], 'Vector exceeds read batch budget')
         index.write_text(original_index)
         blob.write_bytes(encoded_data)
-    for value in ['0', '8193', '-1', 'oops']:
+    run([*common, '-read-memory-mib', 16384, '-decode'])
+    for value in ['0', str(2**64 - 1), '-1', 'oops']:
         run(['-read-memory-mib', value], '-read-memory-mib')
     run(['-read-memory-mib', 1, '-bvin', blob, '-decode'], 'Read options require')
 print('Buffered/mapped indexed reads, batch boundaries, exact IDs, truncation and memory limits PASS')

@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
     common = ['--bin', binary, '--reference', reference, '-j', 2, '--reserve-gib', 0]
     for mode in ('fast', 'normal'):
         out = root / mode
-        read_flags = ['--read-memory-mib', '1']
+        read_flags = ['--read-memory-mib', '16384' if mode == 'fast' else '1']
         if mode == 'fast' and sys.platform != 'win32':
             read_flags.append('--read-mmap')
         result = invoke([*common, *read_flags, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else [])])
@@ -67,6 +67,37 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         assert (out / 'PASS.txt').exists()
         assert len(list(out.glob('*/*.bv'))) == (0 if mode == 'fast' else 20)
         assert snapshot(reference) == before
+    # Level selection skips lower-level stream I/O in fast mode and counts both datasets.
+    for mode, start_level in [('fast', 6), ('fast', 10), ('normal', 10)]:
+        out = root / f'{mode}-start-{start_level}'
+        flags = ['--fast'] if mode == 'fast' else []
+        result = invoke([*common, '--out', out, '--start-level', start_level, *flags])
+        records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
+        expected_cases = 2 * (11 - start_level)
+        assert len(records) == expected_cases
+        assert {(row['dataset'], int(row['level'])) for row in records} == {
+            (f'Gov2.{dataset}', level) for dataset in ('sorted', 'unsorted')
+            for level in range(start_level, 11)}
+        assert {row['status'] for row in records} == {'passed'}
+        assert f'ALL PASS: {expected_cases} cases' in result.stdout
+        assert f'All {expected_cases} ' in (out / 'PASS.txt').read_text()
+        metadata = json.loads((out / 'test.json').read_text())
+        assert (metadata['start_level'], metadata['end_level'], metadata['case_count']) == (
+            start_level, 10, expected_cases)
+        assert not list(out.glob('gov2.*.level-01'))
+        assert snapshot(reference) == before
+    lower_stream = reference / 'gov2.sorted.level-01.bv'
+    unavailable = lower_stream.with_suffix('.unavailable')
+    lower_stream.rename(unavailable)
+    try:
+        invoke([*common, '--out', root / 'skip-missing-lower-stream', '--fast', '--start-level', 6])
+    finally:
+        unavailable.rename(lower_stream)
+    for value in ['0', '11', '-1', 'oops']:
+        out = root / ('invalid-start-' + value)
+        invoke([*common, '--out', out, '--fast', '--start-level', value], 2)
+        assert not out.exists()
+    assert snapshot(reference) == before
     # Fast tests the executable, without consulting checksum/history manifests.
     matrix_path = reference / 'matrix.json'
     original_matrix = matrix_path.read_bytes()
@@ -116,6 +147,6 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
     assert all(row['status'] == 'passed' for row in records)
     assert any(row['serialized_bytes_identical'] == 'False' for row in records)
     assert snapshot(reference) == before
-print('20 fast + 20 full + changed-encoding cases, raw-ID equality, exit propagation and read-only references PASS')
+print('Full/default and selected-level fast/normal cases, changed encodings, raw-ID equality, exit propagation and read-only references PASS')
 if args.crash_test:
     print('Deliberate SIGSEGV propagation: PASS')
