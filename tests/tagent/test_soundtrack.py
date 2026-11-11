@@ -49,7 +49,7 @@ class SoundtrackTests(unittest.TestCase):
                     path = Path(directory) / (theme + '.wav')
                     duration = soundtrack.render(path, theme, event, 0.35, 3, 8)
                     if theme == 'steampunk' and event == 'depart':
-                        self.assertAlmostEqual(duration, 48.3, places=4)
+                        self.assertAlmostEqual(duration, 56.1, places=4)
                     if theme == 'steampunk' and event == 'building':
                         self.assertGreater(duration, soundtrack.morse_intervals(soundtrack.TELEGRAM)[-1][1])
                     with wave.open(str(path), 'rb') as stream:
@@ -61,24 +61,23 @@ class SoundtrackTests(unittest.TestCase):
                     self.assertGreater(max(values), 0)
                     banks.append(data)
 
-    def test_station_music_precedes_unchanged_departure(self):
-        """The mono station excerpt plays first; the accepted train follows a pause."""
+    def test_station_music_crossfades_into_departure(self):
+        """The first 30% of the train overlaps the end of the longer march."""
         with tempfile.TemporaryDirectory() as directory:
             plain = Path(directory) / 'departure.wav'
             combined = Path(directory) / 'station-and-departure.wav'
             soundtrack.render(plain, 'steampunk', 'depart', .35, 2, 8, station_music=False)
             duration = soundtrack.render(combined, 'steampunk', 'depart', .35, 2, 8)
-            self.assertAlmostEqual(duration, 48.3, places=4)
+            self.assertAlmostEqual(duration, 56.1, places=4)
             with wave.open(str(plain), 'rb') as source:
-                departure = source.readframes(source.getnframes())
+                source.setpos(round(6.9 * soundtrack.RATE))
+                tail = array.array('h', source.readframes(source.getnframes()))
+                tail = array.array('h', (round(value * .9) for value in tail)).tobytes()
             with wave.open(str(combined), 'rb') as source:
                 self.assertEqual(source.getnchannels(), 1)
-                music = source.readframes(25 * soundtrack.RATE)
-                pause = source.readframes(round(.3 * soundtrack.RATE))
-                rest = source.readframes(source.getnframes())
-            self.assertTrue(any(music))
-            self.assertFalse(any(pause))
-            self.assertEqual(rest, departure)
+                self.assertTrue(any(source.readframes(33 * soundtrack.RATE)))
+                source.setpos(40 * soundtrack.RATE)
+                self.assertEqual(source.readframes(source.getnframes()), tail)
 
     def test_train_stop_preview_is_mono_and_faded(self):
         """The locomotive stop has quiet boundaries and honors output volume."""
@@ -109,8 +108,7 @@ class SoundtrackTests(unittest.TestCase):
                 samples = array.array('h', stream.readframes(stream.getnframes()))
             def window(start, end):
                 return samples[int(start * soundtrack.RATE):int(end * soundtrack.RATE)]
-            self.assertLess(rms(window(24.8, 25)), rms(window(22, 23)) * .1)
-            self.assertLess(rms(window(47.8, 48.2)), rms(window(42, 43)) * .1)
+            self.assertLess(rms(window(55.8, 56.0)), rms(window(50, 51)) * .2)
             soundtrack.render(path, 'steampunk', 'work', .35)
             with wave.open(str(path)) as stream:
                 samples = array.array('h', stream.readframes(stream.getnframes()))

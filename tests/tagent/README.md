@@ -196,12 +196,13 @@ python3 tests/tagent/generate_train_ambient.py WHEELS.wav BETWEEN_WAGONS.wav FRE
 ```
 
 In steampunk mode, the perf and stress phases each get a prerecorded female
-station announcement, with quiet radio static, followed by 25 seconds of Vasily
+station announcement, with quiet radio static, followed by 40 seconds of Vasily
 Agapkin's march "Farewell of Slavianka" through a station-speaker filter and the
 existing 23-second departure: platform bell, steam whistle, then accelerating
-chuffs and bogie knocks as the train pulls away. Each sequence lasts about 54
-seconds and needs no TTS engine. The march fades over its last three seconds;
-the departure fades over its last five, and a passing train fades over its last
+chuffs and bogie knocks as the train pulls away. The train begins during the last 6.9 seconds of the march, with smooth crossfades. The march fades in over two seconds at increased volume,
+and the departure is attenuated by 10%.
+Each sequence lasts about 62 seconds and needs no TTS engine.
+The departure fades over its last five, and a passing train fades over its last
 two seconds. Testing starts without waiting for playback;
 the announcements are played once per phase, not per worker or build.
 The mono music excerpt is from the [United States Coast Guard Band recording](https://commons.wikimedia.org/wiki/File:Farewell_of_Slavianka_(USCGB).ogg),

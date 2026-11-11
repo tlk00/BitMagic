@@ -472,8 +472,8 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=T
         # Fold both positions into a single mono sample for all output devices.
         samples.append(int(32767 * (left_sample + right_sample) / 2))
     if steam and event == 'depart' and (station_music or announcement):
-        # Assemble separate mono assets in order: announcement, station music,
-        # then the unchanged train. Assets are resampled without runtime tools.
+        # The announcement precedes the march; overlap its final section with
+        # the first 30 percent of the train, using smooth complementary fades.
         asset_dir = Path(__file__).resolve().parent / 'assets'
         intro = array.array('h')
         asset_names = []
@@ -492,7 +492,7 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=T
             if sys.byteorder != 'little':
                 source_samples.byteswap()
             output_frames = round(len(source_samples) * RATE / source_rate)
-            fade_seconds = 3.0 if name == 'station-march.wav' else .15
+            fade_seconds = 6.9 if name == 'station-march.wav' else .15
             fade_frames = round(fade_seconds * RATE)
             for i in range(output_frames):
                 position = i * source_rate / RATE
@@ -501,10 +501,26 @@ def render(path, theme, event, volume=0.35, workers=1, budget=1, station_music=T
                 next_sample = source_samples[min(j + 1, len(source_samples) - 1)]
                 envelope = min(1.0, max(0.0, (output_frames - 1 - i) / fade_frames))
                 envelope = envelope * envelope * (3 - 2 * envelope)
-                intro.append(round(volume * envelope * (source_samples[j] * (1 - fraction) +
-                                                        next_sample * fraction)))
-            intro.extend([0] * round(.3 * RATE))
-        intro.extend(samples)
+                if name == 'station-march.wav':
+                    fade_in = min(1.0, i / (2.0 * RATE))
+                    envelope *= fade_in * fade_in * (3 - 2 * fade_in) * 2.0
+                value = round(volume * envelope * (source_samples[j] * (1 - fraction) +
+                                                   next_sample * fraction))
+                intro.append(max(-32768, min(32767, value)))
+            if name != 'station-march.wav':
+                intro.extend([0] * round(.3 * RATE))
+        if station_music:
+            samples = array.array('h', (round(sample * .9) for sample in samples))
+            overlap = min(round(6.9 * RATE), len(samples), len(intro))
+            offset = len(intro) - overlap
+            for i in range(overlap):
+                t = i / max(1, overlap - 1)
+                fade = t * t * (3 - 2 * t)
+                mixed = intro[offset + i] + round(samples[i] * fade)
+                intro[offset + i] = max(-32768, min(32767, mixed))
+            intro.extend(samples[overlap:])
+        else:
+            intro.extend(samples)
         samples = intro
         duration = len(samples) / RATE
     if sys.byteorder != 'little':
