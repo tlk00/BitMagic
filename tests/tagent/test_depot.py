@@ -166,7 +166,7 @@ class DepotTests(unittest.TestCase):
             self.assertFalse(worker.thread.is_alive())
 
     def test_linux_uses_one_stream_through_announcement(self):
-        """Linux keeps one stream playing at 10% and restores it after a clip."""
+        """Linux keeps one stream playing at 25% and restores it after a clip."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             script = root / 'player.py'
@@ -216,7 +216,7 @@ class DepotTests(unittest.TestCase):
                     muted = array.array('h', raw.read_bytes()[offset:])
                     self.assertTrue(muted)
                     self.assertGreater(len(muted), 2205)
-                    self.assertTrue(all(1100 <= value <= 1200 for value in muted[-2205:]))
+                    self.assertTrue(all(2800 <= value <= 2950 for value in muted[-2205:]))
                     worker.unmute()
                     time.sleep(2)
                     restored = array.array('h', raw.read_bytes())

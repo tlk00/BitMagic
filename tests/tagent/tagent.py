@@ -10,6 +10,7 @@ import concurrent.futures
 import datetime
 import depot
 import fcntl
+import fireman
 import json
 import csv
 import inv_reference
@@ -229,7 +230,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -302,6 +303,8 @@ def arguments():
                         help='Piper conductor model (default: LOG_DIR/piper-voices/en_GB-southern_english_female-low.onnx)')
     parser.add_argument('--piper-engineer-model', default=os.environ.get('PIPER_ENGINEER_MODEL') or None,
                         help='Piper engineer model (default: LOG_DIR/piper-voices/en_US-danny-low.onnx)')
+    parser.add_argument('--piper-fireman-model', default=os.environ.get('PIPER_FIREMAN_MODEL') or None,
+                        help='Piper fireman voice (default: LOG_DIR/piper-voices/en_US-ryan-medium.onnx)')
     parser.add_argument('--no-joker', action='store_true', help='disable engineer jokes')
     parser.add_argument('--no-piper-install', action='store_true',
                         default=os.environ.get('PIPER_INSTALL', 'yes') == 'no',
@@ -315,7 +318,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -337,7 +340,7 @@ def arguments():
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
         parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
@@ -482,6 +485,10 @@ class Agent:
         self.engineer_engine = None
         self.engineer_build_replies = []
         self.joker_clock = joker.Schedule()
+        self.fireman_clock = fireman.Schedule()
+        self.fireman_model = Path(args.piper_fireman_model or self.voices_dir / 'en_US-ryan-medium.onnx').expanduser()
+        self.fireman_available = self.fireman_model.is_file() and Path(str(self.fireman_model) + '.json').is_file() and self.piper_python.is_file()
+        self.fireman_failed = False
         self.conductor_engine = None
         self.conductor_download_thread = None
         self.conductor_download_lock = threading.Lock()
@@ -768,6 +775,7 @@ class Agent:
                                 next_job_message = now + interval
                     if log and log.name in ('perf.log', 'runner.log', 'inv-runner.log'):
                         self.report_intermediate_station()
+                        self.report_fireman()
                     if log and log.name == 'inv-runner.log':
                         if self.inv_active:
                             self.report_inv_progress(*self.inv_active)
@@ -1059,7 +1067,7 @@ class Agent:
             self.conductor_download_thread = threading.Thread(target=prepare, daemon=True)
             self.conductor_download_thread.start()
 
-    def download_piper_voice(self, voice, target_model=None, conductor=False, engineer=False):
+    def download_piper_voice(self, voice, target_model=None, conductor=False, engineer=False, fireman_voice=False):
         """Prepare Piper and stage a missing voice; failures preserve TTS fallback."""
         target_model = target_model or self.piper_model
         try:
@@ -1067,7 +1075,10 @@ class Agent:
             config_path = Path(str(target_model) + '.json')
             if (target_model.is_file() and target_model.stat().st_size > 0 and
                     config_path.is_file() and config_path.stat().st_size > 0):
-                if engineer:
+                if fireman_voice:
+                    self.fireman_available = True
+                    self.fireman_failed = False
+                elif engineer:
                     self.joker_available = True
                     self.joker_failed = False
                 elif conductor:
@@ -1102,7 +1113,10 @@ class Agent:
                     if not target.is_file() or not target.stat().st_size:
                         os.replace(source, target)
                 ready = target_model.is_file() and Path(str(target_model) + '.json').is_file()
-                if engineer:
+                if fireman_voice:
+                    self.fireman_available = ready
+                    self.fireman_failed = False
+                elif engineer:
                     self.joker_available = ready
                     self.joker_failed = False
                 elif conductor:
@@ -1156,9 +1170,9 @@ class Agent:
             self.audio_pending = {key: thread for key, thread in self.audio_pending.items() if thread.is_alive()}
             if event == 'fail' and self.audio_failure_thread and self.audio_failure_thread.is_alive():
                 return
-            coalesced = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'work',
+            coalesced = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work',
                          'dispatch', 'repo-unchanged', 'build-clear', 'build-warning')
-            phase_events = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'work', 'dispatch')
+            phase_events = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work', 'dispatch')
             pending_key = (event, self.audio_phase_generation if event in phase_events else None)
             if event in coalesced and pending_key in self.audio_pending:
                 return
@@ -1213,7 +1227,7 @@ class Agent:
             if not self.audio_available and not (self.args.sound_demo or self.args.sound_preview):
                 return
             if self.depot:
-                self.depot.mute()
+                self.depot.mute(.8) if event == 'fireman' else self.depot.mute()
             with self.audio_mutex:
                 obsolete = ((phase is not None and phase != self.audio_phase_generation) or
                             (build is not None and build != self.audio_build_generation))
@@ -1327,6 +1341,23 @@ class Agent:
                 return
             self.next_station_report = now + random.uniform(600, 1200)
             self.sound('station-' + self.station_phase)
+
+    def report_fireman(self):
+        """Offer a measured, infrequent boiler report during running tests."""
+        if self.args.no_sound or self.args.sound_volume <= 0 or self.args.tts != 'auto' or not self.audio_available:
+            return
+        if self.audio_thread and self.audio_thread.is_alive():
+            return
+        if time.monotonic() < self.fireman_clock.deadline:
+            return
+        try:
+            sample = self.memory_monitor.sample() if self.memory_monitor else {}
+        except (OSError, ValueError, subprocess.SubprocessError):
+            sample = {}
+        message = self.fireman_clock.due(sample)
+        if message:
+            self.say('FIREMAN: ' + message)
+            self.sound('fireman', workers=message)
 
     def report_joker(self):
         """Offer occasional engineer chatter only while test jobs are running."""
@@ -1453,7 +1484,7 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
-    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0, length_scale=1.0):
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0, length_scale=1.0, fireman_voice=False):
         """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
 
         voice is a callable so eSpeak voice selection happens only when needed.
@@ -1467,6 +1498,9 @@ class Agent:
         if engineer:
             model = self.joker_model
             available = self.joker_available and not self.joker_failed
+        if fireman_voice:
+            model = self.fireman_model
+            available = self.fireman_available and not self.fireman_failed
         if (not self.tts_engine and not available
                 and not self.tts_warned):
             self.tts_warned = True
@@ -1496,7 +1530,9 @@ class Agent:
                         self.say('TTS: Conductor using Piper (' + str(model) + ')')
                     return duration
                 except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
-                    if engineer:
+                    if fireman_voice:
+                        self.fireman_failed = True
+                    elif engineer:
                         self.joker_failed = True
                     elif conductor:
                         self.piper_conductor_failed = True
@@ -1596,7 +1632,14 @@ class Agent:
         try:
             suffix = '-' + str(workers) if event == 'work' else ''
             path = self.audio_dir / ('sound-' + self.args.sound_theme + '-' + event + suffix + '.wav')
-            if event == 'joker':
+            if event == 'fireman':
+                message = workers if isinstance(workers, str) else 'Fireman Sam to Engineer Joe. We are pulling hard up this grade! I am feeding the fire, but this engine wants every pound of steam we can give her!'
+                duration = self.synthesize_announcement(path, message, lambda: 'en-us+m2', 40, background='train', fireman_voice=True, length_scale=1.08)
+                if duration is None:
+                    return False
+                if self.depot is None and (self.args.sound_demo or self.args.sound_preview):
+                    depot.mix_preview_background(path, self.args.sound_volume)
+            elif event == 'joker':
                 duration = self.synthesize_announcement(path, workers, lambda: 'en-us+m3', 40,
                                                         background='train', engineer=True)
                 if duration is None:
@@ -2336,6 +2379,7 @@ class Agent:
         self.say('SAMPLES BUILD COMPLETE | warnings: {}'.format(self.sample_warnings.count))
         self.finish_build(True)
         self.test_started_at = time.monotonic()
+        self.fireman_clock.start()
         with self.station_visit_lock:
             self.next_intermediate_station = max(self.test_started_at, self.last_station_visit) + random.uniform(3000, 5400)
         self.sound('build')
@@ -2455,6 +2499,21 @@ class Agent:
             if self.args.sound_preview in ('joker', 'fail', 'interrupt'):
                 while engineer_thread.is_alive() and not self.stopping.is_set():
                     engineer_thread.join(timeout=.25)
+        if not self.args.no_sound and self.args.tts == 'auto' and not self.args.check:
+            def prepare_fireman():
+                if self.piper_download_thread:
+                    self.piper_download_thread.join()
+                if not self.stopping.is_set() and not self.fireman_available:
+                    if self.fireman_model.suffix != '.onnx' or not re.fullmatch(
+                            r'[A-Za-z]{2,3}_[A-Za-z]{2}-[A-Za-z0-9_]+-(?:x_low|low|medium|high)', self.fireman_model.stem):
+                        self.say('Fireman Piper voice path is not a downloadable voice name; using fallback')
+                        return
+                    self.download_piper_voice(self.fireman_model.stem, self.fireman_model, fireman_voice=True)
+            fireman_thread = threading.Thread(target=prepare_fireman, daemon=True)
+            fireman_thread.start()
+            if self.args.sound_preview == 'fireman' or self.args.sound_demo:
+                while fireman_thread.is_alive() and not self.stopping.is_set():
+                    fireman_thread.join(timeout=.25)
         if (self.args.sound_demo or self.args.sound_preview) and self.piper_download_thread:
             while self.piper_download_thread.is_alive() and not self.stopping.is_set():
                 self.piper_download_thread.join(timeout=.25)
@@ -2484,6 +2543,7 @@ class Agent:
                     sequence.append(('train-normal-demo', 1))
                 sequence.append(('compilation-depot', 'Dispatch to BitMagic. Welcome to Compilation Depot. The build crews are at work.'))
                 sequence.append(('train-stop', 1))
+                sequence.append(('fireman', 'Fireman Sam to Engineer Joe. We are pulling hard up this grade! The engine needs every pound of steam we can give her!'))
                 sequence.append(('toronto', 'Conductor to Dispatch. Arriving at Long Haul Junction. Testing continues on schedule.'))
             clips = []
             for event, workers in sequence:

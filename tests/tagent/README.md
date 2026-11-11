@@ -165,7 +165,7 @@ During normal steampunk operation, a quiet depot ambience loops in the backgroun
 When perf or stress tests start, it transitions to a five-minute mono moving-train
 loop with recorded wheel sounds and occasional quiet tonal Morse for BITMAGIC.
 At the end of the tests, the background returns to the depot.
-It fades to 10% over about two seconds before each sound event, then returns
+It fades to 25% over about two seconds before each sound event, then returns
 over about three seconds. On Linux, both backgrounds use a continuous PCM stream
 to one player, including while foreground announcements play. Linux tries PipeWire, PulseAudio and ALSA in
 that order. On macOS, playback uses one-second WAV chunks with short tapers at
@@ -471,7 +471,7 @@ failure signals do not interrupt an already queued or active SOS and distress
 exchange. Before normal shutdown or launcher restart, TAgent closes the audio
 queue to new messages and drains it; Ctrl-C still stops child processes promptly.
 
-During foreground announcements the background ambience fades down to 10% of
+During foreground announcements the background ambience fades down to 25% of
 its normal level, then fades back up. Linux keeps its continuous audio stream.
 
 Every produced, supported perf debug binary runs with `--fast`, including in
@@ -715,3 +715,20 @@ seconds; the departure announcement uses the depot background. Both use the
 standard serialized audio queue; the success announcement is
 not issued after a failed or update-interrupted build. Preview the arrival with
 `./run_tagent.sh --sound-preview compilation-depot`.
+
+### Fireman Sam
+
+During active tests Sam reports to Engineer Joe at random intervals of 15–30
+minutes. On Linux, the average host CPU utilization between reports determines
+whether the fire is easy, steady, or working hard on a grade. Available RAM at
+or below 50% adds a coal warning; at or below 15% it adds an urgent warning.
+A lower cgroup memory limit is accounted for. The imagery describes resource
+conditions; it does not claim to measure actual steam or coal. If CPU or memory
+metrics are unavailable (including on macOS), the corresponding statement is
+neutral or omitted. The normal audio queue suppresses stale phase reports and
+keeps the train background at 80% during Sam's transmission.
+
+Sam uses the optional `en_US-ryan-medium` Piper model in `LOG_DIR/piper-voices`,
+with eSpeak fallback and the existing optional download controls. Override it
+with `PIPER_FIREMAN_MODEL` or `--piper-fireman-model`. Preview with
+`./run_tagent.sh --sound-preview fireman`; the sound demo includes Sam too.

@@ -118,6 +118,26 @@ def read_loop(mode):
     return rate, samples
 
 
+def mix_preview_background(path, volume, mode='train-normal'):
+    """Overlay a steady moving-train bed on a mono 44.1 kHz preview WAV."""
+    rate, background = read_loop(mode)
+    with wave.open(str(path), 'rb') as stream:
+        if (stream.getnchannels(), stream.getsampwidth(), stream.getframerate()) != (1, 2, 44100):
+            raise ValueError('preview audio must be 44.1 kHz mono PCM')
+        data = array.array('h', stream.readframes(stream.getnframes()))
+    if sys.byteorder != 'little':
+        data.byteswap()
+    gain = .8 * volume / .35
+    for index, value in enumerate(data):
+        bed = background[int(index * rate / 44100) % len(background)]
+        data[index] = max(-32768, min(32767, round(value + bed * gain)))
+    if sys.byteorder != 'little':
+        data.byteswap()
+    with wave.open(str(path), 'wb') as stream:
+        stream.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+        stream.writeframes(data.tobytes())
+
+
 def render_preview(path, volume, mode='depot', seconds=None):
     """Write one scaled ambience loop to path and return its duration in seconds."""
     rate, samples = read_loop(mode)
@@ -147,6 +167,7 @@ class Depot:
         """Bind the worker to an agent's audio configuration and child registry."""
         self.agent = agent
         self.pause = threading.Event()
+        self.duck_level = .25
         self.quiet = threading.Event()
         self.stop = threading.Event()
         self.thread = None
@@ -163,8 +184,9 @@ class Depot:
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
-    def mute(self):
-        """Fade to 10 percent and wait until the reduced background is playing."""
+    def mute(self, level=.25):
+        """Fade to the requested level and wait until the background is reduced."""
+        self.duck_level = level
         self.pause.set()
         while self.thread and self.thread.is_alive() and not self.agent.stopping.is_set():
             if self.quiet.wait(.2):
@@ -203,11 +225,11 @@ class Depot:
                         current = self.mode
                         rate, samples = read_loop(current)
                         position = 0
-                    if self.pause.is_set() and self.mode == current and gain <= .1:
+                    if self.pause.is_set() and self.mode == current and gain <= self.duck_level + 1e-6:
                         self.quiet.set()
                     elif not self.pause.is_set():
                         self.quiet.clear()
-                    target = 0.0 if self.mode != current else (.1 if self.pause.is_set() else 1.0)
+                    target = 0.0 if self.mode != current else (self.duck_level if self.pause.is_set() else 1.0)
                     end_gain = max(target, gain - .5) if gain > target else min(target, gain + 1 / 3)
                     volume = self.agent.args.sound_volume / .35 * 1.15
                     data = array.array('h')
@@ -275,11 +297,11 @@ class Depot:
                         stream.close()
                         stream = None
                     rate, position = new_rate, 0
-                if self.pause.is_set() and self.mode == current and gain <= .1:
+                if self.pause.is_set() and self.mode == current and gain <= self.duck_level + 1e-6:
                     self.quiet.set()
                 elif not self.pause.is_set():
                     self.quiet.clear()
-                target = 0.0 if self.mode != current else (.1 if self.pause.is_set() else 1.0)
+                target = 0.0 if self.mode != current else (self.duck_level if self.pause.is_set() else 1.0)
                 count = max(1, rate // 4)
                 elapsed = count / rate
                 end_gain = (max(target, gain - elapsed / 2) if gain > target
