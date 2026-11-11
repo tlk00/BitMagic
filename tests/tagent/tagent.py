@@ -1862,7 +1862,7 @@ class Agent:
             names.extend('bminv_' + mode + '_' + suffix for mode in ('debug', 'release'))
         return names
 
-    def report_inv_progress(self, output, name):
+    def report_inv_progress(self, output, name, total):
         """Report completed cases and current phase without blocking validation."""
         now = time.monotonic()
         if now < self.inv_progress_time:
@@ -1877,10 +1877,10 @@ class Agent:
                       if current else 'preparing or finalizing')
         except (OSError, csv.Error, KeyError):
             complete, detail = 0, 'checking reference integrity or preparing'
-        message = ('INV PROGRESS | {} | {} of 20 cases completed | {}'.format(name, complete, detail))
+        message = ('INV PROGRESS | {} | {} of {} cases completed | {}'.format(name, complete, total, detail))
         self.say(message)
         self.sound('inv-announcement', workers=('Conductor to Dispatch. Inverted list validation. '
-                   '{} of 20 cases completed. {}.'.format(complete, detail.replace('-', ' '))))
+                   '{} of {} cases completed. {}.'.format(complete, total, detail.replace('-', ' '))))
 
     def inv_read_budget(self):
         """Resolve an explicit budget or sample Linux available RAM before each variant."""
@@ -1934,12 +1934,14 @@ class Agent:
                 argv.append('--read-mmap')
             if self.args.fast or '_debug' in name:
                 argv.append('--fast')
+            if self.args.fast:
+                argv.extend(['--start-level', '6'])
             self.say('INV START | {} | {} workers | read budget {} MiB | {} | logs {}'.format(
                 name, self.jobs, read_budget,
                 'mmap' if self.args.inv_read_mmap else 'buffered', base))
             (base / 'command.json').write_text(json.dumps(argv, indent=2) + '\n')
             self.inv_progress_time = 0
-            self.inv_active = (output, name)
+            self.inv_active = (output, name, 10 if self.args.fast else 20)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
             except CommandFailure as error:

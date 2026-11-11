@@ -428,6 +428,9 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(argv[argv.index('--read-memory-mib') + 1], str(budget))
             self.assertEqual('--read-mmap' in argv, mmap)
             self.assertEqual('--fast' in argv, fast)
+            self.assertEqual('--start-level' in argv, fast)
+            if fast:
+                self.assertEqual(argv[argv.index('--start-level') + 1], '6')
             import json
             saved = json.loads((run / 'inv_list/bminv_release_avx2/command.json').read_text())
             self.assertEqual(saved, argv)
@@ -451,6 +454,18 @@ class SupervisorTests(unittest.TestCase):
         self.agent.args.inv_read_memory_mib = None
         with patch.object(ta.platform, 'system', return_value='Darwin'):
             self.assertEqual(self.agent.inv_read_budget(), 8192)
+
+    def test_inv_progress_uses_selected_case_count(self):
+        """Progress and speech report the selected fast or normal case total."""
+        output = self.root / 'results'
+        output.mkdir()
+        (output / 'summary.tsv').write_text('dataset\tlevel\tphase\tstatus\nGov2.sorted\t6\tverify\tpassed\n')
+        for total in (10, 20):
+            self.agent.inv_progress_time = 0
+            with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound') as sound:
+                self.agent.report_inv_progress(output, 'bminv_release', total)
+            self.assertIn('1 of {} cases completed'.format(total), say.call_args.args[0])
+            self.assertIn('1 of {} cases completed'.format(total), sound.call_args.kwargs['workers'])
 
     def test_inv_reader_cli_validation(self):
         """Reader defaults, overrides and invalid budgets are resolved at startup."""

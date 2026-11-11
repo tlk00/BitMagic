@@ -663,3 +663,9 @@ through to the inv_list runner's test.json and command logs.
 
 For example, on WIN1:
 `./run_tagent.sh --fast --log-dir /mnt/d/TAgent-logs --read-memory-mib 8192 --read-mmap`.
+
+
+Fast inv_list validation starts at compression level 6 and covers levels 6–10
+for each of the sorted and unsorted datasets, for 10 cases. Progress reports use
+that total. The subsequent normal cycle covers all 20 cases at levels 1–10,
+including fast-mode debug variants when enabled.
