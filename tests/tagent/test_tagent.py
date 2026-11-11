@@ -500,6 +500,22 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(ta.platform, 'system', return_value='Darwin'):
             self.assertEqual(self.agent.inv_read_budget(), 8192)
 
+    def test_station_visits_obey_cooldown_and_report_completed_stage(self):
+        """A recent station visit becomes a short, truthful conductor report."""
+        self.agent.args.no_sound = False
+        self.agent.args.sound_volume = .35
+        with patch.object(self.agent, 'sound') as sound, patch.object(ta.time, 'monotonic', return_value=10000):
+            self.agent.station_visit('inv_list')
+            self.assertEqual(sound.call_args.args[0], 'station-visit')
+            self.assertIn('Validation Junction', sound.call_args.kwargs['workers'])
+            self.agent.station_visit('perf')
+            self.assertEqual(sound.call_args.args[0], 'inv-announcement')
+            self.assertIn('Performance Terminal', sound.call_args.kwargs['workers'])
+        with patch.object(self.agent, 'sound') as sound, patch.object(ta.time, 'monotonic', return_value=11801):
+            self.agent.station_visit('stress', final=True)
+            self.assertEqual(sound.call_args.args[0], 'station-visit')
+            self.assertIn('All scheduled tests have passed', sound.call_args.kwargs['workers'])
+
     def test_inv_progress_uses_selected_case_count(self):
         """Progress and speech report the selected fast or normal case total."""
         output = self.root / 'results'

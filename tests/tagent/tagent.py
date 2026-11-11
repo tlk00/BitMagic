@@ -229,7 +229,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -315,7 +315,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -337,7 +337,7 @@ def arguments():
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
         parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
@@ -426,6 +426,7 @@ class Agent:
         self.attempts = 0
         self.commit = 'unknown'
         self.last_sound = 0
+        self.last_station_visit = -math.inf
         self.next_train_at = math.inf
         self.audio_thread = None
         self.audio_active = None
@@ -1674,6 +1675,16 @@ class Agent:
             elif event in ('repo-new', 'repo-build', 'repo-unchanged', 'repo-restart'):
                 duration = self.render_repo_report(path, event != 'repo-unchanged',
                                                    event == 'repo-build', event == 'repo-restart')
+            elif event == 'station-visit':
+                self.say('CONDUCTOR: ' + workers)
+                voice = self.temp_dir / ('station-voice-{}.wav'.format(threading.get_ident()))
+                try:
+                    spoken = self.synthesize_announcement(voice, workers, lambda: 'en-us+f3', 50,
+                                                          background='train', conductor=True)
+                    duration = soundtrack.render_station_visit(path, voice if spoken is not None else None,
+                                                               self.args.sound_volume)
+                finally:
+                    voice.unlink(missing_ok=True)
             elif event == 'train-stop':
                 duration = soundtrack.render_train_stop(path, self.args.sound_volume)
             elif event == 'train-normal-demo':
@@ -1973,6 +1984,25 @@ class Agent:
             self.say('INV READ BUDGET | available RAM unavailable: {} | using 512 MiB'.format(error))
             return 512
 
+    def station_visit(self, stage, final=False):
+        """Announce a completed stage; limit long station visits to once per 30 minutes."""
+        messages = {
+            'inv_list': ('Arriving at Validation Junction. Reference checks are complete.',
+                         'Pulling into Validation Junction. Reference validation is complete.'),
+            'perf': ('Arriving at Performance Terminal. Speed trials are complete.',
+                     'Pulling into Performance Terminal. The speed tests are complete.'),
+            'stress': ('Arriving at Stress Test Station. The stress run is complete.',
+                       'Pulling into Stress Test Station. Stress testing is complete.'),
+        }
+        message = 'Conductor to Dispatch. ' + (
+            'Arriving at Completion Yard. All scheduled tests have passed.' if final else random.choice(messages[stage]))
+        if (not self.args.no_sound and self.args.sound_volume > 0 and self.audio_available
+                and time.monotonic() - self.last_station_visit >= 1800):
+            self.last_station_visit = time.monotonic()
+            self.sound('station-visit', workers=message)
+        else:
+            self.sound('inv-announcement', workers=message)
+
     def test_inv_stage(self, run, manifest):
         """Validate reference collections with supported inv_list binaries in sequence."""
         self.memory_phase = 'inv_list'
@@ -2035,7 +2065,6 @@ class Agent:
             if status == 'skipped-update' or self.update_waiting():
                 return 'updated'
             self.say('INV PASS | {} | {}'.format(name, output / 'summary.tsv'))
-        self.sound('inv-announcement', workers='Conductor to Dispatch. Inverted list validation completed successfully.')
         return True
 
     def test_perf_stage(self, run, manifest):
@@ -2280,6 +2309,7 @@ class Agent:
         try:
             self.say('TEST MODE | ' + ('Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'))
             previous_stage = None
+            enabled_stages = [stage for stage, _ in stages if stage not in self.args.suppress]
             for stage, execute in stages:
                 if stage in self.args.suppress:
                     self.say('TEST STAGE SUPPRESSED | ' + stage)
@@ -2291,6 +2321,7 @@ class Agent:
                 if execute(run, manifest) == 'updated':
                     self.args.force = True
                     return 'updated'
+                self.station_visit(stage, final=not requested_fast and stage == enabled_stages[-1])
             if requested_fast:
                 # Require a fresh remote check before investing in the longer run.
                 self.next_remote_poll = 0
@@ -2318,6 +2349,7 @@ class Agent:
                     if execute(normal_run, manifest) == 'updated':
                         self.args.force = True
                         return 'updated'
+                    self.station_visit(stage, final=stage == enabled_stages[-1])
                 self.next_remote_poll = 0
                 if self.update_waiting():
                     self.args.force = True
@@ -2403,6 +2435,7 @@ class Agent:
                 else:
                     sequence.append(('train-normal-demo', 1))
                 sequence.append(('train-stop', 1))
+                sequence.append(('station-visit', 'Conductor to Dispatch. Arriving at Performance Terminal. Speed trials are complete.'))
             clips = []
             for event, workers in sequence:
                 self.say('DEMO ' + event + (' | workers ' + str(workers) if event == 'work' else ''))
@@ -2433,7 +2466,8 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.audio_dir))
             return 0
         if self.args.sound_preview:
-            preview_count = ('Conductor to Dispatch. Sorted round trip. The train is climbing slowly, but we are making progress.' if self.args.sound_preview == 'inv-progress' else
+            preview_count = ('Conductor to Dispatch. Arriving at Performance Terminal. Speed trials are complete.' if self.args.sound_preview == 'station-visit' else
+                             'Conductor to Dispatch. Sorted round trip. The train is climbing slowly, but we are making progress.' if self.args.sound_preview == 'inv-progress' else
                              random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
                              'Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)
                              if self.args.sound_preview == 'joker' else ('perf_release_64', 12) if self.args.sound_preview == 'perf-progress' else

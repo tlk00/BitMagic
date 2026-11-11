@@ -23,6 +23,23 @@ class SoundtrackTests(unittest.TestCase):
         self.piper_environment.start()
         self.addCleanup(self.piper_environment.stop)
 
+    def test_station_announcement_waits_and_ducks_bed(self):
+        """Station speech starts at eight seconds and reduces the bed by 20 percent."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bed, voice, result = (root / name for name in ('bed.wav', 'voice.wav', 'out.wav'))
+            for path, duration, value in ((bed, 12, 1000), (voice, 2, 2000)):
+                with wave.open(str(path), 'wb') as stream:
+                    stream.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+                    stream.writeframes(array.array('h', [value] * (duration * 44100)).tobytes())
+            soundtrack.render_station_visit(result, voice, .35 / 1.15, bed)
+            with wave.open(str(result), 'rb') as stream:
+                data = array.array('h', stream.readframes(stream.getnframes()))
+            self.assertEqual(data[6 * 44100], 1000)
+            self.assertEqual(data[8 * 44100], 2800)
+            self.assertEqual(data[10 * 44100], 800)
+            self.assertGreater(data[11 * 44100], 800)
+
     def test_banks(self):
         """Every event is valid mono PCM with bounded peaks."""
         with tempfile.TemporaryDirectory() as directory:

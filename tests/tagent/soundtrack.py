@@ -43,6 +43,51 @@ def render_train_stop(path, volume):
     return len(samples) / RATE
 
 
+def render_station_visit(path, voice_path, volume, asset=None):
+    """Mix the station bed and optional announcement after eight seconds.
+
+    The mono 44.1 kHz asset contains its own entrance and exit fades. The
+    announcement is an already rendered mono WAV; the station bed is gently
+    reduced to 80 percent around it. Return the rendered duration in seconds.
+    """
+    asset = asset or Path(__file__).resolve().parent / 'assets' / 'station-ambience.wav'
+    with wave.open(str(asset), 'rb') as source:
+        if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
+            raise ValueError('Invalid station ambience audio format')
+        bed = array.array('h', source.readframes(source.getnframes()))
+    voice = array.array('h')
+    if voice_path is not None:
+        with wave.open(str(voice_path), 'rb') as source:
+            if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
+                raise ValueError('Invalid station announcement audio format')
+            voice = array.array('h', source.readframes(source.getnframes()))
+    if sys.byteorder != 'little':
+        bed.byteswap()
+        voice.byteswap()
+    offset = 8 * RATE
+    end = offset + len(voice)
+    if end > len(bed):
+        bed.extend([0] * (end - len(bed)))
+    gain = volume / .35 * 1.15
+    result = array.array('h')
+    for index, sample in enumerate(bed):
+        if voice:
+            duck = min(1.0, max(0.0, (index - (offset - RATE)) / RATE),
+                       max(0.0, (end + 2 * RATE - index) / (2 * RATE)))
+        else:
+            duck = 0.0
+        spoken_index = index - offset
+        spoken = voice[spoken_index] if 0 <= spoken_index < len(voice) else 0
+        mixed = round(sample * gain * (1 - .2 * duck) + spoken)
+        result.append(max(-32768, min(32767, mixed)))
+    if sys.byteorder != 'little':
+        result.byteswap()
+    with wave.open(str(path), 'wb') as output:
+        output.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
+        output.writeframes(result.tobytes())
+    return len(result) / RATE
+
+
 def render_dispatch(path, volume=0.35):
     """Write the bundled mono radio message at the requested volume.
 

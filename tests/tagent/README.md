@@ -689,3 +689,21 @@ vectors are still being processed.
 The conductor's inv_list progress report uses shorter speech and slower pacing;
 full vector counts, percentage and elapsed seconds remain in the console log.
 Audition the voice with `./run_tagent.sh --sound-preview inv-progress`.
+
+### Station visits
+
+A successful test stage may trigger a station visit, at most once per 30 minutes;
+more frequent stage transitions receive a short conductor report instead. The
+station bed fades in, the conductor speaks after eight seconds, and the bed is
+reduced by 20% during speech. A missing TTS engine leaves the station ambience
+playing without speech. Queued events use the normal serialized audio queue and
+never delay test execution. Preview with `./run_tagent.sh --sound-preview station-visit`.
+The sound demo also includes a station visit.
+
+The station ambience uses one original: [Train station, ambience, annoucements,
+VIA rail, TORONTO, 2011.wav](https://freesound.org/people/TRP/sounds/577322/)
+by TRP, listed as [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+on Freesound when checked on 2026-11-11. The publicly available compressed preview was used. It was cropped, converted to
+mono and 44.1 kHz, attenuated and faded; the generated WAV is
+`assets/station-ambience.wav`. Other recorded sources and their licenses are
+listed above with their respective effects.
