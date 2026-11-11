@@ -26,6 +26,7 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(sys, 'argv', ['tagent', '--no-sound', '--min-free-gb', '0.001']):
             args = ta.arguments()
         args.state_dir = self.root / 'state'
+        args.suppress.add('inv_list')
         self.agent = ta.Agent(args)
         self.agent.repo = self.root
         self.agent.arm = True
@@ -365,6 +366,55 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('All stress runs are complete.', messages[-1])
         self.assertEqual(messages[-1].count('stress run completed successfully.'), 2)
 
+    def test_reference_discovery_rejects_partial_copy(self):
+        """A manifest alone must not make a partial copy eligible."""
+        import csv
+        candidate = self.agent.home / 'gov2-reference-fixture'
+        candidate.mkdir()
+        rows = []
+        for dataset in ('sorted', 'unsorted'):
+            for level in range(1, 11):
+                rows.append({'dataset': 'Gov2.' + dataset, 'compression_level': level,
+                             'stream_file': 'gov2.{}.level-{:02d}.bv'.format(dataset, level),
+                             'compressed_bytes': 1, 'index_bytes': 1, 'input_bytes': 1})
+        with (candidate / 'references.tsv').open('w', newline='') as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0], delimiter='\t')
+            writer.writeheader()
+            writer.writerows(rows)
+        self.assertFalse(ta.inv_reference.inspect_reference(candidate)[0])
+        (candidate / 'Gov2Flat').mkdir()
+        for dataset in ('sorted', 'unsorted'):
+            (candidate / 'Gov2Flat' / ('gov2.' + dataset)).write_bytes(b'x')
+        for row in rows:
+            file = candidate / row['stream_file']
+            file.write_bytes(b'x')
+            file.with_suffix('.idx').write_bytes(b'x')
+        self.assertTrue(ta.inv_reference.inspect_reference(candidate)[0])
+        self.assertFalse(ta.inv_reference.inspect_reference(candidate, full=True)[0])
+        (candidate / 'matrix.json').write_text('{}')
+        self.assertTrue(ta.inv_reference.inspect_reference(candidate, full=True)[0])
+
+    def test_inv_fast_selects_one_best_supported_variant(self):
+        """Fast mode uses one supported release binary and the CPU budget."""
+        self.agent.args.fast = True
+        self.agent.inv_reference = self.root / 'reference'
+        self.agent.flags = {'sse2', 'sse4_2', 'avx2'}
+        self.agent.arm = False
+        self.agent.next_remote_poll = float('inf')
+        manifest = {'builds': {'inv_list': self.agent.inv_builds()}}
+        with patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_inv_stage(self.root, manifest))
+        args = command.call_args.args[0]
+        self.assertEqual(Path(args[args.index('--bin') + 1]).name, 'bminv_release_avx2')
+        self.assertIn('--fast', args)
+        self.assertIn('--silent', args)
+        self.assertEqual(args[args.index('--threads') + 1], '2')
+
+    def test_suppress_options_combine(self):
+        with patch.object(sys, 'argv', ['tagent', '--suppress', 'perf,inv_list', '--suppress', 'stress']):
+            self.assertEqual(ta.arguments().suppress, {'perf', 'inv_list', 'stress'})
+
     def test_no_debug_skips_execution_but_keeps_builds(self):
         """Pedantic release runs remain enabled while debug binaries are built."""
         self.fixture()
@@ -670,7 +720,7 @@ class SupervisorTests(unittest.TestCase):
     def test_update_stops_at_perf_boundary(self):
         """A discovered update waits for all perf jobs and skips old stress builds."""
         self.fixture()
-        with patch.object(self.agent, 'update_waiting', return_value=True):
+        with patch.object(self.agent, 'update_waiting', side_effect=[False, True]):
             self.assertEqual(self.agent.cycle(), 'updated')
         run = next(self.agent.home.glob('*abc123'))
         self.assertTrue((run / 'perf_release/perf.log').exists())
@@ -795,7 +845,7 @@ class SupervisorTests(unittest.TestCase):
         self.agent.samples_complete = True
         with patch.object(self.agent, 'sound') as sound:
             self.agent.build_progress(logs[0])
-        report = sound.call_args.kwargs['workers']
+        report = sound.call_args_list[0].kwargs['workers']
         self.assertEqual(report[0], 4)
         self.assertEqual(self.agent.sample_warnings.count, 1)
         self.assertIn('Sample build is complete.', ta.build_report_text(report[0], report[1:]))

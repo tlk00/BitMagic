@@ -549,3 +549,27 @@ binaries are still built and checked. Debug execution is enabled by default.
 This option can be combined with `--fast` or `--pedantic`; in pedantic mode
 release coverage is still expanded. Changing this option triggers a new cycle
 when using `--startup changed`.
+
+### inv_list reference validation and stage selection
+
+After building, TAgent runs inv_list, perf, then stress. The stage order is in
+the `stages` tuple in `cycle()`. For inv_list, place the complete Gov2 reference
+collection under `TAgent-logs/gov2-reference-*`, or specify
+`--path-to-invref PATH`. Discovery checks the 20-case matrix and expected file
+sizes; normal mode additionally requires `matrix.json`. Missing, incomplete,
+or ambiguous references are startup errors. The runner performs its own checks.
+
+Use `--suppress perf,inv_list` (or repeat `--suppress`) to skip selected test
+stages: `perf`, `inv_list`, `stress`. Builds still run. For example:
+
+```bash
+./run_tagent.sh --log-dir /mnt/d/TAgent-logs --fast --suppress perf,stress
+```
+
+Fast mode selects one supported release inv_list variant (AVX-512 when enabled
+and supported, otherwise AVX2, SSE4.2, SSE2, or scalar; NEON on ARM). Normal
+mode tests all supported release variants; `--pedantic` adds debug variants
+unless `--no-debug` is set. Debug reference validation uses fast mode. Each
+runner uses the TAgent worker budget, `--silent`, and a fresh per-cycle output
+directory. Progress is reported at ten-minute intervals from `summary.tsv`;
+preflight checksum work is shown as preparation. Reference inputs are read only.

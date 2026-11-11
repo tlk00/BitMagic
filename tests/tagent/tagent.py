@@ -11,6 +11,8 @@ import datetime
 import depot
 import fcntl
 import json
+import csv
+import inv_reference
 import joker
 import math
 import memory_monitor
@@ -199,6 +201,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs\n'
                 '  ./run_tagent.sh --sound-preview joker\n'
                 '  ./run_tagent.sh --once --jobs 4\n'
+                '  ./run_tagent.sh --fast --suppress perf,stress --log-dir /mnt/d/TAgent-logs\n'
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
@@ -227,6 +230,8 @@ def arguments():
     parser.add_argument('--startup', choices=('build', 'changed'),
                         default=os.environ.get('STARTUP', 'build'),
                         help='build on every manual start, or only when changed (default: %(default)s)')
+    parser.add_argument('--path-to-invref', type=Path, help='Gov2 reference directory; default: discover gov2-reference-* under log directory')
+    parser.add_argument('--suppress', action='append', default=[], metavar='STAGES', help='skip test stages: perf, inv_list, stress; comma-separated or repeat option')
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
@@ -280,6 +285,9 @@ def arguments():
     parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
+    args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
+    if args.suppress - {'perf', 'inv_list', 'stress'}:
+        parser.error('--suppress accepts perf, inv_list, stress')
     if args.fast and args.pedantic:
         parser.error('--fast and --pedantic are mutually exclusive')
     args.full_sound_preview = args.sound_preview == 'all'
@@ -365,6 +373,9 @@ class Agent:
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.voices_dir = self.home / 'piper-voices'
         self.voices_dir.mkdir(parents=True, exist_ok=True)
+        self.inv_reference = None
+        self.inv_progress_time = 0
+        self.inv_active = None
         self.memory_monitor = None
         self.memory_phase = 'startup'
         self.jemalloc = None
@@ -636,7 +647,7 @@ class Agent:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
                 if log and self.pending_tip and (log.name == 'perf.log' or
-                        (self.args.restart_on_update and log.name in ('runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
+                        (self.args.restart_on_update and log.name in ('runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
                 env = dict(os.environ, TMPDIR=str(self.temp_dir), TMP=str(self.temp_dir), TEMP=str(self.temp_dir),
@@ -676,6 +687,12 @@ class Agent:
                                 return 'skipped-update'
                     else:
                         self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
+                    if log and log.name == 'inv-runner.log':
+                        if self.inv_active:
+                            self.report_inv_progress(*self.inv_active)
+                        self.poll_remote()
+                        if self.args.restart_on_update and self.pending_tip:
+                            return 'skipped-update'
                     if log and log.name in ('perf.log', 'runner.log'):
                         self.report_station_status()
                         self.report_joker()
@@ -794,6 +811,27 @@ class Agent:
             self.jemalloc = None
             self.say('ALLOCATOR: jemalloc check failed; using system allocator | ' + str(error))
 
+    def discover_inv_reference(self):
+        """Select one complete reference collection or fail with diagnostics."""
+        if 'inv_list' in self.args.suppress:
+            self.say('INV REFERENCE | validation suppressed')
+            return
+        candidates = ([self.args.path_to_invref] if self.args.path_to_invref else
+                      sorted(self.home.glob('gov2-reference-*')))
+        matches = []
+        for candidate in candidates:
+            valid, detail = inv_reference.inspect_reference(candidate, full=not self.args.fast)
+            self.say('INV REFERENCE | {} | {}'.format(candidate, detail))
+            if valid:
+                matches.append(candidate.resolve())
+        if len(matches) != 1:
+            raise Failure('Expected exactly one complete inv_list reference; use --path-to-invref or --suppress inv_list')
+        if self.jobs > 256:
+            raise Failure('inv_list runner supports at most 256 workers; set --jobs 256 or lower')
+        self.inv_reference = matches[0]
+        if self.home == self.inv_reference or self.home.is_relative_to(self.inv_reference):
+            raise Failure('inv_list reference cannot contain the TAgent log directory')
+
     def validate(self):
         """Validate platform, tools, checkout, lock and CPU instruction capabilities."""
         for tool in ('git', 'make', os.environ.get('CXX', 'c++'), 'bash'):
@@ -820,6 +858,7 @@ class Agent:
             self.flags = set(Path('/proc/cpuinfo').read_text().lower().replace('.', '_').split())
         self.resource_check()
         self.detect_jemalloc()
+        self.discover_inv_reference()
         self.memory_monitor = memory_monitor.MemoryMonitor(self)
         self.memory_monitor.start()
         self.say('Validated Python {} | {} workers | {}'.format(platform.python_version(), self.jobs, self.repo))
@@ -1496,6 +1535,11 @@ class Agent:
                                                         background='train')
                 if duration is None:
                     return False
+            elif event == 'inv-announcement':
+                self.say('CONDUCTOR: ' + workers)
+                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+f3', 50, background='train', conductor=True)
+                if duration is None:
+                    return False
             elif event == 'stress-transition':
                 message = workers
                 self.say('CONDUCTOR: ' + message)
@@ -1717,6 +1761,180 @@ class Agent:
             names.extend('bminv_' + mode + '_' + suffix for mode in ('debug', 'release'))
         return names
 
+    def report_inv_progress(self, output, name):
+        """Report completed cases and current phase without blocking validation."""
+        now = time.monotonic()
+        if now < self.inv_progress_time:
+            return
+        self.inv_progress_time = now + 600
+        try:
+            with (output / 'summary.tsv').open(newline='') as stream:
+                rows = list(csv.DictReader(stream, delimiter='\t'))
+            complete = sum(row.get('status') == 'passed' for row in rows)
+            current = next((row for row in rows if row.get('status') == 'running'), None)
+            detail = ('{} level {} {}'.format(current['dataset'], current['level'], current['phase'])
+                      if current else 'preparing or finalizing')
+        except (OSError, csv.Error, KeyError):
+            complete, detail = 0, 'checking reference integrity or preparing'
+        message = ('INV PROGRESS | {} | {} of 20 cases completed | {}'.format(name, complete, detail))
+        self.say(message)
+        self.sound('inv-announcement', workers=('Conductor to Dispatch. Inverted list validation. '
+                   '{} of 20 cases completed. {}.'.format(complete, detail.replace('-', ' '))))
+
+    def test_inv_stage(self, run, manifest):
+        """Validate reference collections with supported inv_list binaries in sequence."""
+        self.memory_phase = 'inv_list'
+        self.joker_clock.start()
+        if self.depot:
+            self.depot.set_mode('train')
+        self.sound('inv-announcement', workers='Conductor to Dispatch. Next stop, Inverted List Validation Station. Reference tests are starting.')
+        self.sound('depart')
+        names = [n for n in manifest['builds']['inv_list'] if self.supported(n)]
+        if self.args.fast:
+            names = [next(n for n in reversed(names) if '_release' in n)]
+        else:
+            names = [n for n in names if '_release' in n or (self.args.pedantic and not self.args.no_debug)]
+        for name in names:
+            base = run / 'inv_list' / name
+            base.mkdir(parents=True)
+            output = base / 'results'
+            argv = ['bash', str(self.repo / 'utils/inv_list/run_inv_test_pl.sh'),
+                    '--bin', str(self.repo / 'utils/inv_list' / name),
+                    '--reference', str(self.inv_reference), '--out', str(output),
+                    '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb)]
+            if self.args.fast or '_debug' in name:
+                argv.append('--fast')
+            self.say('INV START | {} | {} workers | logs {}'.format(name, self.jobs, base))
+            self.inv_progress_time = 0
+            self.inv_active = (output, name)
+            try:
+                status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
+            except CommandFailure as error:
+                try:
+                    details = (base / 'inv-runner.log').read_text(errors='replace')[-4000:]
+                except OSError:
+                    details = 'Runner log unavailable'
+                raise CommandFailure('{} | {}\n{}'.format(name, error, details)) from error
+            finally:
+                self.inv_active = None
+            if status == 'skipped-update' or self.update_waiting():
+                return 'updated'
+            self.say('INV PASS | {} | {}'.format(name, output / 'summary.tsv'))
+        self.sound('inv-announcement', workers='Conductor to Dispatch. Inverted list validation completed successfully.')
+        return True
+
+    def test_perf_stage(self, run, manifest):
+        """Execute performance variants for this cycle."""
+        self.memory_phase = 'perf'
+        self.start_test_sound('perf')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
+            futures = []
+            future_names = {}
+            with self.mutex:
+                self.perf_pending = {n for n in manifest['builds']['perf'] if not (self.args.no_debug and '_debug' in n) and self.supported(n)}
+                self.perf_completed = {}
+                self.perf_last_disclaimer = False
+                self.perf_last_announced = False
+            for name in manifest['builds']['perf']:
+                if self.args.no_debug and '_debug' in name:
+                    self.say('SKIP debug perf ' + name)
+                    continue
+                if not self.supported(name):
+                    self.say('SKIP perf ' + name)
+                    continue
+                work = run / name
+                work.mkdir()
+                perf_command = [str(self.repo / 'tests/perf' / name)]
+                if self.args.fast or '_debug' in name:
+                    perf_command.append('--fast')
+                future = pool.submit(self.command, perf_command, work / 'perf.log', work, test_allocator=True)
+                futures.append(future)
+                future_names[future] = (name, work / 'perf.log')
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    result = future.result()
+                    with self.mutex:
+                        name, path = future_names[future]
+                        self.perf_pending.discard(name)
+                        if result != 'skipped-update':
+                            self.perf_completed[name] = path
+                        if len(self.perf_pending) == 1:
+                            self.next_perf_report = 0
+                except BaseException:
+                    self.stopping.set()
+                    for pending in futures:
+                        pending.cancel()
+                    self.stop_children()
+                    raise
+        if self.update_waiting() or self.perf_skipped:
+            self.args.force = True
+            return 'updated'
+        return True
+
+    def test_stress_stage(self, run, manifest):
+        """Execute supported stress variants for this cycle."""
+        self.memory_phase = 'stress'
+        self.start_test_sound('stress')
+        stress_names = []
+        for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
+            if self.args.no_debug and '_debug' in name:
+                self.say('SKIP debug stress ' + name)
+            elif not self.supported(name):
+                self.say('SKIP unsupported ' + name)
+            else:
+                stress_names.append(name)
+        for index, name in enumerate(stress_names):
+            if index == 0:
+                mode = 'fast' if self.args.fast or '_debug' in name else ('pedantic' if self.args.pedantic else 'normal')
+                self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, self.jobs))
+                self.sound('stress-transition', workers='Conductor to Dispatch. {} stress run is starting. {} mode. {} test crews at work.'.format(spoken_stress_name(name), mode, self.jobs))
+            work = run / name
+            work.mkdir()
+            # Runner selects groups; wrapper gives each invocation its own cwd.
+            runner = work / 'run_all_pl.sh'
+            shutil.copy2(self.repo / 'tests/stress/run_all_pl.sh', runner)
+            wrapper = work / 'worker.sh'
+            wrapper.write_text('#!/bin/bash\nset -eu\ncd "$(mktemp -d ' +
+                shlex.quote(str(work / 'job.XXXXXX')) + ')"\nexec ' +
+                shlex.quote(str(self.repo / 'tests/stress' / name)) + ' "$@"\n')
+            wrapper.chmod(0o755)
+            self.stress_stop_file = work / 'stop-for-update'
+            argv = ['bash', str(runner), '--binary', './worker.sh',
+                    '--jobs', str(self.jobs), '--fail-fast',
+                    '--order-file', str(self.home / 'stress-order.tsv'),
+                    '--stop-file', str(self.stress_stop_file)]
+            if self.args.fast or '_debug' in name:
+                argv.append('--fast')
+            elif self.args.pedantic:
+                argv.append('--pedantic')
+            self.say('STRESS ' + name + ' | ' + str(work))
+            status = self.command(argv, work / 'runner.log', work, fail_fast=True,
+                                  allowed_exit_codes=(75,), test_allocator=True)
+            self.stress_stop_file = None
+            if status == 'skipped-update':
+                self.args.force = True
+                return 'updated'
+            if status == '75':
+                # A branch may have moved back while the workers drained.
+                # Rebuild even then, since this stress suite is incomplete.
+                self.args.force = True
+                self.update_waiting()
+                return 'updated'
+            if self.update_waiting():
+                return 'updated'
+            next_name = stress_names[index + 1] if index + 1 < len(stress_names) else None
+            completed = '{} stress run completed successfully.'.format(spoken_stress_name(name))
+            if next_name:
+                core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
+                mode = 'fast' if self.args.fast or '_debug' in next_name else ('pedantic' if self.args.pedantic else 'normal')
+                self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
+                message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, self.jobs)
+            else:
+                self.say('STRESS COMPLETE | {} | all stress variants completed'.format(name))
+                message = 'Conductor to Dispatch. {0} {0} All stress runs are complete.'.format(completed)
+            self.sound('stress-transition', workers=message)
+        return True
+
     def cycle(self):
         """Build exact current commit; return False on test failure, True on success."""
         if self.depot:
@@ -1826,111 +2044,17 @@ class Agent:
         if self.update_waiting():
             self.args.force = True
             return 'updated'
-        self.memory_phase = 'perf'
-        self.start_test_sound('perf')
+        # Test execution order is configured here; each stage owns its scheduling.
+        stages = (('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
+                  ('stress', self.test_stress_stage))
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
-                futures = []
-                future_names = {}
-                with self.mutex:
-                    self.perf_pending = {n for n in manifest['builds']['perf'] if not (self.args.no_debug and '_debug' in n) and self.supported(n)}
-                    self.perf_completed = {}
-                    self.perf_last_disclaimer = False
-                    self.perf_last_announced = False
-                for name in manifest['builds']['perf']:
-                    if self.args.no_debug and '_debug' in name:
-                        self.say('SKIP debug perf ' + name)
-                        continue
-                    if not self.supported(name):
-                        self.say('SKIP perf ' + name)
-                        continue
-                    work = run / name
-                    work.mkdir()
-                    perf_command = [str(self.repo / 'tests/perf' / name)]
-                    if self.args.fast or '_debug' in name:
-                        perf_command.append('--fast')
-                    future = pool.submit(self.command, perf_command, work / 'perf.log', work, test_allocator=True)
-                    futures.append(future)
-                    future_names[future] = (name, work / 'perf.log')
-                for future in concurrent.futures.as_completed(futures):
-                    try:
-                        result = future.result()
-                        with self.mutex:
-                            name, path = future_names[future]
-                            self.perf_pending.discard(name)
-                            if result != 'skipped-update':
-                                self.perf_completed[name] = path
-                            if len(self.perf_pending) == 1:
-                                self.next_perf_report = 0
-                    except BaseException:
-                        self.stopping.set()
-                        for pending in futures:
-                            pending.cancel()
-                        self.stop_children()
-                        raise
-            if self.update_waiting() or self.perf_skipped:
-                self.args.force = True
-                return 'updated'
-            self.memory_phase = 'stress'
-            self.start_test_sound('stress')
-            stress_names = []
-            for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
-                if self.args.no_debug and '_debug' in name:
-                    self.say('SKIP debug stress ' + name)
-                elif not self.supported(name):
-                    self.say('SKIP unsupported ' + name)
-                else:
-                    stress_names.append(name)
-            for index, name in enumerate(stress_names):
-                if index == 0:
-                    mode = 'fast' if self.args.fast or '_debug' in name else ('pedantic' if self.args.pedantic else 'normal')
-                    self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, self.jobs))
-                    self.sound('stress-transition', workers='Conductor to Dispatch. {} stress run is starting. {} mode. {} test crews at work.'.format(spoken_stress_name(name), mode, self.jobs))
-                work = run / name
-                work.mkdir()
-                # Runner selects groups; wrapper gives each invocation its own cwd.
-                runner = work / 'run_all_pl.sh'
-                shutil.copy2(self.repo / 'tests/stress/run_all_pl.sh', runner)
-                wrapper = work / 'worker.sh'
-                wrapper.write_text('#!/bin/bash\nset -eu\ncd "$(mktemp -d ' +
-                    shlex.quote(str(work / 'job.XXXXXX')) + ')"\nexec ' +
-                    shlex.quote(str(self.repo / 'tests/stress' / name)) + ' "$@"\n')
-                wrapper.chmod(0o755)
-                self.stress_stop_file = work / 'stop-for-update'
-                argv = ['bash', str(runner), '--binary', './worker.sh',
-                        '--jobs', str(self.jobs), '--fail-fast',
-                        '--order-file', str(self.home / 'stress-order.tsv'),
-                        '--stop-file', str(self.stress_stop_file)]
-                if self.args.fast or '_debug' in name:
-                    argv.append('--fast')
-                elif self.args.pedantic:
-                    argv.append('--pedantic')
-                self.say('STRESS ' + name + ' | ' + str(work))
-                status = self.command(argv, work / 'runner.log', work, fail_fast=True,
-                                      allowed_exit_codes=(75,), test_allocator=True)
-                self.stress_stop_file = None
-                if status == 'skipped-update':
+            for stage, execute in stages:
+                if stage in self.args.suppress:
+                    self.say('TEST STAGE SUPPRESSED | ' + stage)
+                    continue
+                if execute(run, manifest) == 'updated':
                     self.args.force = True
                     return 'updated'
-                if status == '75':
-                    # A branch may have moved back while the workers drained.
-                    # Rebuild even then, since this stress suite is incomplete.
-                    self.args.force = True
-                    self.update_waiting()
-                    return 'updated'
-                if self.update_waiting():
-                    return 'updated'
-                next_name = stress_names[index + 1] if index + 1 < len(stress_names) else None
-                completed = '{} stress run completed successfully.'.format(spoken_stress_name(name))
-                if next_name:
-                    core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
-                    mode = 'fast' if self.args.fast or '_debug' in next_name else ('pedantic' if self.args.pedantic else 'normal')
-                    self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
-                    message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, self.jobs)
-                else:
-                    self.say('STRESS COMPLETE | {} | all stress variants completed'.format(name))
-                    message = 'Conductor to Dispatch. {0} {0} All stress runs are complete.'.format(completed)
-                self.sound('stress-transition', workers=message)
             return True
         except CommandFailure as error:
             if self.memory_monitor:
@@ -2088,6 +2212,10 @@ class Agent:
                     self.stop_children()
                     os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
+            if self.inv_reference is not None:
+                key['inv_reference'] = str(self.inv_reference)
+            if self.args.suppress:
+                key['suppress'] = sorted(self.args.suppress)
             if self.args.no_debug:
                 key['no_debug'] = True
             if self.args.fast:
