@@ -113,12 +113,14 @@ void show_help()
         << "-bwt-min-gain N             -- require N complete-record bytes saved by BWT (default 16; 0 disables)" << std::endl
         << "-periodic-step1-interleaved N -- BIC start/end pairs: 1 fixed, 4 gamma-vs-fixed formula choice" << std::endl
         << "-threads N                  -- parallel compression pool (1..256; omitted = sequential)" << std::endl
-        << "-read-memory-mib N          -- indexed read batch budget, raw + encoded (positive MiB, default 512)" << std::endl
+        << "-read-memory-mib N          -- combined staged input budget (positive MiB, default 512)" << std::endl
         << "-read-mmap                  -- Unix read-only windows with read-ahead hints" << std::endl
         << "-batch-vectors N            -- MT input window (default 512; maximum 512)" << std::endl
         << "-level N                    -- compression level 0..10 (default 6)"     << std::endl
         << "-silent (-s)                -- suppress legacy status; explicit progress remains enabled"          << std::endl
         << "--silent                    -- suppress all progress, including explicit/timed reports" << std::endl
+        << "-golden-bvin FILE           -- compare against a validated BV collection" << std::endl
+        << "-golden-index-in FILE       -- golden BLOB index; requires threaded -verify, no -u32in" << std::endl
         << "-verify                     -- verify compressed version "             << std::endl
         << "Cross-bvector (xbv) research modes:" << std::endl
         << "-pair-search -bvin FILE -csv FILE -- analyze XOR pairs" << std::endl
@@ -206,6 +208,8 @@ bm::id64_t xor_memory = 8ull * 1024 * 1024 * 1024;
 bm::id64_t max_vectors = 0;      // zero means the complete input collection
 bm::id64_t progress_vectors = 0; // zero suppresses periodic progress
 std::string bv_index_out_file, bv_index_in_file;
+std::string golden_bv_file; ///< Optional validated collection used for exact comparison.
+std::string golden_index_file; ///< Independent BLOB offsets for the golden collection.
 bool block_selection_step2 = false;
 bool gap_xor_search = false;
 bool compression_diagnostics = false;
@@ -255,6 +259,22 @@ int parse_args(int argc, char *argv[])
             if (!n) throw std::runtime_error(arg + " must be positive");
             if (arg == "-max-vectors") max_vectors = n;
             else progress_vectors = n;
+            continue;
+        }
+        if (arg == "-golden-bvin" || arg == "-golden-index-in")
+        {
+            if (++i >= argc)
+            {
+                throw std::runtime_error("Missing golden collection argument");
+            }
+            if (arg == "-golden-bvin")
+            {
+                golden_bv_file = argv[i];
+            }
+            else
+            {
+                golden_index_file = argv[i];
+            }
             continue;
         }
         if (arg == "-bv-index-out" || arg == "-bv-index-in")
@@ -1163,6 +1183,13 @@ int main(int argc, char *argv[])
             throw std::runtime_error("-bwt-min-gain requires a block-selection mode");
         if (periodic_step1_interleaved && !block_selection_step2)
             throw std::runtime_error("-periodic-step1-interleaved requires -block-select-step2");
+        if ((!golden_bv_file.empty() || !golden_index_file.empty()) &&
+            (golden_bv_file.empty() || golden_index_file.empty() ||
+             !is_verify || is_decode || !compression_threads ||
+             !u32_in_file.empty() || !bv_out_file.empty()))
+        {
+            throw std::runtime_error("Golden comparison requires both golden files and indexed threaded verification without raw input");
+        }
         if (compression_threads &&
             (analysis_modes ||
              (is_verify || is_decode ? bv_index_in_file.empty() || bv_in_file.empty() :
@@ -1240,7 +1267,7 @@ int main(int argc, char *argv[])
             verify_xor_store();
             return 0;
         }
-        if (!u32_in_file.empty())
+        if (!u32_in_file.empty() || !golden_bv_file.empty())
         {
             if (!is_verify)
             {

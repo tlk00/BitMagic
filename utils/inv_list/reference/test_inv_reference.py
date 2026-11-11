@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
             assert 'ALL PASS:' in result.stdout and 'verify 1v' not in result.stdout
             assert 'reference-verify-threaded' not in result.stdout
             assert 'Checking reference integrity:' not in result.stdout
-            assert any('Progress verify ' in log.read_text() for log in out.glob('*/reference-verify-threaded.log'))
+            assert any('Progress verify ' in log.read_text() for log in out.glob('*/golden-verify-threaded.log'))
         records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
         assert len(records) == 20 and {row['status'] for row in records} == {'passed'}
         assert (out / 'PASS.txt').exists()
@@ -86,6 +86,20 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
             start_level, 10, expected_cases)
         assert not list(out.glob('gov2.*.level-01'))
         assert snapshot(reference) == before
+    out = root / 'custom-golden'
+    invoke([*common, '--out', out, '--fast', '--start-level', 10, '--golden-level', 3])
+    assert json.loads((out / 'test.json').read_text())['golden_level'] == 3
+    assert len(list(out.glob('*/golden-verify-threaded.log'))) == 2
+    assert len(list(out.glob('*/reference-verify-threaded.log'))) == 2
+    # A missing prerequisite baseline must fail even outside the selected range.
+    missing = reference / 'gov2.sorted.level-06.bv'
+    hidden = missing.with_suffix('.hidden')
+    missing.rename(hidden)
+    try:
+        invoke([*common, '--out', root / 'missing-golden', '--fast', '--start-level', 10], 2)
+        assert not (root / 'missing-golden/PASS.txt').exists()
+    finally:
+        hidden.rename(missing)
     lower_stream = reference / 'gov2.sorted.level-01.bv'
     unavailable = lower_stream.with_suffix('.unavailable')
     lower_stream.rename(unavailable)
@@ -93,10 +107,11 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         invoke([*common, '--out', root / 'skip-missing-lower-stream', '--fast', '--start-level', 6])
     finally:
         unavailable.rename(lower_stream)
-    for value in ['0', '11', '-1', 'oops']:
-        out = root / ('invalid-start-' + value)
-        invoke([*common, '--out', out, '--fast', '--start-level', value], 2)
-        assert not out.exists()
+    for option in ['--start-level', '--golden-level']:
+        for value in ['0', '11', '-1', 'oops']:
+            out = root / ('invalid-' + option[2:] + '-' + value)
+            invoke([*common, '--out', out, '--fast', option, value], 2)
+            assert not out.exists()
     assert snapshot(reference) == before
     # Fast tests the executable, without consulting checksum/history manifests.
     matrix_path = reference / 'matrix.json'
@@ -132,32 +147,54 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         out = root / (name + '-output')
         result = invoke(['--bin', wrapper, '--reference', reference, '--out', out, '--fast',
                          '--reserve-gib', 0, '--silent'], code)
-        assert 'reference-verify-threaded' in result.stderr and ('SIGSEGV' in result.stderr if name == 'crash' else 'exit 17' in result.stderr)
+        assert 'golden-verify-threaded' in result.stderr and ('SIGSEGV' in result.stderr if name == 'crash' else 'exit 17' in result.stderr)
         assert (out / 'FAILURE.txt').exists() and not (out / 'PASS.txt').exists()
         assert snapshot(reference) == before
     # Real worker failures must survive the child/relay/harness boundary and be logged.
     selected = reference / 'gov2.sorted.level-10.bv'
     selected_index = selected.with_suffix('.idx')
-    for failure in ['verify', 'deserialize']:
+    for failure in ['verify', 'deserialize', 'golden-deserialize', 'golden-mismatch']:
         out = root / ('worker-' + failure)
+        golden_blob = reference / 'gov2.sorted.level-06.bv'
+        saved_golden = golden_blob.read_bytes()
         saved_raw = (inputs / 'gov2.sorted').read_bytes()
         saved_blob, saved_index = selected.read_bytes(), selected_index.read_bytes()
         try:
-            if failure == 'verify':
+            if failure in ('verify', 'golden-mismatch'):
                 changed = bytearray(saved_raw)
                 changed[4:8] = array('I', [0]).tobytes()
                 (inputs / 'gov2.sorted').write_bytes(changed)
                 expected_error = 'Vector comparison failed'
+                if failure == 'golden-mismatch':
+                    # A valid stream with substituted IDs must fail against the golden.
+                    changed_raw = root / 'changed.u32'
+                    changed_raw.write_bytes(changed)
+                    (inputs / 'gov2.sorted').write_bytes(saved_raw)
+                    subprocess.run([str(binary), '-s', '-threads', '2', '-u32in', str(changed_raw),
+                                    '-bvout', str(selected), '-bv-index-out', str(selected_index)],
+                                   check=True, capture_output=True)
+                    expected_error = 'Golden vector comparison failed'
+            elif failure == 'golden-deserialize':
+                golden_blob.write_bytes(bytes([255]) + saved_golden[1:])
+                expected_error = 'worker failed'
             else:
-                selected.write_bytes(saved_blob[:1])
-                selected_index.write_text('BM_INV_BLOB_INDEX_V1 1 1\n0\n1\n')
+                lines = saved_index.decode().splitlines()
+                offsets = list(map(int, lines[1:]))
+                removed = offsets[1] - 1
+                damaged = saved_blob[:1] + saved_blob[offsets[1]:]
+                selected.write_bytes(damaged)
+                selected_index.write_text(f'BM_INV_BLOB_INDEX_V1 {len(damaged)} {len(offsets)-1}\n0\n' +
+                                          '\n'.join(str(value-removed) for value in offsets[1:]) + '\n')
                 expected_error = 'worker failed'
             invoke([*common, '--out', out, '--fast', '--start-level', 10, '--silent'], 1)
-            log = (out / 'gov2.sorted.level-10/reference-verify-threaded.log').read_text()
+            phase = 'golden-verify-threaded' if failure in ('verify', 'golden-deserialize') else 'reference-verify-threaded'
+            log = (out / ('gov2.sorted.level-10/' + phase + '.log')).read_text()
             assert 'Verification worker failed' in log and expected_error in log
-            assert 'vector_index=0' in log and 'blob_begin=0' in log and str(selected) in log
+            assert 'vector_index=0' in log and 'blob_begin=0' in log and str(golden_blob if phase == 'golden-verify-threaded' else selected) in log
             assert 'Verification complete.' not in log
-            result = json.loads((out / 'gov2.sorted.level-10/reference-verify-threaded.result.json').read_text())
+            if phase == 'golden-verify-threaded':
+                assert not (out / 'gov2.sorted.level-10/reference-verify-threaded.log').exists()
+            result = json.loads((out / ('gov2.sorted.level-10/' + phase + '.result.json')).read_text())
             assert result['exit_code'] == 1
             records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
             assert len(records) == 1 and records[0]['status'] == 'failed'
@@ -167,6 +204,7 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
             (inputs / 'gov2.sorted').write_bytes(saved_raw)
             selected.write_bytes(saved_blob)
             selected_index.write_bytes(saved_index)
+            golden_blob.write_bytes(saved_golden)
         assert snapshot(reference) == before
     # Simulate changed release encoding: valid level-6 streams for every requested level.
     wrapper = root / 'different-valid-encoding'

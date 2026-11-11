@@ -34,6 +34,12 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
             array('I', [len(row), *row]).tofile(stream)
     run(['-s', '-threads', 4, '-u32in', raw, '-bvout', blob, '-bv-index-out', index])
     raw_data, encoded_data = raw.read_bytes(), blob.read_bytes()
+    golden, golden_index = root / 'golden.bv', root / 'golden.idx'
+    run(['-s', '-level', 6, '-threads', 2, '-u32in', raw,
+         '-bvout', golden, '-bv-index-out', golden_index])
+    golden_bytes = golden.read_bytes()
+    golden_index_text = golden_index.read_text()
+
     for mapped in [False, True] if sys.platform != 'win32' else [False]:
         flags = ['-read-mmap'] if mapped else []
         for workers, batch in [(1, 7), (4, 512)]:
@@ -41,9 +47,33 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
                       '-read-memory-mib', 1, '-bvin', blob, '-bv-index-in', index, *flags]
             text = run([*common, '-verify', '-u32in', raw])
             assert 'Verification complete.' in text
+            assert 'read_pipeline_slots=2' in text
+            assert int(re.search(r'read_ahead_batches=(\d+)', text).group(1)) > 0
             peak = int(re.search(r'peak_staged_input_bytes=(\d+)', text).group(1))
             assert peak <= 1024 * 1024, peak
             assert 'Decode complete.' in run([*common, '-decode'])
+        compare = [*common, '-verify', '-golden-bvin', golden, '-golden-index-in', golden_index]
+        text = run(compare)
+        assert int(re.search(r'peak_staged_input_bytes=(\d+)', text).group(1)) <= 1024 * 1024
+        assert int(re.search(r'read_ahead_batches=(\d+)', text).group(1)) > 0
+        # Reject wrong collection cardinality before any workers start.
+        other = root / 'short.u32'
+        with other.open('wb') as stream:
+            array('I', [3, 1, 3, 7]).tofile(stream)
+        short_blob, short_index = root / 'short.bv', root / 'short.idx'
+        run(['-s', '-threads', 2, '-u32in', other, '-bvout', short_blob, '-bv-index-out', short_index])
+        run([*common, '-verify', '-golden-bvin', short_blob, '-golden-index-in', short_index],
+            'Golden collection vector count mismatch')
+        # Extend the last golden BLOB: decoding must consume its exact indexed length.
+        lines = golden_index_text.splitlines()
+        header = lines[0].split()
+        header[1] = str(int(header[1]) + 1)
+        lines[0], lines[-1] = ' '.join(header), str(int(lines[-1]) + 1)
+        golden.write_bytes(golden_bytes + b'\0')
+        golden_index.write_text('\n'.join(lines) + '\n')
+        run(compare, 'Golden BLOB decode or length mismatch')
+        golden.write_bytes(golden_bytes)
+        golden_index.write_text(golden_index_text)
         # Change an ID without changing cardinality/sortedness in first and later tasks.
         raw_offsets = []
         position = 0
@@ -58,6 +88,14 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
             value = int.from_bytes(changed[position:position + 4], sys.byteorder) + 1
             changed[position:position + 4] = array('I', [value]).tobytes()
             raw.write_bytes(changed)
+            changed_blob, changed_index = root / 'changed.bv', root / 'changed.idx'
+            run(['-s', '-threads', 2, '-u32in', raw,
+                 '-bvout', changed_blob, '-bv-index-out', changed_index])
+            for reporting in [[], ['-progress-vectors', 1, '-silent']]:
+                text = run([*common, *reporting, '-verify', '-golden-bvin', changed_blob,
+                            '-golden-index-in', changed_index], 'Golden vector comparison failed')
+                assert f'vector_index={failed_vector}' in text
+                assert 'golden_blob_begin=' in text
             for reporting in [[], ['-progress-vectors', 1], ['-progress-vectors', 1, '-silent']]:
                 text = run([*common, *reporting, '-verify', '-u32in', raw], 'Vector comparison failed')
                 assert f'vector_index={failed_vector}' in text
@@ -103,8 +141,28 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
         run([*common, '-decode'], 'Vector exceeds read batch budget')
         index.write_text(original_index)
         blob.write_bytes(encoded_data)
+    # Vectors above half the budget retain the full-budget fallback. Put small
+    # vectors around them to exercise drain-before-read and slot reuse.
+    large_raw, large_blob, large_index = [root / name for name in ('large.u32', 'large.bv', 'large.idx')]
+    with large_raw.open('wb') as stream:
+        for length in [1200, 160000, 1200, 160000, 1200]:
+            array('I', [length, *range(1, length + 1)]).tofile(stream)
+    run(['-s', '-threads', 2, '-u32in', large_raw, '-bvout', large_blob, '-bv-index-out', large_index])
+    for mapped in [False, True] if sys.platform != 'win32' else [False]:
+        flags = ['-read-mmap'] if mapped else []
+        large_flags = ['-s', '-threads', 2, '-batch-vectors', 1, '-read-memory-mib', 1,
+                       '-verify', '-u32in', large_raw, '-bvin', large_blob, '-bv-index-in', large_index, *flags]
+        text = run(large_flags)
+        peak = int(re.search(r'peak_staged_input_bytes=(\d+)', text).group(1))
+        assert 512 * 1024 < peak <= 1024 * 1024, text
+        # Reading a later truncated raw vector fails while a preceding task owns
+        # its encoded slot. Pool joining must precede destruction of that slot.
+        saved = large_raw.read_bytes()
+        large_raw.write_bytes(saved[:-1])
+        run(large_flags, 'Truncated raw input vector')
+        large_raw.write_bytes(saved)
     run([*common, '-read-memory-mib', 16384, '-decode'])
     for value in ['0', str(2**64 - 1), '-1', 'oops']:
         run(['-read-memory-mib', value], '-read-memory-mib')
     run(['-read-memory-mib', 1, '-bvin', blob, '-decode'], 'Read options require')
-print('Buffered/mapped indexed reads, batch boundaries, exact IDs, truncation and memory limits PASS')
+print('Buffered/mapped indexed reads, pipelined batches, large-vector fallback, exact IDs, truncation and memory limits PASS')

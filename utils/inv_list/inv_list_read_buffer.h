@@ -10,11 +10,13 @@ https://www.apache.org/licenses/LICENSE-2.0
     @note Application-internal. Input files must remain unchanged while reading.
     Unix mapping covers one batch at a time; hints are advisory, not RAM reservations.
 */
+#include <cassert>
 #include <fstream>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include "bm.h"
 #if defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
@@ -50,6 +52,12 @@ public:
     void load(std::ifstream& source, bm::id64_t begin, bm::id64_t bytes);
     /** Release storage after workers join; preserve sequential position. */
     void clear();
+    /** Exchange loaded storage with an idle batch slot, preserving reader positions.
+        @param other Buffer with the same backend; neither storage may have live users.
+        Ownership and borrowed pointers move together. Mapping handles stay with
+        their readers. The receiver owns storage until clear() or the next swap.
+    */
+    void swap_storage(inv_list_read_buffer& other) noexcept;
     /** @return Borrowed batch start, or nullptr when no batch is loaded. */
     const unsigned char* data() const { return data_; }
 private:
@@ -110,6 +118,18 @@ void inv_list_read_buffer::clear()
         mapping_ = MAP_FAILED;
         mapped_bytes_ = 0;
     }
+#endif
+}
+
+inline
+void inv_list_read_buffer::swap_storage(inv_list_read_buffer& other) noexcept
+{
+    assert(mapped_ == other.mapped_);
+    buffer_.swap(other.buffer_);
+    std::swap(data_, other.data_);
+#if defined(__unix__) || defined(__APPLE__)
+    std::swap(mapping_, other.mapping_);
+    std::swap(mapped_bytes_, other.mapped_bytes_);
 #endif
 }
 

@@ -413,8 +413,12 @@ static std::vector<bm::id64_t> read_inv_blob_offsets(
     return offsets;
 }
 
+/** @internal One indexed read task and borrowed slices, owned until worker completion. */
 struct parallel_read_job
 {
+    const unsigned char* golden_blob = nullptr; ///< Borrowed golden slice until batch completion.
+    size_t golden_size = 0; ///< Exact indexed golden BLOB length.
+    bm::id64_t golden_begin = 0; ///< Indexed golden BLOB start for diagnostics and slicing.
     std::vector<unsigned> input;
     bm::id64_t begin = 0, end = 0;
     const unsigned char* blob = nullptr; ///< Borrowed batch slice, valid until all tasks join.
@@ -437,6 +441,16 @@ static unsigned sblock_bic_length_bin(unsigned length)
     return 16 + (exponent - 4) * 4 + quarter;
 }
 
+/** Read indexed adjacent BLOB batches and drain workers before releasing storage.
+    @param input_name Raw sorted unique ID collection for raw verification.
+    @param bv_name Candidate encoded collection, read sequentially.
+    @param verify Compare against raw IDs or the configured golden collection.
+    Overlap sequential preparation with worker execution using two storage slots.
+    Uses read_memory_bytes for the sum of both slots, normally half per batch.
+    A single vector larger than half drains active work before using the budget. Indices and per-worker
+    decoded vectors/workspaces require additional memory. Golden inputs must
+    have passed raw verification independently. Throws on I/O, decoding or equality failure.
+*/
 static void read_inv_dump_file_parallel(const std::string& input_name,
                                         const std::string& bv_name, bool verify)
 {
@@ -454,14 +468,38 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     if (file_bytes <= 0) throw std::runtime_error("Empty or unreadable BV collection");
     bv_file.seekg(0);
     inv_list_read_buffer encoded_buffer(bv_name, read_mmap);
+    inv_list_read_buffer active_encoded_buffer(bv_name, read_mmap);
     const auto offsets = read_inv_blob_offsets(bv_index_in_file,
                                                 bm::id64_t(file_bytes));
     const bm::id64_t count = offsets.size() - 1;
     if (verify && max_vectors && max_vectors != count)
         throw std::runtime_error("BLOB index count differs from -max-vectors");
+    const bool golden = verify && !golden_bv_file.empty();
+    std::ifstream golden_file;
+    std::vector<bm::id64_t> golden_offsets;
+    std::unique_ptr<inv_list_read_buffer> golden_buffer;
+    std::unique_ptr<inv_list_read_buffer> active_golden_buffer;
+    if (golden)
+    {
+        golden_file.open(golden_bv_file.c_str(), std::ios::binary);
+        golden_file.seekg(0, std::ios::end);
+        const std::streamoff bytes = golden_file.tellg();
+        if (!golden_file || bytes <= 0)
+        {
+            throw std::runtime_error("Empty or unreadable golden collection");
+        }
+        golden_file.seekg(0);
+        golden_offsets = read_inv_blob_offsets(golden_index_file, bm::id64_t(bytes));
+        if (golden_offsets.size() != offsets.size())
+        {
+            throw std::runtime_error("Golden collection vector count mismatch");
+        }
+        golden_buffer.reset(new inv_list_read_buffer(golden_bv_file, read_mmap));
+        active_golden_buffer.reset(new inv_list_read_buffer(golden_bv_file, read_mmap));
+    }
     std::ifstream fin;
-    std::streamoff input_size = 0;
-    if (verify)
+    std::streamoff input_size = golden ? std::streamoff(golden_offsets.back()) : 0;
+    if (verify && !golden)
     {
         fin.open(input_name.c_str(), std::ios::binary);
         if (!fin) throw std::runtime_error("Cannot open input file");
@@ -474,6 +512,7 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
          << " batch_vectors=" << compression_batch_vectors
          << " indexed_vectors=" << count
          << " read_memory_mib=" << read_memory_bytes / (1024 * 1024)
+         << " read_pipeline_slots=2"
          << " read_backend=" << (read_mmap ? "mmap" : "buffered") << endl;
     std::vector<std::unique_ptr<parallel_read_job> > jobs;
     jobs.reserve(compression_batch_vectors);
@@ -482,7 +521,8 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     pool_type pool;
     pool.start(compression_threads);
     const auto start = clock_type::now();
-    bm::id64_t prepared = 0, emitted = 0, total_ints = 0;
+    bm::id64_t prepared = 0, dispatched = 0, emitted = 0, total_ints = 0;
+    bm::id64_t read_ahead_batches = 0;
     std::vector<bm::id64_t> sblock_exact(sblock_len_stats ? 65536 : 0, 0);
     bm::id64_t sblock_bin_count[64] = {}, sblock_bin_bytes[64] = {};
     bm::id64_t sblock_count = 0, sblock_bytes = 0, sblock_length_sum = 0;
@@ -501,7 +541,7 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
         }
         const double elapsed = std::chrono::duration<double>(now - start).count();
         const inv_progress_values values{emitted, prepared,
-            batch.size() ? inv_list_completed_tasks(batch, prepared) : emitted, input_consumed,
+            batch.size() ? inv_list_completed_tasks(batch, dispatched) : emitted, input_consumed,
             encoded_consumed, elapsed, 0, 0};
         std::ostringstream progress;
         inv_report_read_progress(progress, values, verify);
@@ -521,9 +561,15 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                 std::ostringstream context;
                 context << (verify ? "Verification" : "Decode")
                         << " worker failed: input=" << bv_name
-                        << " raw_input=" << input_name
+                        << (golden ? " golden_input=" : " raw_input=")
+                        << (golden ? golden_bv_file : input_name)
                         << " vector_index=" << emitted
                         << " blob_begin=" << job.begin << " blob_end=" << job.end;
+                if (golden)
+                {
+                    context << " golden_blob_begin=" << job.golden_begin
+                            << " golden_blob_end=" << job.input_end;
+                }
                 inv_list_check_worker(job.error, task_code, context.str());
             }
             total_ints += job.input_count;
@@ -548,20 +594,33 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                 (emitted % progress_vectors == 0 || emitted == count);
             report_progress(count_due);
         }
-        jobs.clear(); batch.get_task_vector().clear(); staged_bytes = 0;
+        jobs.clear();
+        batch.get_task_vector().clear();
+        active_encoded_buffer.clear();
+        if (golden)
+        {
+            active_golden_buffer->clear();
+        }
+        staged_bytes = 0;
     };
     try
     {
         unsigned pending_length = 0;
         while (prepared < count)
         {
+            // One batch is owned by workers while this thread fills the other.
+            std::vector<std::unique_ptr<parallel_read_job> > next_jobs;
+            next_jobs.reserve(compression_batch_vectors);
+            bm::id64_t batch_budget = read_memory_bytes / 2;
             const bm::id64_t batch_begin = offsets[size_t(prepared)];
             bm::id64_t batch_end = batch_begin;
+            const bm::id64_t golden_begin = golden ? golden_offsets[size_t(prepared)] : 0;
+            bm::id64_t golden_end = golden_begin;
             bm::id64_t raw_bytes = 0;
-            while (prepared < count && jobs.size() < compression_batch_vectors)
+            while (prepared < count && next_jobs.size() < compression_batch_vectors)
             {
                 const bm::id64_t end = offsets[size_t(prepared + 1)];
-                if (verify && !pending_length)
+                if (verify && !golden && !pending_length)
                 {
                     fin.read(reinterpret_cast<char*>(&pending_length), sizeof(pending_length));
                     if (!fin || !pending_length)
@@ -569,20 +628,35 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                         throw std::runtime_error("Invalid raw vector length");
                     }
                 }
-                const bm::id64_t next_raw = bm::id64_t(pending_length) * sizeof(unsigned);
-                if (next_raw > read_memory_bytes - raw_bytes ||
-                    end - batch_begin > read_memory_bytes - raw_bytes - next_raw)
+                const bm::id64_t next_raw = golden ?
+                    golden_offsets[size_t(prepared + 1)] - golden_end :
+                    bm::id64_t(pending_length) * sizeof(unsigned);
+                const bm::id64_t encoded_bytes = end - batch_begin;
+                if (next_jobs.empty())
                 {
-                    if (jobs.empty())
+                    if (next_raw > read_memory_bytes ||
+                        encoded_bytes > read_memory_bytes - next_raw)
                     {
                         throw std::runtime_error("Vector exceeds read batch budget; increase -read-memory-mib");
                     }
+                    const bm::id64_t pair_bytes = next_raw + encoded_bytes;
+                    if (pair_bytes > read_memory_bytes - staged_bytes)
+                    {
+                        // A large single vector may borrow the whole budget after draining.
+                        drain();
+                    }
+                    batch_budget = std::min(std::max(batch_budget, pair_bytes),
+                                           read_memory_bytes - staged_bytes);
+                }
+                if (next_raw > batch_budget - raw_bytes ||
+                    encoded_bytes > batch_budget - raw_bytes - next_raw)
+                {
                     break;
                 }
                 std::unique_ptr<parallel_read_job> job(new parallel_read_job);
                 job->begin = offsets[size_t(prepared)];
                 job->end = end;
-                if (verify)
+                if (verify && !golden)
                 {
                     job->input.resize(pending_length);
                     fin.read(reinterpret_cast<char*>(job->input.data()), std::streamsize(next_raw));
@@ -594,21 +668,50 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                     job->input_count = job->input.size();
                     job->input_end = fin.tellg();
                 }
+                if (golden)
+                {
+                    job->golden_size = size_t(next_raw);
+                    job->golden_begin = golden_end;
+                    golden_end = golden_offsets[size_t(prepared + 1)];
+                    job->input_end = std::streamoff(golden_end);
+                }
                 raw_bytes += next_raw;
                 batch_end = end;
-                jobs.push_back(std::move(job));
+                next_jobs.push_back(std::move(job));
                 ++prepared;
                 report_progress(false);
             } // while prepared
-            staged_bytes = size_t(raw_bytes + batch_end - batch_begin);
-            peak_staged_bytes = std::max(peak_staged_bytes, staged_bytes);
+            const size_t next_staged_bytes = size_t(raw_bytes + batch_end - batch_begin);
+            assert(next_staged_bytes <= read_memory_bytes - staged_bytes);
+            peak_staged_bytes = std::max(peak_staged_bytes, staged_bytes + next_staged_bytes);
             encoded_buffer.load(bv_file, batch_begin, batch_end - batch_begin);
             report_progress(false);
+            if (golden)
+            {
+                golden_buffer->load(golden_file, golden_begin, golden_end - golden_begin);
+            }
+            if (!jobs.empty())
+            {
+                ++read_ahead_batches;
+            }
+            // Keep active slices alive until all tasks have published completion.
+            drain();
+            encoded_buffer.swap_storage(active_encoded_buffer);
+            if (golden)
+            {
+                golden_buffer->swap_storage(*active_golden_buffer);
+            }
+            jobs.swap(next_jobs);
+            staged_bytes = next_staged_bytes;
             for (size_t i = 0; i < jobs.size(); ++i)
             {
                 parallel_read_job* target = jobs[i].get();
-                target->blob = encoded_buffer.data() + size_t(target->begin - batch_begin);
-                bm::task_function_t task([target, verify](void*) -> int
+                target->blob = active_encoded_buffer.data() + size_t(target->begin - batch_begin);
+                if (golden)
+                {
+                    target->golden_blob = active_golden_buffer->data() + size_t(target->golden_begin - golden_begin);
+                }
+                bm::task_function_t task([target, verify, golden](void*) -> int
                 {
                     try
                     {
@@ -627,7 +730,25 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                         {
                             throw std::runtime_error("Indexed BLOB decode or length mismatch");
                         }
-                        if (verify && compare_vect(target->input, bv))
+                        if (golden)
+                        {
+                            bm::serialization_profile_streambuf golden_view(target->golden_blob, target->golden_size);
+                            std::istream golden_stream(&golden_view);
+                            bm::streams_decoder golden_channel(golden_stream);
+                            bm::streams_deserializer<bv_type> golden_reader;
+                            bv_type expected;
+                            if (!golden_reader.deserialize(expected, golden_channel) ||
+                                golden_channel.tell() != target->golden_size)
+                            {
+                                throw std::runtime_error("Golden BLOB decode or length mismatch");
+                            }
+                            if (!bv.equal(expected))
+                            {
+                                throw std::runtime_error("Golden vector comparison failed");
+                            }
+                            target->input_count = expected.count();
+                        }
+                        if (verify && !golden && compare_vect(target->input, bv))
                         {
                             throw std::runtime_error("Vector comparison failed");
                         }
@@ -643,9 +764,9 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                 batch.add(task, 0);
                 pool.get_job_queue().push(batch.get_task(unsigned(i)));
             } // for i
-            drain();
-            encoded_buffer.clear();
+            dispatched = prepared;
         } // while prepared
+        drain();
     }
     catch (...)
     {
@@ -655,8 +776,9 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     }
     pool.set_stop_mode(pool_type::stop_when_done);
     pool.join();
-    if (verify && input_consumed != input_size && !max_vectors)
+    if (verify && !golden && input_consumed != input_size && !max_vectors)
         throw std::runtime_error("Input collection has extra vectors");
+    cout << "Read pipeline read_ahead_batches=" << read_ahead_batches << endl;
     inv_report_read_summary(cout, verify, prepared, emitted, worker_seconds, peak_staged_bytes, sblock_len_stats, sblock_exact, sblock_bin_count, sblock_bin_bytes, sblock_count, sblock_bytes, sblock_length_sum, sblock_min, sblock_max, input_consumed, input_size, total_ints);
 
 }

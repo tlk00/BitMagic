@@ -130,15 +130,15 @@ def run_phase(binary, flags, out, case, phase, reserve, silent=False):
 
 
 def validate_read(text, row, phase, raw_bytes):
-    """Require expected completion, full vector count, and raw scope where applicable."""
+    """Require expected completion, full vector count, and expected-input scope where applicable."""
     marker = 'Decode complete.' if 'decode' in phase else 'Verification complete.'
     if marker not in text or number(text, 'Total vectors=') != row['vector_count']:
         raise TestFailure(f'{phase}: incomplete or incorrect decoded vector count')
     if 'decode' not in phase:
         if number(text, 'Total ints=') != row['integer_count']:
-            raise TestFailure(f'{phase}: raw-ID count mismatch')
+            raise TestFailure(f'{phase}: expected ID count mismatch')
         if number(text, 'Input consumed bytes=') != raw_bytes:
-            raise TestFailure(f'{phase}: incomplete raw-ID comparison')
+            raise TestFailure(f'{phase}: incomplete expected-input comparison')
 
 
 def save_summary(out, rows):
@@ -169,16 +169,24 @@ def validate_index(path, size, count):
 
 
 def execute(args, references, binary):
-    """Test selected references, then rebuild each case in normal mode with both readers."""
+    """Validate each golden against raw IDs before comparing selected reference/candidate streams."""
     rows = []
     reserve = int(args.reserve_gib * 1024**3)
     progress = ['-progress-vectors', str(args.progress)]
+    baselines = {row['dataset']: row for row in references
+                 if row['compression_level'] == args.golden_level}
+    validated = set()
     for row in references:
+        if row['compression_level'] < args.start_level:
+            continue
         dataset = row['dataset'].split('.')[-1]
         case = Path(row['stream_file']).stem
         source = args.reference / 'Gov2Flat' / ('gov2.' + dataset)
         original = args.reference / row['stream_file']
         original_index = original.with_suffix('.idx')
+        baseline = baselines[row['dataset']]
+        golden = args.reference / baseline['stream_file']
+        golden_index = golden.with_suffix('.idx')
         entry = dict(dataset=row['dataset'], level=row['compression_level'], status='running',
                      workers=args.j, reference_bytes=row['compressed_bytes'],
                      vectors=row['vector_count'], ids=row['integer_count'])
@@ -192,12 +200,15 @@ def execute(args, references, binary):
             entry.update(result)
             return text
         def reads(stream, index, prefix):
-            """Compare imported raw IDs with decoded bits; full mode also exercises serial traversal."""
+            """Compare with validated golden; full mode also checks raw IDs through serial traversal."""
             flags = ['-t', '-s', '-bvin', stream, '-bv-index-in', index, '-threads', str(args.j),
                      '-batch-vectors', '512', '-read-memory-mib', str(args.read_memory_mib),
                      *(['-read-mmap'] if args.read_mmap else []), *progress]
-            text = phase(prefix + '-verify-threaded', ['-verify', '-u32in', source, *flags])
-            validate_read(text, row, 'verify', row['input_bytes'])
+            # The golden stream itself already passed raw verification in this run.
+            if stream != golden:
+                text = phase(prefix + '-verify-threaded', ['-verify', '-golden-bvin', golden,
+                             '-golden-index-in', golden_index, *flags])
+                validate_read(text, row, 'verify', baseline['compressed_bytes'])
             if not args.fast:
                 text = phase(prefix + '-verify-serial', ['-t', '-s', '-verify', '-u32in', source,
                                                        '-bvin', stream, *progress])
@@ -205,6 +216,14 @@ def execute(args, references, binary):
                 text = phase(prefix + '-decode', ['-decode', *flags])
                 validate_read(text, row, 'decode', row['input_bytes'])
         try:
+            if row['dataset'] not in validated:
+                golden_flags = ['-t', '-s', '-verify', '-u32in', source, '-bvin', golden,
+                                '-bv-index-in', golden_index, '-threads', str(args.j),
+                                '-batch-vectors', '512', '-read-memory-mib', str(args.read_memory_mib),
+                                *(['-read-mmap'] if args.read_mmap else []), *progress]
+                text = phase('golden-verify-threaded', golden_flags)
+                validate_read(text, baseline, 'verify', baseline['input_bytes'])
+                validated.add(row['dataset'])
             reads(original, original_index, 'reference')
             if not args.fast:
                 check_space(args.out, reserve, row['input_bytes'])
@@ -228,7 +247,7 @@ def execute(args, references, binary):
             entry.update(status='passed', exit_code=0)
             save_summary(args.out, rows)
             if not args.silent:
-                print(f'PASS {case}: logical equivalence against raw IDs', flush=True)
+                print(f'PASS {case}: logical equivalence against validated level {args.golden_level}', flush=True)
         except BaseException as error:
             entry.update(status='failed', exit_code=getattr(error, 'code', 130 if isinstance(error, KeyboardInterrupt) else 1))
             save_summary(args.out, rows)
@@ -244,10 +263,12 @@ def parse():
     parser.add_argument('--out', required=True, type=Path, help='Fresh test directory outside reference tree')
     parser.add_argument('-j', '--threads', dest='j', type=int, default=max(1, (os.cpu_count() or 1)-2))
     parser.add_argument('--silent', action='store_true', help='Suppress console progress; retain full logs, final results and errors')
-    parser.add_argument('--fast', action='store_true', help='Threaded full raw-ID validation of selected levels; no checksum audit or rebuild')
+    parser.add_argument('--fast', action='store_true', help='Validate golden against raw IDs, then compare selected levels; no checksum audit or rebuild')
+    parser.add_argument('--golden-level', type=int, choices=range(1, 11), default=6,
+                        help='Golden compression level validated against raw IDs first (default 6)')
     parser.add_argument('--start-level', type=int, choices=range(1, 11), default=1,
                         help='First compression level to test, inclusive through level 10 (default 1)')
-    parser.add_argument('--read-memory-mib', type=int, default=512, help='Raw plus encoded indexed-read batch budget in positive MiB (default 512)')
+    parser.add_argument('--read-memory-mib', type=int, default=512, help='Combined staged input budget for indexed reads in positive MiB (default 512)')
     parser.add_argument('--read-mmap', action='store_true', help='Use Unix read-only BLOB mapping windows')
     parser.add_argument('--progress', type=int, default=1000)
     parser.add_argument('--reserve-gib', type=float, default=8)
@@ -277,7 +298,8 @@ def main():
     expected = {(f'Gov2.{dataset}', level) for dataset in ('sorted', 'unsorted') for level in range(1, 11)}
     if len(table) != 20 or {(row['dataset'], int(row['compression_level'])) for row in table} != expected:
         raise TestFailure('Reference matrix must contain exactly both datasets at levels 1–10', 2)
-    table = [row for row in table if int(row['compression_level']) >= args.start_level]
+    table = [row for row in table if int(row['compression_level']) >= args.start_level
+             or int(row['compression_level']) == args.golden_level]
     # Explicit local logs are created only after path checks. No reference writes occur.
     args.out.mkdir(parents=True)
     snapshots = {}
@@ -339,7 +361,8 @@ def main():
                    reference=str(args.reference), mode='fast' if args.fast else 'normal', workers=args.j,
                    reference_integrity_audit=not args.fast, silent_progress=args.silent,
                    read_memory_mib=args.read_memory_mib, read_mmap=args.read_mmap,
-                   start_level=args.start_level, end_level=10, case_count=len(references),
+                   start_level=args.start_level, golden_level=args.golden_level, end_level=10,
+                   case_count=2 * (11 - args.start_level),
                    platform=platform.platform(), started_utc=datetime.now(timezone.utc).isoformat()))
         execute(args, references, binary)
         if not args.fast:
@@ -348,8 +371,8 @@ def main():
             for path, checksum in snapshots.items():
                 if digest(path) != checksum:
                     raise TestFailure(f'Reference changed during testing: {path}')
-        case_count = len(references)
-        message = (f'All {case_count} raw-ID comparisons passed; reference integrity audit omitted.\n' if args.fast else
+        case_count = 2 * (11 - args.start_level)
+        message = (f'All {case_count} collection validations passed against a raw-validated golden; reference integrity audit omitted.\n' if args.fast else
                    f'All {case_count} reference cases passed; reference checksums unchanged.\n')
         (args.out / 'PASS.txt').write_text(message)
         print(f'ALL PASS: {case_count} cases; reports: {args.out / "summary.tsv"}', flush=True)

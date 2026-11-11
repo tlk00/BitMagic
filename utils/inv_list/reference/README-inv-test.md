@@ -10,8 +10,8 @@ bash run_inv_test_pl.sh --bin ./bminv_neon \
 
 | Mode | Work for every selected sorted/unsorted level |
 |---|---|
-| Normal | Check saved reference integrity; threaded and serial raw-ID verification; independent decode; rebuild into `--out`; repeat both verifications and decode on rebuilt streams. |
-| `--fast` | Full threaded raw-ID verification only. Reads every ID; skips checksum/history audits, rebuilding and decode-only passes. |
+| Normal | Audit saved reference integrity; validate golden against raw IDs; compare other streams against golden with workers; retain serial raw-ID verification, decode and rebuild checks. |
+| `--fast` | Validate golden against all raw IDs once per dataset, then compare selected levels against golden with exact bvector equality. |
 
 Use `--start-level 6` to test levels 6–10 inclusive for both datasets (10 cases).
 The default is level 1, covering all 20 cases. For a reduced-I/O fast run:
@@ -23,18 +23,26 @@ bash run_inv_test_pl.sh --bin ./bminv \
   --out "/Volumes/USB_1TB/inv-test-level6-$(date +%Y%m%d-%H%M%S)"
 ```
 
-Fast mode opens only the selected level streams and indices. Every selected case
-still compares all raw IDs. Summaries report the actual case count; `test.json`
+`--golden-level 6` is the default. Choose any level from 1 through 10.
+For each dataset, the runner first validates that golden stream against every raw
+ID using the current executable. Only after it passes do other selected levels
+use it as their expected collection. Golden validation runs even when its level
+is outside `--start-level`; it is a prerequisite and does not increase the selected
+case count. If the golden is selected, its completed raw check supplies its
+threaded verification. All other threaded checks, including rebuilt candidates,
+decode both collections and compare exact bvector equality. A golden failure
+stops the run before dependent comparisons for that dataset.
+
+Fast mode omits checksum/history audits, rebuilding and decode-only passes. Summaries report the actual case count; `test.json`
 records the level range and count. Normal mode also accepts `--start-level` and
 retains its reference integrity audits, including the final all-file checksum scan.
 
 The raw inputs must be `<reference>/Gov2Flat/gov2.sorted` and `gov2.unsorted`,
-Normal mode checks their recorded input hashes; fast mode directly tests decoding
+Normal mode checks their recorded input hashes; both modes validate the golden
 against the supplied raw inputs. The current bminv verifier imports each raw ID
-list into a bvector and calls `equal()` on the decoded vector. Both saved and
-rebuilt streams are thus compared to the same logical expected vectors.
+list into a bvector and calls `equal()` on the decoded vector. Other streams are compared against that validated logical baseline.
 Serialized size/checksum changes are reported, never treated as logical failures.
-An older target binary may use its own equivalent per-ID verification algorithm.
+The target executable must support `-golden-bvin` and `-golden-index-in`.
 
 `--bin` accepts an executable name on PATH or a path. `-j N` / `--threads N`
 sets the worker budget; default is logical CPUs minus two (at least one).
@@ -73,9 +81,19 @@ structured progress remains available to existing harnesses.
 
 ## Indexed verification I/O
 
-Threaded verification and decode use sequential adjacent-BLOB batches by default.
+Threaded verification and decode use two sequential adjacent-BLOB batch slots.
+The coordinator reads the next batch while workers decode/compare the active
+batch, then drains active tasks before exchanging the slots. There is one reader
+and the configured worker pool; each file advances sequentially. Normally each
+slot can use half the configured budget. The combined staged input bytes across
+both slots stay within the budget. A single vector/pair above half the budget
+can use up to the full budget after active work drains. A pair above the full
+budget is rejected before payload allocation. Buffered reads perform read-ahead
+in the coordinator; mmap windows request advisory prefetch and can still fault
+in workers. Output reports `read_ahead_batches` and combined peak staged bytes.
 Use `--read-memory-mib 8192` for an 8 GiB budget, or `--read-memory-mib 16384`
-for 16 GiB of combined raw-ID and encoded batch data. Positive MiB values are
+for 16 GiB of combined staged input data. Raw verification counts raw IDs plus
+encoded bytes; collection comparison counts encoded bytes from both files. Positive MiB values are
 limited by platform address/stream sizes. The default remains 512 MiB.
 The setting is an upper bound; batches allocate only the data they contain. The index, worker
 bitvectors/decoder/comparison workspaces and filesystem cache need additional RAM.
@@ -83,7 +101,7 @@ The existing 512-vector batch limit can result in smaller batches.
 
 `--read-mmap` selects Unix read-only compressed-file windows and advisory
 sequential/read-ahead hints. Raw inputs remain sequential buffered reads.
-Windows uses buffered batches. Both backends preserve full ID comparison and
+Windows uses buffered batches. Both backends preserve exact logical comparison and
 exact indexed BLOB consumption. These options apply to fast and normal threaded
 read phases. Commands and test.json record the selection.
 
@@ -114,3 +132,18 @@ c++ -std=c++17 -O1 -pthread -I../../src -I. \
   experiments/current/test_worker_error.cpp -o /tmp/inv-worker-error
 /tmp/inv-worker-error
 ```
+
+Direct indexed collection comparison, after independently validating the golden:
+
+```bash
+./bminv -verify -threads 8 -read-memory-mib 8192 \
+  -bvin level10.bv -bv-index-in level10.idx \
+  -golden-bvin level6.bv -golden-index-in level6.idx
+```
+
+Each file has its own index and sequential batch window. The combined staged
+bytes obey the read budget; indices, per-worker decoded vectors, codec scratch
+space and mapping page alignment need additional memory. Failures include both
+file names and indexed BLOB ranges. The focused fixtures induce golden/raw
+mismatches, first/later collection mismatches, count differences, malformed BLOBs
+and extra bytes, and check runner failure logs and markers.
