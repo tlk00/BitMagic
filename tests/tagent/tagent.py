@@ -1536,7 +1536,8 @@ class Agent:
             for player in ('afplay', 'pw-play', 'paplay', 'aplay'):
                 if shutil.which(player):
                     try:
-                        self.command([player, str(path)], timeout=duration + 2)
+                        # Allow device startup, buffering and scheduler delays on WSL.
+                        self.command([player, str(path)], timeout=max(30, duration * 2 + 10))
                         return True
                     except (OSError, Failure) as error:
                         self.say('AUDIO player {} failed for {}: {}'.format(player, event, error))

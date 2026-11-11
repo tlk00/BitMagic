@@ -88,6 +88,16 @@ class SupervisorTests(unittest.TestCase):
             reply.join(3)
         self.assertEqual(order, ['prior', 'joker-reply'])
 
+    def test_audio_player_has_buffering_grace_period(self):
+        """Short clips allow WSL audio startup and buffering time."""
+        self.agent.audio_dir.mkdir()
+        self.agent.args.tts = 'off'
+        with patch.object(ta.soundtrack, 'render_dispatch', return_value=5), \
+             patch.object(ta.shutil, 'which', side_effect=lambda x: '/fake/paplay' if x == 'paplay' else None), \
+             patch.object(self.agent, 'command', return_value='') as command:
+            self.assertTrue(self.agent.play_sound('dispatch', 1))
+        self.assertEqual(command.call_args.kwargs['timeout'], 30)
+
     def test_audio_player_failure_is_logged_and_retried(self):
         """A transient player error does not disable later announcements."""
         self.agent.audio_dir.mkdir()
