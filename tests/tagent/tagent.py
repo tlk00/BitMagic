@@ -62,6 +62,30 @@ STRESS_TRANSITION_PHRASES = (
 )
 
 
+def build_status_label(argv, log):
+    """Derive display configuration from the actual executable or variant log directory.
+
+    inv_list invokes a shell wrapper with --bin; stress wrappers identify their
+    variant through the log's parent directory. Unknown suffixes remain visible.
+    Return an empty label when no executable build configuration is available.
+    """
+    names = []
+    if '--bin' in argv:
+        position = argv.index('--bin') + 1
+        if position < len(argv):
+            names.append(Path(str(argv[position])).name)
+    names.extend((Path(str(argv[0])).name, log.parent.name))
+    display = {'sse42': 'SSE4.2', 'sse41': 'SSE4.1', '64': '64-bit'}
+    for name in names:
+        name = name.removesuffix('.exe')
+        family, separator, configuration = name.partition('_')
+        if separator and family in ('bminv', 'perf', 'stress', 'stress64'):
+            parts = configuration.split('_')
+            return ' '.join(part if part in ('debug', 'release') else
+                            display.get(part, part.upper()) for part in parts)
+    return ''
+
+
 def spoken_stress_name(name):
     """Convert a stress executable name into a pronounceable variant label."""
     parts = name.split('_')[1:]
@@ -730,7 +754,9 @@ class Agent:
                         is_test = log and log.name in ('perf.log', 'runner.log', 'inv-runner.log')
                         if not is_test or self.test_started_at is None or now >= next_job_message:
                             if log:
-                                self.say(('Fast! ' if self.args.fast else 'SloMo ' if self.args.pedantic else 'Norm ') + Path(str(argv[0])).name + ' | ' + str(log), compact=True)
+                                mode = 'Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'
+                                build = build_status_label(argv, log)
+                                self.say(mode + (' ' + build if build else '') + ' | ' + str(log), compact=True)
                             else:
                                 self.say('RUN ' + Path(str(argv[0])).name)
                             if is_test and self.test_started_at is not None:

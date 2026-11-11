@@ -38,6 +38,26 @@ class SupervisorTests(unittest.TestCase):
         self.agent.stop_children()
         self.temp.cleanup()
 
+    def test_build_status_label(self):
+        """Show actual build variants through wrappers and retain future suffixes."""
+        cases = [
+            (['bash', 'run_inv_test_pl.sh', '--bin', '/repo/bminv_release'],
+             'inv_list/bminv_release/inv-runner.log', 'release'),
+            (['bash', 'run_inv_test_pl.sh', '--bin', '/repo/bminv_release_avx2'],
+             'inv_list/bminv_release_avx2/inv-runner.log', 'release AVX2'),
+            (['bash', 'run.sh', '--bin', '/repo/bminv_debug_neon'],
+             'inv_list/bminv_debug_neon/inv-runner.log', 'debug NEON'),
+            (['bash', 'run_all_pl.sh'], 'stress_release_sse42/runner.log', 'release SSE4.2'),
+            (['/repo/perf_release_avx512'], 'perf_release_avx512/perf.log', 'release AVX512'),
+            (['bash', 'run.sh'], 'stress64_debug_64/runner.log', 'debug 64-bit'),
+            (['bash', 'run.sh', '--bin', '/repo/bminv_release_future.exe'],
+             'inv_list/results/inv-runner.log', 'release FUTURE'),
+            (['bash', 'build.sh'], 'build-inv_list.log', ''),
+        ]
+        for argv, path, expected in cases:
+            with self.subTest(argv=argv, path=path):
+                self.assertEqual(ta.build_status_label(argv, Path(path)), expected)
+
     def test_jemalloc_detection_and_preload(self):
         """Select a loadable library and preserve caller preloads without mutation."""
         library = self.root / 'libjemalloc.so.2'
