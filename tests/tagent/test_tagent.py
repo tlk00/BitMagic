@@ -312,10 +312,13 @@ class SupervisorTests(unittest.TestCase):
     def test_success_and_isolation(self):
         """All expected builds run, including debug perf, with isolated stress files."""
         self.fixture()
-        with patch.object(self.agent, 'start_test_sound', wraps=self.agent.start_test_sound) as departure:
+        with patch.object(self.agent, 'start_test_sound', wraps=self.agent.start_test_sound) as departure, \
+                patch.object(self.agent, 'sound') as sounds:
             self.assertTrue(self.agent.cycle())
             self.assertEqual([call.args[0] for call in departure.call_args_list],
                              ['perf', 'stress'])
+            events = [call.args[0] for call in sounds.call_args_list]
+            self.assertLess(events.index('compilation-depot-start'), events.index('compilation-depot-end'))
         self.assertEqual(self.agent.next_train_at, float('inf'))
         runs = list(self.agent.home.glob('*abc123'))
         self.assertEqual(len(runs), 1)
@@ -515,6 +518,51 @@ class SupervisorTests(unittest.TestCase):
             self.agent.station_visit('stress', final=True)
             self.assertEqual(sound.call_args.args[0], 'station-visit')
             self.assertIn('All scheduled tests have passed', sound.call_args.kwargs['workers'])
+
+    def test_intermediate_station_respects_timer_and_recent_visits(self):
+        """Intermediate visits run only in active tests, rearm, and respect station stops."""
+        self.agent.args.no_sound = False
+        self.agent.args.sound_volume = .35
+        self.agent.test_started_at = 1
+        self.agent.next_intermediate_station = 10000
+        with patch.object(self.agent, 'sound') as sound, \
+                patch.object(ta.random, 'uniform', return_value=3000), \
+                patch.object(ta.time, 'monotonic', return_value=9999):
+            self.agent.report_intermediate_station()
+            sound.assert_not_called()
+        with patch.object(self.agent, 'sound') as sound, \
+                patch.object(ta.random, 'uniform', return_value=3000), \
+                patch.object(ta.time, 'monotonic', return_value=10000):
+            self.agent.report_intermediate_station()
+            sound.assert_called_once()
+            self.assertEqual(sound.call_args.args[0], 'station-intermediate')
+            self.assertIn('Testing continues', sound.call_args.kwargs['workers'])
+            self.assertEqual(self.agent.next_intermediate_station, 13000)
+            self.agent.report_intermediate_station()
+            sound.assert_called_once()
+        self.agent.next_intermediate_station = 10001
+        with patch.object(self.agent, 'sound') as sound, patch.object(ta.time, 'monotonic', return_value=10001):
+            self.agent.report_intermediate_station()
+            sound.assert_not_called()
+        self.agent.test_started_at = None
+        with patch.object(self.agent, 'sound') as sound, patch.object(ta.time, 'monotonic', return_value=15000):
+            self.agent.report_intermediate_station()
+            sound.assert_not_called()
+
+    def test_parallel_workers_schedule_one_intermediate_visit(self):
+        """Concurrent test workers share one timer and cannot queue duplicate stations."""
+        self.agent.args.no_sound = False
+        self.agent.test_started_at = 1
+        self.agent.next_intermediate_station = 10
+        with patch.object(self.agent, 'sound') as sound, \
+                patch.object(ta.time, 'monotonic', return_value=10), \
+                patch.object(ta.random, 'uniform', return_value=3000):
+            threads = [threading.Thread(target=self.agent.report_intermediate_station) for _ in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            sound.assert_called_once()
 
     def test_inv_progress_uses_selected_case_count(self):
         """Progress and speech report the selected fast or normal case total."""
@@ -898,6 +946,7 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(self.agent.run(), 0)
         events = [call.args[0] for call in sound.call_args_list]
         self.assertIn('train-normal-demo', events)
+        self.assertIn('toronto', events)
         self.assertIn('train-stop', events)
         self.assertIn('depart-perf', events)
         self.assertIn('fail', events)
@@ -962,6 +1011,7 @@ class SupervisorTests(unittest.TestCase):
             with self.assertRaises(ta.CommandFailure):
                 self.agent.cycle()
             sound.assert_any_call('build-final-failed', workers=(2, self.agent.build_warnings.count, False))
+            self.assertNotIn('compilation-depot-end', [call.args[0] for call in sound.call_args_list])
         self.assertIn('BUILD FAILED | diagnostic errors: 2 | warnings:',
                       (self.agent.home / 'agent.log').read_text())
 

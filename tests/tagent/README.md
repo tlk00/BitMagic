@@ -698,7 +698,7 @@ station bed fades in, the conductor speaks after eight seconds, and the bed is
 reduced by 20% during speech. A missing TTS engine leaves the station ambience
 playing without speech. Queued events use the normal serialized audio queue and
 never delay test execution. Preview with `./run_tagent.sh --sound-preview station-visit`.
-The sound demo also includes a station visit.
+The sound demo includes the Toronto station recording, and `--sound-preview toronto` previews it directly. During active tests, an intermediate station is scheduled after a random 50–90 minutes. A stage-boundary station resets that interval, and intermediate visits share the 30-minute minimum spacing. The conductor names a fictional stop and says testing continues.
 
 The station ambience uses one original: [Train station, ambience, annoucements,
 VIA rail, TORONTO, 2011.wav](https://freesound.org/people/TRP/sounds/577322/)
@@ -707,3 +707,11 @@ on Freesound when checked on 2026-11-11. The publicly available compressed previ
 mono and 44.1 kHz, attenuated and faded; the generated WAV is
 `assets/station-ambience.wav`. Other recorded sources and their licenses are
 listed above with their respective effects.
+
+At the start of compilation, Dispatch welcomes the train to Compilation Depot.
+After all builds succeed and the update check clears, Dispatch announces that
+the freight is cleared for testing. The arrival uses a short station ambience with the announcement after eight
+seconds; the departure announcement uses the depot background. Both use the
+standard serialized audio queue; the success announcement is
+not issued after a failed or update-interrupted build. Preview the arrival with
+`./run_tagent.sh --sound-preview compilation-depot`.

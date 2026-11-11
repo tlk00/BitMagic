@@ -229,7 +229,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -315,7 +315,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -337,7 +337,7 @@ def arguments():
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
         parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
@@ -427,6 +427,8 @@ class Agent:
         self.commit = 'unknown'
         self.last_sound = 0
         self.last_station_visit = -math.inf
+        self.next_intermediate_station = math.inf
+        self.station_visit_lock = threading.RLock()
         self.next_train_at = math.inf
         self.audio_thread = None
         self.audio_active = None
@@ -764,6 +766,8 @@ class Agent:
                                 elapsed = max(0, now - self.test_started_at)
                                 interval = 10 + 290 * min(elapsed / 3600, 1)
                                 next_job_message = now + interval
+                    if log and log.name in ('perf.log', 'runner.log', 'inv-runner.log'):
+                        self.report_intermediate_station()
                     if log and log.name == 'inv-runner.log':
                         if self.inv_active:
                             self.report_inv_progress(*self.inv_active)
@@ -1152,9 +1156,9 @@ class Agent:
             self.audio_pending = {key: thread for key, thread in self.audio_pending.items() if thread.is_alive()}
             if event == 'fail' and self.audio_failure_thread and self.audio_failure_thread.is_alive():
                 return
-            coalesced = ('station-perf', 'station-stress', 'perf-progress', 'inv-progress', 'joker', 'work',
+            coalesced = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'work',
                          'dispatch', 'repo-unchanged', 'build-clear', 'build-warning')
-            phase_events = ('station-perf', 'station-stress', 'perf-progress', 'inv-progress', 'joker', 'work', 'dispatch')
+            phase_events = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'work', 'dispatch')
             pending_key = (event, self.audio_phase_generation if event in phase_events else None)
             if event in coalesced and pending_key in self.audio_pending:
                 return
@@ -1179,7 +1183,7 @@ class Agent:
                 selected = random.choice(('work', 'dispatch'))
                 self.say('STEAMPUNK SOUND ' + ('passing train' if selected == 'work' else 'dispatch'))
             phase = self.audio_phase_generation if selected in phase_events else None
-            build = self.audio_build_generation if selected in ('build-clear', 'build-warning') else None
+            build = self.audio_build_generation if selected in ('build-clear', 'build-warning', 'compilation-depot-start') else None
             self.audio_thread = threading.Thread(target=self.play_after,
                                                 args=(previous, selected, workers, epoch, phase, build), daemon=True)
             if event in coalesced:
@@ -1675,7 +1679,23 @@ class Agent:
             elif event in ('repo-new', 'repo-build', 'repo-unchanged', 'repo-restart'):
                 duration = self.render_repo_report(path, event != 'repo-unchanged',
                                                    event == 'repo-build', event == 'repo-restart')
-            elif event == 'station-visit':
+            elif event in ('compilation-depot-start', 'compilation-depot-end', 'compilation-depot'):
+                message = (workers if isinstance(workers, str) else
+                           'Dispatch to BitMagic. Welcome to Compilation Depot. The build crews are at work.')
+                self.say('DISPATCH: ' + message)
+                if event in ('compilation-depot-start', 'compilation-depot'):
+                    voice = self.temp_dir / ('depot-station-voice-{}.wav'.format(threading.get_ident()))
+                    try:
+                        spoken = self.synthesize_announcement(voice, message, self.dispatcher_voice, 50, background='build')
+                        duration = soundtrack.render_station_visit(path, voice if spoken is not None else None,
+                                                                   self.args.sound_volume, max_seconds=20)
+                    finally:
+                        voice.unlink(missing_ok=True)
+                else:
+                    duration = self.synthesize_announcement(path, message, self.dispatcher_voice, 50, background='build')
+                    if duration is None:
+                        return False
+            elif event in ('station-visit', 'station-intermediate', 'toronto'):
                 self.say('CONDUCTOR: ' + workers)
                 voice = self.temp_dir / ('station-voice-{}.wav'.format(threading.get_ident()))
                 try:
@@ -1996,12 +2016,34 @@ class Agent:
         }
         message = 'Conductor to Dispatch. ' + (
             'Arriving at Completion Yard. All scheduled tests have passed.' if final else random.choice(messages[stage]))
-        if (not self.args.no_sound and self.args.sound_volume > 0 and self.audio_available
-                and time.monotonic() - self.last_station_visit >= 1800):
-            self.last_station_visit = time.monotonic()
-            self.sound('station-visit', workers=message)
-        else:
-            self.sound('inv-announcement', workers=message)
+        with self.station_visit_lock:
+            now = time.monotonic()
+            if (not self.args.no_sound and self.args.sound_volume > 0 and self.audio_available
+                    and now - self.last_station_visit >= 1800):
+                self.last_station_visit = now
+                self.next_intermediate_station = now + random.uniform(3000, 5400)
+                self.sound('station-visit', workers=message)
+            else:
+                self.sound('inv-announcement', workers=message)
+
+    def report_intermediate_station(self):
+        """Schedule an occasional station ambience while test processes are active."""
+        if (self.test_started_at is None or self.stopping.is_set() or self.args.no_sound
+                or self.args.sound_volume <= 0 or not self.audio_available
+                or self.args.sound_theme != 'steampunk'):
+            return
+        with self.station_visit_lock:
+            now = time.monotonic()
+            if now < self.next_intermediate_station or now - self.last_station_visit < 1800:
+                return
+            if self.audio_thread and self.audio_thread.is_alive():
+                return
+            destination = random.choice(('Long Haul Junction', 'Water Stop', 'Highland Siding',
+                                         'Freight Junction', 'Coal Creek Station'))
+            self.last_station_visit = now
+            self.next_intermediate_station = now + random.uniform(3000, 5400)
+            self.sound('station-intermediate', workers=(
+                'Conductor to Dispatch. Arriving at {}. Testing continues on schedule.'.format(destination)))
 
     def test_inv_stage(self, run, manifest):
         """Validate reference collections with supported inv_list binaries in sequence."""
@@ -2245,6 +2287,7 @@ class Agent:
         self.memory_phase = 'build'
         self.test_started_at = None
         self.sound('building')
+        self.sound('compilation-depot-start', workers='Dispatch to BitMagic. Welcome to Compilation Depot. The build crews are at work.')
 
         def run_build(task):
             """Run one build family and retain its separate diagnostic log."""
@@ -2293,6 +2336,8 @@ class Agent:
         self.say('SAMPLES BUILD COMPLETE | warnings: {}'.format(self.sample_warnings.count))
         self.finish_build(True)
         self.test_started_at = time.monotonic()
+        with self.station_visit_lock:
+            self.next_intermediate_station = max(self.test_started_at, self.last_station_visit) + random.uniform(3000, 5400)
         self.sound('build')
         self.perf_skipped = False
         # Always check at the build/test boundary; do not defer an overdue check
@@ -2302,6 +2347,7 @@ class Agent:
         if self.update_waiting():
             self.args.force = True
             return 'updated'
+        self.sound('compilation-depot-end', workers='Dispatch to BitMagic. Compilation Depot reports all builds complete. The freight is cleared to begin testing.')
         # Test execution order is configured here; each stage owns its scheduling.
         stages = (('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
                   ('stress', self.test_stress_stage))
@@ -2377,6 +2423,8 @@ class Agent:
                 self.next_station_report = math.inf
             self.active_run = None
             self.test_started_at = None
+            with self.station_visit_lock:
+                self.next_intermediate_station = math.inf
             self.stress_stop_file = None
             self.next_remote_poll = math.inf
             self.next_train_at = math.inf
@@ -2434,8 +2482,9 @@ class Agent:
                     sequence.extend([('depot', 1), ('train-ambient', 1), ('train-normal-ambient', 1)])
                 else:
                     sequence.append(('train-normal-demo', 1))
+                sequence.append(('compilation-depot', 'Dispatch to BitMagic. Welcome to Compilation Depot. The build crews are at work.'))
                 sequence.append(('train-stop', 1))
-                sequence.append(('station-visit', 'Conductor to Dispatch. Arriving at Performance Terminal. Speed trials are complete.'))
+                sequence.append(('toronto', 'Conductor to Dispatch. Arriving at Long Haul Junction. Testing continues on schedule.'))
             clips = []
             for event, workers in sequence:
                 self.say('DEMO ' + event + (' | workers ' + str(workers) if event == 'work' else ''))
@@ -2466,7 +2515,7 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.audio_dir))
             return 0
         if self.args.sound_preview:
-            preview_count = ('Conductor to Dispatch. Arriving at Performance Terminal. Speed trials are complete.' if self.args.sound_preview == 'station-visit' else
+            preview_count = ('Conductor to Dispatch. Arriving at Performance Terminal. Speed trials are complete.' if self.args.sound_preview in ('station-visit', 'toronto') else
                              'Conductor to Dispatch. Sorted round trip. The train is climbing slowly, but we are making progress.' if self.args.sound_preview == 'inv-progress' else
                              random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
                              'Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)

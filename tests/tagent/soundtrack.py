@@ -43,7 +43,7 @@ def render_train_stop(path, volume):
     return len(samples) / RATE
 
 
-def render_station_visit(path, voice_path, volume, asset=None):
+def render_station_visit(path, voice_path, volume, asset=None, max_seconds=None):
     """Mix the station bed and optional announcement after eight seconds.
 
     The mono 44.1 kHz asset contains its own entrance and exit fades. The
@@ -66,6 +66,13 @@ def render_station_visit(path, voice_path, volume, asset=None):
         voice.byteswap()
     offset = 8 * RATE
     end = offset + len(voice)
+    if max_seconds is not None:
+        # Leave time for the complete announcement and a two-second exit fade.
+        keep = min(len(bed), max(int(max_seconds * RATE), end + 2 * RATE))
+        bed = bed[:keep]
+        fade = min(2 * RATE, len(bed))
+        for i in range(fade):
+            bed[len(bed) - fade + i] = round(bed[len(bed) - fade + i] * (fade - i - 1) / fade)
     if end > len(bed):
         bed.extend([0] * (end - len(bed)))
     gain = volume / .35 * 1.15
