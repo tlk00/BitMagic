@@ -194,7 +194,8 @@ def execute(args, references, binary):
         def reads(stream, index, prefix):
             """Compare imported raw IDs with decoded bits; full mode also exercises serial traversal."""
             flags = ['-t', '-s', '-bvin', stream, '-bv-index-in', index, '-threads', str(args.j),
-                     '-batch-vectors', '512', *progress]
+                     '-batch-vectors', '512', '-read-memory-mib', str(args.read_memory_mib),
+                     *(['-read-mmap'] if args.read_mmap else []), *progress]
             text = phase(prefix + '-verify-threaded', ['-verify', '-u32in', source, *flags])
             validate_read(text, row, 'verify', row['input_bytes'])
             if not args.fast:
@@ -244,6 +245,8 @@ def parse():
     parser.add_argument('-j', '--threads', dest='j', type=int, default=max(1, (os.cpu_count() or 1)-2))
     parser.add_argument('--silent', action='store_true', help='Suppress console progress; retain full logs, final results and errors')
     parser.add_argument('--fast', action='store_true', help='Threaded full raw-ID validation of all 20 references; no checksum audit or rebuild')
+    parser.add_argument('--read-memory-mib', type=int, default=512, help='Raw plus encoded indexed-read batch budget (1..8192 MiB)')
+    parser.add_argument('--read-mmap', action='store_true', help='Use Unix read-only BLOB mapping windows')
     parser.add_argument('--progress', type=int, default=1000)
     parser.add_argument('--reserve-gib', type=float, default=8)
     return parser.parse_args()
@@ -257,6 +260,8 @@ def main():
     protect_paths(args.reference, args.out)
     if args.out.exists():
         raise TestFailure('Require a fresh --out directory', 2)
+    if not 1 <= args.read_memory_mib <= 8192 or (args.read_mmap and os.name != 'posix'):
+        raise TestFailure('Read budget must be 1..8192 MiB; mapping requires Unix', 2)
     if not 1 <= args.j <= 256 or args.progress <= 0 or args.reserve_gib < 0:
         raise TestFailure('Invalid threads, progress or reserve', 2)
     found = shutil.which(args.bin)
@@ -330,6 +335,7 @@ def main():
         write_json(args.out / 'test.json', dict(binary=str(target), binary_sha256=digest(binary),
                    reference=str(args.reference), mode='fast' if args.fast else 'normal', workers=args.j,
                    reference_integrity_audit=not args.fast, silent_progress=args.silent,
+                   read_memory_mib=args.read_memory_mib, read_mmap=args.read_mmap,
                    platform=platform.platform(), started_utc=datetime.now(timezone.utc).isoformat()))
         execute(args, references, binary)
         if not args.fast:

@@ -112,6 +112,8 @@ void show_help()
         << "-bwt-min-gain N             -- require N complete-record bytes saved by BWT (default 16; 0 disables)" << std::endl
         << "-periodic-step1-interleaved N -- BIC start/end pairs: 1 fixed, 4 gamma-vs-fixed formula choice" << std::endl
         << "-threads N                  -- parallel compression pool (1..256; omitted = sequential)" << std::endl
+        << "-read-memory-mib N          -- indexed read batch budget, raw + encoded (1..8192, default 512)" << std::endl
+        << "-read-mmap                  -- Unix read-only windows with read-ahead hints" << std::endl
         << "-batch-vectors N            -- MT input window (default 512; maximum 512)" << std::endl
         << "-level N                    -- compression level 0..10 (default 6)"     << std::endl
         << "-silent (-s)                -- suppress legacy status; explicit progress remains enabled"          << std::endl
@@ -224,6 +226,9 @@ bool bwt_min_gain_specified = false;
 unsigned periodic_step1_interleaved = 0;
 unsigned compression_threads = 0, compression_batch_vectors = 512;
 bool compression_batch_specified = false;
+bm::id64_t read_memory_bytes = 512ull * 1024 * 1024; ///< Combined raw/encoded batch budget.
+bool read_mmap = false; ///< Use bounded Unix read-only mapping windows.
+bool read_options_specified = false; ///< Reject read options outside indexed reads.
 unsigned     c_level = bm::set_compression_default;
 
 
@@ -314,6 +319,36 @@ int parse_args(int argc, char *argv[])
             const auto n = std::stoull(value);
             if (n > 65535) throw std::runtime_error("Invalid range for " + arg);
             bwt_min_gain = unsigned(n); bwt_min_gain_specified = true; continue;
+        }
+        if (arg == "-read-memory-mib")
+        {
+            if (++i == argc)
+            {
+                throw std::runtime_error(arg + " requires a value");
+            }
+            const std::string value(argv[i]);
+            if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+            {
+                throw std::runtime_error("Invalid integer for " + arg);
+            }
+            const auto mib = std::stoull(value);
+            if (!mib || mib > 8192)
+            {
+                throw std::runtime_error("-read-memory-mib must be 1..8192");
+            }
+            read_memory_bytes = mib * 1024 * 1024;
+            read_options_specified = true;
+            continue;
+        }
+        if (arg == "-read-mmap")
+        {
+#if defined(__unix__) || defined(__APPLE__)
+            read_mmap = true;
+            read_options_specified = true;
+            continue;
+#else
+            throw std::runtime_error("-read-mmap requires Unix");
+#endif
         }
         if (arg == "-threads" || arg == "-batch-vectors")
         {
@@ -1128,6 +1163,10 @@ int main(int argc, char *argv[])
              (is_verify || is_decode ? bv_index_in_file.empty() || bv_in_file.empty() :
               (u32_in_file.empty() || bv_out_file.empty()))))
             throw std::runtime_error("-threads requires BV compression or indexed BV verify/decode");
+        if (read_options_specified && (!compression_threads || (!is_verify && !is_decode)))
+        {
+            throw std::runtime_error("Read options require indexed threaded verify/decode");
+        }
         if (compression_batch_specified && !compression_threads)
             throw std::runtime_error("-batch-vectors requires -threads");
         if (!bv_index_out_file.empty() &&

@@ -99,7 +99,7 @@ void inv_report_compression_summary(std::ostream& out,
     @param prepared Read-only snapshot value for this report.
     @param emitted Read-only snapshot value for this report.
     @param worker_seconds Read-only snapshot value for this report.
-    @param peak_staged_bytes Read-only snapshot value for this report.
+    @param peak_staged_bytes Peak combined encoded BLOB and raw-ID batch bytes.
     @param show_lengths Read-only snapshot value for this report.
     @param sblock_exact Read-only snapshot value for this report.
     @param sblock_bin_count Read-only snapshot value for this report.

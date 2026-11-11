@@ -53,7 +53,10 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
     common = ['--bin', binary, '--reference', reference, '-j', 2, '--reserve-gib', 0]
     for mode in ('fast', 'normal'):
         out = root / mode
-        result = invoke([*common, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else [])])
+        read_flags = ['--read-memory-mib', '1']
+        if mode == 'fast' and sys.platform != 'win32':
+            read_flags.append('--read-mmap')
+        result = invoke([*common, *read_flags, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else [])])
         if mode == 'fast':
             assert 'ALL PASS:' in result.stdout and 'verify 1v' not in result.stdout
             assert 'reference-verify-threaded' not in result.stdout

@@ -83,3 +83,17 @@ Use --silent to suppress all progress, including explicitly requested vector-cou
 and timed updates. Final statistics and errors remain visible. Legacy -s/-silent
 retains structured progress requested by -progress-vectors for existing harnesses.
 run_inv_test_pl.sh --silent hides console progress while retaining full phase logs.
+
+INDEXED READ MEMORY AND UNIX MAPPING
+Threaded verify/decode now reads adjacent indexed BLOBs in one sequential batch,
+then workers decode bounded RAM slices. Full raw-ID comparison is retained.
+-read-memory-mib N budgets raw IDs plus encoded bytes per batch (default 512 MiB,
+maximum 8192 MiB). -batch-vectors also bounds records per batch (default 512).
+The budget excludes the index, worker decoder/bitvector/comparison workspaces,
+optional diagnostic records and filesystem cache. Leave RAM for those users.
+A single vector exceeding the budget fails before allocating its raw payload;
+increase the budget explicitly. All workers finish before storage is reused.
+On Unix, -read-mmap selects read-only batch windows with advisory sequential
+and WILLNEED hints when available. Windows uses the portable buffered reader.
+Mapping covers the compressed input; raw IDs still use sequential buffered I/O.
+Mapping assumes input files remain unchanged. It does not reserve physical RAM.

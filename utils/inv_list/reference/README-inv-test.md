@@ -55,3 +55,23 @@ retaining errors, completion summaries, and full progress in the phase logs.
 Direct `bminv --silent` suppresses its own progress even with
 `-progress-vectors N`. Legacy `-s` keeps the earlier behavior: requested
 structured progress remains available to existing harnesses.
+
+## Indexed verification I/O
+
+Threaded verification and decode use sequential adjacent-BLOB batches by default.
+Use `--read-memory-mib 8192` to allow up to 8 GiB of combined raw-ID and encoded
+batch data, or keep the 512 MiB default on smaller machines. The index, worker
+bitvectors/decoder/comparison workspaces and filesystem cache need additional RAM.
+The existing 512-vector batch limit can result in smaller batches.
+
+`--read-mmap` selects Unix read-only compressed-file windows and advisory
+sequential/read-ahead hints. Raw inputs remain sequential buffered reads.
+Windows uses buffered batches. Both backends preserve full ID comparison and
+exact indexed BLOB consumption. These options apply to fast and normal threaded
+read phases. Commands and test.json record the selection.
+
+Focused backend/error checks from utils/inv_list:
+
+```bash
+python3 experiments/current/test_buffered_read.py --bin ./bminv
+```

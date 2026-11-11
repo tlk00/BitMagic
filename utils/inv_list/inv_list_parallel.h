@@ -10,6 +10,7 @@
 #include <cstring>
 #include "inv_list_progress.h"
 #include "inv_list_reports.h"
+#include "inv_list_read_buffer.h"
 
 struct plain_compression_policy
 {
@@ -405,6 +406,7 @@ struct parallel_read_job
 {
     std::vector<unsigned> input;
     bm::id64_t begin = 0, end = 0;
+    const unsigned char* blob = nullptr; ///< Borrowed batch slice, valid until all tasks join.
     std::streamoff input_end = 0;
     size_t input_count = 0;
     double seconds = 0;
@@ -439,6 +441,8 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     bv_file.seekg(0, std::ios::end);
     const std::streamoff file_bytes = bv_file.tellg();
     if (file_bytes <= 0) throw std::runtime_error("Empty or unreadable BV collection");
+    bv_file.seekg(0);
+    inv_list_read_buffer encoded_buffer(bv_name, read_mmap);
     const auto offsets = read_inv_blob_offsets(bv_index_in_file,
                                                 bm::id64_t(file_bytes));
     const bm::id64_t count = offsets.size() - 1;
@@ -457,7 +461,9 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     cout << "Parallel " << (verify ? "verification" : "decode")
          << ": threads=" << compression_threads
          << " batch_vectors=" << compression_batch_vectors
-         << " indexed_vectors=" << count << endl;
+         << " indexed_vectors=" << count
+         << " read_memory_mib=" << read_memory_bytes / (1024 * 1024)
+         << " read_backend=" << (read_mmap ? "mmap" : "buffered") << endl;
     std::vector<std::unique_ptr<parallel_read_job> > jobs;
     jobs.reserve(compression_batch_vectors);
     batch_type batch;
@@ -484,7 +490,7 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
         }
         const double elapsed = std::chrono::duration<double>(now - start).count();
         const inv_progress_values values{emitted, prepared,
-            inv_list_completed_tasks(batch, prepared), input_consumed,
+            batch.size() ? inv_list_completed_tasks(batch, prepared) : emitted, input_consumed,
             encoded_consumed, elapsed, 0, 0};
         std::ostringstream progress;
         inv_report_read_progress(progress, values, verify);
@@ -525,60 +531,105 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     };
     try
     {
+        unsigned pending_length = 0;
         while (prepared < count)
         {
-            std::unique_ptr<parallel_read_job> job(new parallel_read_job);
-            job->begin = offsets[size_t(prepared)];
-            job->end = offsets[size_t(prepared + 1)];
-            if (verify)
+            const bm::id64_t batch_begin = offsets[size_t(prepared)];
+            bm::id64_t batch_end = batch_begin;
+            bm::id64_t raw_bytes = 0;
+            while (prepared < count && jobs.size() < compression_batch_vectors)
             {
-                if (io_read_u32_coll(fin, job->input))
-                    throw std::runtime_error("Error reading input file");
-                job->input_count = job->input.size();
-                job->input_end = fin.tellg();
-            }
-            const size_t bytes = job->input.size() * sizeof(unsigned);
-            if (!jobs.empty() &&
-                (jobs.size() == compression_batch_vectors ||
-                 staged_bytes + bytes > 512ull * 1024 * 1024))
-                drain();
-            staged_bytes += bytes;
-            peak_staged_bytes = std::max(peak_staged_bytes, staged_bytes);
-            jobs.push_back(std::move(job));
-            parallel_read_job* target = jobs.back().get();
-            bm::task_function_t task([target, &bv_name, verify](void*) -> int
-            {
-                try
+                const bm::id64_t end = offsets[size_t(prepared + 1)];
+                if (verify && !pending_length)
                 {
-                    const auto begin = clock_type::now();
-                    std::ifstream file(bv_name.c_str(), std::ios::binary);
-                    if (!file || target->begin > bm::id64_t(std::numeric_limits<std::streamoff>::max()))
-                        throw std::runtime_error("Cannot open indexed BV input");
-                    file.seekg(std::streamoff(target->begin));
-                    if (!file) throw std::runtime_error("Cannot seek indexed BV input");
-                    bm::streams_decoder channel(file);
-                    bm::streams_deserializer<bv_type> reader;
-                    if (sblock_len_stats)
-                        reader.set_sblock_bic_records(&target->sblock_records);
-                    bv_type bv;
-                    if (!reader.deserialize(bv, channel) ||
-                        file.tellg() != std::streamoff(target->end))
-                        throw std::runtime_error("Indexed BLOB decode or length mismatch");
-                    if (verify && compare_vect(target->input, bv))
-                        throw std::runtime_error("Vector comparison failed");
-                    target->seconds = std::chrono::duration<double>(
-                        clock_type::now() - begin).count();
-                    return 0;
+                    fin.read(reinterpret_cast<char*>(&pending_length), sizeof(pending_length));
+                    if (!fin || !pending_length)
+                    {
+                        throw std::runtime_error("Invalid raw vector length");
+                    }
                 }
-                catch (const std::exception& e) { target->error = e.what(); return 1; }
-                catch (...) { target->error = "Unknown read worker failure"; return 1; }
-            });
-            batch.add(task, 0);
-            pool.get_job_queue().push(batch.get_task(unsigned(jobs.size() - 1)));
-            ++prepared;
+                const bm::id64_t next_raw = bm::id64_t(pending_length) * sizeof(unsigned);
+                const bm::id64_t required = raw_bytes + next_raw + end - batch_begin;
+                if (required > read_memory_bytes)
+                {
+                    if (jobs.empty())
+                    {
+                        throw std::runtime_error("Vector exceeds read batch budget; increase -read-memory-mib");
+                    }
+                    break;
+                }
+                std::unique_ptr<parallel_read_job> job(new parallel_read_job);
+                job->begin = offsets[size_t(prepared)];
+                job->end = end;
+                if (verify)
+                {
+                    job->input.resize(pending_length);
+                    fin.read(reinterpret_cast<char*>(job->input.data()), std::streamsize(next_raw));
+                    if (!fin)
+                    {
+                        throw std::runtime_error("Truncated raw input vector");
+                    }
+                    pending_length = 0;
+                    job->input_count = job->input.size();
+                    job->input_end = fin.tellg();
+                }
+                raw_bytes += next_raw;
+                batch_end = end;
+                jobs.push_back(std::move(job));
+                ++prepared;
+                report_progress(false);
+            } // while prepared
+            staged_bytes = size_t(raw_bytes + batch_end - batch_begin);
+            peak_staged_bytes = std::max(peak_staged_bytes, staged_bytes);
+            encoded_buffer.load(bv_file, batch_begin, batch_end - batch_begin);
             report_progress(false);
-        }
-        drain();
+            for (size_t i = 0; i < jobs.size(); ++i)
+            {
+                parallel_read_job* target = jobs[i].get();
+                target->blob = encoded_buffer.data() + size_t(target->begin - batch_begin);
+                bm::task_function_t task([target, verify](void*) -> int
+                {
+                    try
+                    {
+                        const auto begin = clock_type::now();
+                        const size_t blob_size = size_t(target->end - target->begin);
+                        bm::serialization_profile_streambuf view(target->blob, blob_size);
+                        std::istream stream(&view);
+                        bm::streams_decoder channel(stream);
+                        bm::streams_deserializer<bv_type> reader;
+                        if (sblock_len_stats)
+                        {
+                            reader.set_sblock_bic_records(&target->sblock_records);
+                        }
+                        bv_type bv;
+                        if (!reader.deserialize(bv, channel) || channel.tell() != blob_size)
+                        {
+                            throw std::runtime_error("Indexed BLOB decode or length mismatch");
+                        }
+                        if (verify && compare_vect(target->input, bv))
+                        {
+                            throw std::runtime_error("Vector comparison failed");
+                        }
+                        target->seconds = std::chrono::duration<double>(clock_type::now() - begin).count();
+                        return 0;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        target->error = e.what();
+                        return 1;
+                    }
+                    catch (...)
+                    {
+                        target->error = "Unknown read worker failure";
+                        return 1;
+                    }
+                });
+                batch.add(task, 0);
+                pool.get_job_queue().push(batch.get_task(unsigned(i)));
+            } // for i
+            drain();
+            encoded_buffer.clear();
+        } // while prepared
     }
     catch (...)
     {
