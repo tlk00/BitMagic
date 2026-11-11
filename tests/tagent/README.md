@@ -591,3 +591,33 @@ cycle. A marker alone does not identify the cause of interruption.
 Signal fault injection is opt-in because macOS may display crash dialogs.
 Run `TAGENT_FAULT_SIGNALS=1 python3 -m unittest discover -s tests/tagent -p test_tagent.py`
 to include deliberate SIGSEGV, SIGFPE and SIGABRT checks.
+
+
+When started with `--fast`, TAgent runs the express cycle first. After a fresh
+remote check finds no update, it announces the transition and reuses the builds
+for one normal cycle. Debug variants continue to use fast mode. A further remote
+check follows normal testing. An update starts a new express cycle. The console
+identifies the current mode as Fast!, Norm, or SloMo. The transition exchange and
+departure play at 120% of the configured volume, capped at 1.0.
+
+
+Normal testing uses `assets/train-normal-ambient.wav`, a five-minute mono
+loop. It uses the same smooth ducking as the express train background. Preview
+it with `./run_tagent.sh --sound-preview train-normal-ambient`. The sound demo
+includes a 30-second excerpt. The full sound preview includes the entire loop.
+
+The loop mixes CC0 or public-domain recordings from
+[BigSoundBank steam locomotive 1](https://bigsoundbank.com/steam-locomotive-1-s3016.html),
+[Wikimedia Steam engine](https://commons.wikimedia.org/wiki/File:Steam_engine.ogg),
+and [Freesound Moor Street departure](https://freesound.org/people/keithpeter/sounds/125211/).
+The Freesound source is its compressed public preview. Sources were normalized
+to the express loop, crossfaded, and mixed with quiet Morse code spelling
+“BITMAGIC NORMAL LEVEL TESTING IN PROGRESS”.
+
+
+Normal-mode transitions between test stages and sequential inv_list and stress
+variants include the CC0 [steam locomotive stop by Joseph Sardin](https://bigsoundbank.com/steam-locomotive-stop-s3015.html).
+The mono recording has half-second fades and plays over the smoothly ducked
+train ambience. Preview it with `./run_tagent.sh --sound-preview train-stop`;
+the preview follows the stop with a sample conductor transition announcement.
+The stop is also included in the sound demo.

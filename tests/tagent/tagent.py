@@ -205,7 +205,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -282,7 +282,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -300,7 +300,7 @@ def arguments():
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview in ('depot', 'train-ambient', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
         parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
@@ -378,6 +378,7 @@ class Agent:
         self.inv_active = None
         self.memory_monitor = None
         self.memory_phase = 'startup'
+        self.test_started_at = None
         self.jemalloc = None
         self.children = set()
         self.mutex = threading.RLock()
@@ -470,11 +471,12 @@ class Agent:
         self.flags = set()
         self.arm = platform.system() == 'Darwin' and platform.machine() in ('arm64', 'aarch64')
 
-    def say(self, message):
+    def say(self, message, compact=False):
         """Print and persist a timestamped lifecycle message."""
         line = time.strftime('%Y-%m-%d %H:%M:%S ') + message
         with self.log_mutex:
-            print('\r' + line, flush=True)
+            console_line = line[5:] if compact else line
+            print('\r' + console_line, flush=True)
             with (self.home / 'agent.log').open('a') as stream:
                 stream.write(line + '\n')
 
@@ -686,6 +688,7 @@ class Agent:
                     self.perf_workers.add(proc)
                     self.perf_logs[proc] = log
             started = time.monotonic()
+            next_job_message = started
             while True:
                 try:
                     result, _ = proc.communicate(timeout=min(10, timeout) if timeout else 10)
@@ -710,7 +713,17 @@ class Agent:
                                 self.check_update_failure(proc, log)
                                 return 'skipped-update'
                     else:
-                        self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
+                        now = time.monotonic()
+                        is_test = log and log.name in ('perf.log', 'runner.log', 'inv-runner.log')
+                        if not is_test or self.test_started_at is None or now >= next_job_message:
+                            if log:
+                                self.say(('Fast! ' if self.args.fast else 'SloMo ' if self.args.pedantic else 'Norm ') + Path(str(argv[0])).name + ' | ' + str(log), compact=True)
+                            else:
+                                self.say('RUN ' + Path(str(argv[0])).name)
+                            if is_test and self.test_started_at is not None:
+                                elapsed = max(0, now - self.test_started_at)
+                                interval = 10 + 290 * min(elapsed / 3600, 1)
+                                next_job_message = now + interval
                     if log and log.name == 'inv-runner.log':
                         if self.inv_active:
                             self.report_inv_progress(*self.inv_active)
@@ -1212,7 +1225,7 @@ class Agent:
             self.station_phase = phase
             self.next_station_report = time.monotonic() + random.uniform(600, 1200)
         if self.depot:
-            self.depot.set_mode('train')
+            self.depot.set_mode('train-normal' if not self.args.fast and not self.args.pedantic else 'train')
         if phase == 'perf':
             self.start_conductor_download()
             self.next_perf_report = time.monotonic() + 600
@@ -1571,6 +1584,23 @@ class Agent:
                                                         background='build', engineer=True)
                 if duration is None:
                     return False
+            elif event == 'upgrade-dispatch':
+                duration = self.synthesize_announcement(path, workers, self.dispatcher_voice, 50, background='train', volume_multiplier=1.2)
+                if duration is None:
+                    return False
+            elif event == 'upgrade-engineer':
+                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+m3', 40,
+                                                        background='train', engineer=True, volume_multiplier=1.2)
+                if duration is None:
+                    return False
+            elif event == 'upgrade-conductor':
+                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+f3', 50,
+                                                        background='train', conductor=True, volume_multiplier=1.2)
+                if duration is None:
+                    return False
+            elif event == 'upgrade-depart':
+                duration = soundtrack.render(path, self.args.sound_theme, 'depart',
+                                             min(1.0, self.args.sound_volume * 1.2), 1, self.jobs)
             elif event == 'joker-reply':
                 duration = self.synthesize_announcement(path, workers, self.dispatcher_voice, 50,
                                                         background='train')
@@ -1597,9 +1627,13 @@ class Agent:
             elif event in ('repo-new', 'repo-build', 'repo-unchanged', 'repo-restart'):
                 duration = self.render_repo_report(path, event != 'repo-unchanged',
                                                    event == 'repo-build', event == 'repo-restart')
-            elif event in ('depot', 'train-ambient'):
+            elif event == 'train-stop':
+                duration = soundtrack.render_train_stop(path, self.args.sound_volume)
+            elif event == 'train-normal-demo':
+                duration = depot.render_preview(path, self.args.sound_volume, 'train-normal', seconds=30)
+            elif event in ('depot', 'train-ambient', 'train-normal-ambient'):
                 duration = depot.render_preview(path, self.args.sound_volume,
-                                                'depot' if event == 'depot' else 'train')
+                                                {'depot': 'depot', 'train-ambient': 'train', 'train-normal-ambient': 'train-normal'}[event])
             elif event in ('depart-perf', 'depart-stress'):
                 duration = soundtrack.render(path, self.args.sound_theme, 'depart',
                                              self.args.sound_volume, workers, self.jobs,
@@ -1681,6 +1715,8 @@ class Agent:
             message += ' Performance tests are running as an express service, with reduced repetitions and fixtures.'
         elif self.args.pedantic:
             message += ' We are running the extended inspection schedule. Please expect significant delays.'
+        else:
+            message += ' We are running the regular testing schedule. Debug variants use reduced repetitions.'
         self.say('CONDUCTOR: ' + message)
         return self.synthesize_announcement(path, message, lambda: 'en-us+f3', 50,
                                             background='train', conductor=True)
@@ -1827,7 +1863,7 @@ class Agent:
         self.memory_phase = 'inv_list'
         self.joker_clock.start()
         if self.depot:
-            self.depot.set_mode('train')
+            self.depot.set_mode('train-normal' if not self.args.fast and not self.args.pedantic else 'train')
         self.sound('inv-announcement', workers='Conductor to Dispatch. Next stop, Inverted List Validation Station. Reference tests are starting.')
         self.sound('depart')
         names = [n for n in manifest['builds']['inv_list'] if self.supported(n)]
@@ -1835,7 +1871,9 @@ class Agent:
             names = [next(n for n in reversed(names) if '_release' in n)]
         else:
             names = [n for n in names if '_release' in n or (self.args.pedantic and not self.args.no_debug)]
-        for name in names:
+        for index, name in enumerate(names):
+            if index and not self.args.fast and not self.args.pedantic:
+                self.sound('train-stop')
             base = run / 'inv_list' / name
             base.mkdir(parents=True)
             output = base / 'results'
@@ -1966,6 +2004,8 @@ class Agent:
             next_name = stress_names[index + 1] if index + 1 < len(stress_names) else None
             completed = '{} stress run completed successfully.'.format(spoken_stress_name(name))
             if next_name:
+                if not self.args.fast and not self.args.pedantic:
+                    self.sound('train-stop')
                 core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
                 mode = 'fast' if self.args.fast or '_debug' in next_name else ('pedantic' if self.args.pedantic else 'normal')
                 self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
@@ -2030,6 +2070,7 @@ class Agent:
         self.build_targets = {family: [directory / name for name in names]
                               for family, directory, names, _, _ in build_tasks}
         self.memory_phase = 'build'
+        self.test_started_at = None
         self.sound('building')
 
         def run_build(task):
@@ -2078,6 +2119,7 @@ class Agent:
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
         self.say('SAMPLES BUILD COMPLETE | warnings: {}'.format(self.sample_warnings.count))
         self.finish_build(True)
+        self.test_started_at = time.monotonic()
         self.sound('build')
         self.perf_skipped = False
         # Always check at the build/test boundary; do not defer an overdue check
@@ -2090,13 +2132,50 @@ class Agent:
         # Test execution order is configured here; each stage owns its scheduling.
         stages = (('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
                   ('stress', self.test_stress_stage))
+        requested_fast = self.args.fast
         try:
+            self.say('TEST MODE | ' + ('Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'))
+            previous_stage = None
             for stage, execute in stages:
                 if stage in self.args.suppress:
                     self.say('TEST STAGE SUPPRESSED | ' + stage)
                     continue
+                if previous_stage and not self.args.fast and not self.args.pedantic:
+                    self.sound('train-stop')
+                previous_stage = stage
                 marker.write_text(json.dumps({'commit': self.commit, 'run': str(run), 'stage': stage, 'status': 'active'}) + '\n')
                 if execute(run, manifest) == 'updated':
+                    self.args.force = True
+                    return 'updated'
+            if requested_fast:
+                # Require a fresh remote check before investing in the longer run.
+                self.next_remote_poll = 0
+                if self.update_waiting():
+                    self.args.force = True
+                    return 'updated'
+                self.args.fast = False
+                if self.depot:
+                    self.depot.set_mode('train-normal')
+                self.say('TEST MODE | Norm | express cycle complete; reusing builds for normal testing')
+                self.sound('upgrade-dispatch', workers='Dispatch to BitMagic crew. Express freight delivered safely. The line is clear for the regular service.')
+                self.sound('upgrade-conductor', workers='Conductor to Dispatch. Good news, the express delivery is complete. We are ready for the full regular schedule.')
+                self.sound('upgrade-engineer', workers='Engineer Joe to Dispatch. The freight is delivered and the engine is eager for another run. Is the crew bonus on the manifest, or is that still in transit?')
+                self.sound('upgrade-depart')
+                normal_run = run / 'normal'
+                normal_run.mkdir()
+                previous_stage = None
+                for stage, execute in stages:
+                    if stage in self.args.suppress:
+                        continue
+                    if previous_stage:
+                        self.sound('train-stop')
+                    previous_stage = stage
+                    marker.write_text(json.dumps({'commit': self.commit, 'run': str(normal_run), 'stage': stage, 'mode': 'normal', 'status': 'active'}) + '\n')
+                    if execute(normal_run, manifest) == 'updated':
+                        self.args.force = True
+                        return 'updated'
+                self.next_remote_poll = 0
+                if self.update_waiting():
                     self.args.force = True
                     return 'updated'
             return True
@@ -2111,6 +2190,7 @@ class Agent:
                 print('Cannot save failure report: ' + str(report_error), file=sys.stderr, flush=True)
             raise
         finally:
+            self.args.fast = requested_fast
             if self.depot:
                 self.depot.set_mode('depot')
             self.next_perf_report = math.inf
@@ -2120,6 +2200,7 @@ class Agent:
                 self.station_phase = None
                 self.next_station_report = math.inf
             self.active_run = None
+            self.test_started_at = None
             self.stress_stop_file = None
             self.next_remote_poll = math.inf
             self.next_train_at = math.inf
@@ -2174,7 +2255,10 @@ class Agent:
                                  ('build-final-ok', (0, 3, True)),
                                  ('build-final-failed', (2, 3, False))])
                 if self.args.full_sound_preview:
-                    sequence.extend([('depot', 1), ('train-ambient', 1)])
+                    sequence.extend([('depot', 1), ('train-ambient', 1), ('train-normal-ambient', 1)])
+                else:
+                    sequence.append(('train-normal-demo', 1))
+                sequence.append(('train-stop', 1))
             clips = []
             for event, workers in sequence:
                 self.say('DEMO ' + event + (' | workers ' + str(workers) if event == 'work' else ''))
@@ -2213,6 +2297,13 @@ class Agent:
                              (0, 3, True) if self.args.sound_preview == 'build-final-ok' else
                              (2, 3, False) if self.args.sound_preview == 'build-final-failed' else self.jobs)
             self.sound(self.args.sound_preview, force=True, workers=preview_count)
+            if self.args.sound_preview == 'train-stop':
+                message = ('Conductor to Dispatch. SSE two stress run completed successfully. '
+                           'The AVX two stress run is next. '
+                           'SSE two stress run completed successfully. '
+                           'The AVX two stress run is next. '
+                           'Taking on water before the next leg. Over.')
+                self.sound('stress-transition', force=True, workers=message)
             if self.args.sound_preview == 'joker':
                 self.wait_for_audio()
                 if self.joker_reply_thread:

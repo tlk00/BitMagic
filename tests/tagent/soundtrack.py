@@ -25,6 +25,24 @@ MORSE = dict(zip('ABCDEFGHIJKLMNOPQRSTUVWXYZ', (
 MORSE[','] = '--..--'
 
 
+def render_train_stop(path, volume):
+    """Render the faded locomotive stop recording at the requested volume."""
+    asset = Path(__file__).resolve().parent / 'assets' / 'train-stop.wav'
+    with wave.open(str(asset), 'rb') as source:
+        if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
+            raise ValueError('Invalid locomotive stop audio format')
+        samples = array.array('h', source.readframes(source.getnframes()))
+    if sys.byteorder != 'little':
+        samples.byteswap()
+    samples = array.array('h', (round(sample * volume) for sample in samples))
+    if sys.byteorder != 'little':
+        samples.byteswap()
+    with wave.open(str(path), 'wb') as output:
+        output.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
+        output.writeframes(samples.tobytes())
+    return len(samples) / RATE
+
+
 def render_dispatch(path, volume=0.35):
     """Write the bundled mono radio message at the requested volume.
 

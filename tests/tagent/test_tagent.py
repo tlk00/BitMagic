@@ -437,25 +437,31 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
 
     def test_fast_applies_to_all_stress(self):
-        """Fast applies to every executed perf and stress variant."""
+        """Express tests use fast mode; normal release tests reuse the builds."""
         self.fixture()
         self.agent.args.fast = True
         calls = []
         original = self.agent.command
         def command(argv, *args, **kwargs):
-            calls.append(list(argv))
+            calls.append((list(argv), args[0] if args else None))
             return original(argv, *args, **kwargs)
         with patch.object(self.agent, 'command', side_effect=command):
             self.assertTrue(self.agent.cycle())
-        stress = [argv for argv in calls if '--order-file' in argv]
+        stress = [(argv, log) for argv, log in calls if '--order-file' in argv]
         self.assertTrue(stress)
-        self.assertTrue(all('--fast' in argv and '--pedantic' not in argv for argv in stress))
-        perf_runs = [argv for argv in calls if Path(argv[0]).name.startswith('perf_release')]
+        for argv, log in stress:
+            normal = 'normal' in log.parts
+            debug = '_debug' in log.parent.name
+            self.assertEqual('--fast' in argv, not normal or debug)
+            self.assertNotIn('--pedantic', argv)
+        perf_runs = [(argv, log) for argv, log in calls if Path(argv[0]).name.startswith('perf_release')]
         self.assertTrue(perf_runs)
-        self.assertTrue(all(argv[1:] == ['--fast'] for argv in perf_runs))
-        perf_build = next(argv for argv in calls if str(argv[1]).endswith('/perf/build_all.sh'))
-        self.assertNotIn('--pedantic', perf_build)
-        self.assertNotIn('--fast', perf_build)
+        for argv, log in perf_runs:
+            self.assertEqual('--fast' in argv, 'normal' not in log.parts)
+        perf_builds = [argv for argv, _ in calls if len(argv) > 1 and str(argv[1]).endswith('/perf/build_all.sh')]
+        self.assertEqual(len(perf_builds), 1)
+        self.assertNotIn('--pedantic', perf_builds[0])
+        self.assertNotIn('--fast', perf_builds[0])
 
     def test_perf_debug_is_always_fast(self):
         """Regular runs use fast for every debug perf binary but not release."""
@@ -583,6 +589,80 @@ class SupervisorTests(unittest.TestCase):
         self.agent.pending_tip = 'new'
         with self.assertRaisesRegex(ta.CommandFailure, '17'):
             self.agent.check_update_failure(proc, self.root / 'perf.log')
+
+    def test_ambience_tracks_test_mode(self):
+        """Express and pedantic keep their train loop; normal selects the new loop."""
+        from unittest.mock import Mock
+        self.agent.depot = Mock()
+        for fast, pedantic, expected in ((True, False, 'train'),
+                                          (False, True, 'train'),
+                                          (False, False, 'train-normal')):
+            with self.subTest(fast=fast, pedantic=pedantic):
+                self.agent.args.fast = fast
+                self.agent.args.pedantic = pedantic
+                self.agent.start_test_sound('stress')
+                self.agent.depot.set_mode.assert_called_with(expected)
+
+    def test_train_stop_preview_includes_conductor(self):
+        """The stop preview queues the same kind of spoken transition as a run."""
+        self.agent.args.sound_preview = 'train-stop'
+        self.agent.args.no_sound = True
+        with patch.object(self.agent, 'sound') as sound:
+            self.assertEqual(self.agent.run(), 0)
+        calls = sound.call_args_list
+        self.assertEqual([call.args[0] for call in calls], ['train-stop', 'stress-transition'])
+        self.assertIn('SSE two stress run completed successfully', calls[1].kwargs['workers'])
+        self.assertIn('AVX two stress run is next', calls[1].kwargs['workers'])
+
+    def test_sound_demo_includes_normal_ambience(self):
+        """The show includes a short excerpt without requiring a sound device."""
+        self.agent.args.sound_demo = True
+        self.agent.args.no_sound = True
+        with patch.object(self.agent, 'sound') as sound:
+            self.assertEqual(self.agent.run(), 0)
+        events = [call.args[0] for call in sound.call_args_list]
+        self.assertIn('train-normal-demo', events)
+        self.assertIn('train-stop', events)
+        self.assertIn('depart-perf', events)
+        self.assertIn('fail', events)
+
+    def test_fast_cycle_upgrades_to_normal_without_rebuilding(self):
+        """A clear remote check runs normal stages on the existing binaries."""
+        self.fixture()
+        self.agent.args.fast = True
+        observed = []
+        def stage(run, manifest):
+            observed.append((self.agent.args.fast, run.name))
+            return True
+        with patch.object(self.agent, 'test_perf_stage', side_effect=stage), \
+             patch.object(self.agent, 'test_stress_stage', side_effect=stage), \
+             patch.object(self.agent, 'update_waiting', return_value=False), \
+             patch.object(self.agent, 'sound') as sound:
+            self.assertTrue(self.agent.cycle())
+        self.assertEqual([mode for mode, _ in observed], [True, True, False, False])
+        self.assertEqual([name for _, name in observed[2:]], ['normal', 'normal'])
+        self.assertTrue(self.agent.args.fast)
+        events = [call.args[0] for call in sound.call_args_list]
+        start = events.index('upgrade-dispatch')
+        self.assertEqual(events[start:start + 4],
+                         ['upgrade-dispatch', 'upgrade-conductor', 'upgrade-engineer', 'upgrade-depart'])
+        self.assertEqual(events.count('train-stop'), 1)
+
+    def test_fast_cycle_skips_normal_when_update_arrives(self):
+        """An update at the upgrade boundary takes priority over normal testing."""
+        self.fixture()
+        self.agent.args.fast = True
+        observed = []
+        def stage(run, manifest):
+            observed.append(self.agent.args.fast)
+            return True
+        with patch.object(self.agent, 'test_perf_stage', side_effect=stage), \
+             patch.object(self.agent, 'test_stress_stage', side_effect=stage), \
+             patch.object(self.agent, 'update_waiting', side_effect=[False, True]), \
+             patch.object(self.agent, 'sound') as sound:
+            self.assertEqual(self.agent.cycle(), 'updated')
+        self.assertEqual(observed, [True, True])
+        self.assertNotIn('upgrade-dispatch', [call.args[0] for call in sound.call_args_list])
 
     def test_test_failure_is_fatal(self):
         """A nonzero perf result returns failure with logs rather than passing."""

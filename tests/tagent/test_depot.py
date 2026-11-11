@@ -39,7 +39,7 @@ class DepotTests(unittest.TestCase):
     def test_preview_renders_mono_loop(self):
         """The standalone preview is a scaled minute of portable PCM audio."""
         with tempfile.TemporaryDirectory() as directory:
-            for mode, seconds in (('depot', 60), ('train', 300)):
+            for mode, seconds in (('depot', 60), ('train', 300), ('train-normal', 300)):
                 path = Path(directory) / (mode + '.wav')
                 self.assertEqual(depot.render_preview(path, .35, mode), seconds)
                 with wave.open(str(path)) as stream:
@@ -189,7 +189,7 @@ class DepotTests(unittest.TestCase):
             train_loaded = threading.Event()
             def read_loop(mode):
                 """Observe the switch to the testing-phase background."""
-                if mode == 'train':
+                if mode == 'train-normal':
                     train_loaded.set()
                 return 22050, sample
             with patch.object(depot.sys, 'platform', 'linux'), \
@@ -206,7 +206,7 @@ class DepotTests(unittest.TestCase):
                     before = array.array('h', raw.read_bytes())
                     # The old implementation inserted a zero at every second.
                     self.assertGreater(before[3 * 22050], 0)
-                    worker.set_mode('train')
+                    worker.set_mode('train-normal')
                     worker.mute()
                     self.assertTrue(worker.quiet.is_set())
                     self.assertTrue(train_loaded.is_set())

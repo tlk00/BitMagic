@@ -101,10 +101,11 @@ class StreamPlayer:
 
 def read_loop(mode):
     """Read a supported mono ambience loop, returning its sample rate and samples."""
-    if mode not in ('depot', 'train'):
+    if mode not in ('depot', 'train', 'train-normal'):
         raise ValueError('unknown ambience: ' + mode)
-    asset = Path(__file__).resolve().parent / 'assets' / (
-        'depot.wav' if mode == 'depot' else 'train-ambient.wav')
+    filenames = {'depot': 'depot.wav', 'train': 'train-ambient.wav',
+                 'train-normal': 'train-normal-ambient.wav'}
+    asset = Path(__file__).resolve().parent / 'assets' / filenames[mode]
     with wave.open(str(asset), 'rb') as stream:
         rate = stream.getframerate()
         if stream.getnchannels() != 1 or stream.getsampwidth() != 2:
@@ -117,9 +118,14 @@ def read_loop(mode):
     return rate, samples
 
 
-def render_preview(path, volume, mode='depot'):
+def render_preview(path, volume, mode='depot', seconds=None):
     """Write one scaled ambience loop to path and return its duration in seconds."""
     rate, samples = read_loop(mode)
+    if seconds is not None:
+        samples = samples[:int(seconds * rate)]
+        fade = min(len(samples), rate)
+        for i in range(fade):
+            samples[len(samples) - fade + i] = int(samples[len(samples) - fade + i] * (fade - i - 1) / fade)
     gain = volume / .35 * 1.15
     scaled = array.array('h', (max(-32768, min(32767, int(value * gain))) for value in samples))
     if sys.byteorder != 'little':
@@ -147,8 +153,8 @@ class Depot:
         self.mode = 'depot'
 
     def set_mode(self, mode):
-        """Select depot or moving-train ambience with a quiet transition."""
-        if mode not in ('depot', 'train'):
+        """Select an ambience with a quiet transition."""
+        if mode not in ('depot', 'train', 'train-normal'):
             raise ValueError('unknown ambience: ' + mode)
         self.mode = mode
 

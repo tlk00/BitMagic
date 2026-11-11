@@ -63,6 +63,22 @@ class SoundtrackTests(unittest.TestCase):
             self.assertFalse(any(pause))
             self.assertEqual(rest, departure)
 
+    def test_train_stop_preview_is_mono_and_faded(self):
+        """The locomotive stop has quiet boundaries and honors output volume."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'stop.wav'
+            duration = soundtrack.render_train_stop(path, .35)
+            self.assertGreater(duration, 5)
+            self.assertLess(duration, 7)
+            with wave.open(str(path)) as stream:
+                self.assertEqual((stream.getnchannels(), stream.getframerate()), (1, 44100))
+                samples = array.array('h', stream.readframes(stream.getnframes()))
+            self.assertLess(abs(samples[0]), 3)
+            self.assertLess(abs(samples[-1]), 3)
+            self.assertGreater(max(abs(sample) for sample in samples), 500)
+            self.assertLessEqual(max(abs(sample) for sample in samples), 12000)
+
     def test_station_and_train_fade_out(self):
         """March and both train effects taper smoothly towards silence."""
         import math
