@@ -573,3 +573,21 @@ unless `--no-debug` is set. Debug reference validation uses fast mode. Each
 runner uses the TAgent worker budget, `--silent`, and a fresh per-cycle output
 directory. Progress is reported at ten-minute intervals from `summary.tsv`;
 preflight checksum work is shown as preparation. Reference inputs are read only.
+
+
+### Fatal workload failures
+
+A failed build or test ends this TAgent invocation with a nonzero exit status.
+The first workload error is retained while other jobs are terminated. A pending
+repository update does not override an observed failure. Diagnostics include the
+command, variant, termination signal or exit status, and log location.
+Stress groups also publish a first-failure record for the supervisor.
+
+The log directory contains `active-cycle.json` while a cycle is active. It records
+the commit, cycle directory and current test stage. Successful completion removes
+the marker. A later launch reports a remaining marker as evidence of an incomplete
+cycle. A marker alone does not identify the cause of interruption.
+
+Signal fault injection is opt-in because macOS may display crash dialogs.
+Run `TAGENT_FAULT_SIGNALS=1 python3 -m unittest discover -s tests/tagent -p test_tagent.py`
+to include deliberate SIGSEGV, SIGFPE and SIGABRT checks.

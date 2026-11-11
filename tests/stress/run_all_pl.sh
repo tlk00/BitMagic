@@ -290,10 +290,9 @@ elif [ ! -f "$ORDER_FILE" ]; then
 fi
 
 # Unknown selectors precede timed selectors; ties preserve selection order.
-ORDERED_TESTS=()
-while IFS= read -r test_opt; do
-    ORDERED_TESTS[${#ORDERED_TESTS[@]}]="$test_opt"
-done < <(
+schedule_file="$(mktemp "$RUN_LOG_DIR/schedule.XXXXXX")" || exit 1
+if ! (
+    set -o pipefail
     printf '%s\n' "${TESTS[@]}" |
         awk 'FILENAME == ARGV[1] {
                  if (NF == 2 && $2 ~ /^[0-9]+$/) duration[$1] = $2
@@ -304,7 +303,23 @@ done < <(
             "$ORDER_INPUT" - |
         LC_ALL=C sort -k1,1n -k2,2nr -k3,3n |
         awk '{ print $4 }'
-)
+
+) >"$schedule_file"; then
+    echo "ERROR: cannot construct complete stress schedule" >&2
+    exit 1
+fi
+ORDERED_TESTS=()
+while IFS= read -r test_opt; do
+    ORDERED_TESTS[${#ORDERED_TESTS[@]}]="$test_opt"
+done < "$schedule_file"
+[ "${#ORDERED_TESTS[@]}" -eq "${#TESTS[@]}" ] || { echo "Incomplete stress schedule" >&2; exit 1; }
+for expected in "${TESTS[@]}"; do
+    occurrences=0
+    for actual in "${ORDERED_TESTS[@]}"; do
+        [ "$actual" != "$expected" ] || occurrences=$((occurrences + 1))
+    done
+    [ "$occurrences" -eq 1 ] || { echo "Invalid schedule for $expected" >&2; exit 1; }
+done
 TESTS=("${ORDERED_TESTS[@]}")
 
 # Persist each completed job so a later interruption retains earlier results.
@@ -327,7 +342,23 @@ record_timing()
     return 1
 }
 
+rm -f first-failure.txt || exit 1
 PIDS=()
+stop_workers()
+{
+    local worker_pid
+    for worker_pid in "${PIDS[@]}"; do
+        [ -z "$worker_pid" ] || kill -TERM "$worker_pid" 2>/dev/null || true
+    done
+    sleep 0.2
+    for worker_pid in "${PIDS[@]}"; do
+        [ -z "$worker_pid" ] || kill -KILL "$worker_pid" 2>/dev/null || true
+    done
+}
+trap stop_workers EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 PID_TESTS=()
 PID_LOGS=()
 PID_STARTS=()
@@ -425,6 +456,10 @@ reap_finished()
                 PID_STATUS[$index]="fail:$status"
                 echo "FAIL   ${PID_TESTS[$index]} (exit $status, $(format_duration "$elapsed"))"
                 echo "       Details: ${PID_LOGS[$index]}"
+                if [ ! -e first-failure.txt ]; then
+                    printf '%s exit %s log %s\n' "${PID_TESTS[$index]}" "$status" "${PID_LOGS[$index]}" > first-failure.txt.tmp
+                    mv first-failure.txt.tmp first-failure.txt
+                fi
 
                 failure_index=${#FAILED_TESTS[@]}
                 FAILED_TESTS[$failure_index]="${PID_TESTS[$index]}"
@@ -434,6 +469,7 @@ reap_finished()
 
                 if [ "$FAIL_FAST" -ne 0 ]; then
                     STOP_LAUNCHING=1
+                    stop_workers
                 fi
             fi
 

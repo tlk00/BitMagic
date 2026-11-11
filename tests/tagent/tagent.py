@@ -633,6 +633,27 @@ class Agent:
         for proc in processes:
             proc.wait()
 
+    def check_update_failure(self, proc, log):
+        """Preserve an observed workload failure before cancelling for an update."""
+        with self.mutex:
+            failure = getattr(self, 'first_workload_failure', None)
+            processes = list(self.children)
+        if failure:
+            raise failure
+        for child in processes:
+            child_log = getattr(child, 'tagent_log', None)
+            if child_log and child_log.name == 'runner.log' and (child_log.parent / 'first-failure.txt').exists():
+                raise CommandFailure(self.stress_failure_details(child_log))
+            status = child.poll()
+            if child_log and status and not (status == 75 and child_log.name == 'runner.log'):
+                raise CommandFailure('{} | exit {} | observed before update cancellation | current log {}'.format(child.args, status, child_log))
+        status = proc.poll()
+        if log and log.name == 'runner.log' and (log.parent / 'first-failure.txt').exists():
+            raise CommandFailure(self.stress_failure_details(log))
+        if status and not (status == 75 and log and log.name == 'runner.log'):
+            reason = signal.Signals(-status).name if status < 0 else 'exit ' + str(status)
+            raise CommandFailure('{} | {} | log {}'.format(proc.args, reason, log))
+
     def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=(), test_allocator=False):
         """Run argv in an owned group; return stdout or raise with log diagnostics.
 
@@ -640,9 +661,10 @@ class Agent:
         timeout bounds operational commands. Every exit cleans the process group.
         test_allocator enables the detected jemalloc only for test subprocesses.
         """
-        output = log.open('w') if log else subprocess.PIPE
+        output = None
         proc = None
         try:
+            output = log.open('w') if log else subprocess.PIPE
             with self.mutex:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
@@ -658,6 +680,7 @@ class Agent:
                 proc = subprocess.Popen(argv, cwd=cwd or self.repo, stdout=output,
                                         stderr=subprocess.STDOUT, text=True,
                                         start_new_session=True, env=env)
+                proc.tagent_log = log
                 self.children.add(proc)
                 if log and log.name == 'perf.log':
                     self.perf_workers.add(proc)
@@ -673,7 +696,7 @@ class Agent:
                         with log.open('rb') as stream:
                             stream.seek(max(0, log.stat().st_size - 16384))
                             tail = stream.read().decode(errors='replace')
-                        if any(line.startswith('FAIL   ') for line in tail.splitlines()):
+                        if (log.parent / 'first-failure.txt').exists() or any(line.startswith('FAIL   ') for line in tail.splitlines()):
                             raise CommandFailure('Stress group failed\n' + self.stress_failure_details(log))
                     if timeout and time.monotonic() - started >= timeout:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
@@ -684,6 +707,7 @@ class Agent:
                         if self.args.restart_on_update:
                             self.poll_remote()
                             if self.pending_tip:
+                                self.check_update_failure(proc, log)
                                 return 'skipped-update'
                     else:
                         self.say('RUN ' + Path(str(argv[0])).name + ' | logs ' + str(log))
@@ -692,12 +716,14 @@ class Agent:
                             self.report_inv_progress(*self.inv_active)
                         self.poll_remote()
                         if self.args.restart_on_update and self.pending_tip:
+                            self.check_update_failure(proc, log)
                             return 'skipped-update'
                     if log and log.name in ('perf.log', 'runner.log'):
                         self.report_station_status()
                         self.report_joker()
                         self.poll_remote()
                         if self.args.restart_on_update and self.pending_tip:
+                            self.check_update_failure(proc, log)
                             self.perf_skipped = True
                             return 'skipped-update'
                         if log.name == 'perf.log':
@@ -714,8 +740,20 @@ class Agent:
             if proc.returncode:
                 detail = (self.stress_failure_details(log) if log and log.name == 'runner.log'
                           else str(log) if log else (result or '')[-2000:])
-                raise CommandFailure('{} exited {} | {}'.format(shlex.join(map(str, argv)), proc.returncode, detail))
+                reason = signal.Signals(-proc.returncode).name if proc.returncode < 0 else 'exit ' + str(proc.returncode)
+                raise CommandFailure('{} | {} | variant {} | {}'.format(shlex.join(map(str, argv)), reason, log.parent.name if log else 'operational', detail))
             return result or ''
+        except (CommandFailure, OSError) as error:
+            if log:
+                if not isinstance(error, CommandFailure):
+                    error = CommandFailure('{} | variant {} | log {} | {}'.format(argv, log.parent.name, log, error))
+                with self.mutex:
+                    if not hasattr(self, 'first_workload_failure'):
+                        self.first_workload_failure = error
+                self.stopping.set()
+                self.stop_children()
+                raise self.first_workload_failure
+            raise
         finally:
             if proc:
                 self.signal_group(proc, signal.SIGKILL)
@@ -726,7 +764,7 @@ class Agent:
                     self.children.discard(proc)
                     self.perf_workers.discard(proc)
                     self.perf_logs.pop(proc, None)
-            if log:
+            if log and output is not None:
                 output.close()
 
     def stress_failure_details(self, log):
@@ -737,6 +775,9 @@ class Agent:
         """
         details = ['Stress variant: ' + log.parent.name, 'Runner log: ' + str(log)]
         try:
+            record = log.parent / 'first-failure.txt'
+            if record.exists():
+                details.append('First failure: ' + record.read_text(errors='replace').strip())
             lines = log.read_text(errors='replace').splitlines()
             for index, line in enumerate(lines):
                 if not line.startswith('FAIL   '):
@@ -1860,12 +1901,12 @@ class Agent:
                             self.perf_completed[name] = path
                         if len(self.perf_pending) == 1:
                             self.next_perf_report = 0
-                except BaseException:
+                except BaseException as error:
                     self.stopping.set()
                     for pending in futures:
                         pending.cancel()
                     self.stop_children()
-                    raise
+                    raise getattr(self, 'first_workload_failure', error)
         if self.update_waiting() or self.perf_skipped:
             self.args.force = True
             return 'updated'
@@ -1942,6 +1983,8 @@ class Agent:
         run = self.home / (datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '-' + self.commit[:12])
         run.mkdir()
         self.active_run = run
+        marker = self.home / 'active-cycle.json'
+        marker.write_text(json.dumps({'commit': self.commit, 'run': str(run), 'stage': 'build', 'status': 'active'}) + '\n')
         self.build_warnings = WarningCounter()
         self.sample_warnings = WarningCounter()
         self.samples_complete = False
@@ -2026,7 +2069,7 @@ class Agent:
             if self.memory_monitor:
                 self.memory_monitor.snapshot('build-failure')
             self.finish_build(False)
-            raise failures[0]
+            raise getattr(self, 'first_workload_failure', failures[0])
         for _, directory, names, _, _ in build_tasks:
             for name in names:
                 if not os.access(directory / name, os.X_OK):
@@ -2052,6 +2095,7 @@ class Agent:
                 if stage in self.args.suppress:
                     self.say('TEST STAGE SUPPRESSED | ' + stage)
                     continue
+                marker.write_text(json.dumps({'commit': self.commit, 'run': str(run), 'stage': stage, 'status': 'active'}) + '\n')
                 if execute(run, manifest) == 'updated':
                     self.args.force = True
                     return 'updated'
@@ -2059,13 +2103,13 @@ class Agent:
         except CommandFailure as error:
             if self.memory_monitor:
                 self.memory_monitor.snapshot('test-failure')
-            (self.home / 'last-test-failure.txt').write_text(
-                'Commit: ' + self.commit + '\n' + str(error) + '\n')
-            self.say('TEST FAILURE ' + str(error))
-            self.say('Failure report: ' + str(self.home / 'last-test-failure.txt'))
-            self.stopping.clear()
-            self.sound('fail')
-            return False
+            print('TEST FAILURE | commit ' + self.commit + ' | ' + str(error), file=sys.stderr, flush=True)
+            try:
+                (self.home / 'last-test-failure.txt').write_text(
+                    'Commit: ' + self.commit + '\n' + str(error) + '\n')
+            except OSError as report_error:
+                print('Cannot save failure report: ' + str(report_error), file=sys.stderr, flush=True)
+            raise
         finally:
             if self.depot:
                 self.depot.set_mode('depot')
@@ -2175,6 +2219,9 @@ class Agent:
                     self.joker_reply_thread.join(timeout=8)
                 self.wait_for_audio()
             return 0
+        marker = self.home / 'active-cycle.json'
+        if marker.exists():
+            self.say('Previous cycle did not complete successfully | evidence ' + str(marker) + ' | ' + marker.read_text())
         self.validate()
         if self.args.check:
             return 0
@@ -2235,11 +2282,11 @@ class Agent:
                 if not result:
                     if self.args.once:
                         return 3
-                    failed = self.commit
-                    continue
+                    return 3
                 temp = state_path.with_suffix('.tmp')
                 temp.write_text(json.dumps(key))
                 temp.replace(state_path)
+                (self.home / 'active-cycle.json').unlink(missing_ok=True)
                 self.sound('success')
                 self.say('SUCCESS ' + self.commit)
                 self.args.force = False
@@ -2281,7 +2328,20 @@ def main():
         agent.say('Interrupted; stopping all child jobs')
         return 130
     except (Failure, OSError, ValueError) as error:
-        agent.say('ERROR ' + str(error) + ' | logs ' + str(agent.home))
+        error = getattr(agent, 'first_workload_failure', error)
+        print('TAgent ERROR ' + str(error) + ' | logs ' + str(agent.home), file=sys.stderr, flush=True)
+        try:
+            report = agent.home / 'last-test-failure.txt.tmp'
+            report.write_text('Commit: ' + agent.commit + '\n' + str(error) + '\n')
+            report.replace(agent.home / 'last-test-failure.txt')
+        except OSError as report_error:
+            print('Cannot save failure report: ' + str(report_error), file=sys.stderr, flush=True)
+        agent.stop_children()
+        agent.stopping.clear()
+        try:
+            agent.say('ERROR ' + str(error) + ' | logs ' + str(agent.home))
+        except OSError:
+            pass
         agent.sound('fail')
         return 3 if 'Recovery window exhausted' in str(error) else 1
     finally:

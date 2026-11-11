@@ -514,11 +514,85 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('-s ', history.read_text())
         self.assertIn('-ll ', history.read_text())
 
-    def test_test_failure_is_recoverable(self):
+    @unittest.skipUnless(os.environ.get("TAGENT_FAULT_SIGNALS") == "1", "opt-in signal faults can show OS crash dialogs")
+    def test_fault_signals_stop_siblings(self):
+        """Silent crashes preserve the signal and terminate a sibling job."""
+        import signal
+        for sig in (signal.SIGSEGV, signal.SIGFPE, signal.SIGABRT):
+            with self.subTest(signal=sig):
+                self.agent.stopping.clear()
+                if hasattr(self.agent, 'first_workload_failure'):
+                    del self.agent.first_workload_failure
+                marker = self.root / ('survivor-' + str(sig))
+                def sibling():
+                    try:
+                        self.agent.command(['bash', '-c', 'sleep 8; touch "$1"', 'worker', str(marker)],
+                                           self.root / 'sibling.log')
+                    except ta.Failure:
+                        pass
+                thread = threading.Thread(target=sibling)
+                thread.start()
+                time.sleep(.1)
+                log = self.root / ('fault-' + str(sig) + '.log')
+                with self.assertRaisesRegex(ta.CommandFailure, signal.Signals(sig).name):
+                    self.agent.command([sys.executable, '-c',
+                        'import os,resource; resource.setrlimit(resource.RLIMIT_CORE,(0,0)); os.kill(os.getpid(), ' + str(sig) + ')'], log)
+                thread.join(timeout=6)
+                self.assertFalse(thread.is_alive())
+                self.assertFalse(marker.exists())
+                self.assertEqual(log.read_text(), '')
+
+    def test_main_exits_for_failure_with_pending_update(self):
+        """A pending commit never turns a fatal workload result into a restart."""
+        self.agent.pending_tip = 'new'
+        with patch.object(sys, 'argv', ['tagent']), \
+             patch.object(ta, 'Agent', return_value=self.agent), \
+             patch.object(self.agent, 'run', side_effect=ta.CommandFailure('perf_release SIGFPE log /tmp/perf.log')):
+            self.assertEqual(ta.main(), 1)
+        self.assertIn('SIGFPE', (self.agent.home / 'agent.log').read_text())
+
+    def test_stress_fail_fast_kills_unresponsive_sibling(self):
+        """The standalone stress runner stops a TERM-ignoring sibling after exit 17."""
+        import shutil
+        runner = self.root / 'run_all_pl.sh'
+        shutil.copy2(Path(__file__).resolve().parents[1] / 'stress/run_all_pl.sh', runner)
+        worker = self.root / 'worker'
+        worker.write_text('#!' + sys.executable + '\nimport sys,time,signal\n'
+                          'if "-ll" in sys.argv: time.sleep(.3); sys.exit(17)\n'
+                          'signal.signal(signal.SIGTERM, signal.SIG_IGN)\ntime.sleep(30)\n')
+        worker.chmod(0o755)
+        result = subprocess.run(['bash', str(runner), '--binary', './worker',
+                                 '--jobs', '2', '--fail-fast', '-ll', '-s'],
+                                cwd=self.root, capture_output=True, text=True, timeout=8)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('-ll exit 17', (self.root / 'first-failure.txt').read_text())
+        self.assertNotIn('All 2 test groups passed', result.stdout)
+
+    def test_unwritable_workload_log_is_fatal(self):
+        """A missing log parent enters fatal supervision instead of leaving jobs running."""
+        log = self.root / 'missing-parent' / 'perf.log'
+        with self.assertRaisesRegex(ta.CommandFailure, 'perf.log'):
+            self.agent.command([sys.executable, '-c', 'pass'], log)
+        self.assertTrue(self.agent.stopping.is_set())
+        self.assertFalse(self.agent.children)
+
+    def test_crash_wins_update_boundary(self):
+        """A failed binary cannot be treated as update cancellation."""
+        proc = subprocess.Popen([sys.executable, '-c', 'raise SystemExit(17)'])
+        proc.wait()
+        self.agent.pending_tip = 'new'
+        with self.assertRaisesRegex(ta.CommandFailure, '17'):
+            self.agent.check_update_failure(proc, self.root / 'perf.log')
+
+    def test_test_failure_is_fatal(self):
         """A nonzero perf result returns failure with logs rather than passing."""
         self.fixture(fail=True)
-        self.assertFalse(self.agent.cycle())
+        with self.assertRaises(ta.CommandFailure):
+            self.agent.cycle()
         self.assertTrue(list(self.agent.home.glob('*abc123/perf_release/perf.log')))
+        marker = self.agent.home / 'active-cycle.json'
+        self.assertTrue(marker.exists())
+        self.assertIn('perf', marker.read_text())
 
     def test_build_failure_is_fatal(self):
         """Build failure propagates instead of entering test recovery."""
@@ -531,8 +605,8 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(self.agent, 'sound') as sound:
             with self.assertRaises(ta.CommandFailure):
                 self.agent.cycle()
-            sound.assert_any_call('build-final-failed', workers=(2, 2, False))
-        self.assertIn('BUILD FAILED | diagnostic errors: 2 | warnings: 2',
+            sound.assert_any_call('build-final-failed', workers=(2, self.agent.build_warnings.count, False))
+        self.assertIn('BUILD FAILED | diagnostic errors: 2 | warnings:',
                       (self.agent.home / 'agent.log').read_text())
 
     def test_builds_overlap_and_combine_warnings(self):

@@ -175,7 +175,7 @@ ifdef DEPCOMMAND
 else
     DEPCOMMAND:=$(DEPTOOL) $(PLATFORM_CXXFLAGS) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCLUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) > depend.d~
 endif
-CATCOMMAND=cat depend.d~ | awk '{if ( index($$0,".o:" ) !=0 ) print "$(OUTDIR)"$$0; else print $$0}' > $(DEPFILE)
+CATCOMMAND=awk '{if ( index($$0,".o:" ) !=0 ) print "$(OUTDIR)"$$0; else print $$0}' depend.d~ > $(DEPFILE)
 
 
 ifeq ($(DESTTYPE), LIB)

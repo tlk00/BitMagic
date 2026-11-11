@@ -93,8 +93,10 @@ def run_phase(binary, flags, out, case, phase, reserve, silent=False):
                     child.wait(timeout=1)
                 except subprocess.TimeoutExpired:
                     pass
-            thread.join()
-            renderer.wait()
+            thread.join(timeout=10)
+            if thread.is_alive():
+                raise TestFailure('Log relay did not finish after target exit')
+            renderer.wait(timeout=10)
         except BaseException:
             child.terminate()
             try:
@@ -104,7 +106,11 @@ def run_phase(binary, flags, out, case, phase, reserve, silent=False):
                 child.wait()
             thread.join(timeout=10)
             renderer.terminate()
-            renderer.wait()
+            try:
+                renderer.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                renderer.kill()
+                renderer.wait()
             raise
     elapsed = time.monotonic() - start
     result = dict(exit_code=child.returncode, wall_seconds=elapsed, log=str(logfile.relative_to(out)))
@@ -180,6 +186,7 @@ def execute(args, references, binary):
         def phase(name, flags):
             """Record the current phase before launch so failures have a precise summary row."""
             entry['phase'] = name
+            entry['log'] = str(Path(case) / (name + '.log'))
             save_summary(args.out, rows)
             text, result = run_phase(binary, flags, args.out, case, name, reserve, args.silent)
             entry.update(result)
