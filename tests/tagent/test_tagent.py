@@ -1360,11 +1360,11 @@ class SupervisorTests(unittest.TestCase):
             self.agent.next_perf_report = 0
             self.agent.report_perf_progress()
             report = sound.call_args.kwargs['workers']
-            self.assertEqual(report, ('perf_debug_avx2', 1, 'perf_release_avx2', 2, True, True, 210))
+            self.assertEqual(report, ('perf_debug_avx2', 1, 'perf_release_avx2', 2, True, True, 299))
             self.agent.next_perf_report = 0
             debug.write_text('a; 1 sec\nb; 2 sec\nc; 3 sec\n')
             self.agent.report_perf_progress()
-            self.assertEqual(sound.call_args.kwargs['workers'], ('perf_debug_avx2', 3, 'perf_release_avx2', 2, False, False, 210))
+            self.assertEqual(sound.call_args.kwargs['workers'], ('perf_debug_avx2', 3, 'perf_release_avx2', 2, False, False, 299))
             with patch.object(self.agent, 'synthesize_announcement', return_value=1) as speak:
                 self.agent.render_perf_progress(self.root / 'out.wav', sound.call_args.kwargs['workers'])
                 self.assertIn('Approximately 1 percent', speak.call_args.args[1])
@@ -1399,21 +1399,21 @@ class SupervisorTests(unittest.TestCase):
     def test_perf_targets_persist_per_variant_and_mode(self):
         """Successful result counts persist separately across actual execution modes."""
         log = self.root / 'perf.log'
-        log.write_text('a; 1 sec\nb; 2 ms\npartial; 3 sec')
-        self.assertEqual(self.agent.perf_target('perf_release_avx2'), 210)
+        log.write_text('a; 1 sec\nb; 2 ms\nTOTAL; 65.23 min\npartial; 3 sec')
+        self.assertEqual(self.agent.perf_target('perf_release_avx2'), 299)
         self.agent.save_perf_target('perf_release_avx2', log)
         self.assertEqual(self.agent.perf_target('perf_release_avx2'), 2)
-        self.assertEqual(self.agent.perf_target('perf_debug_avx2'), 210)
+        self.assertEqual(self.agent.perf_target('perf_debug_avx2'), 299)
         self.assertTrue((self.agent.home / 'perf-test-targets.cache' / 'perf_release_avx2--normal-normal.json').exists())
         self.agent.args.pedantic = True
-        self.assertEqual(self.agent.perf_target('perf_release_avx2'), 210)
+        self.assertEqual(self.agent.perf_target('perf_release_avx2'), 299)
         self.agent.save_perf_target('perf_debug_avx2', log)
         self.assertTrue((self.agent.home / 'perf-test-targets.cache' / 'perf_debug_avx2--pedantic-fast.json').exists())
         log.write_text('header only\n')
         self.agent.save_perf_target('perf_debug_avx2', log)
         self.assertEqual(self.agent.perf_target('perf_debug_avx2'), 2)
         self.agent.perf_target_path('perf_debug_avx2').write_text('broken')
-        self.assertEqual(self.agent.perf_target('perf_debug_avx2'), 210)
+        self.assertEqual(self.agent.perf_target('perf_debug_avx2'), 299)
 
     def test_perf_progress_ignores_blank_and_rotates(self):
         """Only completed timing lines count, and reports rotate across active variants."""
@@ -1422,21 +1422,21 @@ class SupervisorTests(unittest.TestCase):
             directory.mkdir()
             (directory / 'perf.log').write_text(
                 'BitMagic Library\n\nSIMD code = 8\n\nfirst; 4.924 sec\n\n'
-                'InterpolativeCodingTest() OK\nsecond ; 1 min\nunfinished; 2 sec')
+                'InterpolativeCodingTest() OK\nsecond ; 1 min\nTOTAL; 65.23 min\nunfinished; 2 sec')
         self.agent.perf_logs = {1: self.root / 'perf_release' / 'perf.log',
                                 2: self.root / 'perf_release_avx2' / 'perf.log'}
         self.agent.next_perf_report = 0
         with patch.object(ta.time, 'monotonic', return_value=100), \
              patch.object(self.agent, 'sound') as sound:
             self.agent.report_perf_progress()
-            sound.assert_called_once_with('perf-progress', workers=('perf_release', 2, 'target', 210))
+            sound.assert_called_once_with('perf-progress', workers=('perf_release', 2, 'target', 299))
             self.agent.report_perf_progress()
             self.assertEqual(sound.call_count, 1)
             self.agent.next_perf_report = 0
             self.agent.report_perf_progress()
-            sound.assert_called_with('perf-progress', workers=('perf_release_avx2', 2, 'target', 210))
+            sound.assert_called_with('perf-progress', workers=('perf_release_avx2', 2, 'target', 299))
         output = (self.agent.home / 'agent.log').read_text()
-        self.assertIn('perf_release | 2 completed | approximately 1% of test elements | target 210 | last: second ; 1 min', output)
+        self.assertIn('perf_release | 2 completed | approximately 1% of test elements | target 299 | last: second ; 1 min', output)
         self.assertNotIn('unfinished; 2 sec', output)
 
     def test_build_progress_counts_both_logs_once(self):

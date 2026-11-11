@@ -376,12 +376,13 @@ TAgent reshuffles it. Joe identifies himself as train engineer at each report.
 Each test phase starts a fresh 10–20 minute timer; jokes wait until audio is idle.
 Preview with `./run_tagent.sh --sound-preview joker`.
 
-Perf progress estimates percentages from completed timed records, starting with a
-target of 210. Each successful perf process atomically saves its actual count in
+Perf progress estimates percentages from completed timed records (excluding the
+`TOTAL` summary), starting with a
+target of 299. Each successful perf process atomically saves its actual count in
 `LOG_DIR/perf-test-targets.cache/` for the next run of the same binary and mode.
 Filenames include both cycle mode and actual execution mode, for example
 `perf_debug_avx2--pedantic-fast.json`. Failed, interrupted, empty, and incomplete
-runs do not update the cache. Missing or invalid entries fall back to 210. This
+runs do not update the cache. Missing or invalid entries fall back to 299. This
 is not an estimate of elapsed time; active runs are capped at 99%. When the count
 exceeds its target, the conductor reports a delay and the actual count.
 

@@ -35,7 +35,7 @@ import wave
 
 
 # Initial estimate until a successful run teaches the target for a variant.
-PERF_ESTIMATED_TESTS = 210
+PERF_ESTIMATED_TESTS = 299
 
 
 def perf_estimated_percent(count, target=PERF_ESTIMATED_TESTS):
@@ -49,7 +49,7 @@ def perf_log_progress(path):
     count, last = 0, None
     with path.open('r', errors='replace') as stream:
         for line in stream:
-            if line.endswith('\n') and pattern.search(line):
+            if line.endswith('\n') and line.split(';', 1)[0].strip().upper() != 'TOTAL' and pattern.search(line):
                 count += 1
                 last = line.strip()
     return count, last
