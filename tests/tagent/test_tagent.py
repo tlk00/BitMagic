@@ -526,7 +526,20 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound') as sound:
             self.agent.report_inv_progress(output, 'bminv_release', 20)
         self.assertIn('25 of 100 vectors, 25 percent', say.call_args.args[0])
-        self.assertIn('25 of 100 vectors, 25 percent', sound.call_args.kwargs['workers'])
+        self.assertEqual(sound.call_args.args[0], 'inv-progress')
+        spoken = sound.call_args.kwargs['workers']
+        self.assertNotIn('vectors checked', spoken)
+        self.assertIn('25 percent complete', spoken)
+        self.assertNotIn('60.4', spoken)
+        self.assertNotIn('of 100 vectors', spoken)
+        self.assertNotIn('0 percent', spoken)
+        self.assertNotIn('1107205', spoken)
+        phase.write_text('Progress roundtrip completed=1 total=1000 elapsed_s=60.4\n')
+        self.agent.inv_progress_time = 0
+        with patch.object(self.agent, 'say'), patch.object(self.agent, 'sound') as sound:
+            self.agent.report_inv_progress(output, 'bminv_release', 20)
+        self.assertIn('climbing slowly', sound.call_args.kwargs['workers'])
+        self.assertNotIn('0 percent', sound.call_args.kwargs['workers'])
         phase.write_text('Progress verify vectors=50 elapsed_s=120.5\n')
         (output / 'summary.tsv').write_text(
             'dataset\tlevel\tphase\tstatus\tlog\tvectors\n'
@@ -535,6 +548,13 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound'):
             self.agent.report_inv_progress(output, 'bminv_release', 20)
         self.assertIn('50 of 100 vectors, 50 percent', say.call_args.args[0])
+
+    def test_inv_progress_preview_uses_slower_conductor(self):
+        """Progress uses the conductor voice at the slower radio pacing."""
+        with patch.object(self.agent, 'synthesize_announcement', return_value=None) as speech:
+            self.agent.play_sound('inv-progress', 'Conductor to Dispatch. Sorted round trip. 839 vectors checked.')
+        self.assertTrue(speech.call_args.kwargs['conductor'])
+        self.assertEqual(speech.call_args.kwargs['length_scale'], 1.18)
 
     def test_jemalloc_inherits_through_test_process_tree(self):
         """Test runners and their child binaries inherit jemalloc and existing preloads."""

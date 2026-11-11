@@ -684,3 +684,8 @@ have completed all selected compression levels, the dataset's vector total and
 elapsed seconds. TAgent includes the latest heartbeat in its existing ten-minute
 console and conductor report. The count may remain zero while the first large
 vectors are still being processed.
+
+
+The conductor's inv_list progress report uses shorter speech and slower pacing;
+full vector counts, percentage and elapsed seconds remain in the console log.
+Audition the voice with `./run_tagent.sh --sound-preview inv-progress`.

@@ -229,7 +229,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -315,7 +315,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -337,7 +337,7 @@ def arguments():
         parser.error('STARTUP must be build or changed')
     if args.sound_theme not in soundtrack.THEMES:
         parser.error('Unknown SOUND_THEME')
-    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
+    if args.sound_preview in ('depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed') and args.sound_theme != 'steampunk':
         parser.error('voice preview requires --sound-theme steampunk')
     if not math.isfinite(args.sound_volume) or not 0 <= args.sound_volume <= 1:
         parser.error('sound-volume must be between 0 and 1')
@@ -1151,9 +1151,9 @@ class Agent:
             self.audio_pending = {key: thread for key, thread in self.audio_pending.items() if thread.is_alive()}
             if event == 'fail' and self.audio_failure_thread and self.audio_failure_thread.is_alive():
                 return
-            coalesced = ('station-perf', 'station-stress', 'perf-progress', 'joker', 'work',
+            coalesced = ('station-perf', 'station-stress', 'perf-progress', 'inv-progress', 'joker', 'work',
                          'dispatch', 'repo-unchanged', 'build-clear', 'build-warning')
-            phase_events = ('station-perf', 'station-stress', 'perf-progress', 'joker', 'work', 'dispatch')
+            phase_events = ('station-perf', 'station-stress', 'perf-progress', 'inv-progress', 'joker', 'work', 'dispatch')
             pending_key = (event, self.audio_phase_generation if event in phase_events else None)
             if event in coalesced and pending_key in self.audio_pending:
                 return
@@ -1448,7 +1448,7 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
-    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0):
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0, length_scale=1.0):
         """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
 
         voice is a callable so eSpeak voice selection happens only when needed.
@@ -1474,8 +1474,11 @@ class Agent:
             speech = Path(temp) / 'speech.wav'
             if available:
                 try:
-                    self.command([str(self.piper_python), '-m', 'piper', '-m', str(model),
-                                  '-f', str(speech), '--', text], timeout=60)
+                    command = [str(self.piper_python), '-m', 'piper', '-m', str(model),
+                               '-f', str(speech)]
+                    if length_scale != 1.0:
+                        command += ['--length-scale', str(length_scale)]
+                    self.command(command + ['--', text], timeout=60)
                     duration = soundtrack.mix_dynamic_dispatch(speech, path,
                                                                min(1.0, self.args.sound_volume * (1.25 if distress else volume_multiplier)),
                                                                workers, self.jobs, background=background,
@@ -1499,7 +1502,7 @@ class Agent:
                     speech.unlink(missing_ok=True)
             if self.tts_engine:
                 try:
-                    self.command([self.tts_engine, '-v', voice(), '-s', '145', '-p', str(pitch),
+                    self.command([self.tts_engine, '-v', voice(), '-s', str(round(145 / length_scale)), '-p', str(pitch),
                                   '-w', str(speech), text], timeout=15)
                     duration = soundtrack.mix_dynamic_dispatch(speech, path,
                                                                min(1.0, self.args.sound_volume * (1.25 if distress else volume_multiplier)),
@@ -1649,9 +1652,10 @@ class Agent:
                                                         background='train')
                 if duration is None:
                     return False
-            elif event == 'inv-announcement':
+            elif event in ('inv-announcement', 'inv-progress'):
                 self.say('CONDUCTOR: ' + workers)
-                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+f3', 50, background='train', conductor=True)
+                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+f3', 50, background='train', conductor=True,
+                                                        length_scale=1.18 if event == 'inv-progress' else 1.0)
                 if duration is None:
                     return False
             elif event == 'stress-transition':
@@ -1898,6 +1902,7 @@ class Agent:
         if now < self.inv_progress_time:
             return
         self.inv_progress_time = now + 600
+        spoken_progress = None
         try:
             with (output / 'summary.tsv').open(newline='') as stream:
                 rows = list(csv.DictReader(stream, delimiter='\t'))
@@ -1923,16 +1928,27 @@ class Agent:
                                 done, vectors, seconds = legacy_done, current.get('vectors', '0'), legacy_seconds
                             done, vectors = int(done), int(vectors)
                             if vectors > 0 and done <= vectors:
+                                percentage = done * 100 // vectors
                                 detail += ', {} of {} vectors, {} percent, {} seconds'.format(
-                                    done, vectors, done * 100 // vectors, seconds.decode())
+                                    done, vectors, percentage, seconds.decode())
+                                dataset = current['dataset'].split('.')[-1]
+                                spoken_progress = '{} round trip. '.format(dataset.capitalize())
+                                if percentage:
+                                    spoken_progress += '{} percent complete.'.format(percentage)
+                                else:
+                                    spoken_progress += 'The train is climbing slowly, but we are making progress.'
                 except (OSError, ValueError):
                     pass
         except (OSError, csv.Error, KeyError):
             complete, detail = 0, 'checking reference integrity or preparing'
         message = ('INV PROGRESS | {} | {} of {} cases completed | {}'.format(name, complete, total, detail))
         self.say(message)
-        self.sound('inv-announcement', workers=('Conductor to Dispatch. Inverted list validation. '
-                   '{} of {} cases completed. {}.'.format(complete, total, detail.replace('-', ' '))))
+        if spoken_progress:
+            message = 'Conductor to Dispatch. ' + spoken_progress
+        else:
+            message = ('Conductor to Dispatch. Inverted list validation. '
+                       '{} of {} cases completed. {}.'.format(complete, total, detail.replace('-', ' ')))
+        self.sound('inv-progress', workers=message)
 
     def inv_read_budget(self):
         """Resolve an explicit budget or sample Linux available RAM before each variant."""
@@ -2003,6 +2019,8 @@ class Agent:
                 'mmap' if self.args.inv_read_mmap else 'buffered', base))
             (base / 'command.json').write_text(json.dumps(argv, indent=2) + '\n')
             self.inv_progress_time = 0
+            with self.audio_mutex:
+                self.audio_phase_generation += 1
             self.inv_active = (output, name, 8 if self.args.fast else 20 if self.args.pedantic else 10)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
@@ -2415,7 +2433,8 @@ class Agent:
             self.say('Sound demo complete | WAV files: ' + str(self.audio_dir))
             return 0
         if self.args.sound_preview:
-            preview_count = (random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
+            preview_count = ('Conductor to Dispatch. Sorted round trip. The train is climbing slowly, but we are making progress.' if self.args.sound_preview == 'inv-progress' else
+                             random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
                              'Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)
                              if self.args.sound_preview == 'joker' else ('perf_release_64', 12) if self.args.sound_preview == 'perf-progress' else
                              (0, 2, 4, 3, 7) if self.args.sound_preview == 'build-clear' else
