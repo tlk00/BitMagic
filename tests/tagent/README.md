@@ -560,7 +560,8 @@ After building, TAgent runs inv_list, perf, then stress. The stage order is in
 the `stages` tuple in `cycle()`. For inv_list, place the complete Gov2 reference
 collection under `TAgent-logs/gov2-reference-*`, or specify
 `--path-to-invref PATH`. Discovery checks the 20-case matrix and expected file
-sizes; normal mode additionally requires `matrix.json`. Missing, incomplete,
+sizes of the streams required by the selected mode; pedantic mode additionally
+requires `matrix.json`. Missing, incomplete,
 or ambiguous references are startup errors. The runner performs its own checks.
 
 Use `--suppress perf,inv_list` (or repeat `--suppress`) to skip selected test
@@ -572,8 +573,8 @@ stages: `perf`, `inv_list`, `stress`. Builds still run. For example:
 
 Fast mode selects one supported release inv_list variant (AVX-512 when enabled
 and supported, otherwise AVX2, SSE4.2, SSE2, or scalar; NEON on ARM). Normal
-mode tests all supported release variants; `--pedantic` adds debug variants
-unless `--no-debug` is set. Debug reference validation uses fast mode. Each
+and pedantic modes run the generic release and one fastest supported SIMD
+release (or the generic release alone if no SIMD build is supported). Each
 runner uses the TAgent worker budget, `--silent`, and a fresh per-cycle output
 directory. Progress is reported at ten-minute intervals from `summary.tsv`;
 preflight checksum work is shown as preparation. Reference inputs are read only.
@@ -599,7 +600,7 @@ to include deliberate SIGSEGV, SIGFPE and SIGABRT checks.
 
 When started with `--fast`, TAgent runs the express cycle first. After a fresh
 remote check finds no update, it announces the transition and reuses the builds
-for one normal cycle. Debug variants continue to use fast mode. A further remote
+for one normal cycle. Perf and stress debug variants continue to use fast mode. A further remote
 check follows normal testing. An update starts a new express cycle. The console
 identifies the current mode as Fast!, Norm, or SloMo. The transition exchange and
 departure play at 120% of the configured volume, capped at 1.0.
@@ -666,6 +667,10 @@ For example, on WIN1:
 `./run_tagent.sh --fast --log-dir /mnt/d/TAgent-logs --read-memory-mib 16384 --read-mmap`.
 
 
-All inv_list validation starts at compression level 6 and covers levels 6–10
-for both datasets, for 10 cases. Level 6 is the validated golden reference.
-Progress reports use that total in fast, normal and pedantic modes.
+Fast inv_list validation uses canonical-block SHA-256 verification, starting
+at level 7 for both datasets (8 cases). Level 6 is validated against raw IDs
+when its hash cache is created. Caches persist under LOG_DIR/inv-hash-cache
+and are reused across cycles and variants. Normal and pedantic validation use
+levels 1–10 (20 cases), the same hash cache, and level 6 as the golden reference.
+Normal uses in-memory round trips. Pedantic adds reference audits and saved-stream
+verification. Progress reports show the corresponding selected case total.

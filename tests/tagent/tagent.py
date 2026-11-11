@@ -887,7 +887,9 @@ class Agent:
                       sorted(self.home.glob('gov2-reference-*')))
         matches = []
         for candidate in candidates:
-            valid, detail = inv_reference.inspect_reference(candidate, full=not self.args.fast)
+            required_levels = range(6, 11) if self.args.fast else range(1, 11) if self.args.pedantic else (6,)
+            valid, detail = inv_reference.inspect_reference(candidate, full=self.args.pedantic,
+                                                             required_levels=required_levels)
             self.say('INV REFERENCE | {} | {}'.format(candidate, detail))
             if valid:
                 matches.append(candidate.resolve())
@@ -1914,10 +1916,17 @@ class Agent:
         self.sound('inv-announcement', workers='Conductor to Dispatch. Next stop, Inverted List Validation Station. Reference tests are starting.')
         self.sound('depart')
         names = [n for n in manifest['builds']['inv_list'] if self.supported(n)]
+        releases = [n for n in names if n == 'bminv_release' or n.startswith('bminv_release_')]
+        if not releases:
+            raise Failure('No supported inv_list release build is available')
+        simd = next((n for n in reversed(releases) if n != 'bminv_release'), None)
         if self.args.fast:
-            names = [next(n for n in reversed(names) if '_release' in n)]
+            names = [simd or releases[0]]
         else:
-            names = [n for n in names if '_release' in n or (self.args.pedantic and not self.args.no_debug)]
+            names = [n for n in ('bminv_release', simd) if n and n in releases]
+            if not simd:
+                self.say('INV SIMD | no supported SIMD release build available')
+        self.say('INV VARIANTS | ' + ', '.join(names))
         for index, name in enumerate(names):
             if index and not self.args.fast and not self.args.pedantic:
                 self.sound('train-stop')
@@ -1929,17 +1938,20 @@ class Agent:
                     '--bin', str(self.repo / 'utils/inv_list' / name),
                     '--reference', str(self.inv_reference), '--out', str(output),
                     '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb),
-                    '--read-memory-mib', str(read_budget), '--start-level', '6', '--golden-level', '6']
+                    '--read-memory-mib', str(read_budget), '--start-level', '7' if self.args.fast else '1',
+                    '--golden-level', '6', '--hash', '--hash-cache-dir', str(self.home / 'inv-hash-cache')]
             if self.args.inv_read_mmap:
                 argv.append('--read-mmap')
-            if self.args.fast or '_debug' in name:
+            if self.args.fast:
                 argv.append('--fast')
+            elif self.args.pedantic:
+                argv.append('--pedantic')
             self.say('INV START | {} | {} workers | read budget {} MiB | {} | logs {}'.format(
                 name, self.jobs, read_budget,
                 'mmap' if self.args.inv_read_mmap else 'buffered', base))
             (base / 'command.json').write_text(json.dumps(argv, indent=2) + '\n')
             self.inv_progress_time = 0
-            self.inv_active = (output, name, 10)
+            self.inv_active = (output, name, 8 if self.args.fast else 20)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
             except CommandFailure as error:

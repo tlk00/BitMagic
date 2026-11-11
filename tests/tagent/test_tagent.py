@@ -393,6 +393,10 @@ class SupervisorTests(unittest.TestCase):
         self.assertFalse(ta.inv_reference.inspect_reference(candidate, full=True)[0])
         (candidate / 'matrix.json').write_text('{}')
         self.assertTrue(ta.inv_reference.inspect_reference(candidate, full=True)[0])
+        (candidate / 'gov2.sorted.level-01.bv').unlink()
+        self.assertTrue(ta.inv_reference.inspect_reference(candidate, required_levels=(6,))[0])
+        self.assertTrue(ta.inv_reference.inspect_reference(candidate, required_levels=range(6, 11))[0])
+        self.assertFalse(ta.inv_reference.inspect_reference(candidate, full=True, required_levels=range(1, 11))[0])
 
     def test_inv_fast_selects_one_best_supported_variant(self):
         """Fast mode uses one supported release binary and the CPU budget."""
@@ -410,6 +414,22 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('--fast', args)
         self.assertIn('--silent', args)
         self.assertEqual(args[args.index('--threads') + 1], '2')
+
+    def test_inv_pedantic_uses_generic_and_best_supported_simd(self):
+        """Pedantic uses two releases even when debug and more SIMD builds exist."""
+        self.agent.inv_reference = self.root / 'reference'
+        self.agent.args.pedantic = True
+        self.agent.args.avx512 = True
+        self.agent.arm = False
+        self.agent.flags = {'sse2', 'sse4_2', 'avx2', 'avx512f', 'avx512bw', 'avx512dq', 'avx512vl'}
+        manifest = {'builds': {'inv_list': self.agent.inv_builds()}}
+        with patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_inv_stage(self.root, manifest))
+        names = [Path(call.args[0][call.args[0].index('--bin') + 1]).name for call in command.call_args_list]
+        self.assertEqual(names, ['bminv_release', 'bminv_release_avx512'])
+        for call in command.call_args_list:
+            self.assertIn('--pedantic', call.args[0])
 
     def test_inv_reader_settings_are_forwarded_and_logged(self):
         """Both validation modes receive the read budget and selected backend."""
@@ -429,7 +449,9 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(argv[argv.index('--read-memory-mib') + 1], str(budget))
             self.assertEqual('--read-mmap' in argv, mmap)
             self.assertEqual('--fast' in argv, fast)
-            self.assertEqual(argv[argv.index('--start-level') + 1], '6')
+            self.assertEqual(argv[argv.index('--start-level') + 1], '7' if fast else '1')
+            self.assertIn('--hash', argv)
+            self.assertEqual(argv[argv.index('--hash-cache-dir') + 1], str(self.agent.home / 'inv-hash-cache'))
             self.assertEqual(argv[argv.index('--golden-level') + 1], '6')
             import json
             saved = json.loads((run / 'inv_list/bminv_release_avx2/command.json').read_text())
@@ -460,7 +482,7 @@ class SupervisorTests(unittest.TestCase):
         output = self.root / 'results'
         output.mkdir()
         (output / 'summary.tsv').write_text('dataset\tlevel\tphase\tstatus\nGov2.sorted\t6\tverify\tpassed\n')
-        for total in (10, 20):
+        for total in (8, 20):
             self.agent.inv_progress_time = 0
             with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound') as sound:
                 self.agent.report_inv_progress(output, 'bminv_release', total)
@@ -481,17 +503,25 @@ class SupervisorTests(unittest.TestCase):
         expected = '/synthetic/libjemalloc.so.2:/synthetic/existing.so'
         self.assertEqual(sum(line == expected for line in lines), 2)
 
-    def test_inv_allocator_enabled_for_pedantic_debug(self):
-        """Pedantic release and debug inv_list variants receive allocator setup."""
+    def test_inv_allocator_enabled_for_pedantic_releases(self):
+        """Pedantic scalar and SIMD inv_list variants receive allocator setup."""
         self.agent.inv_reference = self.root / 'reference'
         self.agent.args.pedantic = True
-        manifest = {'builds': {'inv_list': ['bminv_release', 'bminv_debug']}}
+        self.agent.flags = {'avx2'}
+        manifest = {'builds': {'inv_list': ['bminv_release', 'bminv_debug', 'bminv_release_avx2', 'bminv_debug_avx2']}}
         with patch.object(self.agent, 'command', return_value='') as command, \
              patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
             self.assertTrue(self.agent.test_inv_stage(self.root, manifest))
         self.assertEqual(len(command.call_args_list), 2)
         self.assertTrue(all(call.kwargs.get('test_allocator') is True for call in command.call_args_list))
-        self.assertIn('--fast', command.call_args_list[1].args[0])
+        self.assertEqual([Path(call.args[0][call.args[0].index('--bin') + 1]).name
+                          for call in command.call_args_list], ['bminv_release', 'bminv_release_avx2'])
+        for call in command.call_args_list:
+            argv = call.args[0]
+            self.assertIn('--pedantic', argv)
+            self.assertIn('--hash', argv)
+            self.assertNotIn('--fast', argv)
+            self.assertEqual(argv[argv.index('--start-level') + 1], '1')
 
     def test_stress_allocator_enabled_in_all_modes(self):
         """Every scheduled release/debug stress runner receives allocator setup."""
