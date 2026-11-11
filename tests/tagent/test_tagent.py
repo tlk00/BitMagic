@@ -425,6 +425,7 @@ class SupervisorTests(unittest.TestCase):
                  patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
                 self.assertTrue(self.agent.test_inv_stage(run, manifest))
             argv = command.call_args.args[0]
+            self.assertTrue(command.call_args.kwargs['test_allocator'])
             self.assertEqual(argv[argv.index('--read-memory-mib') + 1], str(budget))
             self.assertEqual('--read-mmap' in argv, mmap)
             self.assertEqual('--fast' in argv, fast)
@@ -465,6 +466,55 @@ class SupervisorTests(unittest.TestCase):
                 self.agent.report_inv_progress(output, 'bminv_release', total)
             self.assertIn('1 of {} cases completed'.format(total), say.call_args.args[0])
             self.assertIn('1 of {} cases completed'.format(total), sound.call_args.kwargs['workers'])
+
+    def test_jemalloc_inherits_through_test_process_tree(self):
+        """Test runners and their child binaries inherit jemalloc and existing preloads."""
+        self.agent.jemalloc = '/synthetic/libjemalloc.so.2'
+        log = self.root / 'preload.log'
+        child_code = "import os; print(os.environ.get('LD_PRELOAD'))"
+        code = ('import os, subprocess, sys; '
+                'print(os.environ.get("LD_PRELOAD"), flush=True); '
+                'subprocess.run([sys.executable, "-c", ' + repr(child_code) + '], check=True)')
+        with patch.dict(os.environ, {'LD_PRELOAD': '/synthetic/existing.so'}):
+            self.agent.command([sys.executable, '-c', code], log, test_allocator=True)
+        lines = log.read_text().splitlines()
+        expected = '/synthetic/libjemalloc.so.2:/synthetic/existing.so'
+        self.assertEqual(sum(line == expected for line in lines), 2)
+
+    def test_inv_allocator_enabled_for_pedantic_debug(self):
+        """Pedantic release and debug inv_list variants receive allocator setup."""
+        self.agent.inv_reference = self.root / 'reference'
+        self.agent.args.pedantic = True
+        manifest = {'builds': {'inv_list': ['bminv_release', 'bminv_debug']}}
+        with patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_inv_stage(self.root, manifest))
+        self.assertEqual(len(command.call_args_list), 2)
+        self.assertTrue(all(call.kwargs.get('test_allocator') is True for call in command.call_args_list))
+        self.assertIn('--fast', command.call_args_list[1].args[0])
+
+    def test_stress_allocator_enabled_in_all_modes(self):
+        """Every scheduled release/debug stress runner receives allocator setup."""
+        self.fixture()
+        manifest = {'builds': {'stress': ['stress_release', 'stress_release_neon',
+                                           'stress_debug', 'stress_debug_neon']}}
+        for mode in ('fast', 'normal', 'pedantic'):
+            self.agent.args.fast = mode == 'fast'
+            self.agent.args.pedantic = mode == 'pedantic'
+            run = self.root / ('stress-' + mode)
+            run.mkdir()
+            with patch.object(self.agent, 'command', return_value='') as command, \
+                 patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+                self.assertTrue(self.agent.test_stress_stage(run, manifest))
+            self.assertTrue(command.call_args_list)
+            self.assertTrue(all(call.kwargs.get('test_allocator') is True
+                                for call in command.call_args_list))
+            names = [Path(call.args[1]).parent.name for call in command.call_args_list]
+            if mode == 'fast':
+                self.assertEqual(names, ['stress_release', 'stress_release_neon'])
+            else:
+                self.assertEqual(names, ['stress_release', 'stress_release_neon',
+                                         'stress_debug', 'stress_debug_neon'])
 
     def test_inv_reader_cli_validation(self):
         """Reader defaults, overrides and invalid budgets are resolved at startup."""

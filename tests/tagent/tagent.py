@@ -870,7 +870,7 @@ class Agent:
                 probe = subprocess.run(['/bin/true'], env=self.test_environment(os.environ),
                                        capture_output=True, text=True, timeout=10)
                 if probe.returncode == 0 and not probe.stderr.strip():
-                    self.say('ALLOCATOR: jemalloc enabled for perf/stress | ' + library)
+                    self.say('ALLOCATOR: jemalloc enabled for inv_list/perf/stress | ' + library)
                     return
                 self.jemalloc = None
             self.say('ALLOCATOR: usable libjemalloc.so.2 not found; using system allocator')

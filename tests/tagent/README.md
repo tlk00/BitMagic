@@ -516,8 +516,9 @@ names remain available for callers using the previous interface.
 
 At startup (including `--check`), TAgent looks for `libjemalloc.so.2` using
 `ldconfig -p` and probes the library in a separate process. If usable, it adds
-its path to `LD_PRELOAD` for perf and stress tests. Stress runner children inherit
-this setting. Existing `LD_PRELOAD` entries are preserved after jemalloc.
+its path to `LD_PRELOAD` for inv_list, perf and stress tests in all modes.
+The inv_list validation runner and stress runner pass it to their test binaries.
+Existing `LD_PRELOAD` entries are preserved after jemalloc.
 Builds, Git commands, and audio do not receive this additional preload.
 The allocator path is recorded in the cycle manifest and startup log.
 If unavailable or unusable, tests continue with the existing allocator settings.
