@@ -50,3 +50,6 @@ utils/svutil/match.raw
 *.sv
 *.xml
 msvc32/bm.sln
+
+# Persistent advisory lock for the parallel stress builder.
+tests/stress/build-stress.lock

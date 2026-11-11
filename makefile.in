@@ -133,6 +133,14 @@ else
    DEPFILE=depend.dRelease
 endif
 
+# Optional per-invocation isolation for concurrent variant builds.
+DEPTEMP=depend.d~
+ifdef BUILD_ROOT
+    OUTDIR:=$(abspath $(BUILD_ROOT))/objects/
+    DEPFILE:=$(abspath $(BUILD_ROOT))/depend.d
+    DEPTEMP:=$(abspath $(BUILD_ROOT))/depend.tmp
+endif
+
 SOURCES = $(CXXSOURCES) $(CSOURCES)
 
 # file extention replacement
@@ -156,11 +164,11 @@ BM_HEADERS := $(wildcard $(PROJECT_DIR)/src/*.h)
 .SILENT : clean init dep
 
 
-$(OUTDIR)%.o: %.cpp
+$(OUTDIR)%.o: %.cpp | init
 	@echo \< $*.cpp \>
 	$(CXX) -c $(CXXFLAGS) $*.cpp -o $@ $(DBGFLAGS)
 
-$(OUTDIR)%.o : %.c
+$(OUTDIR)%.o : %.c | init
 	$(CC) -c $(CFLAGS) $< -o $@ $(DBGFLAGS)
 
 LDFLAGS = $(COMMON_LDFLAGS)
@@ -173,9 +181,9 @@ CFLAGS = $(BMOPTFLAGS) $(COMMON_CFLAGS)
 ifdef DEPCOMMAND
     DEPCOMMAND:=$(DEPCOMMAND)$(DB_INCL) $(PLATFORM_CXXFLAGS) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCLUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) 
 else
-    DEPCOMMAND:=$(DEPTOOL) $(PLATFORM_CXXFLAGS) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCLUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) > depend.d~
+    DEPCOMMAND:=$(DEPTOOL) $(PLATFORM_CXXFLAGS) $(DB_INCL) $(EXTERNINCDIR) $(BASICINCDIR) $(CXX_INCLUDE_FLAGS) $(EXTERNINCDIR) $(SOURCES) > $(DEPTEMP)
 endif
-CATCOMMAND=awk '{if ( index($$0,".o:" ) !=0 ) print "$(OUTDIR)"$$0; else print $$0}' depend.d~ > $(DEPFILE)
+CATCOMMAND=awk '{if ( index($$0,".o:" ) !=0 ) print "$(OUTDIR)"$$0; else print $$0}' $(DEPTEMP) > $(DEPFILE)
 
 
 ifeq ($(DESTTYPE), LIB)
@@ -220,6 +228,11 @@ endif
 
 all: init banner $(DESTINATION) $(OUTDIR)
 
+ifdef BUILD_ROOT
+$(OUTDIR):
+	mkdir -p "$@"
+endif
+
 ifneq ($(strip $(CXXOBJECTS) $(COBJECTS)),)
 $(CXXOBJECTS) $(COBJECTS): $(BM_HEADERS)
 endif
@@ -258,6 +271,9 @@ relink:
 	$(MAKE) all
 
 clean:
+ifdef BUILD_ROOT
+	$(RM) $(OUTDIR)*.o $(DEPFILE) $(DEPTEMP) $(DESTINATION)
+else
 	@echo ====== Clean Up directories
 	$(RM) core *.a *.o *~ depend.d* $(DESTINATION) $(DESTINATION).exe
 	$(RM) $(DEBUGDIR)*.o $(DEBUGDIR)*.a core *.stackdump
@@ -268,6 +284,7 @@ clean:
 	$(RM) -Rf *__Win32_Debug *__Win32_Release *.bak  *.plg
 	$(RM) -Rf warn.log cvsenv.sh
 
+endif
 
 relprep: clean
 	@echo ====== Release preparation
@@ -279,6 +296,9 @@ relprep: clean
 	chmod a-x $(SOURCES) $(wildcard *.h*) $(wildcard *.cpp) $(wildcard ?akefile*) $(wildcard *.txt) $(wildcard *.vcproj)
 
 init:
+ifdef BUILD_ROOT
+	mkdir -p "$(OUTDIR)"
+else
 	[ x$(DESTTYPE) = xCOPYONLY ] && exit 0;\
 	if [ ! -d $(DEBUGDIR) ]; then \
 	    mkdir $(DEBUGDIR) 2>/dev/null; \
@@ -288,13 +308,19 @@ init:
 	fi;\
 	exit 0;\
 
+endif
 
 dep:
 	@echo ====== Dependencies regeneration 
+ifdef BUILD_ROOT
+	mkdir -p "$(OUTDIR)"
+	$(RM) $(DEPFILE) $(DEPTEMP)
+else
 	$(RM) depend.d*
+endif
 	echo $(DEPCOMMAND)
 	$(DEPCOMMAND)
 	$(CATCOMMAND)
-	$(RM) depend.d~
+	$(RM) $(DEPTEMP)
 
 -include $(DEPFILE)

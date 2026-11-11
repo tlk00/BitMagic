@@ -2062,6 +2062,8 @@ class Agent:
             for name in names:
                 (directory / name).unlink(missing_ok=True)
             argv = ['bash', str(directory / 'build_all.sh')]
+            if family == 'stress':
+                argv += ['--jobs', str(self.jobs), '--build-dir', str(run / 'stress-builds')]
             if self.args.avx512:
                 argv.append('--avx512')
             if family == 'perf' and self.args.pedantic:

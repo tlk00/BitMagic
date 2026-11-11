@@ -624,3 +624,22 @@ The mono recording has half-second fades and plays over the smoothly ducked
 train ambience. Preview it with `./run_tagent.sh --sound-preview train-stop`;
 the preview follows the stop with a sample conductor transition announcement.
 The stop is also included in the sound demo.
+
+
+Stress variants compile concurrently through the existing Makefile and platform
+flags. TAgent passes its configured job count to the stress builder; this can
+oversubscribe the machine while other build families are active.
+Each variant has separate objects, dependencies, binary and build.log under the
+cycle's stress-builds directory. Complete compiler diagnostics are forwarded
+once to build-stress.log for the existing warning/error reports.
+Final executable names appear atomically only after successful linking.
+A build failure or interrupt terminates owned Make/compiler process groups;
+the first failed variant, exit status, command and log are recorded in
+stress-builds/failure.json.
+
+Standalone usage is
+`bash tests/stress/build_all.sh --jobs 4`, with optional
+`--build-dir PATH` and x86 `--avx512`. The standalone default is one job.
+Plain make and its debug/release flags retain their existing entry points.
+An optional BUILD_ROOT Make variable isolates objects and dependency files;
+the parallel builder also supplies a per-variant DESTINATION.
