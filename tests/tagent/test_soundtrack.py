@@ -1228,6 +1228,7 @@ class SoundtrackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
                 'tagent', '--sound-theme', 'steampunk', '--tts', 'off', '--state-dir', directory]):
             agent = tagent.Agent(tagent.arguments())
+            agent.prepare_generated_audio()
             import builtins
             original_open = builtins.open
             def no_console(path, *args, **kwargs):
@@ -1243,15 +1244,15 @@ class SoundtrackTests(unittest.TestCase):
             log = (Path(directory) / 'agent.log').read_text()
             self.assertIn('No audio player found', log)
             self.assertIn('audio unavailable', log)
-            agent.sound('dispatch', force=True)
-            self.assertIsNone(agent.audio_thread)
+            self.assertTrue(agent.audio_available)
 
     def test_player_failure_disables_sound_but_not_agent(self):
-        """A present player with no working device falls back and disables playback."""
+        """A present player with no working device falls back and allows a later retry."""
         import builtins
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
                 'tagent', '--sound-theme', 'steampunk', '--tts', 'off', '--state-dir', directory]):
             agent = tagent.Agent(tagent.arguments())
+            agent.prepare_generated_audio()
             original_open = builtins.open
             def no_console(path, *args, **kwargs):
                 """Reject only the console device, preserving file access."""
@@ -1262,12 +1263,11 @@ class SoundtrackTests(unittest.TestCase):
                  patch.object(agent, 'command', side_effect=tagent.CommandFailure('no device')), \
                  patch('builtins.open', side_effect=no_console):
                 agent.play_sound('dispatch', 1)
-            self.assertFalse(agent.audio_available)
+            self.assertTrue(agent.audio_available)
             log = (Path(directory) / 'agent.log').read_text()
             self.assertIn('No working audio player', log)
             self.assertIn('audio unavailable', log)
-            agent.sound('dispatch', force=True)
-            self.assertIsNone(agent.audio_thread)
+            self.assertTrue(agent.audio_available)
 
     def test_launcher_detects_and_uses_local_tts(self):
         """The actual shell launcher detects eSpeak and previews six active crews."""
@@ -1312,9 +1312,9 @@ class SoundtrackTests(unittest.TestCase):
                 self.assertEqual(agent.run(), 0)
                 agent.audio_thread.join(timeout=10)
                 self.assertFalse(agent.audio_thread.is_alive())
-                self.assertFalse(agent.audio_available)
-                self.assertTrue((Path(directory) / 'sound-steampunk-dispatch.wav').exists())
-                self.assertIn('continuing without sound', (Path(directory) / 'agent.log').read_text())
+                self.assertTrue(agent.audio_available)
+                self.assertTrue((Path(directory) / 'generated-audio' / 'sound-steampunk-dispatch.wav').exists())
+                self.assertIn('playback will be retried', (Path(directory) / 'agent.log').read_text())
 
     def test_dispatch_preview_requires_steampunk(self):
         """Removed dieselpunk theme is rejected."""

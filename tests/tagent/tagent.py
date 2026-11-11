@@ -52,6 +52,23 @@ def perf_log_progress(path):
     return count, last
 
 
+STRESS_TRANSITION_PHRASES = (
+    'The crew is changing engines for the next leg.',
+    'We are taking water before the next departure.',
+    'The fireman is bunkering coal for the next leg.',
+    'The crew is servicing the locomotive before we continue.',
+)
+
+
+def spoken_stress_name(name):
+    """Convert a stress executable name into a pronounceable variant label."""
+    parts = name.split('_')[1:]
+    names = {'sse2': 'S S E two', 'sse42': 'S S E four point two',
+             'avx2': 'A V X two', 'avx512': 'A V X five twelve',
+             'neon': 'neon', '64': 'sixty four'}
+    return ' '.join(names.get(part, part) for part in parts) or 'standard'
+
+
 ENGINEER_BUILD_REPLIES = (
     'Engineer Joe to Dispatch. Copy that. I am getting steamed up waiting to hit the rails. Over.',
     'Engineer Joe to Dispatch. One build complete? Excellent. This locomotive has places to choo and people to see. Over.',
@@ -817,8 +834,7 @@ class Agent:
             if os.access('/dev/console', os.W_OK):
                 self.say('No audio player found; will try the local console bell')
             else:
-                self.audio_available = False
-                self.say('No audio player found and console unavailable; continuing without sound')
+                self.say('No audio player found and console unavailable; playback will be retried')
         if self.args.sound_theme == 'steampunk' and self.args.tts == 'auto':
             if self.piper_available:
                 self.say('TTS: Piper available (' + str(self.piper_model) + ')')
@@ -1098,13 +1114,13 @@ class Agent:
         # An important announcement already queued takes precedence over chatter.
         with self.audio_mutex:
             if (self.audio_closing or epoch != self.audio_epoch or
-                    (phase is not None and phase != self.audio_phase_generation) or
-                    (self.audio_thread and self.audio_thread.is_alive())):
+                    (phase is not None and phase != self.audio_phase_generation)):
                 return
+            previous = self.audio_thread if self.audio_thread and self.audio_thread.is_alive() else None
             message = random.choice(DISPATCH_JOKER_REPLIES)
             self.say('DISPATCH: ' + message)
             self.audio_thread = threading.Thread(target=self.play_after,
-                args=(None, 'joker-reply', message, epoch, phase), daemon=True)
+                args=(previous, 'joker-reply', message, epoch, phase), daemon=True)
             self.audio_thread.start()
 
     def start_test_sound(self, phase='perf'):
@@ -1296,7 +1312,7 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
-    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False):
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0):
         """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
 
         voice is a callable so eSpeak voice selection happens only when needed.
@@ -1325,7 +1341,7 @@ class Agent:
                     self.command([str(self.piper_python), '-m', 'piper', '-m', str(model),
                                   '-f', str(speech), '--', text], timeout=60)
                     duration = soundtrack.mix_dynamic_dispatch(speech, path,
-                                                               min(1.0, self.args.sound_volume * 1.25) if distress else self.args.sound_volume,
+                                                               min(1.0, self.args.sound_volume * (1.25 if distress else volume_multiplier)),
                                                                workers, self.jobs, background=background,
                                                                voice_gain=.85, radio=True)
                     if engineer and self.engineer_engine != 'piper':
@@ -1350,7 +1366,7 @@ class Agent:
                     self.command([self.tts_engine, '-v', voice(), '-s', '145', '-p', str(pitch),
                                   '-w', str(speech), text], timeout=15)
                     duration = soundtrack.mix_dynamic_dispatch(speech, path,
-                                                               min(1.0, self.args.sound_volume * 1.25) if distress else self.args.sound_volume,
+                                                               min(1.0, self.args.sound_volume * (1.25 if distress else volume_multiplier)),
                                                                workers, self.jobs, background=background,
                                                                voice_gain=.85, radio=True)
                     if engineer and self.engineer_engine != 'espeak':
@@ -1480,6 +1496,13 @@ class Agent:
                                                         background='train')
                 if duration is None:
                     return False
+            elif event == 'stress-transition':
+                message = workers
+                self.say('CONDUCTOR: ' + message)
+                duration = self.synthesize_announcement(path, message, lambda: 'en-us+f3', 50,
+                                                        background='train', conductor=True, volume_multiplier=1.2)
+                if duration is None:
+                    return False
             elif event in ('station-perf', 'station-stress'):
                 duration = self.render_station_report(path, event == 'station-stress')
                 if duration is None:
@@ -1515,20 +1538,18 @@ class Agent:
                     try:
                         self.command([player, str(path)], timeout=duration + 2)
                         return True
-                    except (OSError, Failure):
-                        pass
+                    except (OSError, Failure) as error:
+                        self.say('AUDIO player {} failed for {}: {}'.format(player, event, error))
             if not self.console_notice:
                 self.console_notice = True
                 self.say('No working audio player; trying the local console bell')
             with open('/dev/console', 'w') as console:
                 console.write('\a' * (3 if event == 'fail' else 1))
         except (OSError, ValueError, EOFError, wave.Error, subprocess.SubprocessError) as error:
-            if rendered:
-                self.audio_available = False
             if not self.audio_warned:
                 self.audio_warned = True
                 if rendered:
-                    self.say('Local audio unavailable; continuing without sound. Generated WAV files: ' + str(self.audio_dir))
+                    self.say('Local audio unavailable; will retry on the next announcement. Generated WAV files: ' + str(self.audio_dir))
                 else:
                     self.say('Sound generation failed: {}; continuing tests'.format(error))
 
@@ -1851,13 +1872,19 @@ class Agent:
                 return 'updated'
             self.memory_phase = 'stress'
             self.start_test_sound('stress')
+            stress_names = []
             for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
                 if self.args.no_debug and '_debug' in name:
                     self.say('SKIP debug stress ' + name)
-                    continue
-                if not self.supported(name):
+                elif not self.supported(name):
                     self.say('SKIP unsupported ' + name)
-                    continue
+                else:
+                    stress_names.append(name)
+            for index, name in enumerate(stress_names):
+                if index == 0:
+                    mode = 'fast' if self.args.fast or '_debug' in name else ('pedantic' if self.args.pedantic else 'normal')
+                    self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, self.jobs))
+                    self.sound('stress-transition', workers='Conductor to Dispatch. {} stress run is starting. {} mode. {} test crews at work.'.format(spoken_stress_name(name), mode, self.jobs))
                 work = run / name
                 work.mkdir()
                 # Runner selects groups; wrapper gives each invocation its own cwd.
@@ -1892,6 +1919,17 @@ class Agent:
                     return 'updated'
                 if self.update_waiting():
                     return 'updated'
+                next_name = stress_names[index + 1] if index + 1 < len(stress_names) else None
+                completed = '{} stress run completed successfully.'.format(spoken_stress_name(name))
+                if next_name:
+                    core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
+                    mode = 'fast' if self.args.fast or '_debug' in next_name else ('pedantic' if self.args.pedantic else 'normal')
+                    self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
+                    message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, self.jobs)
+                else:
+                    self.say('STRESS COMPLETE | {} | all stress variants completed'.format(name))
+                    message = 'Conductor to Dispatch. {0} {0} All stress runs are complete.'.format(completed)
+                self.sound('stress-transition', workers=message)
             return True
         except CommandFailure as error:
             if self.memory_monitor:

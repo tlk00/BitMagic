@@ -65,6 +65,49 @@ class SupervisorTests(unittest.TestCase):
             self.agent.detect_jemalloc()
         self.assertIsNone(self.agent.jemalloc)
 
+    def test_dispatch_reply_waits_for_busy_audio(self):
+        """Dispatch joins the queue and runs after the active announcement."""
+        entered = threading.Event()
+        release = threading.Event()
+        order = []
+        def active():
+            entered.set()
+            release.wait(3)
+            order.append('prior')
+        previous = threading.Thread(target=active)
+        previous.start()
+        self.assertTrue(entered.wait(2))
+        self.agent.audio_thread = previous
+        with patch.object(ta.random, 'uniform', return_value=0), \
+             patch.object(self.agent, 'play_sound', side_effect=lambda event, _: order.append(event) or True):
+            self.agent.queue_joker_reply(self.agent.audio_epoch, self.agent.audio_phase_generation)
+            reply = self.agent.audio_thread
+            self.assertIsNot(reply, previous)
+            self.assertEqual(order, [])
+            release.set()
+            reply.join(3)
+        self.assertEqual(order, ['prior', 'joker-reply'])
+
+    def test_audio_player_failure_is_logged_and_retried(self):
+        """A transient player error does not disable later announcements."""
+        self.agent.audio_dir.mkdir()
+        self.agent.args.tts = 'off'
+        with patch.object(ta.soundtrack, 'render_dispatch', return_value=1), \
+             patch.object(ta.shutil, 'which', side_effect=lambda x: '/fake/paplay' if x == 'paplay' else None), \
+             patch.object(self.agent, 'command', side_effect=[ta.CommandFailure('device busy'), '']), \
+             patch('builtins.open', side_effect=self._deny_console):
+            self.agent.play_sound('dispatch', 1)
+            self.assertTrue(self.agent.audio_available)
+            self.assertTrue(self.agent.play_sound('dispatch', 1))
+        self.assertIn('AUDIO player paplay failed for dispatch: device busy', (self.agent.home / 'agent.log').read_text())
+
+    @staticmethod
+    def _deny_console(path, *args, **kwargs):
+        import io
+        if str(path) == '/dev/console':
+            raise PermissionError('no console')
+        return io.open(path, *args, **kwargs)
+
     def test_generated_audio_migration_and_conflict(self):
         """Move legacy files while preserving both copies of conflicting names."""
         old = self.agent.home / 'sound-steampunk-dispatch.wav'
@@ -297,6 +340,20 @@ class SupervisorTests(unittest.TestCase):
         for name, argv in calls:
             self.assertEqual('--fast' in argv, '_debug' in name)
             self.assertEqual('--pedantic' in argv, '_debug' not in name)
+
+    def test_stress_transition_announces_each_success_twice(self):
+        """Transitions name actual consecutive runners, repeat, and finish cleanly."""
+        self.fixture()
+        self.agent.args.no_debug = True
+        with patch.object(self.agent, 'sound') as sound:
+            self.assertTrue(self.agent.cycle())
+        messages = [c.kwargs['workers'] for c in sound.call_args_list if c.args[0] == 'stress-transition']
+        self.assertEqual(len(messages), 3)
+        self.assertIn('stress run is starting', messages[0])
+        self.assertEqual(messages[1].count('stress run completed successfully.'), 2)
+        self.assertEqual(messages[1].count('stress run is next.'), 2)
+        self.assertIn('All stress runs are complete.', messages[-1])
+        self.assertEqual(messages[-1].count('stress run completed successfully.'), 2)
 
     def test_no_debug_skips_execution_but_keeps_builds(self):
         """Pedantic release runs remain enabled while debug binaries are built."""
