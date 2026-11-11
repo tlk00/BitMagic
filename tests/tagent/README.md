@@ -672,7 +672,15 @@ For example, on WIN1:
 Fast inv_list validation uses canonical-block SHA-256 verification, starting
 at level 7 for both datasets (8 cases). Level 6 is validated against raw IDs
 when its hash cache is created. Caches persist under LOG_DIR/inv-hash-cache
-and are reused across cycles and variants. Normal and pedantic validation use
-levels 1–10 (20 cases), the same hash cache, and level 6 as the golden reference.
-Normal uses in-memory round trips. Pedantic adds reference audits and saved-stream
-verification. Progress reports show the corresponding selected case total.
+and are reused across cycles and variants. Normal validates sorted only at levels 1–10 (10 cases per build). Pedantic
+validates both datasets at levels 1–10 (20 cases per build). Both use the same
+hash cache and level 6 as the golden reference. Normal uses in-memory round trips.
+Pedantic adds reference audits and saved-stream verification. Progress reports show the corresponding selected case total.
+
+
+During a long inv_list round-trip phase the target writes a progress heartbeat
+about every 30 seconds while waiting for worker results. It reports vectors that
+have completed all selected compression levels, the dataset's vector total and
+elapsed seconds. TAgent includes the latest heartbeat in its existing ten-minute
+console and conductor report. The count may remain zero while the first large
+vectors are still being processed.

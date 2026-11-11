@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         read_flags = ['--read-memory-mib', '16384' if mode == 'fast' else '1']
         if mode == 'fast' and sys.platform != 'win32':
             read_flags.append('--read-mmap')
-        result = invoke([*common, *read_flags, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else (['--pedantic'] if mode == 'pedantic' else []))])
+        result = invoke([*common, *read_flags, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else (['--pedantic'] if mode == 'pedantic' else ['--silent']))])
         if mode == 'fast':
             assert 'ALL PASS:' in result.stdout and 'verify 1v' not in result.stdout
             assert 'reference-verify-threaded' not in result.stdout
@@ -67,9 +67,25 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         assert (out / 'PASS.txt').exists()
         assert not list(out.glob('*/*.bv'))
         if mode != 'fast':
-            assert len(list(out.glob('*/roundtrip-levels.log'))) == 2
+            roundtrip_logs = list(out.glob('*/roundtrip-levels.log'))
+            assert len(roundtrip_logs) == 2
+            for phase_log in roundtrip_logs:
+                assert 'Progress roundtrip completed=3 total=3' in phase_log.read_text()
+            if mode == 'normal':
+                assert 'Progress roundtrip' not in result.stdout
             assert len(list(out.glob('*/reference-verify-serial.log'))) == (20 if mode == 'pedantic' else 0)
         assert snapshot(reference) == before
+    # Normal sorted-only selection must not accidentally validate unsorted.
+    out = root / 'normal-sorted-only'
+    invoke([*common, '--out', out, '--dataset', 'sorted', '--hash', '--hash-cache-dir', root / 'sorted-cache', '--start-level', 1])
+    rows_selected = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
+    assert len(rows_selected) == 10
+    assert {row['dataset'] for row in rows_selected} == {'Gov2.sorted'}
+    assert {int(row['level']) for row in rows_selected} == set(range(1, 11))
+    metadata = json.loads((out / 'test.json').read_text())
+    assert metadata['datasets'] == ['sorted'] and metadata['case_count'] == 10
+    assert not list(out.glob('gov2.unsorted*'))
+
     # Level selection skips lower-level stream I/O in fast mode and counts both datasets.
     for mode, start_level in [('fast', 6), ('fast', 10), ('normal', 10)]:
         out = root / f'{mode}-start-{start_level}'

@@ -380,6 +380,8 @@ def parse():
     parser.add_argument('--fast', action='store_true', help='Validate golden against raw IDs, then compare selected levels; no checksum audit or rebuild')
     parser.add_argument('--hash', action='store_true', help='Opt in to cached canonical-block SHA-256 validation')
     parser.add_argument('--hash-cache-dir', type=Path, help='Persistent cache directory (default <reference>/validation-cache)')
+    parser.add_argument('--dataset', choices=('both', 'sorted', 'unsorted'), default='both',
+                        help='Select Gov2 input collection (default: both)')
     parser.add_argument('--golden-level', type=int, choices=range(1, 11), default=6,
                         help='Golden compression level validated against raw IDs first (default 6)')
     parser.add_argument('--start-level', type=int, choices=range(1, 11), default=1,
@@ -423,8 +425,10 @@ def main():
     expected = {(f'Gov2.{dataset}', level) for dataset in ('sorted', 'unsorted') for level in range(1, 11)}
     if len(table) != 20 or {(row['dataset'], int(row['compression_level'])) for row in table} != expected:
         raise TestFailure('Reference matrix must contain exactly both datasets at levels 1–10', 2)
-    table = [row for row in table if int(row['compression_level']) >= args.start_level
-             or int(row['compression_level']) == args.golden_level]
+    datasets = ('sorted', 'unsorted') if args.dataset == 'both' else (args.dataset,)
+    table = [row for row in table if row['dataset'].split('.')[-1] in datasets and
+             (int(row['compression_level']) >= args.start_level
+              or int(row['compression_level']) == args.golden_level)]
     # Explicit local logs are created only after path checks. No reference writes occur.
     args.out.mkdir(parents=True)
     snapshots = {}
@@ -435,7 +439,7 @@ def main():
             if not args.silent:
                 print('Using reference metadata without full checksum/history audits', flush=True)
         else:
-            for dataset in ('sorted', 'unsorted'):
+            for dataset in datasets:
                 source = args.reference / 'Gov2Flat' / ('gov2.' + dataset)
                 if not args.silent:
                     print(f'Checking copied raw input: {source}', flush=True)
@@ -491,7 +495,7 @@ def main():
                    read_memory_mib=args.read_memory_mib, read_mmap=args.read_mmap,
                    start_level=args.start_level, golden_level=args.golden_level, hash_validation=args.hash,
                    hash_cache_dir=str(args.hash_cache_dir) if args.hash else None, end_level=10,
-                   case_count=2 * (11 - args.start_level),
+                   case_count=len(datasets) * (11 - args.start_level), datasets=list(datasets),
                    platform=platform.platform(), started_utc=datetime.now(timezone.utc).isoformat()))
         if args.hash or not args.fast:
             support = subprocess.run([str(binary), '--help'], capture_output=True, text=True, timeout=30)
@@ -508,7 +512,7 @@ def main():
             for path, checksum in snapshots.items():
                 if digest(path) != checksum:
                     raise TestFailure(f'Reference changed during testing: {path}')
-        case_count = 2 * (11 - args.start_level)
+        case_count = len(datasets) * (11 - args.start_level)
         message = (f'All {case_count} collection validations passed against a raw-validated golden; reference integrity audit omitted.\n' if args.fast else
                    f'All {case_count} reference cases passed; reference checksums unchanged.\n' if args.pedantic else
                    f'All {case_count} in-memory round-trip cases passed.\n')

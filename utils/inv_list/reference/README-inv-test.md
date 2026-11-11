@@ -14,6 +14,10 @@ bash run_inv_test_pl.sh --bin ./bminv_neon \
 | `--pedantic` | Normal round trips plus saved-level threaded/serial raw-ID verification, independent decode, and full reference integrity audits. |
 | `--fast` | Validate golden against all raw IDs once per dataset, then compare selected levels against golden with exact bvector equality. |
 
+Use `--dataset sorted` or `--dataset unsorted` to validate one dataset;
+the default `both` retains the complete two-dataset matrix. Selected case counts
+and `test.json` reflect the selection. TAgent uses sorted-only normal runs.
+
 Use `--start-level 6` to test levels 6–10 inclusive for both datasets (10 cases).
 The default is level 1, covering all 20 cases. For a reduced-I/O fast run:
 

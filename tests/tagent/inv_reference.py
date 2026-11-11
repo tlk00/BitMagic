@@ -3,7 +3,7 @@ import csv
 from pathlib import Path
 
 
-def inspect_reference(path, full=False, required_levels=None):
+def inspect_reference(path, full=False, required_levels=None, required_datasets=None):
     """Check matrix identity and file sizes; return a human-readable result."""
     root = Path(path).expanduser().resolve()
     try:
@@ -22,6 +22,8 @@ def inspect_reference(path, full=False, required_levels=None):
             if row['stream_file'] != expected_name:
                 return False, 'unexpected reference filename'
             if required_levels is not None and int(row['compression_level']) not in required_levels:
+                continue
+            if required_datasets is not None and dataset not in required_datasets:
                 continue
             stream = root / expected_name
             for file, field in ((stream, 'compressed_bytes'), (stream.with_suffix('.idx'), 'index_bytes'),

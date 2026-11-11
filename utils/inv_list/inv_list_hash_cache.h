@@ -367,6 +367,8 @@ static int run(const Options& options)
     std::unique_ptr<Batch> active;
     // Declaration order makes futures join before active storage unwinds.
     std::atomic<size_t> next_job{0};
+    std::atomic<uint64_t> roundtrip_done{0}; ///< Vectors fully checked at all selected levels.
+    auto next_roundtrip_report = Clock::now() + std::chrono::seconds(30);
     std::vector<std::future<Metrics>> workers;
     Metrics totals;
     uint64_t prepared = 0, completed = 0, raw_position = 0, input_bytes = 0;
@@ -381,6 +383,18 @@ static int run(const Options& options)
         {
             try
             {
+                if (roundtrip && !options.silent)
+                {
+                    while (worker.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
+                    {
+                        if (Clock::now() >= next_roundtrip_report)
+                        {
+                            std::cerr << "Progress roundtrip completed=" << roundtrip_done.load()
+                                      << " total=" << count << " elapsed_s=" << elapsed(start) << std::endl;
+                            next_roundtrip_report = Clock::now() + std::chrono::seconds(30);
+                        }
+                    }
+                }
                 const auto metric = worker.get();
                 totals.decode += metric.decode;
                 totals.check += metric.check;
@@ -423,7 +437,15 @@ static int run(const Options& options)
             completed += active->jobs.size();
             if (!options.silent)
             {
-                std::cerr << "Progress verify vectors=" << completed << " elapsed_s=" << elapsed(start) << '\n';
+                if (roundtrip)
+                {
+                    std::cerr << "Progress roundtrip completed=" << completed
+                              << " total=" << count << " elapsed_s=" << elapsed(start) << std::endl;
+                }
+                else
+                {
+                    std::cerr << "Progress verify vectors=" << completed << " elapsed_s=" << elapsed(start) << '\n';
+                }
             }
             active.reset();
         }
@@ -587,6 +609,7 @@ static int run(const Options& options)
                         {
                             roundtrip_vector(candidate, options, job.ordinal, metric,
                                              *serializer, *restored_reader, rebuilt, rebuilt_capacity);
+                            ++roundtrip_done;
                         }
                         metric.ids += cardinality;
                     }

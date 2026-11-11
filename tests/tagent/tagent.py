@@ -914,8 +914,10 @@ class Agent:
         matches = []
         for candidate in candidates:
             required_levels = range(6, 11) if self.args.fast else range(1, 11) if self.args.pedantic else (6,)
+            required_datasets = None if self.args.fast or self.args.pedantic else ('sorted',)
             valid, detail = inv_reference.inspect_reference(candidate, full=self.args.pedantic,
-                                                             required_levels=required_levels)
+                                                             required_levels=required_levels,
+                                                             required_datasets=required_datasets)
             self.say('INV REFERENCE | {} | {}'.format(candidate, detail))
             if valid:
                 matches.append(candidate.resolve())
@@ -1903,6 +1905,28 @@ class Agent:
             current = next((row for row in rows if row.get('status') == 'running'), None)
             detail = ('{} level {} {}'.format(current['dataset'], current['level'], current['phase'])
                       if current else 'preparing or finalizing')
+            if current and current['phase'] == 'roundtrip-levels' and current.get('log'):
+                try:
+                    root = output.resolve()
+                    phase_log = (root / current['log']).resolve()
+                    if phase_log.is_relative_to(root):
+                        with phase_log.open('rb') as stream:
+                            stream.seek(0, os.SEEK_END)
+                            stream.seek(max(0, stream.tell() - 16384))
+                            recent = stream.read()
+                        matches = re.findall(
+                            rb'Progress roundtrip completed=(\d+) total=(\d+) elapsed_s=([0-9.]+)'
+                            rb'|Progress verify vectors=(\d+) elapsed_s=([0-9.]+)', recent)
+                        if matches:
+                            done, vectors, seconds, legacy_done, legacy_seconds = matches[-1]
+                            if legacy_done:
+                                done, vectors, seconds = legacy_done, current.get('vectors', '0'), legacy_seconds
+                            done, vectors = int(done), int(vectors)
+                            if vectors > 0 and done <= vectors:
+                                detail += ', {} of {} vectors, {} percent, {} seconds'.format(
+                                    done, vectors, done * 100 // vectors, seconds.decode())
+                except (OSError, ValueError):
+                    pass
         except (OSError, csv.Error, KeyError):
             complete, detail = 0, 'checking reference integrity or preparing'
         message = ('INV PROGRESS | {} | {} of {} cases completed | {}'.format(name, complete, total, detail))
@@ -1972,12 +1996,14 @@ class Agent:
                 argv.append('--fast')
             elif self.args.pedantic:
                 argv.append('--pedantic')
+            else:
+                argv.extend(['--dataset', 'sorted'])
             self.say('INV START | {} | {} workers | read budget {} MiB | {} | logs {}'.format(
                 name, self.jobs, read_budget,
                 'mmap' if self.args.inv_read_mmap else 'buffered', base))
             (base / 'command.json').write_text(json.dumps(argv, indent=2) + '\n')
             self.inv_progress_time = 0
-            self.inv_active = (output, name, 8 if self.args.fast else 20)
+            self.inv_active = (output, name, 8 if self.args.fast else 20 if self.args.pedantic else 10)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
             except CommandFailure as error:

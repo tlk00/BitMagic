@@ -469,6 +469,9 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(argv[argv.index('--read-memory-mib') + 1], str(budget))
             self.assertEqual('--read-mmap' in argv, mmap)
             self.assertEqual('--fast' in argv, fast)
+            self.assertEqual('--dataset' in argv, not fast)
+            if not fast:
+                self.assertEqual(argv[argv.index('--dataset') + 1], 'sorted')
             self.assertEqual(argv[argv.index('--start-level') + 1], '7' if fast else '1')
             self.assertIn('--hash', argv)
             self.assertEqual(argv[argv.index('--hash-cache-dir') + 1], str(self.agent.home / 'inv-hash-cache'))
@@ -502,12 +505,36 @@ class SupervisorTests(unittest.TestCase):
         output = self.root / 'results'
         output.mkdir()
         (output / 'summary.tsv').write_text('dataset\tlevel\tphase\tstatus\nGov2.sorted\t6\tverify\tpassed\n')
-        for total in (8, 20):
+        for total in (8, 10, 20):
             self.agent.inv_progress_time = 0
             with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound') as sound:
                 self.agent.report_inv_progress(output, 'bminv_release', total)
             self.assertIn('1 of {} cases completed'.format(total), say.call_args.args[0])
             self.assertIn('1 of {} cases completed'.format(total), sound.call_args.kwargs['workers'])
+
+    def test_inv_roundtrip_progress_reads_completed_vector_count(self):
+        """Only successfully completed vectors appear in the console and TTS update."""
+        output = self.root / 'results'
+        phase = output / 'case' / 'roundtrip-levels.log'
+        phase.parent.mkdir(parents=True)
+        phase.write_text('Progress roundtrip completed=12 total=100 elapsed_s=30.2\n'
+                         'Progress roundtrip completed=25 total=100 elapsed_s=60.4\n')
+        (output / 'summary.tsv').write_text(
+            'dataset\tlevel\tphase\tstatus\tlog\n'
+            'Gov2.sorted\t1\troundtrip-levels\trunning\tcase/roundtrip-levels.log\n')
+        self.agent.inv_progress_time = 0
+        with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound') as sound:
+            self.agent.report_inv_progress(output, 'bminv_release', 20)
+        self.assertIn('25 of 100 vectors, 25 percent', say.call_args.args[0])
+        self.assertIn('25 of 100 vectors, 25 percent', sound.call_args.kwargs['workers'])
+        phase.write_text('Progress verify vectors=50 elapsed_s=120.5\n')
+        (output / 'summary.tsv').write_text(
+            'dataset\tlevel\tphase\tstatus\tlog\tvectors\n'
+            'Gov2.sorted\t1\troundtrip-levels\trunning\tcase/roundtrip-levels.log\t100\n')
+        self.agent.inv_progress_time = 0
+        with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound'):
+            self.agent.report_inv_progress(output, 'bminv_release', 20)
+        self.assertIn('50 of 100 vectors, 50 percent', say.call_args.args[0])
 
     def test_jemalloc_inherits_through_test_process_tree(self):
         """Test runners and their child binaries inherit jemalloc and existing preloads."""
