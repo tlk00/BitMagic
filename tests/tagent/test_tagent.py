@@ -640,6 +640,26 @@ class SupervisorTests(unittest.TestCase):
         self.assertNotIn('--pedantic', perf_builds[0])
         self.assertNotIn('--fast', perf_builds[0])
 
+    def test_fast_perf_runs_all_supported_releases(self):
+        """Express perf schedules every supported release within its worker pool."""
+        self.agent.args.fast = True
+        self.agent.arm = False
+        self.agent.flags = {'sse2', 'sse4_2', 'avx2'}
+        self.agent.jobs = 2
+        manifest = {'builds': {'perf': ['perf_debug', 'perf_release', 'perf_release_sse2',
+                    'perf_release_sse42', 'perf_release_avx2', 'perf_release_avx512',
+                    'perf_release_64', 'perf_debug_avx2']}}
+        with patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_perf_stage(self.root, manifest))
+        calls = command.call_args_list
+        names = {Path(call.args[0][0]).name for call in calls}
+        self.assertEqual(names, {'perf_release', 'perf_release_sse2', 'perf_release_sse42',
+                                 'perf_release_avx2', 'perf_release_64'})
+        self.assertTrue(all(call.args[0][1:] == ['--fast'] for call in calls))
+        self.assertTrue(all(call.kwargs['test_allocator'] for call in calls))
+        self.assertEqual(set(self.agent.perf_completed), names)
+
     def test_fast_variants_by_platform(self):
         """Fast selects baseline and supported SIMD, never debug or AVX-512."""
         names = ['perf_release', 'perf_debug', 'perf_release_neon',

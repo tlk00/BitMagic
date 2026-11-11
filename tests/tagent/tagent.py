@@ -268,7 +268,7 @@ def arguments():
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
-        'fast': 'run scalar release and supported AVX2 or NEON release perf/stress in fast mode, then normal matrix; incompatible with --pedantic',
+        'fast': 'run all supported release perf variants and scalar/AVX2 or NEON release stress in fast mode, then normal matrix; incompatible with --pedantic',
         'no-debug': 'skip debug perf and stress execution; debug builds are still compiled (default: run debug tests)',
         'avx512': 'build and test AVX-512 variants when supported',
         'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
@@ -1998,7 +1998,7 @@ class Agent:
         """Execute performance variants for this cycle."""
         self.memory_phase = 'perf'
         self.start_test_sound('perf')
-        names = (self.fast_test_variants('perf', manifest['builds']['perf'])
+        names = ([name for name in manifest['builds']['perf'] if '_release' in name]
                  if self.args.fast else manifest['builds']['perf'])
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
             futures = []
