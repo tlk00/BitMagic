@@ -135,6 +135,39 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         assert 'reference-verify-threaded' in result.stderr and ('SIGSEGV' in result.stderr if name == 'crash' else 'exit 17' in result.stderr)
         assert (out / 'FAILURE.txt').exists() and not (out / 'PASS.txt').exists()
         assert snapshot(reference) == before
+    # Real worker failures must survive the child/relay/harness boundary and be logged.
+    selected = reference / 'gov2.sorted.level-10.bv'
+    selected_index = selected.with_suffix('.idx')
+    for failure in ['verify', 'deserialize']:
+        out = root / ('worker-' + failure)
+        saved_raw = (inputs / 'gov2.sorted').read_bytes()
+        saved_blob, saved_index = selected.read_bytes(), selected_index.read_bytes()
+        try:
+            if failure == 'verify':
+                changed = bytearray(saved_raw)
+                changed[4:8] = array('I', [0]).tobytes()
+                (inputs / 'gov2.sorted').write_bytes(changed)
+                expected_error = 'Vector comparison failed'
+            else:
+                selected.write_bytes(saved_blob[:1])
+                selected_index.write_text('BM_INV_BLOB_INDEX_V1 1 1\n0\n1\n')
+                expected_error = 'worker failed'
+            invoke([*common, '--out', out, '--fast', '--start-level', 10, '--silent'], 1)
+            log = (out / 'gov2.sorted.level-10/reference-verify-threaded.log').read_text()
+            assert 'Verification worker failed' in log and expected_error in log
+            assert 'vector_index=0' in log and 'blob_begin=0' in log and str(selected) in log
+            assert 'Verification complete.' not in log
+            result = json.loads((out / 'gov2.sorted.level-10/reference-verify-threaded.result.json').read_text())
+            assert result['exit_code'] == 1
+            records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
+            assert len(records) == 1 and records[0]['status'] == 'failed'
+            assert records[0]['exit_code'] == '1'
+            assert (out / 'FAILURE.txt').exists() and not (out / 'PASS.txt').exists()
+        finally:
+            (inputs / 'gov2.sorted').write_bytes(saved_raw)
+            selected.write_bytes(saved_blob)
+            selected_index.write_bytes(saved_index)
+        assert snapshot(reference) == before
     # Simulate changed release encoding: valid level-6 streams for every requested level.
     wrapper = root / 'different-valid-encoding'
     wrapper.write_text('#!' + sys.executable + '\nimport os, sys\na=sys.argv[1:]\n'

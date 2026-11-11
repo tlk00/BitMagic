@@ -92,3 +92,25 @@ Focused backend/error checks from utils/inv_list:
 ```bash
 python3 experiments/current/test_buffered_read.py --bin ./bminv
 ```
+
+## Worker failure propagation
+
+Read/compression workers capture exceptions with `std::exception_ptr`. After an
+acquire completion wait, the main thread checks both the captured exception and
+the pool task error code. Read failures name the verification/decode phase,
+source files, zero-based vector index and indexed BLOB offsets. Workers finish
+before their batch buffers or mappings are released. Failures exit with status 1;
+the reference runner retains the diagnostic in the phase log, marks the summary
+failed and writes FAILURE.txt without a success marker.
+
+Induced failures in `test_buffered_read.py` cover first/later ID mismatches and
+truncated BLOBs with buffered/mapped reads and quiet/progress/silent execution.
+`test_inv_reference.py` exercises real worker failures through the runner's logs,
+result JSON, summary and failure markers. A standalone background-pool check also
+covers allocation/non-standard exceptions and pool-level error codes:
+
+```bash
+c++ -std=c++17 -O1 -pthread -I../../src -I. \
+  experiments/current/test_worker_error.cpp -o /tmp/inv-worker-error
+/tmp/inv-worker-error
+```

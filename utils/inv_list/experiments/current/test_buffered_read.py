@@ -15,11 +15,13 @@ binary = str(Path(args.bin).resolve())
 
 
 def run(flags, error=None):
-    result = subprocess.run([binary, *map(str, flags)], capture_output=True, text=True)
+    result = subprocess.run([binary, *map(str, flags)], capture_output=True, text=True, timeout=30)
     text = result.stdout + result.stderr
     assert (result.returncode == 0) == (error is None), text
     if error:
-        assert error in text, text
+        assert result.returncode == 1, text
+        assert error in result.stderr and 'Error:' in result.stderr, text
+        assert 'Verification complete.' not in text and 'Decode complete.' not in text, text
     return text
 
 
@@ -42,11 +44,25 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
             peak = int(re.search(r'peak_staged_input_bytes=(\d+)', text).group(1))
             assert peak <= 1024 * 1024, peak
             assert 'Decode complete.' in run([*common, '-decode'])
-        # Keep cardinality and sortedness, change an ID: exact equality must fail.
-        changed = bytearray(raw_data)
-        changed[4:8] = array('I', [1]).tobytes()
-        raw.write_bytes(changed)
-        run([*common, '-verify', '-u32in', raw], 'Vector comparison failed')
+        # Change an ID without changing cardinality/sortedness in first and later tasks.
+        raw_offsets = []
+        position = 0
+        while position < len(raw_data):
+            raw_offsets.append(position)
+            length = int.from_bytes(raw_data[position:position + 4], sys.byteorder)
+            position += 4 + length * 4
+        blob_offsets = list(map(int, index.read_text().splitlines()[1:]))
+        for failed_vector in [0, 639]:
+            changed = bytearray(raw_data)
+            position = raw_offsets[failed_vector] + 4
+            value = int.from_bytes(changed[position:position + 4], sys.byteorder) + 1
+            changed[position:position + 4] = array('I', [value]).tobytes()
+            raw.write_bytes(changed)
+            for reporting in [[], ['-progress-vectors', 1], ['-progress-vectors', 1, '-silent']]:
+                text = run([*common, *reporting, '-verify', '-u32in', raw], 'Vector comparison failed')
+                assert f'vector_index={failed_vector}' in text
+                assert f'blob_begin={blob_offsets[failed_vector]}' in text
+        raw.write_bytes(raw_data)
         # Reject untrusted lengths before allocating their advertised payload.
         raw.write_bytes(array('I', [0x40000000]).tobytes())
         run([*common, '-verify', '-u32in', raw], 'Vector exceeds read batch budget')
@@ -62,6 +78,21 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
         index.write_text('\n'.join(lines) + '\n')
         blob.write_bytes(encoded_data + b'\0')
         run([*common, '-decode'], 'Indexed BLOB decode or length mismatch')
+        index.write_text(original_index)
+        blob.write_bytes(encoded_data)
+        # A later task must also fail with progress enabled or explicitly silenced.
+        last_begin = int(original_index.splitlines()[-2])
+        truncated = encoded_data[:last_begin + 1]
+        lines = original_index.splitlines()
+        header = lines[0].split()
+        header[1] = str(len(truncated))
+        lines[0], lines[-1] = ' '.join(header), str(len(truncated))
+        index.write_text('\n'.join(lines) + '\n')
+        blob.write_bytes(truncated)
+        for reporting in [[], ['-progress-vectors', 1], ['-progress-vectors', 1, '-silent']]:
+            text = run([*common, *reporting, '-decode'], 'Decode worker failed')
+            assert 'vector_index=639' in text and f'blob_begin={last_begin}' in text
+            assert str(blob) in text
         index.write_text(original_index)
         blob.write_bytes(encoded_data)
         # Oversized indexed payload is rejected before loading/mapping the range.

@@ -96,11 +96,6 @@ template<class Pool, class Batch, class Report>
 void inv_list_wait_for_task(Pool& pool, Batch& batch, unsigned index,
                             bool enabled, Report report)
 {
-    if (!enabled)
-    {
-        bm::thread_pool_executor<Pool>::wait_for_batch_done(pool, batch, index, index);
-        return;
-    }
     const bm::task_descr* task = batch.get_task(index);
     auto next_check = std::chrono::steady_clock::now();
     unsigned spins = 0;
@@ -113,7 +108,7 @@ void inv_list_wait_for_task(Pool& pool, Batch& batch, unsigned index,
         // Preserve the executor's yielding wait and prompt completion response.
         // Sample the clock sparsely and invoke the reporting callback at most
         // ten times per second, independent of how fast the spin loop runs.
-        if (!(spins++ & 63u))
+        if (enabled && !(spins++ & 63u))
         {
             const auto now = std::chrono::steady_clock::now();
             if (now >= next_check)

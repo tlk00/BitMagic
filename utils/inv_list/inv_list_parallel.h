@@ -11,6 +11,7 @@
 #include "inv_list_progress.h"
 #include "inv_list_reports.h"
 #include "inv_list_read_buffer.h"
+#include "inv_list_worker_error.h"
 
 struct plain_compression_policy
 {
@@ -102,7 +103,7 @@ struct parallel_compression_job
     size_t input_count = 0;
     std::streamoff input_end = 0;
     double seconds = 0;
-    std::string error;
+    std::exception_ptr error; ///< Worker exception, published by task completion.
 };
 
 template<class Policy>
@@ -195,7 +196,14 @@ static void compress_inv_dump_file_parallel(const std::string& fname,
                                    [&]() { report_progress(false); });
             if (compression_diagnostics) head_wait_seconds += std::chrono::duration<double>(clock_type::now() - wait_begin).count();
             parallel_compression_job<Policy>& job = *jobs[i];
-            if (!job.error.empty()) throw std::runtime_error(job.error);
+            const int task_code = batch.get_task(unsigned(i))->err_code;
+            if (job.error || task_code)
+            {
+                std::ostringstream context;
+                context << "Compression worker failed: input=" << fname
+                        << " output=" << out_fname << " vector_index=" << job.vector_index;
+                inv_list_check_worker(job.error, task_code, context.str());
+            }
             if (!job.blob.size()) throw std::runtime_error("Empty worker compression BLOB");
             errno = 0;
             out.write(reinterpret_cast<const char*>(job.blob.data()),
@@ -312,8 +320,11 @@ static void compress_inv_dump_file_parallel(const std::string& fname,
                     target->input.shrink_to_fit();
                     return 0;
                 }
-                catch (const std::exception& e) { target->error = e.what(); return 1; }
-                catch (...) { target->error = "Unknown compression worker failure"; return 1; }
+                catch (...)
+                {
+                    target->error = std::current_exception();
+                    return 1;
+                }
             });
             batch.add(task, 0);
             pool.get_job_queue().push(batch.get_task(unsigned(jobs.size() - 1)));
@@ -410,7 +421,7 @@ struct parallel_read_job
     std::streamoff input_end = 0;
     size_t input_count = 0;
     double seconds = 0;
-    std::string error;
+    std::exception_ptr error; ///< Worker exception, published by task completion.
     bm::deserializer<bm::bvector<>, bm::decoder>::sblock_records_vect_type sblock_records;
 };
 
@@ -504,7 +515,17 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
             inv_list_wait_for_task(pool, batch, unsigned(i), progress_vectors != 0 && !progress_silent,
                                    [&]() { report_progress(false); });
             const parallel_read_job& job = *jobs[i];
-            if (!job.error.empty()) throw std::runtime_error(job.error);
+            const int task_code = batch.get_task(unsigned(i))->err_code;
+            if (job.error || task_code)
+            {
+                std::ostringstream context;
+                context << (verify ? "Verification" : "Decode")
+                        << " worker failed: input=" << bv_name
+                        << " raw_input=" << input_name
+                        << " vector_index=" << emitted
+                        << " blob_begin=" << job.begin << " blob_end=" << job.end;
+                inv_list_check_worker(job.error, task_code, context.str());
+            }
             total_ints += job.input_count;
             if (sblock_len_stats)
                 for (const auto& rec : job.sblock_records)
@@ -613,14 +634,9 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
                         target->seconds = std::chrono::duration<double>(clock_type::now() - begin).count();
                         return 0;
                     }
-                    catch (const std::exception& e)
-                    {
-                        target->error = e.what();
-                        return 1;
-                    }
                     catch (...)
                     {
-                        target->error = "Unknown read worker failure";
+                        target->error = std::current_exception();
                         return 1;
                     }
                 });
