@@ -34,13 +34,13 @@ import soundtrack
 import wave
 
 
-# Baseline from a complete v10.0.1 perf log; variants may differ.
-PERF_ESTIMATED_TESTS = 189
+# Initial estimate until a successful run teaches the target for a variant.
+PERF_ESTIMATED_TESTS = 210
 
 
-def perf_estimated_percent(count):
+def perf_estimated_percent(count, target=PERF_ESTIMATED_TESTS):
     """Estimate completed test elements, keeping active runs below 100 percent."""
-    return min(99, max(0, round(count * 100 / PERF_ESTIMATED_TESTS)))
+    return min(99, max(0, round(count * 100 / target)))
 
 
 def perf_log_progress(path):
@@ -1370,6 +1370,54 @@ class Agent:
             self.say('ENGINEER: ' + message)
             self.sound('joker', workers=message)
 
+    def perf_target_mode(self, name):
+        """Distinguish cycle configuration and the actual fast/normal execution."""
+        cycle = 'pedantic' if self.args.pedantic else 'fast' if self.args.fast else 'normal'
+        execution = 'fast' if self.args.fast or '_debug' in name else 'normal'
+        return cycle + '-' + execution
+
+    def perf_target_path(self, name):
+        """Return a semantic cache filename for a supported executable name."""
+        if not re.fullmatch(r'perf_[A-Za-z0-9_]+', name):
+            raise ValueError('Invalid perf variant name: ' + name)
+        return self.home / 'perf-test-targets.cache' / (name + '--' + self.perf_target_mode(name) + '.json')
+
+    def perf_target(self, name):
+        """Read the last successful count, or use the initial estimate."""
+        try:
+            data = json.loads(self.perf_target_path(name).read_text())
+            count = data['completed_tests']
+            if type(count) is int and count > 0:
+                return count
+        except (OSError, ValueError, TypeError, KeyError):
+            pass
+        return PERF_ESTIMATED_TESTS
+
+    def save_perf_target(self, name, path):
+        """Atomically retain nonzero complete results after successful execution."""
+        try:
+            count, _ = perf_log_progress(path)
+            if not count:
+                return
+            target = self.perf_target_path(name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            data = {'variant': name, 'mode': self.perf_target_mode(name), 'completed_tests': count}
+            with tempfile.NamedTemporaryFile(mode='w', dir=target.parent, prefix='.target-', delete=False) as stream:
+                temporary = Path(stream.name)
+                try:
+                    json.dump(data, stream)
+                    stream.write('\n')
+                except BaseException:
+                    temporary.unlink(missing_ok=True)
+                    raise
+            try:
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
+            self.say('PERF TARGET | {} | {} | {} completed tests'.format(name, self.perf_target_mode(name), count))
+        except (OSError, ValueError) as error:
+            self.say('PERF TARGET unavailable | {} | {}'.format(name, error))
+
     def report_perf_progress(self):
         """Print every active perf variant and announce one in round-robin order."""
         if time.monotonic() < self.next_perf_report or not self.perf_report_lock.acquire(False):
@@ -1393,6 +1441,7 @@ class Agent:
                     continue
                 name = path.parent.name
                 reference = None
+                target = self.perf_target(name)
                 if single and '_debug' in name:
                     preferred = name.replace('_debug', '_release', 1)
                     candidates = ([preferred] if preferred in completed else []) + [
@@ -1407,22 +1456,23 @@ class Agent:
                             continue
                 if reference:
                     ref_name, total = reference
-                    delayed = count > total
-                    detail = ('delayed' if delayed else 'approximately {}%'.format(min(99, round(count * 100 / total))))
-                    self.say('PERF STATUS | {} | {} completed | {} | reference {}: {} | debug fast; release {} | last: {}'.format(
-                        name, count, detail, ref_name, total, 'fast' if self.args.fast else 'normal', last or 'none yet'))
+                    delayed = count > target
+                    detail = ('delayed' if delayed else 'approximately {}%'.format(perf_estimated_percent(count, target)))
+                    self.say('PERF STATUS | {} | {} completed | {} | target {} | reference {}: {} | debug fast; release {} | last: {}'.format(
+                        name, count, detail, target, ref_name, total, 'fast' if self.args.fast else 'normal', last or 'none yet'))
                     disclaimer = not self.args.fast and not self.perf_last_disclaimer
                     first = not self.perf_last_announced
                     if first:
                         self.say('PERF STATUS | all other perf tasks completed; waiting for ' + name)
                         self.perf_last_announced = True
-                    reports.append((name, count, ref_name, total, disclaimer, first))
+                    reports.append((name, count, ref_name, total, disclaimer, first, target))
                     if disclaimer:
                         self.perf_last_disclaimer = True
                 else:
-                    self.say('PERF STATUS | {} | {} completed | approximately {}% of test elements | last: {}'.format(
-                        name, count, perf_estimated_percent(count), last or 'none yet'))
-                    reports.append((name, count))
+                    detail = 'delayed' if count > target else 'approximately {}% of test elements'.format(perf_estimated_percent(count, target))
+                    self.say('PERF STATUS | {} | {} completed | {} | target {} | last: {}'.format(
+                        name, count, detail, target, last or 'none yet'))
+                    reports.append((name, count, 'target', target))
             self.next_perf_report = now + 600
             if reports:
                 report = reports[self.perf_report_index % len(reports)]
@@ -1851,14 +1901,22 @@ class Agent:
                       if '+f' in voice.strip().lower()]
             return random.choice(voices or ['en-us+f3'])
         spoken_name = name.replace('perf_release', 'perf', 1).replace('_', ' ')
-        if len(report) > 2:
-            ref_name, total, disclaimer = report[2:5]
+        if len(report) == 4 and report[2] == 'target':
+            total = report[3]
             if count > total:
+                message = 'Conductor reporting. The {} train is delayed. {} tests completed.'.format(spoken_name, count)
+            else:
+                message = 'Conductor reporting. {} completed {} tests. Approximately {} percent of test elements complete.'.format(
+                    spoken_name, count, perf_estimated_percent(count, total))
+        elif len(report) > 2:
+            ref_name, total, disclaimer = report[2:5]
+            target = report[6] if len(report) > 6 else total
+            if count > target:
                 message = ('Conductor reporting. The {} train is delayed. {} tests completed; {} completed {}.'
                            .format(spoken_name, count, ref_name.replace('_', ' '), total))
             else:
                 message = ('Conductor reporting. {} completed {} tests. Approximately {} percent, compared with {} tests on {}.'
-                           .format(spoken_name, count, min(99, round(count * 100 / total)), total, ref_name.replace('_', ' ')))
+                           .format(spoken_name, count, perf_estimated_percent(count, target), total, ref_name.replace('_', ' ')))
             if len(report) > 5 and report[5]:
                 message = 'Conductor reporting. All other performance trains have arrived. ' + message.replace('Conductor reporting. ', '', 1)
             if disclaimer:
@@ -2189,6 +2247,7 @@ class Agent:
                         self.perf_pending.discard(name)
                         if result != 'skipped-update':
                             self.perf_completed[name] = path
+                            self.save_perf_target(name, path)
                         if len(self.perf_pending) == 1:
                             self.next_perf_report = 0
                 except BaseException as error:
