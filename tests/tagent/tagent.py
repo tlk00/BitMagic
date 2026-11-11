@@ -233,7 +233,7 @@ def arguments():
     parser.add_argument('--path-to-invref', type=Path, help='Gov2 reference directory; default: discover gov2-reference-* under log directory')
     parser.add_argument('--read-memory-mib', '--inv-read-memory-mib', dest='inv_read_memory_mib',
                         type=int, default=os.environ.get('INV_READ_MEMORY_MIB') or None,
-                        help='inv_list read-batch budget, 1..8192 MiB; default: 70%% of Linux available RAM, capped at 8192; macOS: 8192')
+                        help='inv_list read-batch budget in MiB; default: 70%% of Linux available RAM; macOS: 8192')
     reader = parser.add_mutually_exclusive_group()
     reader.add_argument('--read-mmap', '--inv-read-mmap', dest='inv_read_mmap', action='store_true',
                         help='use Unix read-only BLOB mapping windows for inv_list (default on Unix, including WSL)')
@@ -297,8 +297,8 @@ def arguments():
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
     if args.suppress - {'perf', 'inv_list', 'stress'}:
         parser.error('--suppress accepts perf, inv_list, stress')
-    if args.inv_read_memory_mib is not None and not 1 <= args.inv_read_memory_mib <= 8192:
-        parser.error('--read-memory-mib must be between 1 and 8192')
+    if args.inv_read_memory_mib is not None and not 1 <= args.inv_read_memory_mib <= sys.maxsize // (1024 * 1024):
+        parser.error('--read-memory-mib must be positive and fit host address limits')
     if args.inv_read_mmap and os.name != 'posix':
         parser.error('--read-mmap requires Unix')
     if args.fast and args.pedantic:
@@ -1897,8 +1897,8 @@ class Agent:
             current = sample.get('cgroup_current')
             if limit is not None and current is not None:
                 available = min(available, max(0, limit - current))
-            budget = max(1, min(8192, int(available * .7 / (1024 * 1024))))
-            self.say('INV READ BUDGET | available {} MiB | 70 percent capped at 8192 MiB | selected {} MiB'.format(
+            budget = max(1, min(sys.maxsize // (1024 * 1024), int(available * .7 / (1024 * 1024))))
+            self.say('INV READ BUDGET | available {} MiB | 70 percent | selected {} MiB'.format(
                 available // (1024 * 1024), budget))
             return budget
         except (OSError, ValueError) as error:
@@ -1929,19 +1929,17 @@ class Agent:
                     '--bin', str(self.repo / 'utils/inv_list' / name),
                     '--reference', str(self.inv_reference), '--out', str(output),
                     '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb),
-                    '--read-memory-mib', str(read_budget)]
+                    '--read-memory-mib', str(read_budget), '--start-level', '6', '--golden-level', '6']
             if self.args.inv_read_mmap:
                 argv.append('--read-mmap')
             if self.args.fast or '_debug' in name:
                 argv.append('--fast')
-            if self.args.fast:
-                argv.extend(['--start-level', '6'])
             self.say('INV START | {} | {} workers | read budget {} MiB | {} | logs {}'.format(
                 name, self.jobs, read_budget,
                 'mmap' if self.args.inv_read_mmap else 'buffered', base))
             (base / 'command.json').write_text(json.dumps(argv, indent=2) + '\n')
             self.inv_progress_time = 0
-            self.inv_active = (output, name, 10 if self.args.fast else 20)
+            self.inv_active = (output, name, 10)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
             except CommandFailure as error:

@@ -428,9 +428,8 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(argv[argv.index('--read-memory-mib') + 1], str(budget))
             self.assertEqual('--read-mmap' in argv, mmap)
             self.assertEqual('--fast' in argv, fast)
-            self.assertEqual('--start-level' in argv, fast)
-            if fast:
-                self.assertEqual(argv[argv.index('--start-level') + 1], '6')
+            self.assertEqual(argv[argv.index('--start-level') + 1], '6')
+            self.assertEqual(argv[argv.index('--golden-level') + 1], '6')
             import json
             saved = json.loads((run / 'inv_list/bminv_release_avx2/command.json').read_text())
             self.assertEqual(saved, argv)
@@ -442,7 +441,7 @@ class SupervisorTests(unittest.TestCase):
         with patch.object(ta.platform, 'system', return_value='Linux'), \
              patch.object(ta.memory_monitor.MemoryMonitor, 'sample') as sample:
             for memory, expected in (({'available': 4000 * mib}, 2800),
-                                     ({'available': 24000 * mib}, 8192),
+                                     ({'available': 24000 * mib}, 16800),
                                      ({'available': 16000 * mib, 'cgroup_limit': 8000 * mib,
                                        'cgroup_current': 6000 * mib}, 1400)):
                 sample.return_value = memory
@@ -478,7 +477,9 @@ class SupervisorTests(unittest.TestCase):
                 args = ta.arguments()
                 self.assertEqual(args.inv_read_memory_mib, 1024)
                 self.assertFalse(args.inv_read_mmap)
-            for budget in ('0', '8193', '1.5'):
+            with patch.object(sys, 'argv', ['tagent', '--read-memory-mib', '16384']):
+                self.assertEqual(ta.arguments().inv_read_memory_mib, 16384)
+            for budget in ('0', str(sys.maxsize), '1.5'):
                 with self.subTest(budget=budget), patch.object(sys, 'argv', ['tagent', '--read-memory-mib', budget]):
                     with self.assertRaises(SystemExit):
                         ta.arguments()

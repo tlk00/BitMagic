@@ -646,7 +646,7 @@ the parallel builder also supplies a per-variant DESTINATION.
 
 
 inv_list validation defaults to 70% of Linux MemAvailable before each variant,
-capped at 8192 MiB. WSL uses the RAM visible inside its Linux VM. A detected
+with the upper bound set by host address limits. WSL uses RAM visible inside its Linux VM. A detected
 cgroup memory limit also constrains the available amount. If Linux memory
 sampling fails, TAgent reports it and uses 512 MiB. macOS keeps 8192 MiB.
 Unix read-only mapping windows are enabled by default, including on WSL.
@@ -662,10 +662,9 @@ messages, the cycle manifest and each variant's command.json, and are passed
 through to the inv_list runner's test.json and command logs.
 
 For example, on WIN1:
-`./run_tagent.sh --fast --log-dir /mnt/d/TAgent-logs --read-memory-mib 8192 --read-mmap`.
+`./run_tagent.sh --fast --log-dir /mnt/d/TAgent-logs --read-memory-mib 16384 --read-mmap`.
 
 
-Fast inv_list validation starts at compression level 6 and covers levels 6–10
-for each of the sorted and unsorted datasets, for 10 cases. Progress reports use
-that total. The subsequent normal cycle covers all 20 cases at levels 1–10,
-including fast-mode debug variants when enabled.
+All inv_list validation starts at compression level 6 and covers levels 6–10
+for both datasets, for 10 cases. Level 6 is the validated golden reference.
+Progress reports use that total in fast, normal and pedantic modes.

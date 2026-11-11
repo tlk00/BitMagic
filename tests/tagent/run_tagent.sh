@@ -9,7 +9,7 @@ BUILD_REPORT_SECONDS=${BUILD_REPORT_SECONDS:-60}
 RESERVE_CPUS=${RESERVE_CPUS:-2}
 JOBS=${JOBS:-0}                  # 0 = automatic
 MIN_FREE_GB=${MIN_FREE_GB:-5}
-INV_READ_MEMORY_MIB=${INV_READ_MEMORY_MIB:-} # empty = auto (Linux: 70% available RAM, max 8192 MiB; Mac: 8192)
+INV_READ_MEMORY_MIB=${INV_READ_MEMORY_MIB:-} # empty = auto (Linux: 70% available RAM; Mac: 8192)
 INV_READ_MMAP=${INV_READ_MMAP:-yes}            # yes | no; Unix mapping windows
 REMOTE=${REMOTE:-origin}
 BRANCH=${BRANCH:-master}
