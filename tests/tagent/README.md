@@ -643,3 +643,23 @@ Standalone usage is
 Plain make and its debug/release flags retain their existing entry points.
 An optional BUILD_ROOT Make variable isolates objects and dependency files;
 the parallel builder also supplies a per-variant DESTINATION.
+
+
+inv_list validation defaults to 70% of Linux MemAvailable before each variant,
+capped at 8192 MiB. WSL uses the RAM visible inside its Linux VM. A detected
+cgroup memory limit also constrains the available amount. If Linux memory
+sampling fails, TAgent reports it and uses 512 MiB. macOS keeps 8192 MiB.
+Unix read-only mapping windows are enabled by default, including on WSL.
+The batch budget is shared by the indexed reader rather than multiplied by the
+worker count. The process also needs memory for decoded data and worker state.
+
+Use `--read-memory-mib 2048` to lower the budget or `--no-read-mmap` to
+select buffered reading. `--read-mmap` explicitly enables mapping.
+The launcher settings are INV_READ_MEMORY_MIB (empty for automatic) and INV_READ_MMAP.
+An explicit memory budget takes precedence over automatic sizing.
+Reader settings apply to fast and normal validation, appear in startup-of-variant
+messages, the cycle manifest and each variant's command.json, and are passed
+through to the inv_list runner's test.json and command logs.
+
+For example, on WIN1:
+`./run_tagent.sh --fast --log-dir /mnt/d/TAgent-logs --read-memory-mib 8192 --read-mmap`.

@@ -411,6 +411,63 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('--silent', args)
         self.assertEqual(args[args.index('--threads') + 1], '2')
 
+    def test_inv_reader_settings_are_forwarded_and_logged(self):
+        """Both validation modes receive the read budget and selected backend."""
+        self.agent.inv_reference = self.root / 'reference'
+        self.agent.flags = {'avx2'}
+        manifest = {'builds': {'inv_list': ['bminv_release_avx2']}}
+        for fast, mmap, budget in ((True, True, 8192), (False, False, 256)):
+            self.agent.args.fast = fast
+            self.agent.args.inv_read_mmap = mmap
+            self.agent.args.inv_read_memory_mib = budget
+            run = self.root / ('fast' if fast else 'normal')
+            with patch.object(self.agent, 'command', return_value='') as command, \
+                 patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+                self.assertTrue(self.agent.test_inv_stage(run, manifest))
+            argv = command.call_args.args[0]
+            self.assertEqual(argv[argv.index('--read-memory-mib') + 1], str(budget))
+            self.assertEqual('--read-mmap' in argv, mmap)
+            self.assertEqual('--fast' in argv, fast)
+            import json
+            saved = json.loads((run / 'inv_list/bminv_release_avx2/command.json').read_text())
+            self.assertEqual(saved, argv)
+
+    def test_inv_read_budget_uses_linux_available_ram(self):
+        """Automatic sizing respects available RAM, cgroups, caps and explicit overrides."""
+        self.agent.args.inv_read_memory_mib = None
+        mib = 1024 * 1024
+        with patch.object(ta.platform, 'system', return_value='Linux'), \
+             patch.object(ta.memory_monitor.MemoryMonitor, 'sample') as sample:
+            for memory, expected in (({'available': 4000 * mib}, 2800),
+                                     ({'available': 24000 * mib}, 8192),
+                                     ({'available': 16000 * mib, 'cgroup_limit': 8000 * mib,
+                                       'cgroup_current': 6000 * mib}, 1400)):
+                sample.return_value = memory
+                self.assertEqual(self.agent.inv_read_budget(), expected)
+            sample.side_effect = OSError('unavailable')
+            self.assertEqual(self.agent.inv_read_budget(), 512)
+            self.agent.args.inv_read_memory_mib = 1024
+            self.assertEqual(self.agent.inv_read_budget(), 1024)
+        self.agent.args.inv_read_memory_mib = None
+        with patch.object(ta.platform, 'system', return_value='Darwin'):
+            self.assertEqual(self.agent.inv_read_budget(), 8192)
+
+    def test_inv_reader_cli_validation(self):
+        """Reader defaults, overrides and invalid budgets are resolved at startup."""
+        with patch.dict(os.environ, {'INV_READ_MEMORY_MIB': '8192', 'INV_READ_MMAP': 'yes'}):
+            with patch.object(sys, 'argv', ['tagent']):
+                args = ta.arguments()
+                self.assertEqual(args.inv_read_memory_mib, 8192)
+                self.assertEqual(args.inv_read_mmap, os.name == 'posix')
+            with patch.object(sys, 'argv', ['tagent', '--read-memory-mib', '1024', '--no-read-mmap']):
+                args = ta.arguments()
+                self.assertEqual(args.inv_read_memory_mib, 1024)
+                self.assertFalse(args.inv_read_mmap)
+            for budget in ('0', '8193', '1.5'):
+                with self.subTest(budget=budget), patch.object(sys, 'argv', ['tagent', '--read-memory-mib', budget]):
+                    with self.assertRaises(SystemExit):
+                        ta.arguments()
+
     def test_suppress_options_combine(self):
         with patch.object(sys, 'argv', ['tagent', '--suppress', 'perf,inv_list', '--suppress', 'stress']):
             self.assertEqual(ta.arguments().suppress, {'perf', 'inv_list', 'stress'})

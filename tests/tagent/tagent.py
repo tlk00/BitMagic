@@ -231,6 +231,15 @@ def arguments():
                         default=os.environ.get('STARTUP', 'build'),
                         help='build on every manual start, or only when changed (default: %(default)s)')
     parser.add_argument('--path-to-invref', type=Path, help='Gov2 reference directory; default: discover gov2-reference-* under log directory')
+    parser.add_argument('--read-memory-mib', '--inv-read-memory-mib', dest='inv_read_memory_mib',
+                        type=int, default=os.environ.get('INV_READ_MEMORY_MIB') or None,
+                        help='inv_list read-batch budget, 1..8192 MiB; default: 70%% of Linux available RAM, capped at 8192; macOS: 8192')
+    reader = parser.add_mutually_exclusive_group()
+    reader.add_argument('--read-mmap', '--inv-read-mmap', dest='inv_read_mmap', action='store_true',
+                        help='use Unix read-only BLOB mapping windows for inv_list (default on Unix, including WSL)')
+    reader.add_argument('--no-read-mmap', '--no-inv-read-mmap', dest='inv_read_mmap', action='store_false',
+                        help='use buffered inv_list reads instead of Unix mapping windows')
+    parser.set_defaults(inv_read_mmap=os.name == 'posix' and os.environ.get('INV_READ_MMAP', 'yes') != 'no')
     parser.add_argument('--suppress', action='append', default=[], metavar='STAGES', help='skip test stages: perf, inv_list, stress; comma-separated or repeat option')
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
@@ -288,6 +297,10 @@ def arguments():
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
     if args.suppress - {'perf', 'inv_list', 'stress'}:
         parser.error('--suppress accepts perf, inv_list, stress')
+    if args.inv_read_memory_mib is not None and not 1 <= args.inv_read_memory_mib <= 8192:
+        parser.error('--read-memory-mib must be between 1 and 8192')
+    if args.inv_read_mmap and os.name != 'posix':
+        parser.error('--read-mmap requires Unix')
     if args.fast and args.pedantic:
         parser.error('--fast and --pedantic are mutually exclusive')
     args.full_sound_preview = args.sound_preview == 'all'
@@ -1869,6 +1882,29 @@ class Agent:
         self.sound('inv-announcement', workers=('Conductor to Dispatch. Inverted list validation. '
                    '{} of 20 cases completed. {}.'.format(complete, detail.replace('-', ' '))))
 
+    def inv_read_budget(self):
+        """Resolve an explicit budget or sample Linux available RAM before each variant."""
+        if self.args.inv_read_memory_mib is not None:
+            return self.args.inv_read_memory_mib
+        if platform.system() != 'Linux':
+            return 8192
+        try:
+            sample = memory_monitor.MemoryMonitor(self).sample()
+            available = sample.get('available')
+            if available is None:
+                raise ValueError('MemAvailable missing')
+            limit = sample.get('cgroup_limit')
+            current = sample.get('cgroup_current')
+            if limit is not None and current is not None:
+                available = min(available, max(0, limit - current))
+            budget = max(1, min(8192, int(available * .7 / (1024 * 1024))))
+            self.say('INV READ BUDGET | available {} MiB | 70 percent capped at 8192 MiB | selected {} MiB'.format(
+                available // (1024 * 1024), budget))
+            return budget
+        except (OSError, ValueError) as error:
+            self.say('INV READ BUDGET | available RAM unavailable: {} | using 512 MiB'.format(error))
+            return 512
+
     def test_inv_stage(self, run, manifest):
         """Validate reference collections with supported inv_list binaries in sequence."""
         self.memory_phase = 'inv_list'
@@ -1888,13 +1924,20 @@ class Agent:
             base = run / 'inv_list' / name
             base.mkdir(parents=True)
             output = base / 'results'
+            read_budget = self.inv_read_budget()
             argv = ['bash', str(self.repo / 'utils/inv_list/run_inv_test_pl.sh'),
                     '--bin', str(self.repo / 'utils/inv_list' / name),
                     '--reference', str(self.inv_reference), '--out', str(output),
-                    '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb)]
+                    '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb),
+                    '--read-memory-mib', str(read_budget)]
+            if self.args.inv_read_mmap:
+                argv.append('--read-mmap')
             if self.args.fast or '_debug' in name:
                 argv.append('--fast')
-            self.say('INV START | {} | {} workers | logs {}'.format(name, self.jobs, base))
+            self.say('INV START | {} | {} workers | read budget {} MiB | {} | logs {}'.format(
+                name, self.jobs, read_budget,
+                'mmap' if self.args.inv_read_mmap else 'buffered', base))
+            (base / 'command.json').write_text(json.dumps(argv, indent=2) + '\n')
             self.inv_progress_time = 0
             self.inv_active = (output, name)
             try:
@@ -2050,7 +2093,9 @@ class Agent:
         self.next_build_report = time.monotonic() + self.args.build_report_seconds
         manifest = {'tagent_run': 1, 'commit': self.commit, 'platform': platform.platform(),
                     'jemalloc': self.jemalloc, 'jobs': self.jobs, 'pedantic': self.args.pedantic, 'fast': self.args.fast,
-                    'no_debug': self.args.no_debug, 'builds': {}}
+                    'no_debug': self.args.no_debug, 'builds': {},
+                    'inv_read_memory_mib': self.args.inv_read_memory_mib,
+                    'inv_read_mmap': self.args.inv_read_mmap}
         manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
         self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples', 'inv_list')]
@@ -2369,6 +2414,8 @@ class Agent:
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
             if self.inv_reference is not None:
                 key['inv_reference'] = str(self.inv_reference)
+                key['inv_read_memory_mib'] = self.args.inv_read_memory_mib
+                key['inv_read_mmap'] = self.args.inv_read_mmap
             if self.args.suppress:
                 key['suppress'] = sorted(self.args.suppress)
             if self.args.no_debug:
