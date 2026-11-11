@@ -235,7 +235,7 @@ def arguments():
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
-        'fast': 'run perf and all stress variants in fast mode; incompatible with --pedantic',
+        'fast': 'run scalar release and supported AVX2 or NEON release perf/stress in fast mode, then normal matrix; incompatible with --pedantic',
         'no-debug': 'skip debug perf and stress execution; debug builds are still compiled (default: run debug tests)',
         'avx512': 'build and test AVX-512 variants when supported',
         'once': 'run the selected startup cycle once and exit; exit immediately on test failure',
@@ -1810,6 +1810,17 @@ class Agent:
                 return feature in self.flags
         return True
 
+    def fast_test_variants(self, family, names):
+        """Select scalar release and the supported platform SIMD release."""
+        scalar = family + '_release'
+        simd = scalar + ('_neon' if self.arm else '_avx2')
+        selected = [name for name in (scalar, simd) if name in names and self.supported(name)]
+        if scalar not in selected:
+            raise Failure('Fast test baseline missing: ' + scalar)
+        if simd not in selected:
+            self.say('SKIP fast SIMD | {} unavailable or unsupported'.format(simd))
+        return selected
+
     def builds(self, family):
         """Return explicit expected build names for perf or stress."""
         modes = ['debug', 'release']
@@ -1906,15 +1917,17 @@ class Agent:
         """Execute performance variants for this cycle."""
         self.memory_phase = 'perf'
         self.start_test_sound('perf')
+        names = (self.fast_test_variants('perf', manifest['builds']['perf'])
+                 if self.args.fast else manifest['builds']['perf'])
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
             futures = []
             future_names = {}
             with self.mutex:
-                self.perf_pending = {n for n in manifest['builds']['perf'] if not (self.args.no_debug and '_debug' in n) and self.supported(n)}
+                self.perf_pending = {n for n in names if not (self.args.no_debug and '_debug' in n) and self.supported(n)}
                 self.perf_completed = {}
                 self.perf_last_disclaimer = False
                 self.perf_last_announced = False
-            for name in manifest['builds']['perf']:
+            for name in names:
                 if self.args.no_debug and '_debug' in name:
                     self.say('SKIP debug perf ' + name)
                     continue
@@ -1955,7 +1968,9 @@ class Agent:
         self.memory_phase = 'stress'
         self.start_test_sound('stress')
         stress_names = []
-        for name in sorted(manifest['builds']['stress'], key=lambda item: '_debug' in item):
+        names = (self.fast_test_variants('stress', manifest['builds']['stress'])
+                 if self.args.fast else manifest['builds']['stress'])
+        for name in sorted(names, key=lambda item: '_debug' in item):
             if self.args.no_debug and '_debug' in name:
                 self.say('SKIP debug stress ' + name)
             elif not self.supported(name):

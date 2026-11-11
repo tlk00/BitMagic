@@ -449,6 +449,8 @@ class SupervisorTests(unittest.TestCase):
             self.assertTrue(self.agent.cycle())
         stress = [(argv, log) for argv, log in calls if '--order-file' in argv]
         self.assertTrue(stress)
+        fast_stress = [log.parent.name for _, log in stress if 'normal' not in log.parts]
+        self.assertEqual(fast_stress, ['stress_release', 'stress_release_neon'])
         for argv, log in stress:
             normal = 'normal' in log.parts
             debug = '_debug' in log.parent.name
@@ -456,12 +458,30 @@ class SupervisorTests(unittest.TestCase):
             self.assertNotIn('--pedantic', argv)
         perf_runs = [(argv, log) for argv, log in calls if Path(argv[0]).name.startswith('perf_release')]
         self.assertTrue(perf_runs)
+        fast_perf = {log.parent.name for _, log in perf_runs if 'normal' not in log.parts}
+        self.assertEqual(fast_perf, {'perf_release', 'perf_release_neon'})
         for argv, log in perf_runs:
             self.assertEqual('--fast' in argv, 'normal' not in log.parts)
         perf_builds = [argv for argv, _ in calls if len(argv) > 1 and str(argv[1]).endswith('/perf/build_all.sh')]
         self.assertEqual(len(perf_builds), 1)
         self.assertNotIn('--pedantic', perf_builds[0])
         self.assertNotIn('--fast', perf_builds[0])
+
+    def test_fast_variants_by_platform(self):
+        """Fast selects baseline and supported SIMD, never debug or AVX-512."""
+        names = ['perf_release', 'perf_debug', 'perf_release_neon',
+                 'perf_release_sse2', 'perf_release_avx2', 'perf_release_avx512']
+        self.agent.arm = True
+        self.assertEqual(self.agent.fast_test_variants('perf', names),
+                         ['perf_release', 'perf_release_neon'])
+        self.agent.arm = False
+        self.agent.flags = {'avx2', 'sse2', 'avx512f', 'avx512bw', 'avx512dq', 'avx512vl'}
+        self.assertEqual(self.agent.fast_test_variants('perf', names),
+                         ['perf_release', 'perf_release_avx2'])
+        self.agent.flags = {'sse2'}
+        self.assertEqual(self.agent.fast_test_variants('perf', names), ['perf_release'])
+        with self.assertRaises(ta.Failure):
+            self.agent.fast_test_variants('perf', ['perf_release_avx2'])
 
     def test_perf_debug_is_always_fast(self):
         """Regular runs use fast for every debug perf binary but not release."""

@@ -442,7 +442,10 @@ samples run). Output is saved in `build-samples.log`; sample warnings are includ
 in the combined diagnostics and live spoken reports. Any sample build failure
 stops the cycle before tests.
 
-`--fast` runs every perf and stress variant in fast mode. Perf uses one timed
+`--fast` runs the scalar release and supported AVX2 (x86) or NEON (Apple ARM)
+release variants of perf and stress. If the SIMD variant is unavailable or
+unsupported, the scalar release runs and the skip is reported. Debug and other
+SIMD variants run in the subsequent normal cycle. Perf uses one timed
 repetition and smaller large fixtures; stress uses reduced checks. `--fast` and `--pedantic` are mutually exclusive; TAgent rejects
 the combination at startup.
 Fast runs have distinct saved success state so `--startup changed` does not
