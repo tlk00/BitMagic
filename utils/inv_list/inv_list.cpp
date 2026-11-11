@@ -119,6 +119,11 @@ void show_help()
         << "-level N                    -- compression level 0..10 (default 6)"     << std::endl
         << "-silent (-s)                -- suppress legacy status; explicit progress remains enabled"          << std::endl
         << "--silent                    -- suppress all progress, including explicit/timed reports" << std::endl
+        << "-roundtrip                 -- indexed golden BV in-memory encode/decode verification (-verify)" << std::endl
+        << "-roundtrip-start-level N   -- first round-trip level (default 1)" << std::endl
+        << "-roundtrip-end-level N     -- last round-trip level (default 10)" << std::endl
+        << "-hash-cache-out FILE        -- create SHA-256 cache from indexed -bvin or -u32in" << std::endl
+        << "-hash-cache-in FILE         -- verify indexed -bvin against cached SHA-256 (-verify)" << std::endl
         << "-golden-bvin FILE           -- compare against a validated BV collection" << std::endl
         << "-golden-index-in FILE       -- golden BLOB index; requires threaded -verify, no -u32in" << std::endl
         << "-verify                     -- verify compressed version "             << std::endl
@@ -156,6 +161,11 @@ void show_help()
         << "-decode                     -- run decode test (in-memory)"            << std::endl
         << "-timing (-t)                -- evaluate timing/duration of operations" << std::endl
       ;
+#ifdef BM_NO_SHA256
+    std::cout << "SHA-256 cache support disabled (BM_NO_SHA256)" << std::endl;
+#else
+    std::cout << "SHA-256 cache support enabled" << std::endl;
+#endif
 }
 
 
@@ -208,6 +218,12 @@ bm::id64_t xor_memory = 8ull * 1024 * 1024 * 1024;
 bm::id64_t max_vectors = 0;      // zero means the complete input collection
 bm::id64_t progress_vectors = 0; // zero suppresses periodic progress
 std::string bv_index_out_file, bv_index_in_file;
+bool roundtrip_verify = false; ///< In-memory multi-level verification.
+bool roundtrip_levels_specified = false; ///< Reject stray round-trip range options.
+unsigned roundtrip_start_level = 1; ///< First round-trip level.
+unsigned roundtrip_end_level = 10; ///< Last round-trip level.
+std::string hash_cache_in_file; ///< Persistent digest cache input.
+std::string hash_cache_out_file; ///< Fresh digest cache output.
 std::string golden_bv_file; ///< Optional validated collection used for exact comparison.
 std::string golden_index_file; ///< Independent BLOB offsets for the golden collection.
 bool block_selection_step2 = false;
@@ -259,6 +275,54 @@ int parse_args(int argc, char *argv[])
             if (!n) throw std::runtime_error(arg + " must be positive");
             if (arg == "-max-vectors") max_vectors = n;
             else progress_vectors = n;
+            continue;
+        }
+        if (arg == "-roundtrip")
+        {
+            roundtrip_verify = true;
+            continue;
+        }
+        if (arg == "-roundtrip-start-level" || arg == "-roundtrip-end-level")
+        {
+            if (++i >= argc)
+            {
+                throw std::runtime_error("Missing round-trip level");
+            }
+            const std::string value(argv[i]);
+            if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+            {
+                throw std::runtime_error("Invalid round-trip level");
+            }
+            const unsigned long level = std::stoul(value);
+            if (level < 1 || level > 10)
+            {
+                throw std::runtime_error("Round-trip level must be 1..10");
+            }
+            if (arg == "-roundtrip-start-level")
+            {
+                roundtrip_start_level = unsigned(level);
+            }
+            else
+            {
+                roundtrip_end_level = unsigned(level);
+            }
+            roundtrip_levels_specified = true;
+            continue;
+        }
+        if (arg == "-hash-cache-in" || arg == "-hash-cache-out")
+        {
+            if (++i >= argc)
+            {
+                throw std::runtime_error("Missing hash cache file argument");
+            }
+            if (arg == "-hash-cache-in")
+            {
+                hash_cache_in_file = argv[i];
+            }
+            else
+            {
+                hash_cache_out_file = argv[i];
+            }
             continue;
         }
         if (arg == "-golden-bvin" || arg == "-golden-index-in")
@@ -1112,6 +1176,7 @@ void decode_test_dump_file(const std::string& bv_in_fname)
 #include "inv_list_xbv_rs_bench.h"
 #include "inv_list_xbv_rs_cluster.h"
 #include "inv_list_parallel.h"
+#include "inv_list_hash_cache.h"
 
 int main(int argc, char *argv[])
 {
@@ -1137,6 +1202,40 @@ int main(int argc, char *argv[])
         
         const unsigned analysis_modes = unsigned(rs_bench) + unsigned(rs_cluster_plan) + unsigned(pair_search) + unsigned(pair_index) + unsigned(ref_eval) +
                                         unsigned(xor_build) + unsigned(xor_verify);
+        if ((roundtrip_levels_specified && !roundtrip_verify) || roundtrip_start_level > roundtrip_end_level)
+        {
+            throw std::runtime_error("Round-trip range requires -roundtrip and start <= end");
+        }
+        if (roundtrip_verify || !hash_cache_in_file.empty() || !hash_cache_out_file.empty())
+        {
+            const bool build = !hash_cache_out_file.empty();
+            const bool raw = !u32_in_file.empty();
+            if (!compression_threads || analysis_modes || is_decode || !bv_out_file.empty() ||
+                !golden_bv_file.empty() || !golden_index_file.empty() ||
+                (roundtrip_verify && (build || raw)) ||
+                (build && (!hash_cache_in_file.empty() || is_verify)) ||
+                (!build && (!is_verify || raw)) ||
+                (raw && (!bv_in_file.empty() || !bv_index_in_file.empty())) ||
+                (!raw && (bv_in_file.empty() || bv_index_in_file.empty())))
+            {
+                throw std::runtime_error("Hash cache requires threaded indexed BV input or raw cache creation; verification requires -verify -hash-cache-in");
+            }
+            inv_hash::Options options;
+            options.mode = roundtrip_verify ? "roundtrip" : (build ? (raw ? "cache-raw" : "cache-bv") : "cached");
+            options.start_level = roundtrip_start_level;
+            options.end_level = roundtrip_end_level;
+            options.candidate = bv_in_file;
+            options.candidate_index = bv_index_in_file;
+            options.raw = u32_in_file;
+            options.cache = build ? hash_cache_out_file : hash_cache_in_file;
+            options.threads = compression_threads;
+            options.budget = read_memory_bytes;
+            options.batch_vectors = compression_batch_vectors;
+            options.max_vectors = max_vectors;
+            options.mapped = read_mmap;
+            options.silent = progress_silent || !progress_vectors;
+            return inv_hash::run(options);
+        }
         if ((max_vectors || progress_vectors) && analysis_modes)
             throw std::runtime_error("Vector limit/progress applies only to compression, verification, or decode");
         if (max_vectors && is_decode && u32_in_file.empty())

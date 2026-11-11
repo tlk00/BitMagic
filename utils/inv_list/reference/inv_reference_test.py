@@ -2,6 +2,8 @@
 """Validate a target bminv against both Gov2 datasets and saved levels 1–10."""
 import argparse
 import csv
+import hashlib
+import uuid
 from datetime import datetime, timezone
 import json
 import os
@@ -20,7 +22,7 @@ from gov2_reference import completed, digest, identity, number, write_json
 HERE = Path(__file__).resolve().parent
 FIELDS = ['dataset', 'level', 'status', 'phase', 'exit_code', 'reference_bytes',
           'candidate_bytes', 'candidate_minus_reference_bytes', 'candidate_bits_per_id',
-          'serialized_bytes_identical', 'vectors', 'ids', 'workers', 'wall_seconds', 'log']
+          'serialized_bytes_identical', 'roundtrip_log', 'vectors', 'ids', 'workers', 'wall_seconds', 'log']
 
 
 class TestFailure(Exception):
@@ -168,6 +170,83 @@ def validate_index(path, size, count):
         raise TestFailure('Rebuilt index scope mismatch')
 
 
+def ensure_hash_cache(args, baseline, source, golden, golden_index, phase):
+    """Validate raw equality before first cache build; reuse only matching provenance.
+
+    A per-cache mkdir lock serializes publication. Temporary outputs have unique
+    names and are cleaned on failure. The ready cache and JSON are immutable.
+    Reuse is keyed by frozen TSV hashes and scope, making cache files portable.
+    File metadata detects mutation during the first validation/build only.
+    """
+    def stamp(path):
+        """Return cheap source identity without reading its data bytes."""
+        info = path.stat()
+        return dict(path=str(path), bytes=info.st_size, mtime_ns=info.st_mtime_ns)
+    expected = dict(format='BMBLOCKSHA256V1', dataset=baseline['dataset'],
+                    level=args.golden_level, vectors=baseline['vector_count'],
+                    ids=baseline['integer_count'], golden_sha256=baseline['stream_sha256'],
+                    raw_sha256=baseline['input_sha256'], raw_bytes=baseline['input_bytes'])
+    key = hashlib.sha256(json.dumps(expected, sort_keys=True).encode()).hexdigest()[:20]
+    args.hash_cache_dir.mkdir(parents=True, exist_ok=True)
+    cache = args.hash_cache_dir / (Path(baseline['stream_file']).stem + '.' + key + '.sha256')
+    manifest = cache.with_suffix(cache.suffix + '.json')
+    lock = cache.with_suffix(cache.suffix + '.lock')
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        raise TestFailure(f'Hash cache is being prepared, or a previous run left a lock: {lock}', 2)
+    staging = cache.with_name(cache.name + '.building-' + uuid.uuid4().hex)
+    try:
+        if cache.exists() or manifest.exists():
+            if not cache.is_file() or not manifest.is_file():
+                raise TestFailure(f'Incomplete hash cache publication: {cache}', 2)
+            saved = json.loads(manifest.read_text())
+            if saved.get('provenance') != expected or saved.get('cache_sha256') != digest(cache):
+                raise TestFailure(f'Hash cache provenance/integrity mismatch: {cache}', 2)
+            if not args.silent:
+                print(f'Reusing SHA-256 cache: {cache}', flush=True)
+            return cache
+        origin = dict(raw=stamp(source), golden=stamp(golden), index=stamp(golden_index))
+        common = ['-t', '-s', '-bvin', golden, '-bv-index-in', golden_index,
+                  '-threads', str(args.j), '-batch-vectors', '512',
+                  '-read-memory-mib', str(args.read_memory_mib),
+                  *(['-read-mmap'] if args.read_mmap else []), '-progress-vectors', str(args.progress)]
+        text = phase('golden-verify-threaded', ['-verify', '-u32in', source, *common])
+        validate_read(text, baseline, 'verify', baseline['input_bytes'])
+        text = phase('hash-cache-build', ['-hash-cache-out', staging, *common])
+        if ('Verification complete.' not in text or
+            number(text, 'Total vectors=') != baseline['vector_count'] or
+            number(text, 'Total ints=') != baseline['integer_count']):
+            raise TestFailure('Incomplete hash cache generation')
+        with staging.open('rb') as stream:
+            header = stream.read(64)
+        if (header[:8] != b'BMSHA001' or len(header) != 64 or
+            int.from_bytes(header[8:16], 'little') != baseline['vector_count'] or
+            header[32:64].hex() != baseline['stream_sha256']):
+            raise TestFailure('Hash cache source checksum differs from golden reference')
+        if origin != dict(raw=stamp(source), golden=stamp(golden), index=stamp(golden_index)):
+            raise TestFailure('Hash cache source changed during validation/build')
+        saved = dict(provenance=expected, origin=origin, cache_sha256=digest(staging))
+        staging.rename(cache)
+        try:
+            write_json(manifest, saved)
+        except BaseException:
+            cache.unlink()
+            temporary_manifest = manifest.with_name(manifest.name + '.tmp')
+            if temporary_manifest.exists():
+                temporary_manifest.unlink()
+            raise
+        return cache
+    finally:
+        for temporary in (staging, Path(str(staging) + '.partial')):
+            if temporary.exists():
+                temporary.unlink()
+        staging_lock = Path(str(staging) + '.lock')
+        if staging_lock.is_dir():
+            staging_lock.rmdir()
+        lock.rmdir()
+
+
 def execute(args, references, binary):
     """Validate each golden against raw IDs before comparing selected reference/candidate streams."""
     rows = []
@@ -176,6 +255,8 @@ def execute(args, references, binary):
     baselines = {row['dataset']: row for row in references
                  if row['compression_level'] == args.golden_level}
     validated = set()
+    hash_caches = {}
+    roundtrips = {}
     for row in references:
         if row['compression_level'] < args.start_level:
             continue
@@ -185,6 +266,9 @@ def execute(args, references, binary):
         original = args.reference / row['stream_file']
         original_index = original.with_suffix('.idx')
         baseline = baselines[row['dataset']]
+        if any(row[field] != baseline[field] for field in
+               ('vector_count', 'integer_count', 'input_bytes', 'input_sha256')):
+            raise TestFailure('Selected levels have inconsistent dataset scope', 2)
         golden = args.reference / baseline['stream_file']
         golden_index = golden.with_suffix('.idx')
         entry = dict(dataset=row['dataset'], level=row['compression_level'], status='running',
@@ -205,18 +289,22 @@ def execute(args, references, binary):
                      '-batch-vectors', '512', '-read-memory-mib', str(args.read_memory_mib),
                      *(['-read-mmap'] if args.read_mmap else []), *progress]
             # The golden stream itself already passed raw verification in this run.
-            if stream != golden:
+            if args.hash:
+                text = phase(prefix + '-verify-hash', ['-verify', '-hash-cache-in',
+                             hash_caches[row['dataset']], *flags])
+                if ('Verification complete.' not in text or
+                    number(text, 'Total vectors=') != row['vector_count'] or
+                    number(text, 'Total ints=') != row['integer_count']):
+                    raise TestFailure('Incomplete cached SHA-256 verification')
+            elif stream != golden:
                 text = phase(prefix + '-verify-threaded', ['-verify', '-golden-bvin', golden,
                              '-golden-index-in', golden_index, *flags])
                 validate_read(text, row, 'verify', baseline['compressed_bytes'])
-            if not args.fast:
-                text = phase(prefix + '-verify-serial', ['-t', '-s', '-verify', '-u32in', source,
-                                                       '-bvin', stream, *progress])
-                validate_read(text, row, 'verify-serial', row['input_bytes'])
-                text = phase(prefix + '-decode', ['-decode', *flags])
-                validate_read(text, row, 'decode', row['input_bytes'])
         try:
-            if row['dataset'] not in validated:
+            if args.hash and row['dataset'] not in hash_caches:
+                hash_caches[row['dataset']] = ensure_hash_cache(
+                    args, baseline, source, golden, golden_index, phase)
+            if not args.hash and row['dataset'] not in validated:
                 golden_flags = ['-t', '-s', '-verify', '-u32in', source, '-bvin', golden,
                                 '-bv-index-in', golden_index, '-threads', str(args.j),
                                 '-batch-vectors', '512', '-read-memory-mib', str(args.read_memory_mib),
@@ -224,26 +312,51 @@ def execute(args, references, binary):
                 text = phase('golden-verify-threaded', golden_flags)
                 validate_read(text, baseline, 'verify', baseline['input_bytes'])
                 validated.add(row['dataset'])
-            reads(original, original_index, 'reference')
+            if not args.fast and row['dataset'] not in roundtrips:
+                flags = ['-t', '-s', '-verify', '-roundtrip', '-bvin', golden,
+                         '-bv-index-in', golden_index, '-threads', str(args.j),
+                         '-batch-vectors', '512', '-read-memory-mib', str(args.read_memory_mib),
+                         '-roundtrip-start-level', str(args.start_level), '-roundtrip-end-level', '10',
+                         *(['-read-mmap'] if args.read_mmap else []), *progress]
+                if args.hash:
+                    flags += ['-hash-cache-in', hash_caches[row['dataset']]]
+                text = phase('roundtrip-levels', flags)
+                if ('Roundtrip complete.' not in text or
+                    number(text, 'Total vectors=') != baseline['vector_count'] or
+                    number(text, 'Total ints=') != baseline['integer_count'] or
+                    number(text, 'Total round trips=') != baseline['vector_count'] * (11 - args.start_level)):
+                    raise TestFailure('Incomplete in-memory round-trip verification')
+                levels = {}
+                for line in text.splitlines():
+                    if line.startswith('Roundtrip level='):
+                        values = dict(field.split('=', 1) for field in line.split()[1:])
+                        level = int(values['level'])
+                        if level in levels or int(values['vectors']) != baseline['vector_count']:
+                            raise TestFailure('Duplicate/incomplete round-trip level result')
+                        levels[level] = values
+                if set(levels) != set(range(args.start_level, 11)):
+                    raise TestFailure('Missing in-memory round-trip levels')
+                roundtrips[row['dataset']] = (levels, entry['log'])
             if not args.fast:
-                check_space(args.out, reserve, row['input_bytes'])
-                candidate = args.out / case / (case + '.bv')
-                index = candidate.with_suffix('.idx')
-                if candidate.exists() or index.exists():
-                    raise TestFailure('Refusing to overwrite a candidate stream')
-                text = phase('rebuild', ['-t', '-s', '-level', str(row['compression_level']),
-                                        '-threads', str(args.j), '-batch-vectors', '512', '-u32in', source,
-                                        '-bvout', candidate, '-bv-index-out', index, *progress])
-                size = candidate.stat().st_size
-                if number(text, 'Total vectors=') != row['vector_count'] or number(text, 'Total ints=') != row['integer_count']:
-                    raise TestFailure('Rebuild scope mismatch')
-                if number(text, 'Input consumed bytes=') != row['input_bytes'] or number(text, 'BV size = ') != size:
-                    raise TestFailure('Rebuild byte accounting mismatch')
-                validate_index(index, size, row['vector_count'])
-                reads(candidate, index, 'candidate')
-                entry.update(candidate_bytes=size, candidate_minus_reference_bytes=size-row['compressed_bytes'],
-                             candidate_bits_per_id=8*size/row['integer_count'],
-                             serialized_bytes_identical=(digest(candidate) == row['stream_sha256']))
+                levels, roundtrip_log = roundtrips[row['dataset']]
+                rebuilt_bytes = int(levels[row['compression_level']]['bytes'])
+                entry.update(candidate_bytes=rebuilt_bytes,
+                             candidate_minus_reference_bytes=rebuilt_bytes-row['compressed_bytes'],
+                             candidate_bits_per_id=8*rebuilt_bytes/row['integer_count'],
+                             roundtrip_log=roundtrip_log)
+                if not args.pedantic:
+                    entry.update(phase='roundtrip-levels', log=roundtrip_log)
+            if args.fast or args.pedantic:
+                reads(original, original_index, 'reference')
+                if args.pedantic:
+                    text = phase('reference-verify-serial', ['-t', '-s', '-verify', '-u32in', source,
+                                 '-bvin', original, *progress])
+                    validate_read(text, row, 'verify-serial', row['input_bytes'])
+                    text = phase('reference-decode', ['-decode', '-bvin', original,
+                                 '-bv-index-in', original_index, '-threads', str(args.j),
+                                 '-read-memory-mib', str(args.read_memory_mib),
+                                 *(['-read-mmap'] if args.read_mmap else []), *progress])
+                    validate_read(text, row, 'decode', row['input_bytes'])
             entry.update(status='passed', exit_code=0)
             save_summary(args.out, rows)
             if not args.silent:
@@ -263,7 +376,10 @@ def parse():
     parser.add_argument('--out', required=True, type=Path, help='Fresh test directory outside reference tree')
     parser.add_argument('-j', '--threads', dest='j', type=int, default=max(1, (os.cpu_count() or 1)-2))
     parser.add_argument('--silent', action='store_true', help='Suppress console progress; retain full logs, final results and errors')
+    parser.add_argument('--pedantic', action='store_true', help='Add saved-level decoding/verification and full reference integrity audits to normal round trips')
     parser.add_argument('--fast', action='store_true', help='Validate golden against raw IDs, then compare selected levels; no checksum audit or rebuild')
+    parser.add_argument('--hash', action='store_true', help='Opt in to cached canonical-block SHA-256 validation')
+    parser.add_argument('--hash-cache-dir', type=Path, help='Persistent cache directory (default <reference>/validation-cache)')
     parser.add_argument('--golden-level', type=int, choices=range(1, 11), default=6,
                         help='Golden compression level validated against raw IDs first (default 6)')
     parser.add_argument('--start-level', type=int, choices=range(1, 11), default=1,
@@ -278,9 +394,18 @@ def parse():
 def main():
     """Audit reference inputs, snapshot the target, and run without writing in the reference tree."""
     args = parse()
+    if args.fast and args.pedantic:
+        raise TestFailure('--fast and --pedantic are separate validation modes', 2)
     args.reference = args.reference.resolve(strict=True)
     args.out = args.out.resolve()
     protect_paths(args.reference, args.out)
+    if args.hash_cache_dir and not args.hash:
+        raise TestFailure('--hash-cache-dir requires --hash', 2)
+    args.hash_cache_dir = (args.hash_cache_dir or args.reference / 'validation-cache').resolve()
+    if args.hash and (args.hash_cache_dir == args.reference or
+                      args.hash_cache_dir.is_relative_to(args.out) or
+                      args.out.is_relative_to(args.hash_cache_dir)):
+        raise TestFailure('Hash cache must be a separate persistent subdirectory disjoint from --out', 2)
     if args.out.exists():
         raise TestFailure('Require a fresh --out directory', 2)
     if not 1 <= args.read_memory_mib <= sys.maxsize // (1024 * 1024) or (args.read_mmap and os.name != 'posix'):
@@ -293,7 +418,7 @@ def main():
     target = Path(found).resolve()
     if (args.reference / '.reference-lock').exists():
         raise TestFailure('Reference generator lock exists; finish or inspect that run first', 2)
-    matrix = None if args.fast else json.loads((args.reference / 'matrix.json').read_text())
+    matrix = None if not args.pedantic else json.loads((args.reference / 'matrix.json').read_text())
     table = list(csv.DictReader((args.reference / 'references.tsv').open(), delimiter='\t'))
     expected = {(f'Gov2.{dataset}', level) for dataset in ('sorted', 'unsorted') for level in range(1, 11)}
     if len(table) != 20 or {(row['dataset'], int(row['compression_level'])) for row in table} != expected:
@@ -306,9 +431,9 @@ def main():
     references = []
     try:
         check_space(args.out, int(args.reserve_gib * 1024**3))
-        if args.fast:
+        if not args.pedantic:
             if not args.silent:
-                print('Fast mode: skipping reference checksum and historical validation audits', flush=True)
+                print('Using reference metadata without full checksum/history audits', flush=True)
         else:
             for dataset in ('sorted', 'unsorted'):
                 source = args.reference / 'Gov2Flat' / ('gov2.' + dataset)
@@ -324,13 +449,15 @@ def main():
             if table_row['stream_file'] != expected_file:
                 raise TestFailure('Unexpected reference filename in TSV', 2)
             key = Path(expected_file).stem
-            if args.fast:
+            if not args.pedantic:
                 row = dict(table_row)
                 for field in ('compression_level', 'vector_count', 'integer_count', 'input_bytes', 'compressed_bytes'):
                     row[field] = int(row[field])
-                required = [args.reference / expected_file,
-                            (args.reference / expected_file).with_suffix('.idx'),
-                            args.reference / 'Gov2Flat' / ('gov2.' + dataset)]
+                required = []
+                if args.fast or row['compression_level'] == args.golden_level:
+                    required = [args.reference / expected_file,
+                                (args.reference / expected_file).with_suffix('.idx'),
+                                args.reference / 'Gov2Flat' / ('gov2.' + dataset)]
                 if not all(path.is_file() for path in required):
                     raise TestFailure(f'Missing stream, index or raw input: {key}', 2)
                 references.append(row)
@@ -346,10 +473,11 @@ def main():
                 references.append(row)
                 for name, checksum in row['artifacts'].items():
                     snapshots[args.reference / name] = checksum
-        if not args.fast:
+        if args.pedantic:
             # Include manifests and auxiliary reference files in the immutability check.
             for path in args.reference.rglob('*'):
-                if path.is_file() and path not in snapshots:
+                if (path.is_file() and path not in snapshots and
+                    not (args.hash and path.is_relative_to(args.hash_cache_dir))):
                     snapshots[path] = digest(path)
         # Snapshot target so a concurrent rebuild cannot change later phases.
         tools = args.out / '.tools'
@@ -358,14 +486,23 @@ def main():
         shutil.copy2(target, binary)
         shutil.copy2(HERE.parent / 'experiments/current/progress_console.py', tools / 'progress_console.py')
         write_json(args.out / 'test.json', dict(binary=str(target), binary_sha256=digest(binary),
-                   reference=str(args.reference), mode='fast' if args.fast else 'normal', workers=args.j,
-                   reference_integrity_audit=not args.fast, silent_progress=args.silent,
+                   reference=str(args.reference), mode='fast' if args.fast else ('pedantic' if args.pedantic else 'normal'), workers=args.j,
+                   reference_integrity_audit=args.pedantic, silent_progress=args.silent,
                    read_memory_mib=args.read_memory_mib, read_mmap=args.read_mmap,
-                   start_level=args.start_level, golden_level=args.golden_level, end_level=10,
+                   start_level=args.start_level, golden_level=args.golden_level, hash_validation=args.hash,
+                   hash_cache_dir=str(args.hash_cache_dir) if args.hash else None, end_level=10,
                    case_count=2 * (11 - args.start_level),
                    platform=platform.platform(), started_utc=datetime.now(timezone.utc).isoformat()))
+        if args.hash or not args.fast:
+            support = subprocess.run([str(binary), '--help'], capture_output=True, text=True, timeout=30)
+            (args.out / 'hash-support.log').write_text(support.stdout + support.stderr)
+            if support.returncode or (not args.fast and '-roundtrip ' not in support.stdout):
+                raise TestFailure('Target binary lacks in-memory round-trip support; rebuild inv_list', 2)
+            if args.hash and ('-hash-cache-in' not in support.stdout or
+                              'SHA-256 cache support disabled' in support.stdout):
+                raise TestFailure('Target binary lacks SHA-256 cache support; rebuild with crypto enabled', 2)
         execute(args, references, binary)
-        if not args.fast:
+        if args.pedantic:
             if not args.silent:
                 print('Rechecking reference integrity after target execution', flush=True)
             for path, checksum in snapshots.items():
@@ -373,7 +510,8 @@ def main():
                     raise TestFailure(f'Reference changed during testing: {path}')
         case_count = 2 * (11 - args.start_level)
         message = (f'All {case_count} collection validations passed against a raw-validated golden; reference integrity audit omitted.\n' if args.fast else
-                   f'All {case_count} reference cases passed; reference checksums unchanged.\n')
+                   f'All {case_count} reference cases passed; reference checksums unchanged.\n' if args.pedantic else
+                   f'All {case_count} in-memory round-trip cases passed.\n')
         (args.out / 'PASS.txt').write_text(message)
         print(f'ALL PASS: {case_count} cases; reports: {args.out / "summary.tsv"}', flush=True)
     except BaseException as error:

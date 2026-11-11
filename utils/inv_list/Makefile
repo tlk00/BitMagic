@@ -37,10 +37,27 @@ DESTINATION = bminv
 DESTTYPE = 
 DESTINATIONDIR=utils/inv_list
 
+# SHA-256 is optional. macOS and native Windows use system crypto providers.
+INV_UNAME := $(shell uname -s)
+ifeq ($(BM_NO_SHA256),YES)
+    override BMOPTFLAGS += -DBM_NO_SHA256
+else ifneq ($(findstring MINGW,$(INV_UNAME)),)
+    EXTERNLIBS += -lbcrypt
+else ifneq ($(INV_UNAME),Darwin)
+    INV_CRYPTO_LIBS := $(shell pkg-config --libs libcrypto 2>/dev/null)
+    ifneq ($(strip $(INV_CRYPTO_LIBS)),)
+        EXTERNLIBS += $(INV_CRYPTO_LIBS)
+        CXX_INCLUDE_FLAGS += $(shell pkg-config --cflags libcrypto 2>/dev/null)
+    else
+        override BMOPTFLAGS += -DBM_NO_SHA256
+        $(warning libcrypto not found via pkg-config; building exact-only inv_list)
+    endif
+endif
+
 include ../../makefile.in
 
 # Shared serializer settings must rebuild the app even without generated dependencies.
-$(CXXOBJECTS): $(wildcard inv_list*.h)
+$(CXXOBJECTS): $(wildcard inv_list*.h) ../../src/bmbvhash.h
 
 # Build this utility with BitMagic's native AArch64 NEON backend. Force the
 # object rebuild because changing BMOPTFLAGS alone does not update timestamps.

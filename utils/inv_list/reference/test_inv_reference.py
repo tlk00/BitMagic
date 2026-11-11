@@ -51,12 +51,12 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
     assert result.returncode == 0, (result.stdout[-2000:], result.stderr)
     before = snapshot(reference)
     common = ['--bin', binary, '--reference', reference, '-j', 2, '--reserve-gib', 0]
-    for mode in ('fast', 'normal'):
+    for mode in ('fast', 'normal', 'pedantic'):
         out = root / mode
         read_flags = ['--read-memory-mib', '16384' if mode == 'fast' else '1']
         if mode == 'fast' and sys.platform != 'win32':
             read_flags.append('--read-mmap')
-        result = invoke([*common, *read_flags, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else [])])
+        result = invoke([*common, *read_flags, '--out', out, *(['--fast', '--silent', '--progress', '1'] if mode == 'fast' else (['--pedantic'] if mode == 'pedantic' else []))])
         if mode == 'fast':
             assert 'ALL PASS:' in result.stdout and 'verify 1v' not in result.stdout
             assert 'reference-verify-threaded' not in result.stdout
@@ -65,7 +65,10 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
         records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
         assert len(records) == 20 and {row['status'] for row in records} == {'passed'}
         assert (out / 'PASS.txt').exists()
-        assert len(list(out.glob('*/*.bv'))) == (0 if mode == 'fast' else 20)
+        assert not list(out.glob('*/*.bv'))
+        if mode != 'fast':
+            assert len(list(out.glob('*/roundtrip-levels.log'))) == 2
+            assert len(list(out.glob('*/reference-verify-serial.log'))) == (20 if mode == 'pedantic' else 0)
         assert snapshot(reference) == before
     # Level selection skips lower-level stream I/O in fast mode and counts both datasets.
     for mode, start_level in [('fast', 6), ('fast', 10), ('normal', 10)]:
@@ -128,7 +131,7 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
     assert 'Checking copied raw input:' not in result.stdout
     assert 'Rechecking reference integrity' not in result.stdout
     assert json.loads((output / 'test.json').read_text())['reference_integrity_audit'] is False
-    failed = invoke([*common, '--out', root / 'normal-with-stale-audit-records'], 2)
+    failed = invoke([*common, '--pedantic', '--out', root / 'pedantic-with-stale-audit-records'], 2)
     assert 'Copied raw input checksum mismatch' in failed.stderr
     matrix_path.write_bytes(original_matrix)
     manifest_path.write_bytes(original_manifest)
@@ -206,18 +209,62 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
             selected_index.write_bytes(saved_index)
             golden_blob.write_bytes(saved_golden)
         assert snapshot(reference) == before
-    # Simulate changed release encoding: valid level-6 streams for every requested level.
-    wrapper = root / 'different-valid-encoding'
-    wrapper.write_text('#!' + sys.executable + '\nimport os, sys\na=sys.argv[1:]\n'
-                       'if "-bvout" in a: a[a.index("-level")+1]="6"\n'
-                       'os.execv(' + repr(str(binary)) + ', [' + repr(str(binary)) + '] + a)\n')
-    wrapper.chmod(0o755)
-    out = root / 'different-encoding-output'
-    invoke(['--bin', wrapper, '--reference', reference, '--out', out, '--reserve-gib', 0, '-j', 2])
-    records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
-    assert all(row['status'] == 'passed' for row in records)
-    assert any(row['serialized_bytes_identical'] == 'False' for row in records)
+    # Normal round trips need only the golden stream, even for a missing selected level.
+    historical = reference / 'gov2.sorted.level-10.bv'
+    saved_historical = historical.with_suffix('.held')
+    historical.rename(saved_historical)
+    try:
+        out = root / 'normal-golden-only'
+        invoke([*common, '--out', out, '--start-level', 10])
+        assert (out / 'PASS.txt').exists()
+        assert not list(out.glob('*/reference-verify-serial.log'))
+        invoke([*common, '--pedantic', '--out', root / 'pedantic-missing-history', '--start-level', 10], 1)
+    finally:
+        saved_historical.rename(historical)
     assert snapshot(reference) == before
-print('Full/default and selected-level fast/normal cases, changed encodings, raw-ID equality, exit propagation and read-only references PASS')
+    invoke([*common, '--fast', '--pedantic', '--out', root / 'incompatible-modes'], 2)
+    # Provider-disabled binaries are rejected before any expensive raw verification.
+    unsupported = root / 'no-sha-support'
+    unsupported.write_text('#!' + sys.executable + '\nimport sys\n'
+                           'if "--help" in sys.argv:\n'
+                           ' print("-hash-cache-in FILE; SHA-256 cache support disabled")\n'
+                           ' sys.exit(0)\n'
+                           'sys.exit(77)\n')
+    unsupported.chmod(0o755)
+    unavailable_out = root / 'hash-unavailable'
+    invoke(['--bin', unsupported, '--reference', reference, '--out', unavailable_out,
+            '--fast', '--hash', '--start-level', 10, '--reserve-gib', 0], 2)
+    assert not list(unavailable_out.glob('*/golden-verify-threaded.log'))
+    # Cached validation is explicitly opt-in and persists next to the references.
+    hash_common = [*common, '--fast', '--start-level', 7, '--hash']
+    first = root / 'hash-first'
+    invoke([*hash_common, '--out', first])
+    cache_dir = reference / 'validation-cache'
+    assert len(list(cache_dir.glob('*.sha256'))) == 2
+    assert len(list(first.glob('*/golden-verify-threaded.log'))) == 2
+    assert len(list(first.glob('*/hash-cache-build.log'))) == 2
+    second = root / 'hash-reuse'
+    invoke([*hash_common, '--out', second])
+    assert not list(second.glob('*/golden-verify-threaded.log'))
+    assert not list(second.glob('*/hash-cache-build.log'))
+    assert len(list(second.glob('*/reference-verify-hash.log'))) == 8
+    for command in second.glob('*/reference-verify-hash.command.json'):
+        flags = json.loads(command.read_text())
+        assert '-hash-cache-in' in flags and '-golden-bvin' not in flags and '-u32in' not in flags
+    assert all(digest(reference / name) == checksum for name, checksum in before.items())
+    # Independent target directory, and complete mode with the same optional path.
+    third = root / 'hash-override'
+    invoke([*common, '--out', third, '--start-level', 10, '--hash',
+            '--hash-cache-dir', root / 'custom-hash-cache'])
+    assert (third / 'PASS.txt').exists()
+    # Corruption must stop verification and leave only a failure marker.
+    cache = next(cache_dir.glob('*.sha256'))
+    data = cache.read_bytes()
+    cache.write_bytes(data[:-1])
+    failed = root / 'hash-corrupt'
+    invoke([*hash_common, '--out', failed], 2)
+    assert (failed / 'FAILURE.txt').exists() and not (failed / 'PASS.txt').exists()
+    cache.write_bytes(data)
+print('Normal round trips, pedantic history, fast/hash scopes, failure propagation and reference immutability PASS')
 if args.crash_test:
     print('Deliberate SIGSEGV propagation: PASS')
