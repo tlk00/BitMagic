@@ -67,6 +67,7 @@ def compact_progress(line, columns):
     return result[:limit]
 
 
+silent_progress = '--silent' in sys.argv[1:]
 hide_opcode_profile = '--hide-opcode-profile' in sys.argv[1:]
 in_opcode_profile = False
 interactive = sys.stdout.isatty()
@@ -91,6 +92,8 @@ for raw in sys.stdin.buffer:
                         'Horizontal block ')):
         continue
     if line.startswith('Progress '):
+        if silent_progress:
+            continue
         width = shutil.get_terminal_size(fallback=(80, 24)).columns if interactive else 80
         pending = compact_progress(line, width)
         if interactive:

@@ -77,3 +77,9 @@ start-reduction/first-start ablations have been retired from the CLI. Their
 switches now fail as unknown options; -diag/-d was ineffective and is removed.
 Use presets for normal compression. Step-2, interleaved step-1 and targeted
 codec controls remain for retained comparisons; library formats are unchanged.
+
+SILENT PROGRESS
+Use --silent to suppress all progress, including explicitly requested vector-count
+and timed updates. Final statistics and errors remain visible. Legacy -s/-silent
+retains structured progress requested by -progress-vectors for existing harnesses.
+run_inv_test_pl.sh --silent hides console progress while retaining full phase logs.

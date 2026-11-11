@@ -30,6 +30,29 @@ with tempfile.TemporaryDirectory(prefix='bm-cli-cleanup-') as directory:
     with raw.open('wb') as stream:
         for row in rows:
             array('I', [len(row), *row]).tofile(stream)
+    # --silent suppresses explicit progress in every collection operation;
+    # legacy -s still allows requested structured progress for existing harnesses.
+    for workers in (0, 2):
+        ordinary = root / f'progress-{workers}.bv'
+        quiet = root / f'silent-{workers}.bv'
+        flags = ['-s', '-level', 6, '-u32in', raw, '-progress-vectors', 1]
+        threaded = ['-threads', workers] if workers else []
+        index = root / f'silent-{workers}.idx'
+        ordinary_log = run(binary, flags + threaded + ['-bvout', ordinary])
+        assert 'Progress compress ' in ordinary_log
+        extra = ['-bv-index-out', index] if workers else []
+        quiet_log = run(binary, ['--silent', *flags, *threaded, '-bvout', quiet, *extra])
+        assert 'Progress ' not in quiet_log and 'Total vectors=4' in quiet_log
+        assert quiet.read_bytes() == ordinary.read_bytes()
+        for phase in ('verify', 'decode'):
+            arguments = ['-t', '-s', '-bvin', quiet, '-progress-vectors', 1, '--silent', '-' + phase]
+            if workers:
+                arguments += ['-threads', workers, '-bv-index-in', index]
+            if phase == 'verify':
+                arguments += ['-u32in', raw]
+            text = run(binary, arguments)
+            assert 'Progress ' not in text and 'Total vectors=4' in text
+    assert 'Error:' in run(binary, ['--silent', '-bvin', root / 'missing.bv', '-decode'], False)
     assert 'Compression' in run(binary, ['--help'])
     for option in ['-unknown-option', '-level', '-bvout', '-u32in', '-threads']:
         run(binary, [option], False)

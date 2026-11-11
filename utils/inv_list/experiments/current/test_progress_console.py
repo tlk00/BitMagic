@@ -38,6 +38,14 @@ class ProgressConsoleTest(unittest.TestCase):
             self.assertEqual(process.returncode, 0)
             self.assertEqual(process.stdout.read(), b'')
 
+    def test_silent_keeps_results_and_errors(self):
+        """Silent presentation discards progress while retaining ordinary diagnostic lines."""
+        result = subprocess.run(['python3', str(SCRIPT), '--silent'],
+                                input='Progress verify vectors=1 elapsed_s=30\nError: visible\nVerification complete.\n',
+                                capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout, 'Error: visible\nVerification complete.\n')
+        self.assertNotIn('\x1b', result.stdout)
+
     def test_terminal_updates_reuse_one_row(self):
         """TTY progress clears/replaces its row and leaves ordinary text visible."""
         master, slave = pty.openpty()

@@ -158,7 +158,7 @@ static void compress_inv_dump_file_parallel(const std::string& fname,
     double worker_seconds = 0, head_wait_seconds = 0;
     const auto start = clock_type::now();
 
-    inv_list_progress_timer progress_timer(progress_vectors != 0, start);
+    inv_list_progress_timer progress_timer(progress_vectors != 0 && !progress_silent, start);
     std::streamoff input_consumed = 0;
     double last_vector_seconds = 0;
     size_t last_vector_bytes = 0;
@@ -190,7 +190,7 @@ static void compress_inv_dump_file_parallel(const std::string& fname,
         for (size_t i = 0; i < jobs.size(); ++i)
         {
             const auto wait_begin = compression_diagnostics ? clock_type::now() : clock_type::time_point{};
-            inv_list_wait_for_task(pool, batch, unsigned(i), progress_vectors != 0,
+            inv_list_wait_for_task(pool, batch, unsigned(i), progress_vectors != 0 && !progress_silent,
                                    [&]() { report_progress(false); });
             if (compression_diagnostics) head_wait_seconds += std::chrono::duration<double>(clock_type::now() - wait_begin).count();
             parallel_compression_job<Policy>& job = *jobs[i];
@@ -473,7 +473,7 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     size_t staged_bytes = 0, peak_staged_bytes = 0;
     double worker_seconds = 0;
     std::streamoff input_consumed = 0;
-    inv_list_progress_timer progress_timer(progress_vectors != 0, start);
+    inv_list_progress_timer progress_timer(progress_vectors != 0 && !progress_silent, start);
     bm::id64_t encoded_consumed = 0;
     auto report_progress = [&](bool count_due)
     {
@@ -495,7 +495,7 @@ static void read_inv_dump_file_parallel(const std::string& input_name,
     {
         for (size_t i = 0; i < jobs.size(); ++i)
         {
-            inv_list_wait_for_task(pool, batch, unsigned(i), progress_vectors != 0,
+            inv_list_wait_for_task(pool, batch, unsigned(i), progress_vectors != 0 && !progress_silent,
                                    [&]() { report_progress(false); });
             const parallel_read_job& job = *jobs[i];
             if (!job.error.empty()) throw std::runtime_error(job.error);

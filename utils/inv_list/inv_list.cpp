@@ -114,7 +114,8 @@ void show_help()
         << "-threads N                  -- parallel compression pool (1..256; omitted = sequential)" << std::endl
         << "-batch-vectors N            -- MT input window (default 512; maximum 512)" << std::endl
         << "-level N                    -- compression level 0..10 (default 6)"     << std::endl
-        << "-silent (-s)                -- no progress print or messages"          << std::endl
+        << "-silent (-s)                -- suppress legacy status; explicit progress remains enabled"          << std::endl
+        << "--silent                    -- suppress all progress, including explicit/timed reports" << std::endl
         << "-verify                     -- verify compressed version "             << std::endl
         << "Cross-bvector (xbv) research modes:" << std::endl
         << "-pair-search -bvin FILE -csv FILE -- analyze XOR pairs" << std::endl
@@ -165,6 +166,7 @@ std::string  u32_in_file;
 bool         is_timing = false;
 bool         is_verify = false;
 bool         is_silent = false;
+bool         progress_silent = false; ///< Suppress explicitly requested structured progress.
 bool         is_decode = false;
 
 bool pair_search = false, pair_inspect = false;
@@ -540,7 +542,13 @@ int parse_args(int argc, char *argv[])
             continue;
         }
         
-        if (arg == "-silent" || arg == "--silent" || arg == "-s" || arg == "--s")
+        if (arg == "--silent")
+        {
+            is_silent = true;
+            progress_silent = true;
+            continue;
+        }
+        if (arg == "-silent" || arg == "-s" || arg == "--s")
         {
             is_silent = true;
             continue;
@@ -622,23 +630,27 @@ int validate_inp_vec(const VT& vec,
     return 0;
 }
 
-/// Verification check if integer vector is equivalent to a bit-vector
-///
-template<typename VT, typename BV>
-int compare_vect(const VT& vec, const BV& bv)
+/** Compare a decoded vector logically with an independently imported ID list.
+    @tparam ValuesVect Contiguous container of sorted, unique unsigned IDs.
+    @tparam BV Bit-vector type used by the reader.
+    @param vec Read-only expected IDs; storage remains owned by the caller.
+    @param bv Read-only decoded vector.
+    @return Zero for exact logical equality, minus one for any difference.
+    @pre Input IDs are sorted and unique, as required by the collection format.
+*/
+template<typename ValuesVect, typename BV>
+int compare_vect(const ValuesVect& vec, const BV& bv)
 {
     if (vec.size() != bv.count())
     {
         return -1;
     }
-    typename BV::enumerator en = bv.first();
-    typename VT::const_iterator it = vec.begin();
-    for (; en.valid(); ++en, ++it)
+    BV expected;
+    if (!vec.empty())
     {
-        if (*en != *it)
-            return -1;
+        expected.set(vec.data(), typename BV::size_type(vec.size()), bm::BM_SORTED);
     }
-    return 0;
+    return bv.equal(expected) ? 0 : -1;
 }
 
 /// Debug utility to detect super sparse bit-vectors
@@ -801,7 +813,7 @@ void compress_inv_dump_file(const std::string& fname,
         
         std::streamsize fpos_curr = fin.tellg();
         const bm::id64_t completed = ++processed_vectors;
-        if (progress_vectors &&
+        if (progress_vectors && !progress_silent &&
             (completed % progress_vectors == 0 ||
              (max_vectors && completed == max_vectors) || fpos_curr == fsize))
         {
@@ -928,7 +940,7 @@ void verify_inv_dump_file(const std::string& fname,
         
         std::streamsize fpos_curr = fin.tellg();
         const bm::id64_t completed = ++processed_vectors;
-        if (progress_vectors &&
+        if (progress_vectors && !progress_silent &&
             (completed % progress_vectors == 0 ||
              (max_vectors && completed == max_vectors) || fpos_curr == fsize))
         {
@@ -1006,7 +1018,7 @@ void decode_test_dump_file(const std::string& bv_in_fname)
         if (fpos_curr <= bv_start || fpos_curr > fsize)
             throw std::runtime_error("Invalid position in bvect dump file");
 
-        if (progress_vectors &&
+        if (progress_vectors && !progress_silent &&
             ((i + 1) % progress_vectors == 0 || fpos_curr == fsize))
         {
             const double elapsed = std::chrono::duration<double>(
