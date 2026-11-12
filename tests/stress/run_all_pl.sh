@@ -58,11 +58,12 @@ Runner options:
 Test selectors from t.cpp:
   -ll,  -llevel         Low-level tests
   -s,   -support        Support-container tests
-  -bvb0                 Bit-vector basic tests, part 0
+  -bvb0                 Bit-vector basic tests, part 0, plus complexity checks
   -bvb1                 Bit-vector basic tests, part 1
+  -bvb1a/b/c/d          Independent bit-vector basic subgroups
   -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization and indexed-gather tests
-  -fileser              File serialization/deserialization and corruption tests
+  -fileser              File serialization/deserialization, including -svfileser
   -svfileser            Sparse-vector file and stringstream tests
   -svser                Sparse-vector level/opcode/index/gather tests
   -strsvstream          Disk-free string streaming and gather tests
@@ -71,18 +72,25 @@ Test selectors from t.cpp:
   -svindex              Sparse-vector index persistence tests
   -bvl0, -bvops0        Bit-vector logical operations, part 0
   -bvl1, -bvops1        Bit-vector logical operations, part 1
+  -bvl0a/b              Detailed operations / randomized stress
+  -bvl0b0/1/2           Three independently seeded random-stress batches
+  -bvl1a/b/c/d          OR method 2 / OR / AND method 2 / AND stress
   -bvl2, -bvops2        Bit-vector logical operations, part 2
   -bvs,  -bvshift       Bit-vector shift/insert/erase tests
+  -bvs0/1/2/3           Quarter-range shift-right stress; part 0 has other shift/insert/erase checks
   -rc,   -rankc         Rank-compression tests
   -agg,  -aggregator    Aggregator tests
   -sv0                  Sparse-vector tests, part 0
   -sv1                  Sparse-vector tests, part 1
   -sv1a                 Sparse-vector tests, part 1a
   -sv1b                 Sparse-vector tests, part 1b
+  -sv1b0/1/2/3          Signed GT scan query partitions
   -sv1c                 Sparse-vector tests, part 1c
   -sort, --sort         Sparse-vector sorting tests
   -csv0                 Compressed sparse-vector tests, part 0
   -csv0a                Compressed sparse-vector tests, part 0a
+  -csv0a0/1/2/3/4       Basic + -csv0c / range pass 0 / range pass 1 / set stress / load stress
+  -csv0a30/31/32/33    Disjoint randomized set/null stress shards
   -csv0b                Compressed sparse-vector tests, part 0b
   -csv0c                Compressed sparse-vector tests, part 0c
   -csv1                 Compressed sparse-vector tests, part 1
@@ -90,6 +98,7 @@ Test selectors from t.cpp:
   -csv1a0               Compressed sparse-vector GT scan basic checks
   -csv1a1               Compressed sparse-vector GT scan random pass 0
   -csv1a2               Compressed sparse-vector GT scan optimized pass 1
+  -csv1a                All compressed sparse-vector GT scan passes
   -csv1b                Compressed sparse-vector tests, part 1b
   -strsv, -svstr        String sparse-vector tests
   -cc                   Compressed-collection tests
@@ -101,11 +110,15 @@ Test selectors from t.cpp:
   -svf0c                Floating-point sparse-vector tests, part 0c
   -svf0c1               Floating-point sparse-vector scanner linear data
   -svf0c2               Floating-point sparse-vector scanner random data
+  -svf0c20/21/22/23    Random-data scanner query partitions
   -svf0c3               Floating-point sparse-vector scanner skewed data
   -svf1                 Float/RSC index/gather/scanner aggregate
   -svf1a0/1/2          Float index/gather levels 0-5 / 6 / 7-10
   -svf1b0/1/2          RSC float index/gather levels 0-5 / 6 / 7-10
   -svf1c               RSC float scanner tests
+  -svf1a               Runner group for the three plain float index/gather parts
+  -svf1b               Runner group for the three RSC parts and scanner
+  -svserquick           Runner group for sparse-vector serialization/index/streams
 
 The broader overlapping selectors -bvb/-bvbasic, -bvo/-bvops/-bvl, -sv,
 -csv/-rsc, -allsvser, -svf1, and -svf are accepted for targeted runs but are not
@@ -128,12 +141,12 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-complexity|-bvser|-bvset|-fileser|-svfileser|-svser|-strsvstream|-svfstream|-svindex|\
-        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
-        -bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
-        -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1c|-sort|--sort|\
-        -csv|-rsc|-csv0|-csv0a|-csv0b|-csv0c|-csv1|-csv1a|-csv1a0|-csv1a1|-csv1a2|-csv1b|\
-        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf0c1|-svf0c2|-svf0c3|-svf1|-svf1a0|-svf1a1|-svf1a2|-svf1b0|-svf1b1|-svf1b2|-svf1c)
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvb1[a-d]|-complexity|-bvser|-bvset|-fileser|-svfileser|-svser|-svserquick|-strsvstream|-svfstream|-svindex|\
+        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl0b[0-2]|-bvl1|-bvops1|-bvl1[a-d]|-bvl2|-bvops2|\
+        -bvs|-bvshift|-bvs[0-3]|-rc|-rankc|-agg|-aggregator|\
+        -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1b[0-3]|-sv1c|-sort|--sort|\
+        -csv|-rsc|-csv0|-csv0a|-csv0a[0-4]|-csv0a3[0-3]|-csv0b|-csv0c|-csv1|-csv1a|-csv1a0|-csv1a1|-csv1a2|-csv1b|\
+        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf0c1|-svf0c2|-svf0c2[0-3]|-svf0c3|-svf1|-svf1a|-svf1a0|-svf1a1|-svf1a2|-svf1b|-svf1b0|-svf1b1|-svf1b2|-svf1c)
             return 0
             ;;
         *)
@@ -263,13 +276,13 @@ esac
 if [ "${#TESTS[@]}" -eq 0 ]; then
     TESTS=(
         -ll -s
-        -bvb0 -bvb1 -complexity -bvser -fileser -svfileser -svser -strsvstream -svfstream -svindex
-        -bvl0 -bvl1 -bvl2
-        -bvs -rc -agg
-        -sv0 -sv1a -sv1b -sv1c -sort
-        -csv0a -csv0c -csv0b -csv1a0 -csv1a1 -csv1a2 -csv1b
+        -bvb0 -bvb1a -bvb1b -bvb1c -bvb1d -bvser -fileser -svserquick
+        -bvl0a -bvl0b0 -bvl0b1 -bvl0b2 -bvl1a -bvl1b -bvl1c -bvl1d -bvl2
+        -bvs0 -bvs1 -bvs2 -bvs3 -rc -agg
+        -sv0 -sv1a -sv1b0 -sv1b1 -sv1b2 -sv1b3 -sv1c -sort
+        -csv0a0 -csv0a1 -csv0a2 -csv0a30 -csv0a31 -csv0a32 -csv0a33 -csv0a4 -csv0b -csv1a -csv1b
         -strsv -cc -ser
-        -svf0a -svf0c1 -svf0c2 -svf0c3 -svf0b -svf1a1 -svf1b1 -svf1a0 -svf1b0 -svf1a2 -svf1b2 -svf1c
+        -svf0a -svf0c1 -svf0c20 -svf0c21 -svf0c22 -svf0c23 -svf0c3 -svf0b -svf1a -svf1b
     )
 fi
 
@@ -415,7 +428,20 @@ start_test()
 
     echo "START  $test_opt -> $log_file"
 
-    worker_args=("$test_opt" -silent)
+    case "$test_opt" in
+        -svf1a)
+            worker_args=(-svf1a0 -svf1a1 -svf1a2 -silent)
+            ;;
+        -svf1b)
+            worker_args=(-svf1b0 -svf1b1 -svf1b2 -svf1c -silent)
+            ;;
+        -svserquick)
+            worker_args=(-svser -svindex -strsvstream -svfstream -silent)
+            ;;
+        *)
+            worker_args=("$test_opt" -silent)
+            ;;
+    esac
     if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
         worker_args[${#worker_args[@]}]=--pedantic
     fi

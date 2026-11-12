@@ -11,6 +11,7 @@ cd "$SCRIPT_DIR" || exit 1
 JOBS=""
 RUN_NAME=""
 LOG_DIR="logs/parallel"
+ORDER_FILE=""
 FAIL_FAST=0
 PEDANTIC_ARGS=()
 FAST=0
@@ -49,6 +50,7 @@ Runner options:
                         New selectors run first; missing selectors are ignored.
                         History: ./logs/parallel/order.tsv, shared by all builds.
                         Completed non-fast jobs update history, including failed runs.
+  --order-file FILE     Use a separate learned timing history at FILE
   -onlystress,
     --only-stress       Pass -onlystress to every t64.cpp test process
   -nostress,
@@ -58,6 +60,7 @@ Runner options:
 
 Test selectors verified against t64.cpp:
   -bvb,  -bvbasic       Bit-vector basic tests (includes bvector serialization)
+  -bvb0, -bvb1a/b/c     Independent bit-vector basic subgroups
   -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization tests
   -fileser              File serialization tests
@@ -69,23 +72,36 @@ Test selectors verified against t64.cpp:
   -svindex              Sparse-vector index persistence tests
   -bvl,  -bvo, -bvops   All bit-vector logical operations
   -bvl0, -bvops0        Logical-operation correctness tests
+  -bvl0a/b              AND/OR correctness / XOR/SUB correctness
   -bvl1, -bvops1        OR stress test
   -bvl2, -bvops2        AND stress test
   -bvl3, -bvops3        SUB stress test
   -bvl4, -bvops4        XOR stress test
+  -bvl1a/b ... -bvl4a/b Two trial batches per logical operation
   -bvs,  -bvshift       Bit-vector shift/insert/erase tests
+  -bvs0/1/2/3           Direct shifts / shift aggregator / insert / erase
   -rc,   -rankc         Rank-compression tests
   -agg,  -aggregator    Aggregator tests
   -sv                   Sparse-vector tests
+  -sv0, -sv1a/b/c       Core / range scan / signed scan / sorting groups
   -csv                  Compressed sparse-vector tests
+  -csv0a0               Compressed sparse-vector basic checks
+  -csv0a3, -csv0a4      Full set/null stress / load stress
+  -csv0a30/31/32/33    Disjoint randomized set/null stress shards
+  -csv0b, -csv1a/b      Signed and gather / GT scan / serial and scan groups
   -strsv, -svstr        String sparse-vector tests
   -cc                   Compressed-collection tests
   -svf                  Floating-point sparse-vector tests
   -svf0                 Float basic/scanner tests
+  -svf0a/b              Float basic / unbounded scanner tests
+  -svf0c1, -svf0c3     Linear / skewed float scanner tests
+  -svf0c20/21/22/23    Random float scanner query partitions
   -svf1                 Float/RSC index/gather/scanner aggregate
   -svf1a0/1/2          Float index/gather levels 0-5 / 6 / 7-10
   -svf1b0/1/2          RSC float index/gather levels 0-5 / 6 / 7-10
   -svf1c               RSC float scanner tests
+  -svf1a, -svf1b       Runner groups for plain / RSC float index and gather
+  -svserquick           Runner group for sparse serialization, index, and streams
 
 Parsed by t64.cpp but currently without an independently dispatched test block:
   -ll, -llevel, -s, -support
@@ -108,11 +124,12 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-complexity|-bvser|-bvset|\
-        -fileser|-svfileser|-svser|-strsvstream|-svfstream|-svindex|\
-        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl1|-bvops1|-bvl2|-bvops2|\
-        -bvl3|-bvops3|-bvl4|-bvops4|-bvs|-bvshift|-rc|-rankc|-agg|-aggregator|\
-        -sv|-csv|-strsv|-svstr|-cc|-svf|-svf0|-svf1|-svf1a0|-svf1a1|-svf1a2|-svf1b0|-svf1b1|-svf1b2|-svf1c)
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1[a-c]|-complexity|-bvser|-bvset|\
+        -fileser|-svfileser|-svser|-svserquick|-strsvstream|-svfstream|-svindex|\
+        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl1|-bvops1|-bvl1[a-b]|-bvl2|-bvops2|-bvl2[a-b]|\
+        -bvl3|-bvops3|-bvl3[a-b]|-bvl4|-bvops4|-bvl4[a-b]|-bvs|-bvshift|-bvs[0-3]|-rc|-rankc|-agg|-aggregator|\
+        -sv|-sv0|-sv1[a-c]|-csv|-csv0a0|-csv0a3|-csv0a4|-csv0a3[0-3]|-csv0b|-csv1[a-b]|-strsv|-svstr|-cc|\
+        -svf|-svf0|-svf0a|-svf0b|-svf0c1|-svf0c3|-svf0c2[0-3]|-svf1|-svf1a|-svf1b|-svf1a0|-svf1a1|-svf1a2|-svf1b0|-svf1b1|-svf1b2|-svf1c)
             return 0
             ;;
         *)
@@ -170,6 +187,11 @@ while [ "$#" -gt 0 ]; do
         --heavy-first)
             # Compatibility option: learned scheduling is always enabled.
             shift
+            ;;
+        --order-file)
+            [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
+            ORDER_FILE="$2"
+            shift 2
             ;;
         -onlystress|--only-stress)
             ONLY_STRESS=1
@@ -246,10 +268,15 @@ case "$JOBS" in
 esac
 
 if [ "${#TESTS[@]}" -eq 0 ]; then
+    # Initial longest-first guess for the untimed 64-bit partitions. Completed
+    # normal runs replace this order with measured weights from order.tsv.
     TESTS=(
-        -bvb -complexity -svfileser -svser -strsvstream -svfstream -svindex
-        -bvl0 -bvl1 -bvl2 -bvl3 -bvl4 -bvs -rc -agg
-        -sv -csv -strsv -cc -svf0 -svf1a1 -svf1b1 -svf1a0 -svf1b0 -svf1a2 -svf1b2 -svf1c
+        -csv0a30 -csv0a31 -csv0a32 -csv0a33 -svf0c20 -svf0c21 -svf0c22 -svf0c23
+        -bvl1a -bvl2a -bvl3a -bvl4a -bvl1b -bvl2b -bvl3b -bvl4b
+        -sv1b -bvb1b -bvb1c -bvs0 -csv1b -csv0a4
+        -bvb0 -bvb1a -bvser -svserquick -bvl0a -bvl0b -bvs1 -bvs2 -bvs3
+        -rc -agg -sv0 -sv1a -sv1c -csv0a0 -csv0b -csv1a -strsv -cc
+        -svf0a -svf0b -svf0c1 -svf0c3 -svf1a -svf1b
     )
 fi
 
@@ -259,7 +286,7 @@ RUN_LOG_DIR="$(cd "$RUN_LOG_DIR" && pwd)" || exit 1
 
 # One learned order per suite, independent of binary and log-directory overrides.
 # Rows contain selector and latest elapsed seconds, sorted longest first.
-ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
+[ -n "$ORDER_FILE" ] || ORDER_FILE="${SCRIPT_DIR}/logs/parallel/order.tsv"
 # Fast timings are not representative: use existing history read-only.
 ORDER_INPUT="$ORDER_FILE"
 if [ "$FAST" -eq 0 ]; then
@@ -364,7 +391,20 @@ start_test()
 
     echo "START  $test_opt -> $log_file"
 
-    worker_args=("$test_opt" -silent)
+    case "$test_opt" in
+        -svserquick)
+            worker_args=(-svfileser -svser -svindex -strsvstream -svfstream -silent)
+            ;;
+        -svf1a)
+            worker_args=(-svf1a0 -svf1a1 -svf1a2 -silent)
+            ;;
+        -svf1b)
+            worker_args=(-svf1b0 -svf1b1 -svf1b2 -svf1c -silent)
+            ;;
+        *)
+            worker_args=("$test_opt" -silent)
+            ;;
+    esac
     if [ "${#PEDANTIC_ARGS[@]}" -ne 0 ]; then
         worker_args[${#worker_args[@]}]=--pedantic
     fi
