@@ -375,6 +375,35 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual('--fast' in argv, '_debug' in name)
             self.assertEqual('--pedantic' in argv, '_debug' not in name)
 
+    def test_gcc_stress_is_fast_and_last_in_normal_cycles(self):
+        """GCC goes last in normal mode; pedantic keeps its previous behavior."""
+        self.fixture()
+        manifest = {'builds': {'stress': ['stress_debug', 'stress_release_gcc',
+                                           'stress_release', 'stress_debug_sse2', 'stress_release_avx2']}}
+        for mode in ('normal', 'pedantic'):
+            self.agent.args.pedantic = mode == 'pedantic'
+            run = self.root / ('gcc-' + mode)
+            run.mkdir()
+            with patch.object(self.agent, 'supported', return_value=True), \
+                 patch.object(self.agent, 'command', return_value='') as command, \
+                 patch.object(self.agent, 'sound') as sound, \
+                 patch.object(self.agent, 'update_waiting', return_value=False):
+                self.assertTrue(self.agent.test_stress_stage(run, manifest))
+            calls = [(Path(c.args[1]).parent.name, c.args[0]) for c in command.call_args_list]
+            names = [name for name, _ in calls]
+            gcc = next(argv for name, argv in calls if name == 'stress_release_gcc')
+            if mode == 'normal':
+                self.assertEqual(names[-1], 'stress_release_gcc')
+                self.assertIn('--fast', gcc)
+                self.assertNotIn('--pedantic', gcc)
+                transition = next(c.kwargs['workers'] for c in sound.call_args_list
+                                  if c.args[0] == 'stress-transition' and 'release gcc stress run is next' in c.kwargs['workers'])
+                self.assertIn('next run is fast mode', transition)
+            else:
+                self.assertIn('--pedantic', gcc)
+                self.assertNotIn('--fast', gcc)
+                self.assertLess(names.index('stress_release_gcc'), names.index('stress_debug'))
+
     def test_stress_transition_announces_each_success_twice(self):
         """Transitions name actual consecutive runners, repeat, and finish cleanly."""
         self.fixture()

@@ -2268,7 +2268,19 @@ class Agent:
         stress_names = []
         names = (self.fast_test_variants('stress', manifest['builds']['stress'])
                  if self.args.fast else manifest['builds']['stress'])
-        for name in sorted(names, key=lambda item: '_debug' in item):
+        def stress_mode(name):
+            """Choose the actual runner mode for this variant and cycle."""
+            if self.args.fast or '_debug' in name or (not self.args.pedantic and name == 'stress_release_gcc'):
+                return 'fast'
+            return 'pedantic' if self.args.pedantic else 'normal'
+
+        def stress_order(name):
+            """In normal cycles put GCC last, after all other release and debug runs."""
+            if not self.args.fast and not self.args.pedantic and name == 'stress_release_gcc':
+                return 2
+            return 1 if '_debug' in name else 0
+
+        for name in sorted(names, key=stress_order):
             if self.args.no_debug and '_debug' in name:
                 self.say('SKIP debug stress ' + name)
             elif not self.supported(name):
@@ -2277,7 +2289,7 @@ class Agent:
                 stress_names.append(name)
         for index, name in enumerate(stress_names):
             if index == 0:
-                mode = 'fast' if self.args.fast or '_debug' in name else ('pedantic' if self.args.pedantic else 'normal')
+                mode = stress_mode(name)
                 self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, self.jobs))
                 self.sound('stress-transition', workers='Conductor to Dispatch. {} stress run is starting. {} mode. {} test crews at work.'.format(spoken_stress_name(name), mode, self.jobs))
             work = run / name
@@ -2295,9 +2307,10 @@ class Agent:
                     '--jobs', str(self.jobs), '--fail-fast',
                     '--order-file', str(self.home / 'stress-order.tsv'),
                     '--stop-file', str(self.stress_stop_file)]
-            if self.args.fast or '_debug' in name:
+            mode = stress_mode(name)
+            if mode == 'fast':
                 argv.append('--fast')
-            elif self.args.pedantic:
+            elif mode == 'pedantic':
                 argv.append('--pedantic')
             self.say('STRESS ' + name + ' | ' + str(work))
             status = self.command(argv, work / 'runner.log', work, fail_fast=True,
@@ -2320,7 +2333,7 @@ class Agent:
                 if not self.args.fast and not self.args.pedantic:
                     self.sound('train-stop')
                 core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
-                mode = 'fast' if self.args.fast or '_debug' in next_name else ('pedantic' if self.args.pedantic else 'normal')
+                mode = stress_mode(next_name)
                 self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
                 message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, self.jobs)
             else:

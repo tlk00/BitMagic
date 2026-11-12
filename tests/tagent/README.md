@@ -737,3 +737,7 @@ Sam uses the optional `en_US-ryan-medium` Piper model in `LOG_DIR/piper-voices`,
 with eSpeak fallback and the existing optional download controls. Override it
 with `PIPER_FIREMAN_MODEL` or `--piper-fireman-model`. Preview with
 `./run_tagent.sh --sound-preview fireman`; the sound demo includes Sam too.
+
+In normal cycles, `stress_release_gcc` runs last, after the debug stress variants,
+and uses `--fast`. In pedantic cycles it retains pedantic mode and the existing
+release-before-debug ordering.
