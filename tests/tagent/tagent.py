@@ -250,7 +250,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -338,7 +338,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -1824,6 +1824,8 @@ class Agent:
                     voice.unlink(missing_ok=True)
             elif event == 'train-stop':
                 duration = soundtrack.render_train_stop(path, self.args.sound_volume)
+            elif event == 'station-manchuria':
+                duration = soundtrack.render_manchuria_station(path, self.args.sound_volume)
             elif event == 'train-normal-demo':
                 duration = depot.render_preview(path, self.args.sound_volume, 'train-normal', seconds=30)
             elif event in ('depot', 'train-ambient', 'train-normal-ambient'):
@@ -2356,6 +2358,7 @@ class Agent:
             if next_name:
                 if not self.args.fast and not self.args.pedantic:
                     self.sound('train-stop')
+                self.sound('station-manchuria')
                 core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
                 mode = stress_mode(next_name)
                 self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
@@ -2639,6 +2642,7 @@ class Agent:
                     sequence.append(('train-normal-demo', 1))
                 sequence.append(('compilation-depot', 'Dispatch to BitMagic. Welcome to Compilation Depot. The build crews are at work.'))
                 sequence.append(('train-stop', 1))
+                sequence.append(('station-manchuria', 1))
                 sequence.append(('fireman', 'Fireman Sam to Engineer Joe. We are pulling hard up this grade! The engine needs every pound of steam we can give her!'))
                 sequence.append(('toronto', 'Conductor to Dispatch. Arriving at Long Haul Junction. Testing continues on schedule.'))
             clips = []

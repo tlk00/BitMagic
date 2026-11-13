@@ -25,6 +25,29 @@ MORSE = dict(zip('ABCDEFGHIJKLMNOPQRSTUVWXYZ', (
 MORSE[','] = '--..--'
 
 
+def render_manchuria_station(path, volume):
+    """Scale the approved station and waltz mix from its reference volume of 0.35.
+
+    Write mono 44.1 kHz PCM to path and return its duration in seconds.
+    """
+    asset = Path(__file__).resolve().parent / 'assets' / 'station-manchuria.wav'
+    with wave.open(str(asset), 'rb') as source:
+        if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, RATE):
+            raise ValueError('Invalid Manchuria station audio format')
+        samples = array.array('h', source.readframes(source.getnframes()))
+    if sys.byteorder != 'little':
+        samples.byteswap()
+    peak = max((abs(sample) for sample in samples), default=0)
+    gain = min(volume / .35, 32767 / peak) if peak else 0
+    samples = array.array('h', (max(-32768, min(32767, round(sample * gain))) for sample in samples))
+    if sys.byteorder != 'little':
+        samples.byteswap()
+    with wave.open(str(path), 'wb') as output:
+        output.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
+        output.writeframes(samples.tobytes())
+    return len(samples) / RATE
+
+
 def render_train_stop(path, volume):
     """Render the faded locomotive stop recording at the requested volume."""
     asset = Path(__file__).resolve().parent / 'assets' / 'train-stop.wav'

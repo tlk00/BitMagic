@@ -714,6 +714,18 @@ mono and 44.1 kHz, attenuated and faded; the generated WAV is
 `assets/station-ambience.wav`. Other recorded sources and their licenses are
 listed above with their respective effects.
 
+Between consecutive stress variants, the station ambience crossfades into an
+excerpt of «On the Hills of Manchuria», followed by the conductor's transition
+announcement. It uses the normal audio queue and does not delay test jobs.
+Preview it with `./run_tagent.sh --sound-preview station-manchuria`; it is also
+included in `--sound-demo`. The mono mix is `assets/station-manchuria.wav`.
+The waltz is the 1909 recording by the orchestra of the 1st Grenadier Artillery
+Brigade under V. F. Becker, from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:On_the_Hills_of_Manchuria_-_Zonophone_-_1909.ogg).
+As checked on 2026-11-13, Commons marks the recording public domain in the US
+and applies its Russian Empire public-domain tag; the file metadata also credits
+© 2010 Russian-Records.com for the digitized source. The station source and
+license are listed above.
+
 At the start of compilation, Dispatch welcomes the train to Compilation Depot.
 After all builds succeed and the update check clears, Dispatch announces that
 the freight is cleared for testing. The arrival uses a short station ambience with the announcement after eight

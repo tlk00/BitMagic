@@ -415,6 +415,9 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('stress run is starting', messages[0])
         self.assertEqual(messages[1].count('stress run completed successfully.'), 2)
         self.assertEqual(messages[1].count('stress run is next.'), 2)
+        events = [c.args[0] for c in sound.call_args_list]
+        self.assertEqual(events.count('station-manchuria'), 1)
+        self.assertEqual(events[events.index('station-manchuria') + 1], 'stress-transition')
         self.assertIn('All stress runs are complete.', messages[-1])
         self.assertEqual(messages[-1].count('stress run completed successfully.'), 2)
 
@@ -977,6 +980,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('train-normal-demo', events)
         self.assertIn('toronto', events)
         self.assertIn('train-stop', events)
+        self.assertIn('station-manchuria', events)
         self.assertIn('depart-perf', events)
         self.assertIn('fail', events)
 
