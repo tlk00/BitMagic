@@ -61,6 +61,7 @@ Test selectors from t.cpp:
   -bvb0                 Bit-vector basic tests, part 0, plus complexity checks
   -bvb1                 Bit-vector basic tests, part 1
   -bvb1a/b/c/d          Independent bit-vector basic subgroups
+  -bvb1d0/1/2           Rank/mutation / mutation operations / block/import checks
   -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization and indexed-gather tests
   -fileser              File serialization/deserialization, including -svfileser
@@ -75,22 +76,32 @@ Test selectors from t.cpp:
   -bvl0a/b              Detailed operations / randomized stress
   -bvl0b0/1/2           Three independently seeded random-stress batches
   -bvl1a/b/c/d          OR method 2 / OR / AND method 2 / AND stress
+  -bvl1b0/1/2           Three regular OR stress trial batches
   -bvl2, -bvops2        Bit-vector logical operations, part 2
+  -bvl2a/b/c            SUB / XOR / Kleene logic groups
   -bvs,  -bvshift       Bit-vector shift/insert/erase tests
   -bvs0/1/2/3           Quarter-range shift-right stress; part 0 has other shift/insert/erase checks
+  -bvs0a/b/c/d          Four smaller portions of the first shift quarter
   -rc,   -rankc         Rank-compression tests
   -agg,  -aggregator    Aggregator tests
   -sv0                  Sparse-vector tests, part 0
   -sv1                  Sparse-vector tests, part 1
   -sv1a                 Sparse-vector tests, part 1a
+  -sv1a0/1              Range/filter / equality scan checks
+  -sv1a2a/b/c/d         Unsigned GT scan query partitions
   -sv1b                 Sparse-vector tests, part 1b
   -sv1b0/1/2/3          Signed GT scan query partitions
+  -sv1bq0/1/2/3         Runner names for rebalanced signed GT shards
   -sv1c                 Sparse-vector tests, part 1c
   -sort, --sort         Sparse-vector sorting tests
   -csv0                 Compressed sparse-vector tests, part 0
   -csv0a                Compressed sparse-vector tests, part 0a
   -csv0a0/1/2/3/4       Basic + -csv0c / range pass 0 / range pass 1 / set stress / load stress
+  -csv0a0a              RSC basic checks outside randomized mutation stress
+  -csv0a0b0/1/2/3      Four RSC randomized mutation index ranges
+  -csv0a0c0/1/2/3      Four RSC merge-boundary query partitions
   -csv0a30/31/32/33    Disjoint randomized set/null stress shards
+  -csv0a4a/b            Even / odd RSC load fixture passes
   -csv0b                Compressed sparse-vector tests, part 0b
   -csv0c                Compressed sparse-vector tests, part 0c
   -csv1                 Compressed sparse-vector tests, part 1
@@ -101,14 +112,18 @@ Test selectors from t.cpp:
   -csv1a                All compressed sparse-vector GT scan passes
   -csv1b                Compressed sparse-vector tests, part 1b
   -strsv, -svstr        String sparse-vector tests
+  -strsv0a/b            String core/serialization / scan/sort groups
+  -strsv1a/b/c/d        String stress query partitions
   -cc                   Compressed-collection tests
   -ser                  All serialization tests
   -svf                  All floating-point sparse-vector tests
   -svf0                 Floating-point sparse-vector tests, part 0
   -svf0a                Floating-point sparse-vector tests, part 0a
   -svf0b                Floating-point sparse-vector tests, part 0b
+  -svf0b0/1/2/3         Unbounded linear scanner query partitions
   -svf0c                Floating-point sparse-vector tests, part 0c
   -svf0c1               Floating-point sparse-vector scanner linear data
+  -svf0c1a/b/c/d        Linear scanner query partitions
   -svf0c2               Floating-point sparse-vector scanner random data
   -svf0c20/21/22/23    Random-data scanner query partitions
   -svf0c3               Floating-point sparse-vector scanner skewed data
@@ -119,6 +134,9 @@ Test selectors from t.cpp:
   -svf1a               Runner group for the three plain float index/gather parts
   -svf1b               Runner group for the three RSC parts and scanner
   -svserquick           Runner group for sparse-vector serialization/index/streams
+  -serquick             Runner group for file and sparse serialization checks
+  -bvlquick             Runner group for short logical-operation checks
+  -csvsetquick          Runner group for the four set/null stress shards
 
 The broader overlapping selectors -bvb/-bvbasic, -bvo/-bvops/-bvl, -sv,
 -csv/-rsc, -allsvser, -svf1, and -svf are accepted for targeted runs but are not
@@ -141,12 +159,12 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvb1[a-d]|-complexity|-bvser|-bvset|-fileser|-svfileser|-svser|-svserquick|-strsvstream|-svfstream|-svindex|\
-        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl0b[0-2]|-bvl1|-bvops1|-bvl1[a-d]|-bvl2|-bvops2|\
-        -bvs|-bvshift|-bvs[0-3]|-rc|-rankc|-agg|-aggregator|\
-        -sv|-sv0|-sv1|-sv1a|-sv1b|-sv1b[0-3]|-sv1c|-sort|--sort|\
-        -csv|-rsc|-csv0|-csv0a|-csv0a[0-4]|-csv0a3[0-3]|-csv0b|-csv0c|-csv1|-csv1a|-csv1a0|-csv1a1|-csv1a2|-csv1b|\
-        -strsv|-svstr|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0c|-svf0c1|-svf0c2|-svf0c2[0-3]|-svf0c3|-svf1|-svf1a|-svf1a0|-svf1a1|-svf1a2|-svf1b|-svf1b0|-svf1b1|-svf1b2|-svf1c)
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvb1[a-d]|-bvb1d[0-2]|-complexity|-bvser|-bvset|-fileser|-svfileser|-svser|-svserquick|-serquick|-strsvstream|-svfstream|-svindex|\
+        -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl0b[0-2]|-bvl1|-bvops1|-bvl1[a-d]|-bvl1b[0-2]|-bvl2|-bvops2|-bvl2[a-c]|-bvlquick|\
+        -bvs|-bvshift|-bvs[0-3]|-bvs0[a-d]|-rc|-rankc|-agg|-aggregator|\
+        -sv|-sv0|-sv1|-sv1a|-sv1a[0-1]|-sv1a2[a-d]|-sv1b|-sv1b[0-3]|-sv1bq[0-3]|-sv1c|-sort|--sort|\
+        -csv|-rsc|-csv0|-csv0a|-csv0a[0-4]|-csv0a0a|-csv0a0b[0-3]|-csv0a0c[0-3]|-csv0a3[0-3]|-csvsetquick|-csv0a4[a-b]|-csv0b|-csv0c|-csv1|-csv1a|-csv1a0|-csv1a1|-csv1a2|-csv1b|\
+        -strsv|-svstr|-strsv0[a-b]|-strsv1[a-d]|-cc|-ser|-allsvser|-svf|-svf0|-svf0a|-svf0b|-svf0b[0-3]|-svf0c|-svf0c1|-svf0c1[a-d]|-svf0c2|-svf0c2[0-3]|-svf0c3|-svf1|-svf1a|-svf1a0|-svf1a1|-svf1a2|-svf1b|-svf1b0|-svf1b1|-svf1b2|-svf1c)
             return 0
             ;;
         *)
@@ -276,13 +294,20 @@ esac
 if [ "${#TESTS[@]}" -eq 0 ]; then
     TESTS=(
         -ll -s
-        -bvb0 -bvb1a -bvb1b -bvb1c -bvb1d -bvser -fileser -svserquick
-        -bvl0a -bvl0b0 -bvl0b1 -bvl0b2 -bvl1a -bvl1b -bvl1c -bvl1d -bvl2
-        -bvs0 -bvs1 -bvs2 -bvs3 -rc -agg
-        -sv0 -sv1a -sv1b0 -sv1b1 -sv1b2 -sv1b3 -sv1c -sort
-        -csv0a0 -csv0a1 -csv0a2 -csv0a30 -csv0a31 -csv0a32 -csv0a33 -csv0a4 -csv0b -csv1a -csv1b
-        -strsv -cc -ser
-        -svf0a -svf0c1 -svf0c20 -svf0c21 -svf0c22 -svf0c23 -svf0c3 -svf0b -svf1a -svf1b
+        -bvb0 -bvb1a -bvb1b -bvb1c -bvb1d0 -bvb1d1 -bvb1d2 -bvser -serquick
+        -bvlquick -bvl0b0 -bvl0b1 -bvl0b2 -bvl1b0 -bvl1b1 -bvl1b2 -bvl1d
+        -bvl2a -bvl2b -bvl2c
+        -bvs0a -bvs0b -bvs0c -bvs0d -bvs1 -bvs2 -bvs3 -rc -agg
+        -sv0 -sv1a0 -sv1a1 -sv1a2a -sv1a2b -sv1a2c -sv1a2d
+        # New names keep the old skewed -sv1b0..3 timings out of scheduling.
+        -sv1bq0 -sv1bq1 -sv1bq2 -sv1bq3 -sv1c -sort
+        -csv0a0a -csv0a0b0 -csv0a0b1 -csv0a0b2 -csv0a0b3 -csv0a1 -csv0a2
+        -csv0a0c0 -csv0a0c1 -csv0a0c2 -csv0a0c3
+        -csvsetquick -csv0a4a -csv0a4b -csv0b -csv1a -csv1b
+        -strsv0a -strsv0b -strsv1a -strsv1b -strsv1c -strsv1d -cc
+        -svf0a -svf0c1a -svf0c1b -svf0c1c -svf0c1d
+        -svf0c20 -svf0c21 -svf0c22 -svf0c23 -svf0c3
+        -svf0b0 -svf0b1 -svf0b2 -svf0b3 -svf1a -svf1b
     )
 fi
 
@@ -429,6 +454,18 @@ start_test()
     echo "START  $test_opt -> $log_file"
 
     case "$test_opt" in
+        -serquick)
+            worker_args=(-fileser -svser -svindex -strsvstream -svfstream -silent)
+            ;;
+        -bvlquick)
+            worker_args=(-bvl0a -bvl1a -bvl1c -silent)
+            ;;
+        -csvsetquick)
+            worker_args=(-csv0a30 -csv0a31 -csv0a32 -csv0a33 -silent)
+            ;;
+        -sv1bq[0-3])
+            worker_args=("-sv1b${test_opt#-sv1bq}" -silent)
+            ;;
         -svf1a)
             worker_args=(-svf1a0 -svf1a1 -svf1a2 -silent)
             ;;

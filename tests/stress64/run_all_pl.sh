@@ -84,16 +84,21 @@ Test selectors verified against t64.cpp:
   -agg,  -aggregator    Aggregator tests
   -sv                   Sparse-vector tests
   -sv0, -sv1a/b/c       Core / range scan / signed scan / sorting groups
+  -sv1b0/1/2/3         Four signed scanner query partitions
   -csv                  Compressed sparse-vector tests
   -csv0a0               Compressed sparse-vector basic checks
   -csv0a3, -csv0a4      Full set/null stress / load stress
+  -csv0a4a/b            Even / odd RSC load fixtures
   -csv0a30/31/32/33    Disjoint randomized set/null stress shards
   -csv0b, -csv1a/b      Signed and gather / GT scan / serial and scan groups
   -strsv, -svstr        String sparse-vector tests
+  -strsv0a/b            String core checks / string stress
   -cc                   Compressed-collection tests
   -svf                  Floating-point sparse-vector tests
   -svf0                 Float basic/scanner tests
   -svf0a/b              Float basic / unbounded scanner tests
+  -svf0b0/1/2/3         Four unbounded scanner query partitions
+  -svf0c1a/b/c/d        Four linear scanner query partitions
   -svf0c1, -svf0c3     Linear / skewed float scanner tests
   -svf0c20/21/22/23    Random float scanner query partitions
   -svf1                 Float/RSC index/gather/scanner aggregate
@@ -128,8 +133,8 @@ is_valid_test()
         -fileser|-svfileser|-svser|-svserquick|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl1|-bvops1|-bvl1[a-b]|-bvl2|-bvops2|-bvl2[a-b]|\
         -bvl3|-bvops3|-bvl3[a-b]|-bvl4|-bvops4|-bvl4[a-b]|-bvs|-bvshift|-bvs[0-3]|-rc|-rankc|-agg|-aggregator|\
-        -sv|-sv0|-sv1[a-c]|-csv|-csv0a0|-csv0a3|-csv0a4|-csv0a3[0-3]|-csv0b|-csv1[a-b]|-strsv|-svstr|-cc|\
-        -svf|-svf0|-svf0a|-svf0b|-svf0c1|-svf0c3|-svf0c2[0-3]|-svf1|-svf1a|-svf1b|-svf1a0|-svf1a1|-svf1a2|-svf1b0|-svf1b1|-svf1b2|-svf1c)
+        -sv|-sv0|-sv1[a-c]|-sv1b[0-3]|-csv|-csv0a0|-csv0a3|-csv0a4|-csv0a4[a-b]|-csv0a3[0-3]|-csv0b|-csv1[a-b]|-strsv|-svstr|-strsv0[a-b]|-cc|\
+        -svf|-svf0|-svf0a|-svf0b|-svf0b[0-3]|-svf0c1|-svf0c1[a-d]|-svf0c3|-svf0c2[0-3]|-svf1|-svf1a|-svf1b|-svf1a0|-svf1a1|-svf1a2|-svf1b0|-svf1b1|-svf1b2|-svf1c)
             return 0
             ;;
         *)
@@ -273,10 +278,10 @@ if [ "${#TESTS[@]}" -eq 0 ]; then
     TESTS=(
         -csv0a30 -csv0a31 -csv0a32 -csv0a33 -svf0c20 -svf0c21 -svf0c22 -svf0c23
         -bvl1a -bvl2a -bvl3a -bvl4a -bvl1b -bvl2b -bvl3b -bvl4b
-        -sv1b -bvb1b -bvb1c -bvs0 -csv1b -csv0a4
+        -sv1b0 -sv1b1 -sv1b2 -sv1b3 -bvb1b -bvb1c -bvs0 -csv1b -csv0a4a -csv0a4b
         -bvb0 -bvb1a -bvser -svserquick -bvl0a -bvl0b -bvs1 -bvs2 -bvs3
-        -rc -agg -sv0 -sv1a -sv1c -csv0a0 -csv0b -csv1a -strsv -cc
-        -svf0a -svf0b -svf0c1 -svf0c3 -svf1a -svf1b
+        -rc -agg -sv0 -sv1a -sv1c -csv0a0 -csv0b -csv1a -strsv0a -strsv0b -cc
+        -svf0a -svf0b0 -svf0b1 -svf0b2 -svf0b3 -svf0c1a -svf0c1b -svf0c1c -svf0c1d -svf0c3 -svf1a -svf1b
     )
 fi
 

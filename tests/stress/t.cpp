@@ -5940,15 +5940,19 @@ void GenerateShiftTestCollection(std::vector<bvect>* target,
 
 
 
-/** Exercise shift behavior over one quarter of the 32-bit right-shift range.
-    Part zero also runs the other shift checks. Aggregate callers use one part.
+/** Exercise selected 32-bit right- and left-shift ranges.
+    Right part zero also runs the other shift checks. Aggregate callers use one part.
     @param right_part Zero-based range partition.
     @param right_parts Number of partitions.
+    @param left_part Zero-based left-shift range partition.
+    @param left_parts Number of left-shift partitions.
 */
 static
-void BvectorShiftTest(unsigned right_part = 0, unsigned right_parts = 1)
+void BvectorShiftTest(unsigned right_part = 0, unsigned right_parts = 1,
+                      unsigned left_part = 0, unsigned left_parts = 1)
 {
     BM_ASSERT(right_parts && right_part < right_parts);
+    BM_ASSERT(left_parts && left_part < left_parts);
     cout << "---------------------------- Bvector SHIFT test" << endl;
 
     if (right_part == 0)
@@ -6150,9 +6154,26 @@ void BvectorShiftTest(unsigned right_part = 0, unsigned right_parts = 1)
     assert(idx == 4278190080-2);
     }
 
+    } // if right_part
+
+    if (right_part == 0 || left_parts > 1)
+    {
     {
     std::cout << "\nShift-L stress (1 bit shift)..\n" << endl;;
-    unsigned start = bm::id_max-1;
+    const unsigned left_max = bm::id_max - 1;
+    const unsigned last_offset = left_max - 1;
+    const std::uint64_t first_offset =
+        std::uint64_t(left_max) * left_part / left_parts;
+    const std::uint64_t end_offset =
+        std::uint64_t(left_max) * (left_part + 1) / left_parts;
+    unsigned offset = unsigned(first_offset);
+    if (is_fast && left_parts > 1)
+    {
+        offset = 0;
+        while (offset < first_offset)
+            offset = NextStressTestValue(offset, last_offset, 16);
+    }
+    unsigned start = left_max - offset;
     bvect bv;
     bv.set(start);
 
@@ -6166,9 +6187,10 @@ void BvectorShiftTest(unsigned right_part = 0, unsigned right_parts = 1)
     
     s = std::chrono::steady_clock::now();
 
-    for( ; start;
-         start = bm::id_max - 1 - NextStressTestValue(bm::id_max - 1 - start, unsigned(bm::id_max - 2), 16))
+    for (; offset < end_offset;
+         offset = NextStressTestValue(offset, last_offset, 16))
     {
+        start = left_max - offset;
         if (is_fast)
         {
             bv.clear();
@@ -6218,7 +6240,7 @@ void BvectorShiftTest(unsigned right_part = 0, unsigned right_parts = 1)
     cout << "ok.\n";
     }
 
-    } // if right_part
+    } // if left-shift partition
 
     {
     std::cout << "\nShift-R stress (1 bit shift)..\n" << endl;
@@ -12278,12 +12300,24 @@ void TestAND_OR(bm::random_subset<bvect>& rsub,
 }
 
 
+/** Run randomized bit-vector operations over a selected trial batch.
+    @param repetitions Normal trial count.
+    @param set_operation Fixed operation, or -1 for random selection.
+    @param detailed Enable detailed checks.
+    @param method Fixed vector generator, or -1 for selection.
+    @param bv1 Optional borrowed first fixture.
+    @param bv2 Optional borrowed second fixture.
+    @param fast_count Fast-mode trial count.
+    @param trial_offset Original trial index for strategy and level cycles.
+*/
 static
 void StressTest(unsigned repetitions, int set_operation, bool detailed,
-                int method = -1, const bvect* bv1=0, const bvect* bv2 = 0)
+                int method = -1, const bvect* bv1=0, const bvect* bv2 = 0,
+                unsigned fast_count = 8, unsigned trial_offset = 0)
 {
     // Retain both allocation strategies selected by trial parity.
-    repetitions = StressRepetitions(repetitions, 8);
+    BM_ASSERT(repetitions && fast_count);
+    repetitions = StressRepetitions(repetitions, fast_count);
 
 
    unsigned RatioSum = 0;
@@ -12309,6 +12343,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
    unsigned i;
    for (i = 0; i < repetitions; ++i)
    {
+        const unsigned trial_index = i + trial_offset;
         if (!is_silent)
         {
             cout << endl << " - - - - - - - - - - - - STRESS STEP " << i; 
@@ -12357,8 +12392,8 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         bvect*        bvect_full1= new bvect();
         bvect*        bvect_full2= new bvect();
 
-        bvect_full1->set_new_blocks_strat(i&1 ? bm::BM_GAP : bm::BM_BIT);
-        bvect_full2->set_new_blocks_strat(i&1 ? bm::BM_GAP : bm::BM_BIT);
+        bvect_full1->set_new_blocks_strat(trial_index & 1u ? bm::BM_GAP : bm::BM_BIT);
+        bvect_full2->set_new_blocks_strat(trial_index & 1u ? bm::BM_GAP : bm::BM_BIT);
 
         int opt = rand() % 2;
 
@@ -16856,7 +16891,7 @@ void StressTest(unsigned repetitions, int set_operation, bool detailed,
         // Serialization
        
         bm::serializer<bvect> bv_ser;
-        bv_ser.set_compression_level(i % (bm::set_compression_max + 1));
+        bv_ser.set_compression_level(trial_index % (bm::set_compression_max + 1));
         bv_ser.gap_length_serialization(false);
         bv_ser.byte_order_serialization(false);
        
@@ -37877,12 +37912,19 @@ void TestSparseVectorScan()
 }
 
 
+/** Check unsigned GT scans on small fixtures and one large-query partition.
+    @param query_part Zero-based partition of large scan queries.
+    @param query_parts Number of large-query partitions.
+*/
 static
-void TestSparseVectorScanGT()
+void TestSparseVectorScanGT(unsigned query_part = 0,
+                            unsigned query_parts = 1)
 {
+    BM_ASSERT(query_parts && query_part < query_parts);
     cout << " --------------- Test sparse_vector<> scan algo TestSparseVectorScanGT()" << endl;
 
     bm::sparse_vector_scanner<sparse_vector_u32> scanner;
+    if (query_part == 0)
     {
         sparse_vector_u32 sv(bm::use_null);
         sv.push_back(1);
@@ -37946,6 +37988,7 @@ void TestSparseVectorScanGT()
     }
 
 
+    if (query_part == 0)
     {
         sparse_vector_u32 sv(bm::use_null);
         sv.push_back_null(); // 0
@@ -38001,6 +38044,8 @@ void TestSparseVectorScanGT()
         for (bvect::size_type j = 0; j < sv_size;
              j = NextStressTestValue(j, bvect::size_type(sv_size - 1), 16, 1))
         {
+            if ((j / 16u) % query_parts != query_part)
+                continue;
             {
                 bvect bv_res, bv_control;
                 scanner.find_gt_horizontal(sv, j, bv_res);
@@ -38243,7 +38288,9 @@ void TestSignedSparseVectorScanGT(unsigned query_part = 0,
              i = NextStressTestValue(i, unsigned(2 * sv_size - 1), 16, 1),
              j = int(i) - sv_size)
         {
-            if (i % query_parts != query_part)
+            // Keep each 16-value block together so every shard receives the
+            // expensive CheckGTSearch() probe at its block boundary.
+            if ((i / 16u) % query_parts != query_part)
             {
                 continue;
             }
@@ -42406,9 +42453,15 @@ void EraseSVCollection(SV& sv)
 }
 
 
+/** Exercise string sparse-vector comparisons and scans on one query shard.
+    @param query_part Zero-based query partition.
+    @param query_parts Number of independent query partitions.
+*/
 static
-void StressTestStrSparseVector()
+void StressTestStrSparseVector(unsigned query_part = 0,
+                               unsigned query_parts = 1)
 {
+   BM_ASSERT(query_parts && query_part < query_parts);
    cout << "---------------------------- Bit-plane STR sparse vector stress test" << endl;
 
    const unsigned max_coll = 3000000;
@@ -42528,9 +42581,12 @@ void StressTestStrSparseVector()
     if (test_size > 20000)
         test_size = 20000;
 
+    unsigned prefix_query = 0;
     for (unsigned i = 0; i < test_size;
-         i = NextStressTestValue(i, test_size - 1, 8, 1))
+         ++prefix_query, i = NextStressTestValue(i, test_size - 1, 8, 1))
     {
+        if (prefix_query % query_parts != query_part)
+            continue;
         str_sv_sorted.get(i, &str1[0], str_size);
         for (unsigned j = 0; j < test_size;
              j = NextStressTestValue(j, test_size - 1, 8, 1))
@@ -42597,9 +42653,13 @@ void StressTestStrSparseVector()
         scanner64.bind(str_sv_remap, true); // bind sorted vector
 
 
+        unsigned search_query = 0;
         for (unsigned i = 0; i < unsigned(str_coll_sorted.size());
+             ++search_query,
              i = NextStressTestValue(i, unsigned(str_coll_sorted.size() - 1), 16, 1))
         {
+            if (search_query % query_parts != query_part)
+                continue;
             const string& s = str_coll_sorted[i];
             unsigned pos1, pos2, pos3, pos4;
 
@@ -47323,8 +47383,11 @@ static const unsigned csv_basic_count_pass0 = 2u;
 static const unsigned csv_basic_count_pass1 = 4u;
 static const unsigned csv_basic_set_stress = 8u;
 static const unsigned csv_basic_load_stress = 16u;
+static const unsigned csv_basic_mutation_stress = 32u;
+static const unsigned csv_basic_merge_stress = 64u;
 static const unsigned csv_basic_all = csv_basic_misc | csv_basic_count_pass0 |
-    csv_basic_count_pass1 | csv_basic_set_stress | csv_basic_load_stress;
+    csv_basic_count_pass1 | csv_basic_set_stress | csv_basic_load_stress |
+    csv_basic_mutation_stress | csv_basic_merge_stress;
 
 /** Check range counts before and after index synchronization.
     @param first_pass First pass to run (0: unsynchronized, 1: synchronized).
@@ -47493,14 +47556,206 @@ void TestCompressSparseVectorSetStress(unsigned part = 0, unsigned parts = 1)
 
 }
 
-/** Exercise RSC load, optimize, decode, copy, and move stress cases. */
+/** Exercise independent RSC merge boundaries on one query shard.
+    @param part Zero-based boundary partition.
+    @param parts Number of independent boundary partitions.
+*/
 static
-void TestCompressSparseVectorLoadStress()
+void TestCompressSparseVectorMergeStress(unsigned part = 0,
+                                         unsigned parts = 1)
 {
+    BM_ASSERT(parts && part < parts);
+    {
+        rsc_sparse_vector_u32::bvector_type bv;
+        unsigned to = 65536*2;
+        bv.set_range(1, to);
+
+        unsigned boundary_index = 0;
+        for (unsigned i = 1; i < to;
+             ++boundary_index, i = NextStressTestValue(i, to - 1, 8, 1))
+        {
+            if (boundary_index % parts != part)
+                continue;
+            rsc_sparse_vector_u32 csv1(bv);
+            rsc_sparse_vector_u32 csv2(bv);
+            csv1.sync(); csv2.sync();
+
+            for (unsigned i0 = 1; i0 < i; ++i0)
+            {
+                csv1.set(i0, i0);
+                csv1.inc(i0, i0);
+            }
+            for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
+            {
+                csv2.set(i1, i1);
+                csv2.inc(i1, i1);
+            }
+            csv1.merge_not_null(csv2);
+            assert(csv1.in_sync());
+
+            for (unsigned i0 = 1; i0 < i; ++i0)
+            {
+                unsigned v = csv1.get(i0);
+                assert(csv1.get(i0) == i0*2);
+
+                unsigned N_bits = (unsigned) rand()%31;
+                if (N_bits)
+                {
+                    auto u = csv1.get_unsigned_bits(i0, N_bits);
+                    unsigned mask1 = ~0u >> (32 - N_bits);
+                    auto v_masked = v & mask1;
+                    assert(u == v_masked);
+                }
+
+            }
+            for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
+            {
+                assert(csv1.get(i1) == i1*2);
+            }
+            assert(csv1.get(i) == 0);
+
+            if (!is_silent)
+                if (i % 100 == 0)
+                    cout << "\r" << i << " / " << to << flush;
+
+        } // for
+        cout << endl;
+    }
+}
+
+/** Compare synchronized and unsynchronized RSC mutations on one index range.
+    @param part Zero-based index-range partition.
+    @param parts Number of independent index-range partitions.
+*/
+static
+void TestCompressSparseVectorMutationStress(unsigned part = 0,
+                                            unsigned parts = 1)
+{
+    BM_ASSERT(parts && part < parts);
+    cout << "random assignment in sync() mode.... [stress]" << endl;
+    {
+        bvect bv;
+        generate_bvector(bv);
+        if (parts > 1)
+        {
+            bvect::size_type first, last;
+            bv.find_range(first, last);
+            const std::uint64_t span = std::uint64_t(last) - first + 1;
+            const unsigned part_first = first + unsigned(span * part / parts);
+            const unsigned part_last = first + unsigned(span * (part + 1) / parts) - 1;
+            bv.keep_range(part_first, part_last);
+            BM_ASSERT(bv.any());
+        }
+        bv.optimize();
+
+        bvect::size_type first, last, mid;
+        bv.find_range(first, last);
+        mid = first + ((last - first) / 4);
+
+        rsc_sparse_vector_u32 csv1;
+        rsc_sparse_vector_u32 csv2(bv);
+        if (is_fast)
+        {
+            // Preserve every populated index and final value. Sample expensive
+            // rank-based mutations after constructing the full expected fixture.
+            for (auto en = bv.first(); en.valid(); ++en)
+            {
+                const auto idx = *en;
+                csv1.push_back(idx, (idx & 0xFF) + 1);
+            } // for en
+            csv2 = csv1;
+            csv1.unsync();
+            csv2.sync();
+            for (unsigned pass = 0; pass < 2; ++pass)
+            {
+                const auto begin = pass ? first : mid;
+                const auto end = pass ? mid - 1 : last;
+                for (auto en = bv.get_enumerator(begin); en.valid() && *en <= end;)
+                {
+                    const auto idx = *en;
+                    csv1.set(idx, idx & 0xFF);
+                    csv1.inc(idx);
+                    csv2.set(idx, idx & 0xFF);
+                    csv2.inc(idx);
+                    assert(!csv1.in_sync() && csv2.in_sync());
+                    en.go_to(NextStressTestValue(idx, end, 16, 1));
+                } // for en
+                csv1.optimize();
+                csv2.optimize();
+            } // for pass
+        }
+        else
+        {
+            {
+                bvect::enumerator en = bv.get_enumerator(mid);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    csv1.set(idx, idx & 0xFF);
+                    csv1.inc(idx);
+
+                }
+                csv1.optimize();
+                en.go_to(0);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    if (idx >= mid)
+                        break;
+                    csv1.set(idx, idx & 0xFF);
+                    csv1.inc(idx);
+                }
+                csv1.optimize();
+            }
+            // sync mode
+            {
+                csv2.sync();
+                bvect::enumerator en = bv.get_enumerator(mid);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    csv2.set(idx, idx & 0xFF);
+                    csv2.inc(idx);
+                }
+                assert(csv2.in_sync());
+                csv2.optimize();
+
+                en.go_to(0);
+                for (;en.valid(); ++en)
+                {
+                    auto idx = *en;
+                    if (idx >= mid)
+                        break;
+                    csv2.set(idx, idx & 0xFF);
+                    csv2.inc(idx);
+                }
+                assert(csv2.in_sync());
+                csv2.optimize();
+
+            }
+        }
+        bool eq = csv1.equal(csv2);
+        if (!eq)
+        {
+            cerr << "Error: rsc_sparse_vector() add values check failed" << endl;
+            assert(0); exit(1);
+        }
+    }
+}
+
+/** Exercise RSC load, optimize, decode, copy, and move stress cases.
+    @param pass_part Zero-based interleaved fixture partition.
+    @param pass_parts Number of fixture partitions.
+*/
+static
+void TestCompressSparseVectorLoadStress(unsigned pass_part = 0,
+                                        unsigned pass_parts = 1)
+{
+    BM_ASSERT(pass_parts && pass_part < pass_parts);
     {
     cout << "------ Compressed load() stress test" << endl;
     BM_DECLARE_TEMP_BLOCK(tb)
-    for (unsigned i = 0; i < 10; ++i)
+    for (unsigned i = pass_part; i < 10; i += pass_parts)
     {
         cout << "\nPass " << i << endl;
 
@@ -48283,59 +48538,13 @@ void TestCompressSparseVector(unsigned test_mask = csv_basic_all)
         assert(csv1.get(bm::id_max-1) == 255);
     }
 
+    } // if csv_basic_misc
+    if (test_mask & csv_basic_merge_stress)
     {
-        rsc_sparse_vector_u32::bvector_type bv;
-        unsigned to = 65536*2;
-        bv.set_range(1, to);
-
-        for (unsigned i = 1; i < to;
-             i = NextStressTestValue(i, to - 1, 8, 1))
-        {
-            rsc_sparse_vector_u32 csv1(bv);
-            rsc_sparse_vector_u32 csv2(bv);
-            csv1.sync(); csv2.sync();
-
-            for (unsigned i0 = 1; i0 < i; ++i0)
-            {
-                csv1.set(i0, i0);
-                csv1.inc(i0, i0);
-            }
-            for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
-            {
-                csv2.set(i1, i1);
-                csv2.inc(i1, i1);
-            }
-            csv1.merge_not_null(csv2);
-            assert(csv1.in_sync());
-
-            for (unsigned i0 = 1; i0 < i; ++i0)
-            {
-                unsigned v = csv1.get(i0);
-                assert(csv1.get(i0) == i0*2);
-
-                unsigned N_bits = (unsigned) rand()%31;
-                if (N_bits)
-                {
-                    auto u = csv1.get_unsigned_bits(i0, N_bits);
-                    unsigned mask1 = ~0u >> (32 - N_bits);
-                    auto v_masked = v & mask1;
-                    assert(u == v_masked);
-                }
-
-            }
-            for (unsigned i1 = i+1; i1 < 65536*2; ++i1)
-            {
-                assert(csv1.get(i1) == i1*2);
-            }
-            assert(csv1.get(i) == 0);
-
-            if (!is_silent)
-                if (i % 100 == 0)
-                    cout << "\r" << i << " / " << to << flush;
-
-        } // for
-        cout << endl;
+        TestCompressSparseVectorMergeStress();
     }
+    if (test_mask & csv_basic_misc)
+    {
 
     cout << "random assignmnet in sync() mode...." << endl;
     {
@@ -48396,107 +48605,13 @@ void TestCompressSparseVector(unsigned test_mask = csv_basic_all)
         }
     }
 
-    cout << "random assignment in sync() mode.... [stress]" << endl;
+    } // if csv_basic_misc
+    if (test_mask & csv_basic_mutation_stress)
     {
-        bvect bv;
-        generate_bvector(bv);
-        bv.optimize();
-
-        bvect::size_type first, last, mid;
-        bv.find_range(first, last);
-        mid = first + ((last - first) / 4);
-
-        rsc_sparse_vector_u32 csv1;
-        rsc_sparse_vector_u32 csv2(bv);
-        if (is_fast)
-        {
-            // Preserve every populated index and final value. Sample expensive
-            // rank-based mutations after constructing the full expected fixture.
-            for (auto en = bv.first(); en.valid(); ++en)
-            {
-                const auto idx = *en;
-                csv1.push_back(idx, (idx & 0xFF) + 1);
-            } // for en
-            csv2 = csv1;
-            csv1.unsync();
-            csv2.sync();
-            for (unsigned pass = 0; pass < 2; ++pass)
-            {
-                const auto begin = pass ? first : mid;
-                const auto end = pass ? mid - 1 : last;
-                for (auto en = bv.get_enumerator(begin); en.valid() && *en <= end;)
-                {
-                    const auto idx = *en;
-                    csv1.set(idx, idx & 0xFF);
-                    csv1.inc(idx);
-                    csv2.set(idx, idx & 0xFF);
-                    csv2.inc(idx);
-                    assert(!csv1.in_sync() && csv2.in_sync());
-                    en.go_to(NextStressTestValue(idx, end, 16, 1));
-                } // for en
-                csv1.optimize();
-                csv2.optimize();
-            } // for pass
-        }
-        else
-        {
-            {
-                bvect::enumerator en = bv.get_enumerator(mid);
-                for (;en.valid(); ++en)
-                {
-                    auto idx = *en;
-                    csv1.set(idx, idx & 0xFF);
-                    csv1.inc(idx);
-
-                }
-                csv1.optimize();
-                en.go_to(0);
-                for (;en.valid(); ++en)
-                {
-                    auto idx = *en;
-                    if (idx >= mid)
-                        break;
-                    csv1.set(idx, idx & 0xFF);
-                    csv1.inc(idx);
-                }
-                csv1.optimize();
-            }
-            // sync mode
-            {
-                csv2.sync();
-                bvect::enumerator en = bv.get_enumerator(mid);
-                for (;en.valid(); ++en)
-                {
-                    auto idx = *en;
-                    csv2.set(idx, idx & 0xFF);
-                    csv2.inc(idx);
-                }
-                assert(csv2.in_sync());
-                csv2.optimize();
-
-                en.go_to(0);
-                for (;en.valid(); ++en)
-                {
-                    auto idx = *en;
-                    if (idx >= mid)
-                        break;
-                    csv2.set(idx, idx & 0xFF);
-                    csv2.inc(idx);
-                }
-                assert(csv2.in_sync());
-                csv2.optimize();
-
-            }
-        }
-        bool eq = csv1.equal(csv2);
-        if (!eq)
-        {
-            cerr << "Error: rsc_sparse_vector() add values check failed" << endl;
-            assert(0); exit(1);
-        }
+        TestCompressSparseVectorMutationStress();
     }
-
-    
+    if (test_mask & csv_basic_misc)
+    {
 
         {
         rsc_sparse_vector_u32 csv1;
@@ -49967,25 +50082,32 @@ void show_help()
         << "-support (or -s)      - support containers " << endl
         << "-bvbasic (or -bvb)    - bit-vector basic " << endl
         << "-bvb1a..d             - independent bit-vector basic part 1 groups" << endl
+        << "-bvb1d0..2            - smaller mutation/block groups" << endl
         << "-bvser (-bvset)       - bit-vector serialization " << endl
         << "-bvops (-bvo, -bvl)   - bit-vector logical operations" << endl
         << "-bvl0a..b,-bvl1a..d   - split logical-operation stress groups" << endl
         << "-bvl0b0..2            - independent random-operation stress batches" << endl
+        << "-bvl1b0..2,-bvl2a..c  - OR trial batches / SUB, XOR, Kleene groups" << endl
         << "-bvshift (or -bvs)    - bit-vector shifts " << endl
         << "-bvs0..3              - quarter-range right-shift stress groups" << endl
+        << "-bvs0a..d             - left-shift and first-quarter subranges" << endl
         << "-rankc (or -rc)       - rank-compress " << endl
         << "-neon                 - native AArch64 kernel tests" << endl
         << "-agg (or -aggregator) - bm::aggregator " << endl
         << "-sv                   - test sparse vectors" << endl
         << "-sv1a, -sv1b, -sv1c   - sparse-vector tests, part 1 split groups" << endl
         << "-sv1b0..3             - signed GT scan query partitions" << endl
+        << "-sv1a0/1,-sv1a2a..d   - range/filter, equality, unsigned GT groups" << endl
         << "-csv                  - test compressed sparse vectors" << endl
         << "-csv0a, -csv0b, -csv0c- compressed sparse-vector tests, part 0 split groups" << endl
         << "-csv0a0..4            - basic/range/set/load subgroups" << endl
         << "-csv0a30..33          - disjoint randomized set/null stress shards" << endl
+        << "-csv0a0a,-csv0a0b0..3,-csv0a0c0..3 - core, mutation, merge groups" << endl
+        << "-csv0a4a/b            - RSC load fixture batches" << endl
         << "-csv1a, -csv1b        - compressed sparse-vector tests, part 1 split groups" << endl
         << "-csv1a0,-csv1a1,-csv1a2 - compressed sparse-vector GT scan split groups" << endl
-        << "-strsv                - test sparse vectors" << endl
+        << "-strsv                - test string sparse vectors" << endl
+        << "-strsv0a/b,-strsv1a..d - string core and stress query groups" << endl
         << "-cc                   - test compresses collections" << endl
         << "-xorser               - one-block XOR serialization size comparisons" << endl
         << "-complexity           - vector/XOR complexity, all-pairs interval oracle" << endl
@@ -50001,6 +50123,7 @@ void show_help()
         << "-svf0a, -svf0b, -svf0c- floating-point sparse-vector split groups" << endl
         << "-svf0c1,-svf0c2,-svf0c3 - SVF scanner linear/random/skewed groups" << endl
         << "-svf0c20..23         - random scanner query partitions" << endl
+        << "-svf0b0..3,-svf0c1a..d - unbounded and linear query partitions" << endl
         << endl
         << "-silent               -run without excessive progress report prints"
         << endl;
@@ -50017,6 +50140,7 @@ bool         is_bvbasic = false;
 bool         is_bvb0 = false;
 bool         is_bvb1 = false;
 bool         is_bvb1_part[4] = {};
+bool         is_bvb1d_part[3] = {};
 bool         is_bvser = false;
 bool         is_bvops = false;
 bool         is_bvops0 = false;
@@ -50025,15 +50149,20 @@ bool         is_bvops2 = false;
 bool         is_bvops0_part[2] = {};
 bool         is_bvops0_random_part[3] = {};
 bool         is_bvops1_part[4] = {};
+bool         is_bvops1_regular_part[3] = {};
+bool         is_bvops2_part[3] = {};
 
 bool         is_bvshift = false;
 bool         is_bvshift_part[4] = {};
+bool         is_bvshift_first_part[4] = {};
 bool         is_rankc = false;
 bool         is_agg = false;
 bool         is_sv = false;
 bool         is_sv0 = false;
 bool         is_sv1 = false;
 bool         is_sv1a = false;
+bool         is_sv1a_core_part[2] = {};
+bool         is_sv1a_gt_part[4] = {};
 bool         is_sv1b = false;
 bool         is_sv1b_part[4] = {};
 bool         is_sv1c = false;
@@ -50042,7 +50171,11 @@ bool         is_csv0 = false;
 bool         is_csv1 = false;
 bool         is_csv0a = false;
 bool         is_csv0a_part[5] = {};
+bool         is_csv0a_misc_core = false;
+bool         is_csv0a_mutation_part[4] = {};
+bool         is_csv0a_merge_part[4] = {};
 bool         is_csv0a_set_part[4] = {};
+bool         is_csv0a_load_part[2] = {};
 bool         is_csv0b = false;
 bool         is_csv0c = false;
 bool         is_csv1a = false;
@@ -50052,6 +50185,8 @@ bool         is_csv1a2 = false;
 bool         is_csv1b = false;
 
 bool         is_str_sv = false;
+bool         is_str_sv_core_part[2] = {};
+bool         is_str_sv_stress_part[4] = {};
 bool         is_c_coll = false;
 bool         is_ser = false;
 bool         is_xor_ser = false;
@@ -50073,8 +50208,10 @@ bool         is_svf1b[3] = {};
 bool         is_svf1c = false;
 bool         is_svf0a = false;
 bool         is_svf0b = false;
+bool         is_svf0b_part[4] = {};
 bool         is_svf0c = false;
 bool         is_svf0c1 = false;
+bool         is_svf0c1_part[4] = {};
 bool         is_svf0c2 = false;
 bool         is_svf0c2_part[4] = {};
 bool         is_svf0c3 = false;
@@ -50157,6 +50294,13 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_bvb1_part[unsigned(arg[5] - 'a')] = true;
+            continue;
+        }
+        if (arg.size() == 7 && arg.compare(0, 6, "-bvb1d") == 0 &&
+            arg[6] >= '0' && arg[6] <= '2')
+        {
+            is_all = false;
+            is_bvb1d_part[unsigned(arg[6] - '0')] = true;
             continue;
         }
         if (arg == "-xorser")
@@ -50254,10 +50398,24 @@ int parse_args(int argc, char *argv[])
             is_bvops1_part[unsigned(arg[5] - 'a')] = true;
             continue;
         }
+        if (arg.size() == 7 && arg.compare(0, 6, "-bvl1b") == 0 &&
+            arg[6] >= '0' && arg[6] <= '2')
+        {
+            is_all = false;
+            is_bvops1_regular_part[unsigned(arg[6] - '0')] = true;
+            continue;
+        }
         if (arg == "-bvl2" || arg == "-bvops2")
         {
             is_all = false;
             is_bvops2 = true;
+            continue;
+        }
+        if (arg.size() == 6 && arg.compare(0, 5, "-bvl2") == 0 &&
+            arg[5] >= 'a' && arg[5] <= 'c')
+        {
+            is_all = false;
+            is_bvops2_part[unsigned(arg[5] - 'a')] = true;
             continue;
         }
 
@@ -50272,6 +50430,13 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_bvshift_part[unsigned(arg[4] - '0')] = true;
+            continue;
+        }
+        if (arg.size() == 6 && arg.compare(0, 5, "-bvs0") == 0 &&
+            arg[5] >= 'a' && arg[5] <= 'd')
+        {
+            is_all = false;
+            is_bvshift_first_part[unsigned(arg[5] - 'a')] = true;
             continue;
         }
         if (arg == "-rc" || arg == "-rankc")
@@ -50309,6 +50474,19 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_sv1a = true;
+            continue;
+        }
+        if (arg == "-sv1a0" || arg == "-sv1a1")
+        {
+            is_all = false;
+            is_sv1a_core_part[unsigned(arg.back() - '0')] = true;
+            continue;
+        }
+        if (arg.size() == 7 && arg.compare(0, 6, "-sv1a2") == 0 &&
+            arg[6] >= 'a' && arg[6] <= 'd')
+        {
+            is_all = false;
+            is_sv1a_gt_part[unsigned(arg[6] - 'a')] = true;
             continue;
         }
         if (arg == "-sv1b")
@@ -50356,11 +50534,38 @@ int parse_args(int argc, char *argv[])
             is_csv0a_part[unsigned(arg[6] - '0')] = true;
             continue;
         }
+        if (arg == "-csv0a0a")
+        {
+            is_all = false;
+            is_csv0a_misc_core = true;
+            continue;
+        }
+        if (arg.size() == 9 && arg.compare(0, 8, "-csv0a0b") == 0 &&
+            arg[8] >= '0' && arg[8] <= '3')
+        {
+            is_all = false;
+            is_csv0a_mutation_part[unsigned(arg[8] - '0')] = true;
+            continue;
+        }
+        if (arg.size() == 9 && arg.compare(0, 8, "-csv0a0c") == 0 &&
+            arg[8] >= '0' && arg[8] <= '3')
+        {
+            is_all = false;
+            is_csv0a_merge_part[unsigned(arg[8] - '0')] = true;
+            continue;
+        }
         if (arg.size() == 8 && arg.compare(0, 7, "-csv0a3") == 0 &&
             arg[7] >= '0' && arg[7] <= '3')
         {
             is_all = false;
             is_csv0a_set_part[unsigned(arg[7] - '0')] = true;
+            continue;
+        }
+        if (arg.size() == 8 && arg.compare(0, 7, "-csv0a4") == 0 &&
+            (arg[7] == 'a' || arg[7] == 'b'))
+        {
+            is_all = false;
+            is_csv0a_load_part[unsigned(arg[7] - 'a')] = true;
             continue;
         }
         if (arg == "-csv0b")
@@ -50418,6 +50623,20 @@ int parse_args(int argc, char *argv[])
             is_str_sv = true;
             continue;
         }
+        if (arg.size() == 8 && arg.compare(0, 7, "-strsv0") == 0 &&
+            (arg[7] == 'a' || arg[7] == 'b'))
+        {
+            is_all = false;
+            is_str_sv_core_part[unsigned(arg[7] - 'a')] = true;
+            continue;
+        }
+        if (arg.size() == 8 && arg.compare(0, 7, "-strsv1") == 0 &&
+            arg[7] >= 'a' && arg[7] <= 'd')
+        {
+            is_all = false;
+            is_str_sv_stress_part[unsigned(arg[7] - 'a')] = true;
+            continue;
+        }
         if (arg == "-cc")
         {
             is_all = false;
@@ -50459,6 +50678,13 @@ int parse_args(int argc, char *argv[])
             is_svf0b = true;
             continue;
         }
+        if (arg.size() == 7 && arg.compare(0, 6, "-svf0b") == 0 &&
+            arg[6] >= '0' && arg[6] <= '3')
+        {
+            is_all = false;
+            is_svf0b_part[unsigned(arg[6] - '0')] = true;
+            continue;
+        }
         if (arg == "-svf0c")
         {
             is_all = false;
@@ -50469,6 +50695,13 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_svf0c1 = true;
+            continue;
+        }
+        if (arg.size() == 8 && arg.compare(0, 7, "-svf0c1") == 0 &&
+            arg[7] >= 'a' && arg[7] <= 'd')
+        {
+            is_all = false;
+            is_svf0c1_part[unsigned(arg[7] - 'a')] = true;
             continue;
         }
         if (arg == "-svf0c2")
@@ -53976,16 +54209,16 @@ static const unsigned svf_scanner_skewed = 4u;
 static const unsigned svf_scanner_all =
         svf_scanner_linear | svf_scanner_random | svf_scanner_skewed;
 
-/** Check float scanning distributions and a partition of random range queries.
+/** Check float scanning distributions and a partition of range queries.
     @param test_mask Distribution selection from svf_scanner_*.
-    @param random_part Zero-based random-query partition.
-    @param random_parts Number of random-query partitions.
+    @param query_part Zero-based query partition.
+    @param query_parts Number of query partitions.
 */
 void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all,
-                                unsigned random_part = 0,
-                                unsigned random_parts = 1)
+                                unsigned query_part = 0,
+                                unsigned query_parts = 1)
 {
-    BM_ASSERT(random_parts && random_part < random_parts);
+    BM_ASSERT(query_parts && query_part < query_parts);
     BM_DECLARE_TEMP_BLOCK(tb)
 
     sparseVecFloat::size_type N = 20000000;
@@ -54024,6 +54257,8 @@ void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all,
         std::cout << "-------------------------SVF Linear Values Scanner" << std::endl;
         for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
         {
+            if (i % query_parts != query_part)
+                continue;
             runSVFScannerTest(linData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
@@ -54047,7 +54282,7 @@ void SparseVecFloatScannerTests(unsigned test_mask = svf_scanner_all,
         std::cout << "-------------------------SVF Random Values Scanner" << std::endl;
         for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
         {
-            if (i % random_parts != random_part)
+            if (i % query_parts != query_part)
             {
                 continue;
             }
@@ -54341,13 +54576,27 @@ void sparseVecFloatRSCScannerTests()
 }
 
 
-void in_range_unbounded(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+/** Scan an unbounded float range in a borrowed sparse-vector fixture.
+    @param sv Borrowed fixture.
+    @param from First bound.
+    @param to Second bound.
+    @param bv_out Output positions.
+*/
+void in_range_unbounded(const sparseVecFloat& sv, float from, float to,
+                        sparseVecFloat::bvector_type &bv_out)
 {
     bm::sparse_vector_scanner<sparseVecFloat> scan;
     scan.find_range_float_unbounded(sv, from, to, bv_out);
 }
 
-void in_range_vect_unbounded(std::vector<float> fv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+/** Build the flat-vector oracle for an unbounded float range.
+    @param fv Borrowed flat fixture.
+    @param from First bound.
+    @param to Second bound.
+    @param bv_out Output positions.
+*/
+void in_range_vect_unbounded(const std::vector<float>& fv, float from, float to,
+                             sparseVecFloat::bvector_type &bv_out)
 {
     if(from > to) std::swap(from, to);
     for(sparseVecFloat::size_type i = 0; i < fv.size(); i++){
@@ -54358,7 +54607,14 @@ void in_range_vect_unbounded(std::vector<float> fv, float from, float to, sparse
     }
 }
 
-void in_range_const_unbounded(sparseVecFloat sv, float from, float to, sparseVecFloat::bvector_type &bv_out)
+/** Build the iterator oracle for an unbounded float range.
+    @param sv Borrowed sparse-vector fixture.
+    @param from First bound.
+    @param to Second bound.
+    @param bv_out Output positions.
+*/
+void in_range_const_unbounded(const sparseVecFloat& sv, float from, float to,
+                              sparseVecFloat::bvector_type &bv_out)
 {
     sparseVecFloat::const_iterator ci = sv.begin();
     if (from > to) std::swap(from, to);
@@ -54382,7 +54638,15 @@ void in_range_for_each_sparse_unbounded(const sparseVecFloat& sv, float from, fl
     bm::for_each_sparse(sv, func);
 }
 
-void runSVFScannerUnboundedTest(std::vector<float> temp, sparseVecFloat testSVF, float from, float to)
+/** Compare an unbounded float scan with flat and sparse-vector oracles.
+    @param temp Borrowed flat fixture.
+    @param testSVF Borrowed sparse-vector fixture.
+    @param from First bound.
+    @param to Second bound.
+*/
+void runSVFScannerUnboundedTest(const std::vector<float>& temp,
+                                const sparseVecFloat& testSVF,
+                                float from, float to)
 {
     sparseVecFloat::bvector_type bv_range;
     sparseVecFloat::bvector_type bv_vector;
@@ -54434,8 +54698,14 @@ void runSVFScannerUnboundedTest(std::vector<float> temp, sparseVecFloat testSVF,
     }
 }
 
-void SparseVecFloatScannerUnboundedTests()
+/** Check unbounded float ranges over one query partition.
+    @param query_part Zero-based query partition.
+    @param query_parts Number of query partitions.
+*/
+void SparseVecFloatScannerUnboundedTests(unsigned query_part = 0,
+                                         unsigned query_parts = 1)
 {
+    BM_ASSERT(query_parts && query_part < query_parts);
     BM_DECLARE_TEMP_BLOCK(tb)
     
     sparseVecFloat::size_type N = 20000000;
@@ -54471,6 +54741,8 @@ void SparseVecFloatScannerUnboundedTests()
         std::cout << "-------------------------SVF Linear Values Unbounded Scanner" << std::endl;
         for(unsigned int i = 0; i < StressRepetitions(tests, 8); ++i)
         {
+            if (i % query_parts != query_part)
+                continue;
             runSVFScannerUnboundedTest(linData, testSVF, from[i], to[i]);
             float progress_pct = ((float)(i + 1) / (float)StressRepetitions(tests, 8)) * 100.0f;
             if (!is_silent)
@@ -55695,7 +55967,9 @@ return 0;
 
     if (is_all || is_bvbasic || is_bvb0 || is_bvb1 ||
         is_bvb1_part[0] || is_bvb1_part[1] ||
-        is_bvb1_part[2] || is_bvb1_part[3])
+        is_bvb1_part[2] || is_bvb1_part[3] ||
+        is_bvb1d_part[0] || is_bvb1d_part[1] ||
+        is_bvb1d_part[2])
     {
 
         if (is_all || is_bvbasic || is_bvb0)
@@ -55762,7 +56036,9 @@ return 0;
 
         if (is_all || is_bvbasic || is_bvb1 ||
             is_bvb1_part[0] || is_bvb1_part[1] ||
-            is_bvb1_part[2] || is_bvb1_part[3])
+            is_bvb1_part[2] || is_bvb1_part[3] ||
+            is_bvb1d_part[0] || is_bvb1d_part[1] ||
+            is_bvb1d_part[2])
         {
             if (is_all || is_bvbasic || is_bvb1 || is_bvb1_part[0])
             {
@@ -55815,22 +56091,31 @@ return 0;
              CheckAllocLeaks(false);
             } // if part 2
 
-            if (is_all || is_bvbasic || is_bvb1 || is_bvb1_part[3])
+            if (is_all || is_bvbasic || is_bvb1 || is_bvb1_part[3] ||
+                is_bvb1d_part[0])
             {
             RankRangeSplitTest();
              CheckAllocLeaks(false);
 
             MutationTest();
              CheckAllocLeaks(false);
+            } // if rank and mutation
+            if (is_all || is_bvbasic || is_bvb1 || is_bvb1_part[3] ||
+                is_bvb1d_part[1])
+            {
             MutationOperationsTest();
              CheckAllocLeaks(false);
+            } // if mutation operations
 
+            if (is_all || is_bvbasic || is_bvb1 || is_bvb1_part[3] ||
+                is_bvb1d_part[2])
+            {
             BlockLevelTest();
              CheckAllocLeaks(false);
 
             BVImportTest();
              CheckAllocLeaks(false);
-            } // if part 3
+            } // if block and import
 
             if (is_all || is_bvbasic || is_bvb1)
                 ReportTestBlockDone("-bvb1");
@@ -55839,6 +56124,12 @@ return 0;
             {
                 if (is_bvb1_part[part])
                     ReportTestBlockDone(part_names[part]);
+            } // for part
+            const char* last_names[] = {"-bvb1d0", "-bvb1d1", "-bvb1d2"};
+            for (unsigned part = 0; part < 3; ++part)
+            {
+                if (is_bvb1d_part[part])
+                    ReportTestBlockDone(last_names[part]);
             } // for part
          }
 
@@ -55898,7 +56189,9 @@ return 0;
     }
     
     if (is_all || is_bvshift || is_bvshift_part[0] ||
-        is_bvshift_part[1] || is_bvshift_part[2] || is_bvshift_part[3])
+        is_bvshift_part[1] || is_bvshift_part[2] || is_bvshift_part[3] ||
+        is_bvshift_first_part[0] || is_bvshift_first_part[1] ||
+        is_bvshift_first_part[2] || is_bvshift_first_part[3])
     {
          if (is_all || is_bvshift)
          {
@@ -55918,9 +56211,23 @@ return 0;
                          ReportTestBlockDone(part_names[part]);
                  }
              } // for part
+             const char* first_names[] = {
+                 "-bvs0a", "-bvs0b", "-bvs0c", "-bvs0d"
+             };
+             for (unsigned part = 0; part < 4; ++part)
+             {
+                 if (is_bvshift_first_part[part])
+                 {
+                     BvectorShiftTest(part, 16, part, 4);
+                     CheckAllocLeaks(false);
+                     if (part)
+                         ReportTestBlockDone(first_names[part]);
+                 }
+             } // for part
          }
 
-         if (is_all || is_bvshift || is_bvshift_part[0])
+         if (is_all || is_bvshift || is_bvshift_part[0] ||
+             is_bvshift_first_part[0])
          {
          BvectorInsertTest();
          CheckAllocLeaks(false);
@@ -55931,6 +56238,8 @@ return 0;
 
          if (is_bvshift_part[0])
              ReportTestBlockDone("-bvs0");
+         if (is_bvshift_first_part[0])
+             ReportTestBlockDone("-bvs0a");
          if (is_all || is_bvshift)
              ReportTestBlockDone("-bvs");
     }
@@ -55995,7 +56304,9 @@ return 0;
     }
 
     if (is_bvops1 || is_bvops1_part[0] || is_bvops1_part[1] ||
-        is_bvops1_part[2] || is_bvops1_part[3])
+        is_bvops1_part[2] || is_bvops1_part[3] ||
+        is_bvops1_regular_part[0] || is_bvops1_regular_part[1] ||
+        is_bvops1_regular_part[2])
     {
         if (is_bvops1 || is_bvops1_part[0])
         {
@@ -56029,22 +56340,49 @@ return 0;
             if (is_bvops1_part[part])
                 ReportTestBlockDone(part_names[part]);
         } // for part
+        const unsigned regular_counts[] = {48u, 48u, 54u};
+        const unsigned fast_counts[] = {3u, 3u, 2u};
+        const char* regular_names[] = {"-bvl1b0", "-bvl1b1", "-bvl1b2"};
+        unsigned normal_offset = 0;
+        unsigned fast_offset = 0;
+        for (unsigned part = 0; part < 3; ++part)
+        {
+            if (is_bvops1_regular_part[part])
+            {
+                srand(1u + part * 9973u);
+                StressTest(regular_counts[part], 0, false, -1, 0, 0,
+                           fast_counts[part], is_fast ? fast_offset : normal_offset);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(regular_names[part]);
+            }
+            normal_offset += regular_counts[part];
+            fast_offset += fast_counts[part];
+        } // for part
     }
 
-    if (is_bvops2)
+    if (is_bvops2 || is_bvops2_part[0] || is_bvops2_part[1] ||
+        is_bvops2_part[2])
     {
         // -------------------------------------
         // placed here for performance/parallel test execution purposes
         //
+        if (is_bvops2 || is_bvops2_part[0])
+        {
         StressTest(150, 1, false); // SUB
          CheckAllocLeaks(false);
+        }
 
+        if (is_bvops2 || is_bvops2_part[1])
+        {
         StressTest(150, 2, false); // XOR
          CheckAllocLeaks(false);
+        }
 
         // -------------------------------------
 
 
+        if (is_bvops2 || is_bvops2_part[2])
+        {
         KleeneLogicTest();
          CheckAllocLeaks(false);
 
@@ -56053,8 +56391,16 @@ return 0;
 
         KleeneLogicOrStressTest();
          CheckAllocLeaks(false);
+        }
 
-        ReportTestBlockDone("-bvl2");
+        if (is_bvops2)
+            ReportTestBlockDone("-bvl2");
+        const char* part_names[] = {"-bvl2a", "-bvl2b", "-bvl2c"};
+        for (unsigned part = 0; part < 3; ++part)
+        {
+            if (is_bvops2_part[part])
+                ReportTestBlockDone(part_names[part]);
+        } // for part
     }
 
     if (is_all || is_bvops)
@@ -56120,6 +56466,9 @@ return 0;
     }
 
     if (is_all || is_sv || is_sv0 || is_sv1 || is_sv1a || is_sv1b || is_sv1c ||
+        is_sv1a_core_part[0] || is_sv1a_core_part[1] ||
+        is_sv1a_gt_part[0] || is_sv1a_gt_part[1] ||
+        is_sv1a_gt_part[2] || is_sv1a_gt_part[3] ||
         is_sv1b_part[0] || is_sv1b_part[1] ||
         is_sv1b_part[2] || is_sv1b_part[3])
     {
@@ -56175,23 +56524,45 @@ return 0;
             ReportTestBlockDone("-sv0");
         }
 
-        if (is_all || is_sv || is_sv1 || is_sv1a)
+        if (is_all || is_sv || is_sv1 || is_sv1a || is_sv1a_core_part[0])
         {
             TestSparseVectorRange();
              CheckAllocLeaks(false);
 
             TestSparseVectorFilter();
              CheckAllocLeaks(false);
+            if (is_sv1a_core_part[0])
+                ReportTestBlockDone("-sv1a0");
+        }
 
+        if (is_all || is_sv || is_sv1 || is_sv1a || is_sv1a_core_part[1])
+        {
             TestSparseVectorScan();
              CheckAllocLeaks(false);
+            if (is_sv1a_core_part[1])
+                ReportTestBlockDone("-sv1a1");
+        }
 
+        if (is_all || is_sv || is_sv1 || is_sv1a)
+        {
             TestSparseVectorScanGT();
              CheckAllocLeaks(false);
 
             if (is_sv1a)
                 ReportTestBlockDone("-sv1a");
-         }
+        }
+        const char* gt_names[] = {
+            "-sv1a2a", "-sv1a2b", "-sv1a2c", "-sv1a2d"
+        };
+        for (unsigned part = 0; part < 4; ++part)
+        {
+            if (is_sv1a_gt_part[part])
+            {
+                TestSparseVectorScanGT(part, 4);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(gt_names[part]);
+            }
+        } // for part
 
         if (is_all || is_sv || is_sv1 || is_sv1b)
         {
@@ -56243,8 +56614,14 @@ return 0;
         is_csv0a || is_csv0b || is_csv0c ||
         is_csv0a_part[0] || is_csv0a_part[1] ||
         is_csv0a_part[2] || is_csv0a_part[3] || is_csv0a_part[4] ||
+        is_csv0a_misc_core || is_csv0a_mutation_part[0] ||
+        is_csv0a_mutation_part[1] || is_csv0a_mutation_part[2] ||
+        is_csv0a_mutation_part[3] ||
+        is_csv0a_merge_part[0] || is_csv0a_merge_part[1] ||
+        is_csv0a_merge_part[2] || is_csv0a_merge_part[3] ||
         is_csv0a_set_part[0] || is_csv0a_set_part[1] ||
         is_csv0a_set_part[2] || is_csv0a_set_part[3] ||
+        is_csv0a_load_part[0] || is_csv0a_load_part[1] ||
         is_csv1a || is_csv1a0 || is_csv1a1 || is_csv1a2 || is_csv1b)
     {
         if (is_all || is_csv || is_csv0 || is_csv0a)
@@ -56256,7 +56633,9 @@ return 0;
                 ReportTestBlockDone("-csv0a");
         }
         const unsigned csv_part_masks[] = {
-            csv_basic_misc, csv_basic_count_pass0, csv_basic_count_pass1,
+            csv_basic_misc | csv_basic_mutation_stress |
+                csv_basic_merge_stress,
+            csv_basic_count_pass0, csv_basic_count_pass1,
             csv_basic_set_stress, csv_basic_load_stress
         };
         const char* csv_part_names[] = {
@@ -56272,6 +56651,35 @@ return 0;
                     ReportTestBlockDone(csv_part_names[part]);
             }
         } // for part
+        if (is_csv0a_misc_core)
+        {
+            TestCompressSparseVector(csv_basic_misc);
+            CheckAllocLeaks(false);
+        }
+        const char* mutation_names[] = {
+            "-csv0a0b0", "-csv0a0b1", "-csv0a0b2", "-csv0a0b3"
+        };
+        for (unsigned part = 0; part < 4; ++part)
+        {
+            if (is_csv0a_mutation_part[part])
+            {
+                TestCompressSparseVectorMutationStress(part, 4);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(mutation_names[part]);
+            }
+        } // for part
+        const char* merge_names[] = {
+            "-csv0a0c0", "-csv0a0c1", "-csv0a0c2", "-csv0a0c3"
+        };
+        for (unsigned part = 0; part < 4; ++part)
+        {
+            if (is_csv0a_merge_part[part])
+            {
+                TestCompressSparseVectorMergeStress(part, 4);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(merge_names[part]);
+            }
+        } // for part
         const char* set_part_names[] = {
             "-csv0a30", "-csv0a31", "-csv0a32", "-csv0a33"
         };
@@ -56284,8 +56692,19 @@ return 0;
                 ReportTestBlockDone(set_part_names[part]);
             }
         } // for part
+        const char* load_names[] = {"-csv0a4a", "-csv0a4b"};
+        for (unsigned part = 0; part < 2; ++part)
+        {
+            if (is_csv0a_load_part[part])
+            {
+                TestCompressSparseVectorLoadStress(part, 2);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(load_names[part]);
+            }
+        } // for part
 
-        if (is_all || is_csv || is_csv0 || is_csv0c || is_csv0a_part[0])
+        if (is_all || is_csv || is_csv0 || is_csv0c ||
+            is_csv0a_part[0] || is_csv0a_misc_core)
         {
             TestRSCForEachSparseFilter();
              CheckAllocLeaks(false);
@@ -56298,6 +56717,8 @@ return 0;
         }
         if (is_csv0a_part[0])
             ReportTestBlockDone("-csv0a0");
+        if (is_csv0a_misc_core)
+            ReportTestBlockDone("-csv0a0a");
 
         if (is_all || is_csv || is_csv0 || is_csv0b)
         {
@@ -56372,9 +56793,13 @@ return 0;
          ReportTestBlockDone("-cc");
     }
     
-    if (is_all || is_str_sv)
+    if (is_all || is_str_sv || is_str_sv_core_part[0] ||
+        is_str_sv_core_part[1] || is_str_sv_stress_part[0] ||
+        is_str_sv_stress_part[1] || is_str_sv_stress_part[2] ||
+        is_str_sv_stress_part[3])
     {
-
+        if (is_all || is_str_sv || is_str_sv_core_part[0])
+        {
          TestStrSparseVector();
          CheckAllocLeaks(false);
 
@@ -56383,7 +56808,15 @@ return 0;
 
          TestStrSparseVectorSerial();
          CheckAllocLeaks(false);
+         if (is_str_sv_core_part[0])
+         {
+             StrSparseVectorFullTopBlockSerializationRegressionTest();
+             CheckAllocLeaks(false);
+         }
+        }
 
+        if (is_all || is_str_sv || is_str_sv_core_part[1])
+        {
          TestStrSparseVector_FindEq();
          CheckAllocLeaks(false);
 
@@ -56398,11 +56831,32 @@ return 0;
 
          TestStrSparseQuickSort();
          CheckAllocLeaks(false);
+        }
 
+        if (is_all || is_str_sv)
+        {
          StressTestStrSparseVector();
          CheckAllocLeaks(false);
+        }
+        const char* stress_names[] = {
+            "-strsv1a", "-strsv1b", "-strsv1c", "-strsv1d"
+        };
+        for (unsigned part = 0; part < 4; ++part)
+        {
+            if (is_str_sv_stress_part[part])
+            {
+                StressTestStrSparseVector(part, 4);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(stress_names[part]);
+            }
+        } // for part
 
-         ReportTestBlockDone("-strsv");
+        if (is_all || is_str_sv)
+            ReportTestBlockDone("-strsv");
+        if (is_str_sv_core_part[0])
+            ReportTestBlockDone("-strsv0a");
+        if (is_str_sv_core_part[1])
+            ReportTestBlockDone("-strsv0b");
     }
 
     if (is_sv_ser || is_ser || is_allsvser || is_all)
@@ -56506,6 +56960,10 @@ return 0;
 
     if (is_all || is_svf || is_svf0 || is_svf1 || is_svf1_parts || is_svf0a || is_svf0b ||
         is_svf0c || is_svf0c1 || is_svf0c2 || is_svf0c3 ||
+        is_svf0b_part[0] || is_svf0b_part[1] ||
+        is_svf0b_part[2] || is_svf0b_part[3] ||
+        is_svf0c1_part[0] || is_svf0c1_part[1] ||
+        is_svf0c1_part[2] || is_svf0c1_part[3] ||
         is_svf0c2_part[0] || is_svf0c2_part[1] ||
         is_svf0c2_part[2] || is_svf0c2_part[3]){
         
@@ -56529,6 +56987,18 @@ return 0;
             if (is_svf0b)
                 ReportTestBlockDone("-svf0b");
         }
+        const char* unbounded_names[] = {
+            "-svf0b0", "-svf0b1", "-svf0b2", "-svf0b3"
+        };
+        for (unsigned part = 0; part < 4; ++part)
+        {
+            if (is_svf0b_part[part])
+            {
+                SparseVecFloatScannerUnboundedTests(part, 4);
+                CheckAllocLeaks(false);
+                ReportTestBlockDone(unbounded_names[part]);
+            }
+        } // for part
         if (is_all || is_svf0 || is_svf || is_svf0c)
         {
             SparseVecFloatScannerTests();
@@ -56545,6 +57015,18 @@ return 0;
                 CheckAllocLeaks(false);
                 ReportTestBlockDone("-svf0c1");
             }
+            const char* linear_names[] = {
+                "-svf0c1a", "-svf0c1b", "-svf0c1c", "-svf0c1d"
+            };
+            for (unsigned part = 0; part < 4; ++part)
+            {
+                if (is_svf0c1_part[part])
+                {
+                    SparseVecFloatScannerTests(svf_scanner_linear, part, 4);
+                    CheckAllocLeaks(false);
+                    ReportTestBlockDone(linear_names[part]);
+                }
+            } // for part
             if (is_svf0c2)
             {
                 SparseVecFloatScannerTests(svf_scanner_random);
