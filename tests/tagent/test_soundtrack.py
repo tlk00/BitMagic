@@ -365,6 +365,20 @@ class SoundtrackTests(unittest.TestCase):
                 agent.render_station_report(Path(directory) / 'out.wav', True)
                 self.assertIn('expect significant delays', speech.call_args.args[1])
 
+    def test_station_destination_choices_avoid_stop_and_early_arrival(self):
+        """Each periodic destination option avoids alarm and premature arrival."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', ['tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            for stress in (False, True):
+                for index in range(4):
+                    with patch.object(tagent.random, 'choice', side_effect=lambda choices: choices[index]), \
+                         patch.object(agent, 'synthesize_announcement', return_value=1) as speech:
+                        agent.render_station_report(Path(directory) / 'out.wav', stress)
+                        message = speech.call_args.args[1].lower()
+                        self.assertNotIn('next stop', message)
+                        self.assertNotIn('approaching', message)
+                        self.assertIn('station', message)
+
     def test_phase_change_keeps_train_timer(self):
         """Both phases announce while the periodic five-minute clock is preserved."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
@@ -768,6 +782,31 @@ class SoundtrackTests(unittest.TestCase):
                 agent.args.sound_volume = 1.0
                 agent.play_sound('fail', 1)
                 self.assertEqual(render.call_args.args[3], 1.0)
+
+    def test_joker_reply_probability_and_shuffled_deck(self):
+        """A quarter of jokes have no reply; replies exhaust the deck before reuse."""
+        with tempfile.TemporaryDirectory() as directory, patch('sys.argv', ['tagent', '--state-dir', directory]):
+            agent = tagent.Agent(tagent.arguments())
+            with patch.object(agent, 'play_sound', return_value=True), \
+                 patch.object(tagent.threading, 'Thread') as thread, \
+                 patch.object(tagent.random, 'random', return_value=.24):
+                agent.play_after(None, 'joker', 'joke', agent.audio_epoch)
+                thread.assert_not_called()
+            with patch.object(agent, 'play_sound', return_value=True), \
+                 patch.object(tagent.threading, 'Thread') as thread, \
+                 patch.object(tagent.random, 'random', return_value=.25):
+                agent.play_after(None, 'joker', 'joke', agent.audio_epoch)
+                thread.assert_called_once()
+            agent.audio_thread = None
+            replies = []
+            with patch.object(tagent.random, 'uniform', return_value=0), \
+                 patch.object(agent, 'play_after') as play:
+                for _ in tagent.DISPATCH_JOKER_REPLIES:
+                    agent.queue_joker_reply(agent.audio_epoch)
+                    agent.audio_thread.join(timeout=2)
+                    replies.append(play.call_args.args[2])
+            self.assertEqual(set(replies), set(tagent.DISPATCH_JOKER_REPLIES))
+            self.assertEqual(len(replies), len(set(replies)))
 
     def test_joker_reply_scheduling_and_cancellation(self):
         """Dispatch responds after the pause unless a failure supersedes it."""

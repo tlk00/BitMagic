@@ -417,8 +417,9 @@ runner `--fast` mode, including during `--pedantic` TAgent runs; release variant
 use `--pedantic` when requested. The runner cannot combine these two modes.
 
 After a played Joe announcement, Dispatch may reply after a random 3–7 second
-pause, choosing from five responses. A failure, shutdown, or another queued
-announcement cancels the response. Preview the reply with `--sound-preview
+pause, choosing from a shuffled deck of responses without repeats until the deck
+is exhausted. Each joke has a 25% chance of receiving no reply. A failure,
+shutdown, or phase change cancels a pending response. Preview the reply with `--sound-preview
 joker-reply`; `--sound-preview joker` plays the exchange when local audio is available.
 
 When the SOS signal plays, available TTS follows it with an engineer mayday and

@@ -118,6 +118,26 @@ DISPATCH_JOKER_REPLIES = (
     'Dispatch to Engineer Joe. This frequency is for train operations, not stand-up comedy.',
     'Dispatch to Engineer Joe. Maintain radio discipline. The timetable is suffering enough.',
     'Dispatch to Engineer Joe. Enough. One more joke and you can explain it to the yardmaster.',
+    'Dispatch to Engineer Joe. Copy that. Please leave the comedy on the platform.',
+    'Dispatch to Engineer Joe. Message received. The signal box requests a quieter channel.',
+    'Dispatch to Engineer Joe. Roger. Let us keep this frequency clear for the working timetable.',
+    'Dispatch to Engineer Joe. Your remark has been logged. Railway traffic takes priority.',
+    'Dispatch to Engineer Joe. Acknowledged. Please return the microphone to railway service.',
+    'Dispatch to Engineer Joe. The yardmaster heard that. I suggest we both return to work.',
+    'Dispatch to Engineer Joe. Copy. The signal is clear; let us keep the frequency the same way.',
+    'Dispatch to Engineer Joe. Understood. Further commentary can wait until the next siding.',
+    'Dispatch to Engineer Joe. The train has right of way. Your material does not.',
+    'Dispatch to Engineer Joe. Please reserve the airwaves for signals, reports, and genuine emergencies.',
+    'Dispatch to Engineer Joe. I will add that to the incident book under unnecessary transmissions.',
+    'Dispatch to Engineer Joe. Acknowledged. We are operating a railway, not an open microphone night.',
+    'Dispatch to Engineer Joe. Very well. Let us try a stretch of uninterrupted silence.',
+    'Dispatch to Engineer Joe. Your audience is currently occupied with the timetable.',
+    'Dispatch to Engineer Joe. Noted. Please keep the next transmission strictly operational.',
+    'Dispatch to Engineer Joe. I have notified the yardmaster that morale is apparently under control.',
+    'Dispatch to Engineer Joe. The line is busy. Save the next one for the crew room.',
+    'Dispatch to Engineer Joe. That concludes the entertainment portion of this transmission.',
+    'Dispatch to Engineer Joe. Negative on further punchlines. Maintain radio discipline.',
+    'Dispatch to Engineer Joe. Please give the other trains a chance to use the air.',
 )
 
 
@@ -442,6 +462,7 @@ class Agent:
         self.audio_pending = {}
         self.audio_failure_thread = None
         self.joker_reply_thread = None
+        self.dispatch_reply_deck = []
         self.audio_mutex = threading.Lock()
         self.depot = None
         self.audio_warned = False
@@ -1244,7 +1265,7 @@ class Agent:
                     if self.stopping.wait(.7) or epoch != self.audio_epoch:
                         break
                     self.play_sound(distress_event, 1)
-            if event == 'joker' and played and epoch == self.audio_epoch:
+            if event == 'joker' and played and epoch == self.audio_epoch and random.random() >= .25:
                 self.joker_reply_thread = threading.Thread(
                     target=self.queue_joker_reply, args=(epoch, phase), daemon=True)
                 self.joker_reply_thread.start()
@@ -1272,7 +1293,10 @@ class Agent:
                     (phase is not None and phase != self.audio_phase_generation)):
                 return
             previous = self.audio_thread if self.audio_thread and self.audio_thread.is_alive() else None
-            message = random.choice(DISPATCH_JOKER_REPLIES)
+            if not self.dispatch_reply_deck:
+                self.dispatch_reply_deck = list(DISPATCH_JOKER_REPLIES)
+                random.shuffle(self.dispatch_reply_deck)
+            message = self.dispatch_reply_deck.pop()
             self.say('DISPATCH: ' + message)
             self.audio_thread = threading.Thread(target=self.play_after,
                 args=(previous, 'joker-reply', message, epoch, phase), daemon=True)
@@ -1860,17 +1884,17 @@ class Agent:
         """Announce the next destination and fast stress service when requested."""
         if stress:
             messages = (
-                'Conductor to BitMagic. Next stop, Stress Test Station.',
+                'Conductor to BitMagic. Our next station is Stress Test Station.',
                 'Conductor reporting. Our next destination is Stress Test Station.',
                 'Conductor to the crew. We are bound for Stress Test Station.',
-                'Conductor reporting. The freight is headed for Stress Test Station.',
+                'Conductor reporting. Stress Test Station is ahead.',
             )
         else:
             messages = (
-                'Conductor to BitMagic. Next stop, Performance Test Station.',
+                'Conductor to BitMagic. Our next station is Performance Test Station.',
                 'Conductor reporting. Our next destination is Performance Test Station.',
                 'Conductor to the crew. We are bound for Performance Test Station.',
-                'Conductor reporting. The freight is headed for Performance Test Station.',
+                'Conductor reporting. Performance Test Station is ahead.',
             )
         message = random.choice(messages)
         if stress:
@@ -2152,7 +2176,7 @@ class Agent:
         self.joker_clock.start()
         if self.depot:
             self.depot.set_mode('train-normal' if not self.args.fast and not self.args.pedantic else 'train')
-        self.sound('inv-announcement', workers='Conductor to Dispatch. Next stop, Inverted List Validation Station. Reference tests are starting.')
+        self.sound('inv-announcement', workers='Conductor to Dispatch. Our next station is Inverted List Validation Station. Reference tests are starting.')
         self.sound('depart')
         names = [n for n in manifest['builds']['inv_list'] if self.supported(n)]
         releases = [n for n in names if n == 'bminv_release' or n.startswith('bminv_release_')]
