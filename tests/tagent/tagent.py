@@ -11,6 +11,7 @@ import datetime
 import depot
 import fcntl
 import fireman
+import inv_cache
 import json
 import csv
 import inv_reference
@@ -276,6 +277,9 @@ def arguments():
                         default=os.environ.get('STARTUP', 'build'),
                         help='build on every manual start, or only when changed (default: %(default)s)')
     parser.add_argument('--path-to-invref', type=Path, help='Gov2 reference directory; default: discover gov2-reference-* under log directory')
+    parser.add_argument('--inv-cache-dir', type=Path, default=os.environ.get('INV_CACHE_DIR') or None,
+                        help='optional existing reference cache directory (default: /mnt/c/TAgent-cache on Linux if present)')
+    parser.add_argument('--no-inv-cache', action='store_true', help='read inv_list reference directly without a local copy')
     parser.add_argument('--read-memory-mib', '--inv-read-memory-mib', dest='inv_read_memory_mib',
                         type=int, default=os.environ.get('INV_READ_MEMORY_MIB') or None,
                         help='inv_list read-batch budget in MiB; default: 70%% of Linux available RAM; macOS: 8192')
@@ -962,6 +966,25 @@ class Agent:
         self.inv_reference = matches[0]
         if self.home == self.inv_reference or self.home.is_relative_to(self.inv_reference):
             raise Failure('inv_list reference cannot contain the TAgent log directory')
+        if self.args.no_inv_cache:
+            self.say('INV CACHE | disabled; reading ' + str(self.inv_reference))
+            return
+        cache = self.args.inv_cache_dir
+        if cache is None and platform.system() == 'Linux':
+            candidate = Path('/mnt/c/TAgent-cache')
+            if candidate.is_dir():
+                cache = candidate
+        if cache is None:
+            self.say('INV CACHE | no cache directory configured; reading ' + str(self.inv_reference))
+            return
+        original = self.inv_reference
+        try:
+            self.inv_reference = inv_cache.copy_reference(original, Path(cache).expanduser(),
+                int(self.args.min_free_gb * 1024**3), self.say)
+            self.say('INV REFERENCE | using cached copy ' + str(self.inv_reference))
+        except (OSError, ValueError) as error:
+            self.inv_reference = original
+            self.say('INV CACHE | unavailable: {} | falling back to {}'.format(error, original))
 
     def validate(self):
         """Validate platform, tools, checkout, lock and CPU instruction capabilities."""

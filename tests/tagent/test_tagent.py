@@ -470,6 +470,30 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('--silent', args)
         self.assertEqual(args[args.index('--threads') + 1], '2')
 
+    def test_reference_cache_fallback_and_selection(self):
+        """Reference copy failures retain the original; successful copies are selected."""
+        self.agent.args.suppress.discard('inv_list')
+        source = self.root / 'reference'
+        source.mkdir()
+        self.agent.args.path_to_invref = source
+        self.agent.args.inv_cache_dir = self.root / 'ssd'
+        with patch.object(ta.inv_reference, 'inspect_reference', return_value=(True, 'valid')), \
+             patch.object(ta.inv_cache, 'copy_reference', side_effect=OSError('disk full')):
+            self.agent.discover_inv_reference()
+        self.assertEqual(self.agent.inv_reference, source.resolve())
+        self.assertIn('falling back', (self.agent.home / 'agent.log').read_text())
+        cached = self.root / 'cached-reference'
+        with patch.object(ta.inv_reference, 'inspect_reference', return_value=(True, 'valid')), \
+             patch.object(ta.inv_cache, 'copy_reference', return_value=cached):
+            self.agent.discover_inv_reference()
+        self.assertEqual(self.agent.inv_reference, cached)
+        self.agent.args.no_inv_cache = True
+        with patch.object(ta.inv_reference, 'inspect_reference', return_value=(True, 'valid')), \
+             patch.object(ta.inv_cache, 'copy_reference') as copier:
+            self.agent.discover_inv_reference()
+        copier.assert_not_called()
+        self.assertEqual(self.agent.inv_reference, source.resolve())
+
     def test_inv_pedantic_uses_generic_and_best_supported_simd(self):
         """Pedantic uses two releases even when debug and more SIMD builds exist."""
         self.agent.inv_reference = self.root / 'reference'

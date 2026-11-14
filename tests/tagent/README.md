@@ -574,6 +574,19 @@ sizes of the streams required by the selected mode; pedantic mode additionally
 requires `matrix.json`. Missing, incomplete,
 or ambiguous references are startup errors. The runner performs its own checks.
 
+On Linux, an existing `/mnt/c/TAgent-cache` is used automatically for a local
+reference copy. Select another existing writable directory with `--inv-cache-dir
+PATH` or `INV_CACHE_DIR` in `run_tagent.sh`; `--no-inv-cache` reads the source
+directly. TAgent reports the source, free space, each file's size and copy and
+verification times. The first copy is SHA-256 checked before publication;
+later startups compare the source file inventory and metadata and cached file
+sizes without rereading the file contents. Same-size cache corruption after
+publication is therefore not detected by this startup check. Changed references
+create a new cache; older and quarantined copies are preserved and may require
+manual cleanup. Missing space, permissions or copy errors fall back to the
+original reference. Logs, temporary files and the inv_list hash cache remain in
+the log directory. The first copy can take considerable time and storage.
+
 Use `--suppress perf,inv_list` (or repeat `--suppress`) to skip selected test
 stages: `perf`, `inv_list`, `stress`. Builds still run. For example:
 
