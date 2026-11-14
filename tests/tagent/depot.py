@@ -12,6 +12,9 @@ import time
 import wave
 from pathlib import Path
 
+AUDIO_RETRY_SECONDS = 30
+STREAM_STALL_SECONDS = 10
+
 
 def stream_command(player, rate):
     """Return the Linux player's command for a mono, signed 16-bit PCM stream."""
@@ -66,7 +69,7 @@ class StreamPlayer:
                     raise RuntimeError(self.error_detail()) from None
                 remaining = remaining[count:]
                 last_progress = time.monotonic()
-            elif time.monotonic() - last_progress > 4:
+            elif time.monotonic() - last_progress > STREAM_STALL_SECONDS:
                 raise RuntimeError('Audio player stopped consuming data')
         if remaining:
             raise RuntimeError('Audio stopped')
@@ -169,6 +172,7 @@ class Depot:
         self.pause = threading.Event()
         self.duck_level = .25
         self.quiet = threading.Event()
+        self.unavailable = threading.Event()
         self.stop = threading.Event()
         self.thread = None
         self.mode = 'depot'
@@ -189,7 +193,7 @@ class Depot:
         self.duck_level = level
         self.pause.set()
         while self.thread and self.thread.is_alive() and not self.agent.stopping.is_set():
-            if self.quiet.wait(.2):
+            if self.unavailable.is_set() or self.quiet.wait(.2):
                 break
 
     def unmute(self):
@@ -212,14 +216,22 @@ class Depot:
                 self.run_stream(current, rate, samples)
                 return
             players = [p for p in ('afplay', 'pw-play', 'paplay', 'aplay') if shutil.which(p)]
-            if not players:
-                return
             gain, position = 0.0, 0
+            recovering = False
             with tempfile.TemporaryDirectory(prefix='depot-', dir=getattr(self.agent, 'temp_dir', self.agent.home)) as directory:
                 chunk = Path(directory) / 'ambient.wav'
                 while not self.stop.is_set():
                     if self.agent.stopping.is_set():
                         self.stop.wait(.1)
+                        continue
+                    if not players:
+                        self.unavailable.set()
+                        self.quiet.set()
+                        if not recovering:
+                            self.agent.say('Depot ambience unavailable; retrying in {} seconds'.format(AUDIO_RETRY_SECONDS))
+                            recovering = True
+                        self.stop.wait(AUDIO_RETRY_SECONDS)
+                        players = [p for p in ('afplay', 'pw-play', 'paplay', 'aplay') if shutil.which(p)]
                         continue
                     if self.mode != current and gain <= 0:
                         current = self.mode
@@ -227,6 +239,7 @@ class Depot:
                         position = 0
                     if self.pause.is_set() and self.mode == current and gain <= self.duck_level + 1e-6:
                         self.quiet.set()
+                        self.unavailable.set()
                     elif not self.pause.is_set():
                         self.quiet.clear()
                     target = 0.0 if self.mode != current else (self.duck_level if self.pause.is_set() else 1.0)
@@ -263,9 +276,18 @@ class Depot:
                         if self.agent.stopping.is_set() or self.stop.is_set():
                             gain = 0.0
                             continue
-                        self.agent.say('Depot ambience unavailable; continuing without background audio'
-                                       + (': ' + str(last_error) if last_error else ''))
-                        return
+                        self.agent.say('Depot ambience unavailable; retrying in {} seconds{}'.format(
+                            AUDIO_RETRY_SECONDS, ': ' + str(last_error) if last_error else ''))
+                        self.quiet.set()
+                        recovering = True
+                        gain = 0.0
+                        self.stop.wait(AUDIO_RETRY_SECONDS)
+                        players = [p for p in ('afplay', 'pw-play', 'paplay', 'aplay') if shutil.which(p)]
+                        continue
+                    if recovering:
+                        self.agent.say('Depot ambience restored')
+                        recovering = False
+                        self.unavailable.clear()
                     gain = end_gain
         except (OSError, ValueError, EOFError, wave.Error) as error:
             self.agent.say('Depot ambience unavailable: {}; continuing without background audio'.format(error))
@@ -275,10 +297,9 @@ class Depot:
     def run_stream(self, current, rate, samples):
         """Stream both backgrounds through one Linux player between announcements."""
         players = [p for p in ('pw-play', 'paplay', 'aplay') if shutil.which(p)]
-        if not players:
-            return
         failed = set()
         stream = None
+        recovering = False
         gain, position = 0.0, 0
         next_write = time.monotonic()
         try:
@@ -314,30 +335,39 @@ class Depot:
                     data.append(max(-32768, min(32767, value)))
                 if sys.byteorder != 'little':
                     data.byteswap()
-                while not self.stop.is_set() and not self.agent.stopping.is_set():
-                    if stream is None:
-                        player = next((p for p in players if p not in failed), None)
-                        if player is None:
-                            self.agent.say('Depot ambience unavailable; continuing without background audio')
-                            return
-                        try:
-                            stream = StreamPlayer(self.agent, player, rate, self.stop)
-                            next_write = time.monotonic()
-                        except (OSError, RuntimeError) as error:
-                            failed.add(player)
-                            self.agent.say('Background player {} failed: {}'.format(player, error))
-                            continue
+                if stream is None:
+                    player = next((p for p in players if p not in failed), None)
+                    if player is None:
+                        self.agent.say('Depot ambience unavailable; retrying in {} seconds'.format(AUDIO_RETRY_SECONDS))
+                        self.unavailable.set()
+                        self.quiet.set()
+                        recovering = True
+                        gain = 0.0
+                        self.stop.wait(AUDIO_RETRY_SECONDS)
+                        players = [p for p in ('pw-play', 'paplay', 'aplay') if shutil.which(p)]
+                        failed.clear()
+                        continue
                     try:
-                        stream.write(data.tobytes())
-                        break
+                        stream = StreamPlayer(self.agent, player, rate, self.stop)
+                        next_write = time.monotonic()
                     except (OSError, RuntimeError) as error:
-                        stream.close()
-                        stream = None
-                        if not self.stop.is_set() and not self.agent.stopping.is_set():
-                            failed.add(player)
-                            self.agent.say('Background player {} failed: {}'.format(player, error))
-                else:
+                        failed.add(player)
+                        self.agent.say('Background player {} failed: {}'.format(player, error))
+                        continue
+                try:
+                    stream.write(data.tobytes())
+                except (OSError, RuntimeError) as error:
+                    stream.close()
+                    stream = None
+                    gain = 0.0
+                    if not self.stop.is_set() and not self.agent.stopping.is_set():
+                        failed.add(player)
+                        self.agent.say('Background player {} failed: {}'.format(player, error))
                     continue
+                if recovering:
+                    self.agent.say('Depot ambience restored')
+                    recovering = False
+                    self.unavailable.clear()
                 gain = end_gain
                 position = (position + count) % len(samples)
                 next_write = max(next_write + elapsed, time.monotonic())

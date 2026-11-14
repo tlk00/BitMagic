@@ -170,7 +170,9 @@ over about three seconds. On Linux, both backgrounds use a continuous PCM stream
 to one player, including while foreground announcements play. Linux tries PipeWire, PulseAudio and ALSA in
 that order. On macOS, playback uses one-second WAV chunks with short tapers at
 the boundaries. The background is independent of builds and tests;
-an unavailable player disables the ambience without stopping work. Set
+an unavailable player triggers another connection attempt every 30 seconds
+without stopping work or blocking announcements. Restoration is logged and
+the background fades back in. Set
 `DEPOT_SOUND=no` in the launcher or use `--no-depot` to disable both backgrounds;
 `--no-sound` disables all audio. The normal sound demo and individual previews
 play their effects without the continuous depot layer.

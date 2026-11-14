@@ -120,7 +120,7 @@ class DepotTests(unittest.TestCase):
             self.assertTrue(all(first == 0 and last == 0 for first, last in edges))
 
     def test_player_failure_releases_foreground(self):
-        """A broken audio device ends ambience and cannot block an announcement."""
+        """A broken audio device enters retry and cannot block an announcement."""
         with tempfile.TemporaryDirectory() as directory:
             messages = []
             def command(argv, timeout):
@@ -131,12 +131,63 @@ class DepotTests(unittest.TestCase):
             worker = depot.Depot(agent)
             with patch.object(depot.sys, 'platform', 'darwin'), \
                  patch.object(depot.shutil, 'which', side_effect=lambda name: name == 'afplay'):
-                worker.start()
-                worker.thread.join(3)
-                worker.mute()
+                try:
+                    worker.start()
+                    self.assertTrue(worker.quiet.wait(3))
+                    worker.mute()
+                    self.assertTrue(worker.thread.is_alive())
+                finally:
+                    worker.close()
             self.assertFalse(worker.thread.is_alive())
             self.assertTrue(worker.quiet.is_set())
-            self.assertTrue(any('continuing without background audio' in text for text in messages))
+            self.assertTrue(any('retrying in' in text for text in messages))
+
+    def test_linux_stream_recovers_and_releases_announcements(self):
+        """A stalled player is retried, restores the current mode, and stops cleanly."""
+        messages = []
+        failed = threading.Event()
+        restored = threading.Event()
+        launches = []
+        class FakeStream:
+            def __init__(self, agent, player, rate, stop):
+                launches.append(player)
+
+            def write(self, data):
+                if len(launches) == 1:
+                    failed.set()
+                    raise RuntimeError('temporary stall')
+                restored.set()
+
+            def close(self):
+                pass
+
+        agent = SimpleNamespace(args=SimpleNamespace(sound_volume=.35),
+                                stopping=threading.Event(), say=messages.append)
+        worker = depot.Depot(agent)
+        samples = array.array('h', [5000]) * 22050
+        with patch.object(depot.sys, 'platform', 'linux'), \
+             patch.object(depot.shutil, 'which', side_effect=lambda name: name == 'paplay'), \
+             patch.object(depot, 'read_loop', return_value=(22050, samples)), \
+             patch.object(depot, 'StreamPlayer', FakeStream), \
+             patch.object(depot, 'AUDIO_RETRY_SECONDS', .3):
+            try:
+                worker.start()
+                self.assertTrue(failed.wait(2))
+                self.assertTrue(worker.quiet.wait(2))
+                worker.set_mode('train-normal')
+                worker.mute()
+                worker.unmute()
+                start = time.monotonic()
+                worker.mute()
+                self.assertLess(time.monotonic() - start, .2)
+                self.assertTrue(restored.wait(2))
+                self.assertTrue(worker.thread.is_alive())
+                self.assertGreaterEqual(len(launches), 2)
+                self.assertTrue(any('retrying in' in message for message in messages))
+                self.assertTrue(any('ambience restored' in message for message in messages))
+            finally:
+                worker.close()
+        self.assertFalse(worker.thread.is_alive())
 
     def test_repeated_player_processes_keep_running(self):
         """A sequence of real player processes continues past three seconds."""
