@@ -125,9 +125,42 @@ class ReferenceCacheTests(unittest.TestCase):
                 path.write_bytes(b'other data')
             return original(path, *args, **kwargs)
         with patch.object(Path, 'open', corrupt_before_verification):
-            with self.assertRaisesRegex(ValueError, 'verification'):
+            with self.assertRaisesRegex(ValueError, 'verification') as caught:
                 self.copy()
+        message = str(caught.exception)
+        self.assertIn('mismatches: SHA-256', message)
+        self.assertIn('source_stream_sha256=', message)
+        self.assertIn('destination_sha256=', message)
+        self.assertIn('expected_size=10 source_size=10 destination_size=10', message)
         self.assertEqual(list((self.cache / 'inv-reference-v1').iterdir()), [])
+
+    def test_source_mtime_change_has_distinct_diagnostics(self):
+        """Matching bytes with a changed source timestamp identify metadata failure."""
+        original = Path.open
+        source = self.source / 'Gov2Flat/gov2.sorted'
+        stamp = source.stat()
+        def touch_before_verification(path, *args, **kwargs):
+            if path.name == 'gov2.sorted' and args and args[0] == 'rb' and self.cache.resolve() in path.resolve().parents:
+                os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns + 1000000000))
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'open', touch_before_verification):
+            with self.assertRaisesRegex(ValueError, 'mismatches: source mtime_ns') as caught:
+                self.copy()
+        self.assertIn('delta_ns=1000000000', str(caught.exception))
+        self.assertNotIn('mismatches: SHA-256', str(caught.exception))
+
+    def test_destination_size_mismatch_is_reported(self):
+        """A truncated copy names length and digest mismatches together."""
+        original = Path.open
+        def truncate_before_verification(path, *args, **kwargs):
+            if path.name == 'gov2.sorted' and args and args[0] == 'rb' and self.cache.resolve() in path.resolve().parents:
+                path.write_bytes(b'x')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'open', truncate_before_verification):
+            with self.assertRaises(ValueError) as caught:
+                self.copy()
+        self.assertIn('destination size, destination bytes read, SHA-256', str(caught.exception))
+        self.assertIn('expected_size=10 source_size=10 destination_size=1', str(caught.exception))
 
     def test_reuse_does_not_read_reference_contents(self):
         first = self.copy()

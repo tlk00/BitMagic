@@ -150,13 +150,17 @@ def copy_reference(source, cache_root, reserve_bytes, report, progress=None):
             target = tree / name
             target.parent.mkdir(parents=True, exist_ok=True)
             checksum = hashlib.sha256()
+            written_bytes = 0
             with source_file.open('rb') as incoming, target.open('xb') as output:
                 while True:
                     data = incoming.read(CHUNK_BYTES)
                     if not data:
                         break
                     checksum.update(data)
-                    output.write(data)
+                    written = output.write(data)
+                    if written != len(data):
+                        raise OSError('short cache write: {} | requested {} bytes, wrote {}'.format(name, len(data), written))
+                    written_bytes += written
                     copied_bytes += len(data)
                     if time.monotonic() >= progress_at:
                         report('INV CACHE | copying {} | {} of {} bytes | {:.1f}s'.format(
@@ -183,13 +187,39 @@ def copy_reference(source, cache_root, reserve_bytes, report, progress=None):
                         if progress:
                             progress('verifying', completed_bytes, total, name)
             current = source_file.stat()
-            if (current.st_size != size or current.st_mtime_ns != mtime or
-                    target.stat().st_size != size or actual.digest() != checksum.digest()):
-                raise ValueError('copy verification or source stability failed: ' + name)
+            target_size = target.stat().st_size
+            mismatches = []
+            for label, expected, observed in (
+                    ('source size', size, current.st_size),
+                    ('source mtime_ns', mtime, current.st_mtime_ns),
+                    ('source bytes read', size, copied_bytes),
+                    ('destination bytes written', size, written_bytes),
+                    ('destination size', size, target_size),
+                    ('destination bytes read', size, checked_bytes),
+                    ('SHA-256', checksum.hexdigest(), actual.hexdigest())):
+                if expected != observed:
+                    mismatches.append(label)
+            if mismatches:
+                detail = ('copy verification failed: {} | mismatches: {} | source {} | destination {} | '
+                          'expected_size={} source_size={} destination_size={} | '
+                          'source_mtime_before_ns={} source_mtime_after_ns={} delta_ns={} | '
+                          'source_bytes_read={} destination_bytes_written={} destination_bytes_read={} | '
+                          'source_stream_sha256={} destination_sha256={}').format(
+                    name, ', '.join(mismatches), source_file, target, size, current.st_size, target_size,
+                    mtime, current.st_mtime_ns, current.st_mtime_ns - mtime,
+                    copied_bytes, written_bytes, checked_bytes, checksum.hexdigest(), actual.hexdigest())
+                report('INV CACHE | ' + detail)
+                raise ValueError(detail)
             report('INV CACHE | file {} | {} bytes | copy {:.1f}s | verify {:.1f}s'.format(
                 name, size, copied - before, time.monotonic() - copied))
-        if inventory(source) != files:
-            raise ValueError('reference changed during copying')
+        final_files = inventory(source)
+        if final_files != files:
+            changes = [name for name in sorted(files.keys() | final_files.keys())
+                       if files.get(name) != final_files.get(name)]
+            for name in changes[:20]:
+                report('INV CACHE | source inventory changed: {} | before [bytes, mtime_ns]={} | after={}'.format(
+                    name, files.get(name), final_files.get(name)))
+            raise ValueError('reference changed during copying: {} files changed; see INV CACHE diagnostics'.format(len(changes)))
         (staging / 'inventory.json').write_text(json.dumps(source_info, sort_keys=True))
         os.rename(staging, destination)
     report('INV CACHE | ready {} | {} bytes | {:.1f}s'.format(reference, total, time.monotonic() - started))

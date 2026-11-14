@@ -585,8 +585,11 @@ On Linux, an existing `/mnt/c/TAgent-cache` is used automatically for a local
 reference copy. Select another existing writable directory with `--inv-cache-dir
 PATH` or `INV_CACHE_DIR` in `run_tagent.sh`; `--no-inv-cache` reads the source
 directly. TAgent reports the source, free space, each file's size and copy and
-verification times. The first copy is SHA-256 checked before publication;
-later startups compare the source file inventory and metadata and cached file
+verification times. The first copy is SHA-256 checked before publication.
+Verification failures log each mismatching field, both SHA-256 values, expected
+and actual lengths, byte counts, and source modification timestamps in nanoseconds
+with their difference. Final source-inventory changes identify affected filenames.
+Later startups compare the source file inventory and metadata and cached file
 sizes without rereading the file contents. Same-size cache corruption after
 publication is therefore not detected by this startup check. Changed references
 create a new cache; after successful verification and publication, TAgent removes
