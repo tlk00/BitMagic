@@ -1274,10 +1274,60 @@ class SupervisorTests(unittest.TestCase):
         """Network recovery failure never silently tests a potentially stale checkout."""
         with patch.object(self.agent, 'validate'), \
              patch.object(self.agent, 'fetch', side_effect=ta.Failure('offline')), \
-             patch.object(self.agent, 'cycle') as cycle:
+             patch.object(self.agent, 'cycle') as cycle, \
+             patch.object(self.agent, 'discover_inv_reference') as discover:
             with self.assertRaisesRegex(ta.Failure, 'offline'):
                 self.agent.run()
             cycle.assert_not_called()
+            discover.assert_not_called()
+
+    def test_startup_update_restarts_before_reference_copy(self):
+        """An updated agent restarts before discovering or copying its reference."""
+        self.agent.lock_file = (self.root / 'lock').open('a')
+        old = 'a' * 40
+        new = 'b' * 40
+        def git(*args):
+            if args[:2] == ('rev-parse', 'HEAD'):
+                return old
+            if args[:2] == ('status', '--porcelain'):
+                return ''
+            if args[:2] == ('diff', '--name-only'):
+                return 'tests/tagent/tagent.py'
+            if args[:2] == ('merge', '--ff-only'):
+                return ''
+            raise AssertionError(args)
+        with patch.object(self.agent, 'validate'), \
+             patch.object(self.agent, 'fetch', return_value=new), \
+             patch.object(self.agent, 'git', side_effect=git), \
+             patch.object(self.agent, 'discover_inv_reference') as discover, \
+             patch.object(ta.os, 'execv', side_effect=RuntimeError('restart sentinel')):
+            with self.assertRaisesRegex(RuntimeError, 'restart sentinel'):
+                self.agent.run()
+        discover.assert_not_called()
+
+    def test_startup_fetch_precedes_reference_then_build(self):
+        """Reference preparation happens after the first fetch and before testing."""
+        self.agent.args.once = True
+        commit = 'a' * 40
+        events = []
+        with patch.object(self.agent, 'validate', side_effect=lambda: events.append('validate')), \
+             patch.object(self.agent, 'fetch', side_effect=lambda *_: events.append('fetch') or commit), \
+             patch.object(self.agent, 'git', return_value=commit), \
+             patch.object(self.agent, 'discover_inv_reference', side_effect=lambda: events.append('reference')), \
+             patch.object(self.agent, 'cycle', side_effect=lambda: events.append('cycle') or True):
+            self.assertEqual(self.agent.run(), 0)
+        self.assertEqual(events, ['validate', 'fetch', 'reference', 'cycle'])
+
+    def test_check_validates_reference_without_fetch(self):
+        """Local check keeps checking reference while remaining offline."""
+        self.agent.args.check = True
+        with patch.object(self.agent, 'validate') as validate, \
+             patch.object(self.agent, 'fetch') as fetch, \
+             patch.object(self.agent, 'discover_inv_reference') as discover:
+            self.assertEqual(self.agent.run(), 0)
+        validate.assert_called_once()
+        discover.assert_called_once()
+        fetch.assert_not_called()
 
     def test_update_stops_at_perf_boundary(self):
         """A discovered update waits for all perf jobs and skips old stress builds."""

@@ -1072,7 +1072,6 @@ class Agent:
                 self.args.sound_volume > 0 and self.audio_available):
             self.depot = depot.Depot(self)
             self.depot.start()
-        self.discover_inv_reference()
         self.memory_monitor = memory_monitor.MemoryMonitor(self)
         self.memory_monitor.start()
         self.say('Validated Python {} | {} workers | {}'.format(platform.python_version(), self.jobs, self.repo))
@@ -2878,12 +2877,14 @@ class Agent:
             self.say('Previous cycle did not complete successfully | evidence ' + str(marker) + ' | ' + marker.read_text())
         self.validate()
         if self.args.check:
+            self.discover_inv_reference()
             return 0
         self.cleanup_logs()
         self.sound('start')
         failed = None
         state_path = self.home / 'success.json'
         startup_pending = True
+        reference_prepared = False
         while True:
             updated = False
             tip = self.fetch(failed)
@@ -2908,6 +2909,10 @@ class Agent:
                         self.depot.close()
                     self.stop_children()
                     os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
+            if not reference_prepared:
+                self.say('STARTUP | repository current; preparing inv_list reference')
+                self.discover_inv_reference()
+                reference_prepared = True
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
             if self.inv_reference is not None:
                 key['inv_reference'] = str(self.inv_reference)

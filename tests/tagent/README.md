@@ -576,6 +576,10 @@ collection under `TAgent-logs/gov2-reference-*`, or specify
 sizes of the streams required by the selected mode; pedantic mode additionally
 requires `matrix.json`. Missing, incomplete,
 or ambiguous references are startup errors. The runner performs its own checks.
+On normal startup, after basic checkout and environment checks, TAgent fetches
+and applies repository updates before discovering or copying reference data.
+If TAgent itself changed, it restarts before reference preparation. `--check`
+continues to validate locally without fetching.
 
 On Linux, an existing `/mnt/c/TAgent-cache` is used automatically for a local
 reference copy. Select another existing writable directory with `--inv-cache-dir
