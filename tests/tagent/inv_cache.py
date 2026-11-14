@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 import time
@@ -43,7 +44,48 @@ def matches(root, files):
         name: data[0] for name, data in files.items()}
 
 
-def copy_reference(source, cache_root, reserve_bytes, report):
+def remove_old_copies(parent, current, report):
+    """Remove recognized published copies after current was verified and published.
+
+    Leave unknown directories, symlinks, staging and quarantined files untouched.
+    Log deletion failures without invalidating the newly published reference.
+    """
+    if parent.is_symlink():
+        report('INV CACHE | cleanup skipped: cache parent is a symlink')
+        return
+    try:
+        candidates = list(parent.iterdir())
+    except OSError as error:
+        report('INV CACHE | cleanup unavailable: ' + str(error))
+        return
+    for candidate in candidates:
+        if candidate == current or not re.fullmatch(r'[0-9a-f]{24}', candidate.name):
+            continue
+        try:
+            if candidate.is_symlink() or not candidate.is_dir():
+                continue
+            if {child.name for child in candidate.iterdir()} != {'reference', 'inventory.json'}:
+                continue
+            manifest = candidate / 'inventory.json'
+            reference = candidate / 'reference'
+            if manifest.is_symlink() or reference.is_symlink() or not reference.is_dir():
+                continue
+            saved = json.loads(manifest.read_text())
+            if not isinstance(saved, dict) or saved.get('format') != 1 or not isinstance(saved.get('files'), dict):
+                continue
+            key = hashlib.sha256(json.dumps(saved, sort_keys=True).encode()).hexdigest()[:24]
+            if key != candidate.name:
+                continue
+            size = sum(item[0] for item in saved['files'].values())
+            report('INV CACHE | removing old copy {} | {} bytes recorded'.format(candidate, size))
+            started = time.monotonic()
+            shutil.rmtree(candidate)
+            report('INV CACHE | old copy removed {} | {:.1f}s'.format(candidate, time.monotonic() - started))
+        except (OSError, ValueError, TypeError, IndexError, json.JSONDecodeError) as error:
+            report('INV CACHE | cannot remove old copy {}: {}'.format(candidate, error))
+
+
+def copy_reference(source, cache_root, reserve_bytes, report, progress=None):
     """Return a validated cached reference, or raise on failure for caller fallback.
 
     source must be immutable during copying. cache_root must already exist and be
@@ -51,6 +93,8 @@ def copy_reference(source, cache_root, reserve_bytes, report):
     an entirely verified tree with unchanged source metadata is published.
     Existing copies use their saved source inventory and per-file sizes.
     report receives operator-readable status and per-file timing messages.
+    progress, when supplied, receives phase, aggregate bytes copied, total bytes
+    and the current filename. It must not delay the copy.
     """
     source = source.resolve()
     cache_root = cache_root.resolve()
@@ -90,6 +134,9 @@ def copy_reference(source, cache_root, reserve_bytes, report):
     if free < total + reserve_bytes:
         raise ValueError('insufficient cache space: {} bytes free; {} bytes required including reserve'.format(free, total + reserve_bytes))
     report('INV CACHE | copying to {} | free {} bytes | reserve {} bytes'.format(cache_root, free, reserve_bytes))
+    completed_bytes = 0
+    if progress:
+        progress('copying', 0, total, '')
     with tempfile.TemporaryDirectory(prefix='.copy-', dir=parent) as temp:
         staging = Path(temp)
         tree = staging / 'reference'
@@ -115,8 +162,13 @@ def copy_reference(source, cache_root, reserve_bytes, report):
                         report('INV CACHE | copying {} | {} of {} bytes | {:.1f}s'.format(
                             name, copied_bytes, size, time.monotonic() - before))
                         progress_at = time.monotonic() + 30
+                        if progress:
+                            progress('copying', completed_bytes + copied_bytes, total, name)
             copied = time.monotonic()
+            completed_bytes += copied_bytes
             report('INV CACHE | verifying {} | {} bytes'.format(name, size))
+            if progress:
+                progress('verifying', completed_bytes, total, name)
             actual = hashlib.sha256()
             checked_bytes = 0
             progress_at = copied + 30
@@ -128,6 +180,8 @@ def copy_reference(source, cache_root, reserve_bytes, report):
                         report('INV CACHE | verifying {} | {} of {} bytes | {:.1f}s'.format(
                             name, checked_bytes, size, time.monotonic() - copied))
                         progress_at = time.monotonic() + 30
+                        if progress:
+                            progress('verifying', completed_bytes, total, name)
             current = source_file.stat()
             if (current.st_size != size or current.st_mtime_ns != mtime or
                     target.stat().st_size != size or actual.digest() != checksum.digest()):
@@ -139,4 +193,7 @@ def copy_reference(source, cache_root, reserve_bytes, report):
         (staging / 'inventory.json').write_text(json.dumps(source_info, sort_keys=True))
         os.rename(staging, destination)
     report('INV CACHE | ready {} | {} bytes | {:.1f}s'.format(reference, total, time.monotonic() - started))
+    if progress:
+        progress('ready', total, total, '')
+    remove_old_copies(parent, destination, report)
     return reference

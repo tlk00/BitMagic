@@ -40,6 +40,58 @@ class ReferenceCacheTests(unittest.TestCase):
         second = self.copy()
         self.assertNotEqual(first, second)
         self.assertEqual((second / 'references.tsv').read_text(), 'changed reference')
+        self.assertFalse(first.exists())
+        self.assertTrue(any('old copy removed' in line for line in self.messages))
+
+    def test_old_copy_survives_failed_new_copy(self):
+        first = self.copy()
+        (self.source / 'references.tsv').write_text('changed reference')
+        with patch.object(inv_cache.shutil, 'disk_usage', return_value=type('Usage', (), {'free': 0})()):
+            with self.assertRaisesRegex(ValueError, 'insufficient cache space'):
+                self.copy()
+        self.assertTrue(first.is_dir())
+        self.assertEqual((first / 'references.tsv').read_text(), 'reference data')
+
+    def test_old_copy_survives_copy_io_failure(self):
+        first = self.copy()
+        (self.source / 'references.tsv').write_text('changed reference')
+        original = Path.open
+        def fail_source(path, *args, **kwargs):
+            if path.name == 'gov2.sorted' and args and args[0] == 'rb':
+                raise OSError('source unavailable')
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'open', fail_source):
+            with self.assertRaisesRegex(OSError, 'source unavailable'):
+                self.copy()
+        self.assertTrue(first.is_dir())
+
+    def test_cleanup_preserves_unrecognized_and_quarantined_files(self):
+        first = self.copy()
+        parent = first.parent.parent
+        unrelated = parent / '0123456789abcdef01234567'
+        unrelated.mkdir()
+        (unrelated / 'important.txt').write_text('leave me alone')
+        quarantine = parent / '.invalid-test'
+        quarantine.mkdir()
+        (self.source / 'references.tsv').write_text('changed reference')
+        self.copy()
+        self.assertTrue((unrelated / 'important.txt').is_file())
+        self.assertTrue(quarantine.is_dir())
+        self.assertFalse(first.exists())
+
+    def test_cleanup_failure_keeps_new_copy(self):
+        first = self.copy()
+        (self.source / 'references.tsv').write_text('changed reference')
+        real_rmtree = inv_cache.shutil.rmtree
+        def remove(path, *args, **kwargs):
+            if Path(path) == first.parent:
+                raise OSError('access denied')
+            return real_rmtree(path, *args, **kwargs)
+        with patch.object(inv_cache.shutil, 'rmtree', side_effect=remove):
+            second = self.copy()
+        self.assertTrue(first.is_dir())
+        self.assertEqual((second / 'references.tsv').read_text(), 'changed reference')
+        self.assertTrue(any('cannot remove old copy' in line for line in self.messages))
 
     def test_corrupted_copy_is_quarantined_and_rebuilt(self):
         first = self.copy()

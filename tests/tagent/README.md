@@ -281,12 +281,9 @@ warning formats may not be recognized; the currently unfinished line is counted
 when it completes, or when its build ends. This is a count of log diagnostic
 lines, not unique issues or a full code analysis.
 
-With Piper or eSpeak NG, the dispatcher announces the exact warning and build-target
-counts. For eSpeak, the voice is selected from `DISPATCHER_VOICE` (default
-`en-us+f3,en-us+f4,en-us+m3`; set one voice or a comma-separated list via the
-launcher or `--dispatcher-voice`). At zero warnings, randomized reports mention
-workshop and depot progress; above zero the dispatcher
-calls caution on the line.
+With Piper or eSpeak NG, depot foreman Angus announces the exact warning and
+build-target counts. At zero warnings, randomized reports mention workshop
+and depot progress; above zero the foreman calls for caution.
 The wording is railway-themed fiction, not a real dispatcher instruction.
 At the end of the build, success or failure, TAgent prints the recognized
 compiler/linker `error:` (including `fatal error:`) and `warning:` line totals
@@ -319,6 +316,12 @@ and keeps the dispatcher voice under `LOG_DIR/piper-voices/en_US-lessac-medium.o
 with its `.onnx.json` alongside. The conductor and engineer models are also
 stored in `LOG_DIR/piper-voices`; configure them with `PIPER_CONDUCTOR_MODEL` /
 `--piper-conductor-model` and `PIPER_ENGINEER_MODEL` / `--piper-engineer-model`.
+Foreman Angus uses speaker 4 of [DataCraftsmanAustralia's Australian Piper voice](https://huggingface.co/DataCraftsmanAustralia/piper-en_AU-librivox-medium)
+(CC BY 4.0; see its attribution file). TAgent downloads the verified model and
+configuration into `LOG_DIR/piper-voices` in the background if needed, unless
+downloads are disabled. Set `PIPER_FOREMAN_MODEL` or `--piper-foreman-model`
+to use an existing compatible multispeaker model with Angus at speaker 4.
+If Angus is unavailable, Joe's Piper voice and then eSpeak are used as fallback.
 `LOG_DIR` means the selected `--log-dir` or the default `TAgent-logs`.
 The conductor voice is prepared at startup, in the background during normal
 operation. TAgent reports when the files are present or downloaded, and logs
@@ -582,10 +585,18 @@ verification times. The first copy is SHA-256 checked before publication;
 later startups compare the source file inventory and metadata and cached file
 sizes without rereading the file contents. Same-size cache corruption after
 publication is therefore not detected by this startup check. Changed references
-create a new cache; older and quarantined copies are preserved and may require
-manual cleanup. Missing space, permissions or copy errors fall back to the
+create a new cache; after successful verification and publication, TAgent removes
+older recognized published copies. Unrecognized and quarantined copies are kept.
+Enough free space for the new copy must be available before old copies are removed.
+Missing space, permissions or copy errors fall back to the
 original reference. Logs, temporary files and the inv_list hash cache remain in
 the log directory. The first copy can take considerable time and storage.
+During a new copy, the depot ambience plays and the depot foreman reports
+loading and verification about every five minutes and on completion. These
+announcements use Angus's voice and join the normal serialized audio queue.
+After a successful build he calls for Engineer Joe, using rotating replies;
+Joe then responds. Preview with `--sound-preview cache-progress` or
+`--sound-preview foreman-build-reply`; both appear in the sound demo.
 
 Use `--suppress perf,inv_list` (or repeat `--suppress`) to skip selected test
 stages: `perf`, `inv_list`, `stress`. Builds still run. For example:

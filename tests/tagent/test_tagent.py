@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Focused supervisor checks using temporary checkouts and synthetic test jobs."""
 import importlib.util
+import hashlib
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -9,6 +11,7 @@ import tempfile
 import threading
 import time
 import unittest
+import wave
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('tagent', Path(__file__).with_name('tagent.py'))
@@ -493,6 +496,28 @@ class SupervisorTests(unittest.TestCase):
             self.agent.discover_inv_reference()
         copier.assert_not_called()
         self.assertEqual(self.agent.inv_reference, source.resolve())
+
+    def test_reference_cache_foreman_reports_and_completion(self):
+        """Cache reports are rate-limited and queued progress expires on completion."""
+        self.agent.args.suppress.discard('inv_list')
+        source = self.root / 'reference'
+        source.mkdir()
+        self.agent.args.path_to_invref = source
+        self.agent.args.inv_cache_dir = self.root / 'ssd'
+        def copy(source, cache, reserve, report, progress):
+            progress('copying', 0, 10 * 1024**3, '')
+            progress('verifying', 5 * 1024**3, 10 * 1024**3, 'input')
+            progress('ready', 10 * 1024**3, 10 * 1024**3, '')
+            return self.root / 'cached'
+        generation = self.agent.audio_phase_generation
+        with patch.object(ta.inv_reference, 'inspect_reference', return_value=(True, 'valid')), \
+             patch.object(ta.inv_cache, 'copy_reference', side_effect=copy), \
+             patch.object(self.agent, 'sound') as sound:
+            self.agent.discover_inv_reference()
+        calls = sound.call_args_list
+        self.assertEqual([call.args[0] for call in calls], ['cache-progress', 'cache-complete'])
+        self.assertIn('Depot foreman to Dispatch', calls[0].kwargs['workers'])
+        self.assertEqual(self.agent.audio_phase_generation, generation + 1)
 
     def test_inv_pedantic_uses_generic_and_best_supported_simd(self):
         """Pedantic uses two releases even when debug and more SIMD builds exist."""
@@ -1356,18 +1381,72 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(sum(x.args[0] == 'engineer-build-reply' for x in sound.call_args_list), 2)
 
     def test_engineer_replies_follow_successful_build_without_repeats(self):
-        """Dispatch precedes Joe, who does not joke after a build failure."""
+        """The foreman calls for Joe after a successful build; failure is distinct."""
         with patch.object(self.agent, 'sound') as sound:
             for _ in ta.ENGINEER_BUILD_REPLIES:
                 self.agent.finish_build(True)
             calls = sound.call_args_list
-            self.assertEqual([c.args[0] for c in calls[::2]], ['build-final-ok'] * len(ta.ENGINEER_BUILD_REPLIES))
-            replies = [c.kwargs['workers'] for c in calls[1::2]]
+            self.assertEqual([c.args[0] for c in calls[::3]], ['build-final-ok'] * len(ta.ENGINEER_BUILD_REPLIES))
+            self.assertEqual([c.args[0] for c in calls[1::3]], ['foreman-build-reply'] * len(ta.ENGINEER_BUILD_REPLIES))
+            replies = [c.kwargs['workers'] for c in calls[2::3]]
             self.assertEqual(set(replies), set(ta.ENGINEER_BUILD_REPLIES))
             sound.reset_mock()
             self.agent.finish_build(False)
             sound.assert_called_once()
             self.assertEqual(sound.call_args.args[0], 'build-final-failed')
+
+    def test_foreman_uses_angus_and_falls_back_to_engineer(self):
+        """Foreman selects speaker four and retains the existing fallback on failure."""
+        self.agent.foreman_available = True
+        self.agent.joker_available = True
+        self.agent.args.tts = 'auto'
+        commands = []
+        def synth(argv, **kwargs):
+            commands.append(argv)
+            if str(self.agent.foreman_model) in argv:
+                raise ta.Failure('temporary Angus failure')
+            with wave.open(argv[argv.index('-f') + 1], 'wb') as stream:
+                stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                stream.writeframes(b'\x10\x10' * 2205)
+        with patch.object(self.agent, 'command', side_effect=synth):
+            self.assertIsNotNone(self.agent.synthesize_announcement(self.root / 'voice.wav',
+                'Depot foreman reporting.', lambda: 'en-us+m3', 40, foreman=True))
+        self.assertEqual(commands[0][commands[0].index('-s') + 1], '4')
+        self.assertIn(str(self.agent.joker_model), commands[1])
+        self.assertTrue(self.agent.foreman_failed)
+
+    def test_foreman_download_is_verified_and_uses_speaker_four(self):
+        """Provision both pinned voice files, then probe the intended speaker."""
+        model = b'model fixture'
+        config = b'{"num_speakers": 10}'
+        files = {'en_AU-librivox-medium.onnx': model,
+                 'en_AU-librivox-medium.onnx.json': config}
+        hashes = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
+        calls = []
+        def download(url, timeout):
+            return io.BytesIO(files[url.rsplit('/', 1)[-1]])
+        def command(argv, **kwargs):
+            calls.append(argv)
+            with wave.open(argv[argv.index('-f') + 1], 'wb') as stream:
+                stream.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+                stream.writeframes(b'\x10\x10' * 100)
+        with patch.object(ta, 'FOREMAN_VOICE_FILES', hashes), \
+             patch.object(ta.urllib.request, 'urlopen', side_effect=download), \
+             patch.object(self.agent, 'ensure_piper_engine'), \
+             patch.object(self.agent, 'command', side_effect=command):
+            self.agent.prepare_foreman_voice()
+        self.assertTrue(self.agent.foreman_available)
+        self.assertEqual(self.agent.foreman_model.read_bytes(), model)
+        self.assertEqual(calls[0][calls[0].index('-s') + 1], '4')
+
+    def test_foreman_bad_download_falls_back_without_publishing(self):
+        """Checksum failure keeps Angus unavailable and never publishes bad files."""
+        with patch.object(ta.urllib.request, 'urlopen', return_value=io.BytesIO(b'wrong')), \
+             patch.object(self.agent, 'ensure_piper_engine'):
+            self.agent.prepare_foreman_voice()
+        self.assertFalse(self.agent.foreman_available)
+        self.assertFalse(self.agent.foreman_model.exists())
+        self.assertIn('checksum mismatch', (self.agent.home / 'agent.log').read_text())
 
     def test_samples_spoken_completion_and_global_warnings(self):
         """Sample completion is explicit; warnings aggregate across all families."""

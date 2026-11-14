@@ -11,6 +11,7 @@ import datetime
 import depot
 import fcntl
 import fireman
+import hashlib
 import inv_cache
 import json
 import csv
@@ -32,11 +33,16 @@ import tempfile
 import threading
 import time
 import soundtrack
+import urllib.request
 import wave
 
 
 # Initial estimate until a successful run teaches the target for a variant.
 PERF_ESTIMATED_TESTS = 299
+FOREMAN_VOICE_FILES = {
+    'en_AU-librivox-medium.onnx': 'f34849bce64d803d0fe90087766d5d6f2a8215a12edad43e486d77072df7dd41',
+    'en_AU-librivox-medium.onnx.json': 'e0d8d381bf3eedeb7483cfa4ab5333d45284d30822bbc93f39fd10dc2935c1c1',
+}
 
 
 def perf_estimated_percent(count, target=PERF_ESTIMATED_TESTS):
@@ -110,6 +116,13 @@ ENGINEER_BUILD_REPLIES = (
     'Engineer Joe to Dispatch. The crew found some loose instructions. They are not sure whether to assemble them or put them back in the register. Over.',
     'Engineer Joe to Dispatch. The mechanic asked for an assembly drawing. I gave him the disassembly. We are no longer on speaking terms. Over.',
     'Engineer Joe to Dispatch. The engine passed inspection, but the optimizer removed the caboose. Apparently nobody was using it. Over.',
+)
+
+FOREMAN_BUILD_REPLIES = (
+    'Depot foreman Angus to Dispatch. The build is finished. Where the hell is that engineer who was so keen to get moving? My crew has been working their backsides off, and Joe has gone walkabout. Send him back to his locomotive. Over.',
+    'Depot foreman Angus to Dispatch. The engine is assembled, the crews have worked like mad, and our impatient engineer is nowhere to be found. If Joe is at the tea room, tell him his train is ready and so is my temper. Over.',
+    'Depot foreman Angus to Dispatch. We have finished the bloody build. Joe could not wait to leave, could he? Well, we have busted our backsides in this shed, and now the man has vanished. Find that engineer and put him on his engine. Over.',
+    'Depot foreman Angus to Dispatch. All build crews report finished. We have been sweating over this locomotive while Joe has apparently gone on an extended inspection of the refreshment room. Tell him to get his backside back here. Over.',
 )
 
 
@@ -230,9 +243,9 @@ def build_report_text(count, progress=None):
             'The locomotive is coming together nicely in the shed.',
             'The depot crew reports a clear inspection so far.',
         ))
-        return 'Dispatch to BitMagic. Build in progress. No compiler warnings so far.' + status + ' ' + depot_status
+        return 'Depot foreman to Dispatch. Build in progress. No compiler warnings so far.' + status + ' ' + depot_status
     word = 'warning' if count == 1 else 'warnings'
-    return ('Dispatch to BitMagic. Attention in the depot. {} compiler {} so far.'.format(count, word)
+    return ('Depot foreman to Dispatch. Attention in the depot. {} compiler {} so far.'.format(count, word)
             + status + ' Please check the build log.')
 
 
@@ -251,7 +264,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'cache-progress', 'foreman-build-reply', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -329,6 +342,8 @@ def arguments():
                         help='Piper engineer model (default: LOG_DIR/piper-voices/en_US-danny-low.onnx)')
     parser.add_argument('--piper-fireman-model', default=os.environ.get('PIPER_FIREMAN_MODEL') or None,
                         help='Piper fireman voice (default: LOG_DIR/piper-voices/en_US-ryan-medium.onnx)')
+    parser.add_argument('--piper-foreman-model', default=os.environ.get('PIPER_FOREMAN_MODEL') or None,
+                        help='Piper foreman Angus model (default: LOG_DIR/piper-voices/en_AU-librivox-medium.onnx, speaker 4)')
     parser.add_argument('--no-joker', action='store_true', help='disable engineer jokes')
     parser.add_argument('--no-piper-install', action='store_true',
                         default=os.environ.get('PIPER_INSTALL', 'yes') == 'no',
@@ -342,7 +357,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'cache-progress', 'foreman-build-reply', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -514,6 +529,14 @@ class Agent:
         self.fireman_model = Path(args.piper_fireman_model or self.voices_dir / 'en_US-ryan-medium.onnx').expanduser()
         self.fireman_available = self.fireman_model.is_file() and Path(str(self.fireman_model) + '.json').is_file() and self.piper_python.is_file()
         self.fireman_failed = False
+        self.foreman_model = Path(args.piper_foreman_model or self.voices_dir / 'en_AU-librivox-medium.onnx').expanduser()
+        self.foreman_available = (self.piper_python.is_file() and os.access(self.piper_python, os.X_OK) and
+            self.foreman_model.is_file() and self.foreman_model.stat().st_size > 0 and
+            Path(str(self.foreman_model) + '.json').is_file() and Path(str(self.foreman_model) + '.json').stat().st_size > 0)
+        self.foreman_failed = False
+        self.foreman_engine = None
+        self.foreman_build_replies = []
+        self.foreman_download_thread = None
         self.conductor_engine = None
         self.conductor_download_thread = None
         self.conductor_download_lock = threading.Lock()
@@ -978,11 +1001,43 @@ class Agent:
             self.say('INV CACHE | no cache directory configured; reading ' + str(self.inv_reference))
             return
         original = self.inv_reference
+        next_announcement = 0.0
+        def cache_progress(phase, completed, total, filename):
+            """Announce occasional cache progress without delaying the copy."""
+            nonlocal next_announcement
+            if self.args.check:
+                return
+            now = time.monotonic()
+            if phase == 'ready':
+                with self.audio_mutex:
+                    self.audio_phase_generation += 1
+                self.sound('cache-complete', workers=(
+                    'Depot foreman to Dispatch. Reference supplies have arrived at the depot. '
+                    'The crew has checked the cargo and the train is ready for assembly. Over.'))
+                return
+            if now < next_announcement:
+                return
+            next_announcement = now + 300
+            if phase == 'verifying':
+                message = ('Depot foreman to Dispatch. The crew is checking the reference cargo. '
+                           '{} of {} gibibytes have been copied. Over.'.format(
+                               round(completed / 1024**3), round(total / 1024**3)))
+            else:
+                message = ('Depot foreman to Dispatch. Reference supplies are being loaded at the depot. '
+                           '{} of {} gibibytes copied. Over.'.format(
+                               round(completed / 1024**3), round(total / 1024**3)))
+            self.sound('cache-progress', workers=message)
         try:
             self.inv_reference = inv_cache.copy_reference(original, Path(cache).expanduser(),
-                int(self.args.min_free_gb * 1024**3), self.say)
+                int(self.args.min_free_gb * 1024**3), self.say, cache_progress)
             self.say('INV REFERENCE | using cached copy ' + str(self.inv_reference))
         except (OSError, ValueError) as error:
+            with self.audio_mutex:
+                self.audio_phase_generation += 1
+            if not self.args.check:
+                self.sound('cache-complete', workers=(
+                    'Depot foreman to Dispatch. Reference loading was interrupted. '
+                    'The crew will use the original supplies. Over.'))
             self.inv_reference = original
             self.say('INV CACHE | unavailable: {} | falling back to {}'.format(error, original))
 
@@ -1012,6 +1067,11 @@ class Agent:
             self.flags = set(Path('/proc/cpuinfo').read_text().lower().replace('.', '_').split())
         self.resource_check()
         self.detect_jemalloc()
+        if (not self.args.check and self.args.sound_theme == 'steampunk' and
+                not self.args.no_sound and not self.args.no_depot and
+                self.args.sound_volume > 0 and self.audio_available):
+            self.depot = depot.Depot(self)
+            self.depot.start()
         self.discover_inv_reference()
         self.memory_monitor = memory_monitor.MemoryMonitor(self)
         self.memory_monitor.start()
@@ -1175,6 +1235,53 @@ class Agent:
             if not self.stopping.is_set():
                 self.say('Piper setup or voice download failed ({}); continuing with TTS fallback'.format(error))
 
+    def prepare_foreman_voice(self):
+        """Provision and validate Angus asynchronously; leave other voices available on failure."""
+        try:
+            self.ensure_piper_engine()
+            model = self.foreman_model
+            config = Path(str(model) + '.json')
+            if not (model.is_file() and model.stat().st_size and config.is_file() and config.stat().st_size):
+                if self.args.no_piper_download or self.args.piper_foreman_model:
+                    return
+                self.say('TTS: Downloading Australian foreman voice Angus')
+                model.parent.mkdir(parents=True, exist_ok=True)
+                base = 'https://huggingface.co/DataCraftsmanAustralia/piper-en_AU-librivox-medium/resolve/main/'
+                with tempfile.TemporaryDirectory(prefix='.tagent-foreman-', dir=model.parent) as temp:
+                    directory = Path(temp)
+                    for name, expected in FOREMAN_VOICE_FILES.items():
+                        digest = hashlib.sha256()
+                        with urllib.request.urlopen(base + name, timeout=30) as response, (directory / name).open('wb') as output:
+                            while not self.stopping.is_set():
+                                chunk = response.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                digest.update(chunk)
+                                output.write(chunk)
+                        if self.stopping.is_set():
+                            return
+                        if digest.hexdigest() != expected:
+                            raise ValueError('foreman voice checksum mismatch: ' + name)
+                    for name, target in ((model.name, model), (config.name, config)):
+                        os.replace(directory / name, target)
+            settings = json.loads(config.read_text())
+            if settings.get('num_speakers', 0) <= 4:
+                raise ValueError('foreman model does not contain speaker 4')
+            with tempfile.TemporaryDirectory(prefix='foreman-probe-', dir=self.temp_dir) as temp:
+                probe = Path(temp) / 'probe.wav'
+                self.command([str(self.piper_python), '-m', 'piper', '-m', str(model), '-s', '4',
+                              '-f', str(probe), '--', 'Depot foreman ready.'], timeout=60)
+                with wave.open(str(probe), 'rb') as audio:
+                    if audio.getnchannels() != 1 or audio.getsampwidth() != 2 or not audio.getnframes():
+                        raise ValueError('foreman Piper voice produced invalid audio')
+            self.foreman_available = True
+            self.foreman_failed = False
+            self.say('TTS: Foreman Angus Piper ready (' + str(model) + ')')
+        except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+            self.foreman_available = False
+            if not self.stopping.is_set():
+                self.say('TTS: Foreman Angus unavailable ({}); using existing voice fallback'.format(error))
+
     def wait_for_audio(self, timeout=300):
         """Wait in short interruptible steps for a bounded in-flight audio clip.
 
@@ -1214,9 +1321,9 @@ class Agent:
             self.audio_pending = {key: thread for key, thread in self.audio_pending.items() if thread.is_alive()}
             if event == 'fail' and self.audio_failure_thread and self.audio_failure_thread.is_alive():
                 return
-            coalesced = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work',
+            coalesced = ('cache-progress', 'station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work',
                          'dispatch', 'repo-unchanged', 'build-clear', 'build-warning')
-            phase_events = ('station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work', 'dispatch')
+            phase_events = ('cache-progress', 'station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work', 'dispatch')
             pending_key = (event, self.audio_phase_generation if event in phase_events else None)
             if event in coalesced and pending_key in self.audio_pending:
                 return
@@ -1581,7 +1688,7 @@ class Agent:
         voices = [voice.strip() for voice in self.args.dispatcher_voice.split(',') if voice.strip()]
         return random.choice(voices or ['en-us+f3'])
 
-    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0, length_scale=1.0, fireman_voice=False):
+    def synthesize_announcement(self, path, text, voice, pitch, workers=1, background='build', conductor=False, engineer=False, distress=False, volume_multiplier=1.0, length_scale=1.0, fireman_voice=False, foreman=False):
         """Mix Piper speech, then eSpeak speech on failure; return None if unavailable.
 
         voice is a callable so eSpeak voice selection happens only when needed.
@@ -1589,6 +1696,9 @@ class Agent:
         """
         if self.args.tts != 'auto':
             return None
+        if foreman and (not self.foreman_available or self.foreman_failed):
+            foreman = False
+            engineer = True
         available = (self.piper_conductor_available and not self.piper_conductor_failed if conductor
                      else self.piper_available and not self.piper_failed)
         model = self.piper_conductor_model if conductor else self.piper_model
@@ -1598,6 +1708,9 @@ class Agent:
         if fireman_voice:
             model = self.fireman_model
             available = self.fireman_available and not self.fireman_failed
+        if foreman:
+            model = self.foreman_model
+            available = self.foreman_available and not self.foreman_failed
         if (not self.tts_engine and not available
                 and not self.tts_warned):
             self.tts_warned = True
@@ -1612,6 +1725,8 @@ class Agent:
                 try:
                     command = [str(self.piper_python), '-m', 'piper', '-m', str(model),
                                '-f', str(speech)]
+                    if foreman:
+                        command += ['-s', '4']
                     if length_scale != 1.0:
                         command += ['--length-scale', str(length_scale)]
                     self.command(command + ['--', text], timeout=60)
@@ -1619,6 +1734,9 @@ class Agent:
                                                                min(1.0, self.args.sound_volume * (1.25 if distress else volume_multiplier)),
                                                                workers, self.jobs, background=background,
                                                                voice_gain=.85, radio=True)
+                    if foreman and self.foreman_engine != 'piper':
+                        self.foreman_engine = 'piper'
+                        self.say('TTS: Foreman Angus using Piper speaker 4 (' + str(model) + ')')
                     if engineer and self.engineer_engine != 'piper':
                         self.engineer_engine = 'piper'
                         self.say('TTS: Engineer using Piper (' + str(model) + ')')
@@ -1627,6 +1745,11 @@ class Agent:
                         self.say('TTS: Conductor using Piper (' + str(model) + ')')
                     return duration
                 except (OSError, ValueError, EOFError, wave.Error, Failure) as error:
+                    if foreman:
+                        self.foreman_failed = True
+                        self.say('TTS: Foreman Angus failed ({}); using existing voice fallback'.format(error))
+                        return self.synthesize_announcement(path, text, voice, pitch, workers, background,
+                            engineer=True, distress=distress, volume_multiplier=volume_multiplier, length_scale=length_scale)
                     if fireman_voice:
                         self.fireman_failed = True
                     elif engineer:
@@ -1666,7 +1789,7 @@ class Agent:
         else:
             count, progress = report, None
         duration = self.synthesize_announcement(path, lambda: build_report_text(count, progress),
-                                                self.dispatcher_voice, 57 if count else 50)
+                                                lambda: 'en-us+m3', 40, foreman=True)
         if duration is not None:
             return duration
         asset = Path(soundtrack.__file__).resolve().parent / 'assets' / (
@@ -1677,9 +1800,9 @@ class Agent:
     def render_build_summary(self, path, result):
         """Announce final success and exact diagnostic counts, with offline fallback."""
         errors, warnings, success = result
-        text = ('Dispatch to BitMagic. Build {}. {} compiler errors. '
+        text = ('Depot foreman to Dispatch. Build {}. {} compiler errors. '
                 '{} compiler warnings.'.format('complete' if success else 'failed', errors, warnings))
-        duration = self.synthesize_announcement(path, text, self.dispatcher_voice, 50 if success else 57)
+        duration = self.synthesize_announcement(path, text, lambda: 'en-us+m3', 40, foreman=True)
         if duration is not None:
             return duration
         return soundtrack.render_build_summary_fallback(path, errors, warnings, success,
@@ -1695,6 +1818,10 @@ class Agent:
         if self.args.sound_theme == 'steampunk':
             self.sound('build-final-ok' if success else 'build-final-failed', workers=counts)
             if success:
+                if not self.foreman_build_replies:
+                    self.foreman_build_replies = list(FOREMAN_BUILD_REPLIES)
+                    random.shuffle(self.foreman_build_replies)
+                self.sound('foreman-build-reply', workers=self.foreman_build_replies.pop())
                 self.queue_engineer_build_reply()
 
     def queue_engineer_build_reply(self):
@@ -1773,6 +1900,12 @@ class Agent:
             elif event == 'engineer-build-reply':
                 duration = self.synthesize_announcement(path, workers, lambda: 'en-us+m3', 40,
                                                         background='build', engineer=True)
+                if duration is None:
+                    return False
+            elif event in ('cache-progress', 'cache-complete', 'foreman-build-reply'):
+                self.say('DEPOT FOREMAN: ' + workers)
+                duration = self.synthesize_announcement(path, workers, lambda: 'en-us+m3', 40,
+                                                        background='build', foreman=True)
                 if duration is None:
                     return False
             elif event == 'upgrade-dispatch':
@@ -2604,6 +2737,16 @@ class Agent:
         self.report_audio()
         self.start_piper_download()
         self.start_conductor_download()
+        if not self.args.no_sound and self.args.tts == 'auto' and not self.args.check and not self.foreman_available:
+            def prepare_foreman():
+                """Wait for Piper setup before preparing the optional Angus voice."""
+                if self.piper_download_thread:
+                    while self.piper_download_thread.is_alive() and not self.stopping.is_set():
+                        self.piper_download_thread.join(timeout=.25)
+                if not self.stopping.is_set():
+                    self.prepare_foreman_voice()
+            self.foreman_download_thread = threading.Thread(target=prepare_foreman, daemon=True)
+            self.foreman_download_thread.start()
         if not self.args.no_sound and self.args.tts == 'auto' and not self.args.check:
             def prepare_engineer():
                 """Reuse the shared engine after its startup provisioning completes."""
@@ -2639,6 +2782,11 @@ class Agent:
         if (self.args.sound_demo or self.args.sound_preview) and self.piper_download_thread:
             while self.piper_download_thread.is_alive() and not self.stopping.is_set():
                 self.piper_download_thread.join(timeout=.25)
+        if self.foreman_download_thread and (self.args.sound_demo or self.args.sound_preview in
+                ('cache-progress', 'foreman-build-reply', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed')):
+            deadline = time.monotonic() + 120
+            while self.foreman_download_thread.is_alive() and not self.stopping.is_set() and time.monotonic() < deadline:
+                self.foreman_download_thread.join(timeout=.25)
         if self.args.sound_demo or self.args.sound_preview:
             if self.conductor_download_thread:
                 while self.conductor_download_thread.is_alive() and not self.stopping.is_set():
@@ -2664,6 +2812,8 @@ class Agent:
                 else:
                     sequence.append(('train-normal-demo', 1))
                 sequence.append(('compilation-depot', 'Dispatch to BitMagic. Welcome to Compilation Depot. The build crews are at work.'))
+                sequence.append(('cache-progress', 'Depot foreman to Dispatch. Reference supplies are being loaded at the depot. 42 of 167 gibibytes copied. Over.'))
+                sequence.append(('foreman-build-reply', FOREMAN_BUILD_REPLIES[0]))
                 sequence.append(('train-stop', 1))
                 sequence.append(('station-manchuria', 1))
                 sequence.append(('fireman', 'Fireman Sam to Engineer Joe. We are pulling hard up this grade! The engine needs every pound of steam we can give her!'))
@@ -2699,6 +2849,8 @@ class Agent:
             return 0
         if self.args.sound_preview:
             preview_count = ('Conductor to Dispatch. Arriving at Performance Terminal. Speed trials are complete.' if self.args.sound_preview in ('station-visit', 'toronto') else
+                             'Depot foreman to Dispatch. Reference supplies are being loaded at the depot. 42 of 167 gibibytes copied. Over.' if self.args.sound_preview == 'cache-progress' else
+                             random.choice(FOREMAN_BUILD_REPLIES) if self.args.sound_preview == 'foreman-build-reply' else
                              'Conductor to Dispatch. Sorted round trip. The train is climbing slowly, but we are making progress.' if self.args.sound_preview == 'inv-progress' else
                              random.choice(DISPATCH_JOKER_REPLIES) if self.args.sound_preview == 'joker-reply' else
                              'Train engineer Joe to BitMagic. ' + random.choice(self.joker_clock.lines)
@@ -2727,10 +2879,6 @@ class Agent:
         self.validate()
         if self.args.check:
             return 0
-        if (self.args.sound_theme == 'steampunk' and not self.args.no_sound and
-                not self.args.no_depot and self.args.sound_volume > 0 and self.audio_available):
-            self.depot = depot.Depot(self)
-            self.depot.start()
         self.cleanup_logs()
         self.sound('start')
         failed = None
