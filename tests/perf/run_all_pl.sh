@@ -134,15 +134,17 @@ if [ "$FAST" -eq 0 ]; then
     touch "$ORDER_FILE" || exit 1
 fi
 
-# Initial normal-mode weights are rough seconds from the x86 full-run log.
+# Initial normal-mode weights are rough seconds from the x86 grouped run.
 # Learned group times replace them after a normal run.
 default_weight()
 {
     case "$1" in
-        codec-decode) echo 510 ;;
-        codec-encode|float-rsc|float-compare|bit-enum) echo 420 ;;
-        float-plain|sparse-scan|sparse-access|bit-logic) echo 360 ;;
-        bit-core|bit-shift|sparse-serial|float-serial|rsc|string|mmap) echo 300 ;;
+        mmap-global-1) echo 900 ;;
+        mmap-global-rest|float-compare-rsc|float-compare-plain) echo 750 ;;
+        sparse-access|sparse-access-signed|sparse-scan|sparse-scan-signed|sparse-scan-string|bit-enum) echo 650 ;;
+        bit-core|bit-scan|sparse-serial|sparse-gather|float-rsc-scan|float-rsc-results|float-plain-scan|float-plain-results|mmap-tail) echo 550 ;;
+        codec-decode|codec-encode|bit-logic|float-compare-extra|sparse-transform|rsc) echo 450 ;;
+        bit-interval|string|float-serial|bit-shift) echo 300 ;;
         *) echo 0 ;;
     esac
 }

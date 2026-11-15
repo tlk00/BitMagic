@@ -110,10 +110,14 @@ perf_run_options g_perf_options;
 
 /// @internal Names of the disjoint groups used by the parallel perf runner.
 static const char* const perf_groups[] = {
-    "bit-core", "bit-shift", "codec-encode", "codec-decode", "bit-enum",
-    "bit-logic", "sparse-access", "sparse-scan", "sparse-serial",
-    "float-serial", "rsc", "string", "float-plain", "float-rsc",
-    "float-compare", "mmap"
+    "bit-core", "bit-scan", "bit-shift", "codec-encode", "codec-decode",
+    "bit-enum", "bit-interval", "bit-logic", "sparse-transform",
+    "sparse-access", "sparse-access-signed", "sparse-scan",
+    "sparse-scan-signed", "sparse-scan-string", "sparse-serial",
+    "sparse-gather", "float-serial", "rsc", "string",
+    "float-plain-scan", "float-plain-results", "float-rsc-scan",
+    "float-rsc-results", "float-compare-plain", "float-compare-rsc",
+    "float-compare-extra", "mmap-global-1", "mmap-global-rest", "mmap-tail"
 };
 
 /// @internal Check whether a name identifies one independent perf group.
@@ -6330,8 +6334,14 @@ void str_gather_mmap_set_islands_from_starts(
     mask_bv.optimize();
 }
 
+/// @internal Run the mmap gather cases selected for this worker.
+/// @param selected_pattern 0 for global, 1 for tail, or 2 for both.
+/// @param selected_island_len Run only this island length, or all when zero.
+/// @param skipped_island_len Omit this island length, or none when zero.
 static
-void StrSparseVectorGatherMMapDeserializationPerfTest()
+void StrSparseVectorGatherMMapDeserializationPerfTest(unsigned selected_pattern = 2,
+                                                     unsigned selected_island_len = 0,
+                                                     unsigned skipped_island_len = 0)
 {
     if (g_perf_options.print_space)
         cout << " ------------------------------ StrSparseVectorGatherMMapDeserializationPerfTest()" << endl;
@@ -6453,10 +6463,16 @@ void StrSparseVectorGatherMMapDeserializationPerfTest()
 
     for (unsigned p = 0; p < island_pattern_count; ++p)
     {
+        if (selected_pattern != 2 && selected_pattern != p)
+            continue;
         const char* island_pattern = island_patterns[p];
         for (unsigned i = 0; i < island_len_count; ++i)
         {
             unsigned island_len = island_lens[i];
+            if (selected_island_len && selected_island_len != island_len)
+                continue;
+            if (skipped_island_len == island_len)
+                continue;
             if (profile_island_gather_only &&
                 (p != 1 || island_len != profile_island_len))
                 continue;
@@ -6544,8 +6560,14 @@ void StrSparseVectorGatherMMapDeserializationPerfTest()
         cout << " ------------------------------ StrSparseVectorGatherMMapDeserializationPerfTest() OK" << endl;
 }
 #else
+/// @internal Keep mmap group dispatch available on Windows.
+/// @param First argument is the selected pattern (unused).
+/// @param Second argument is the selected island length (unused).
+/// @param Third argument is the skipped island length (unused).
 static
-void StrSparseVectorGatherMMapDeserializationPerfTest()
+void StrSparseVectorGatherMMapDeserializationPerfTest(unsigned = 2,
+                                                     unsigned = 0,
+                                                     unsigned = 0)
 {
     if (!g_perf_options.silent)
         cout << " ------------------------------ StrSparseVectorGatherMMapDeserializationPerfTest() skipped on Windows" << endl;
@@ -8832,7 +8854,10 @@ void TestSVFScannerRSC()
     }
 }
 
-void TestSVFComparison()
+/// Compare float range scanners and const iterators on selected vector forms.
+/// @param run_plain Run the ordinary sparse vector comparisons.
+/// @param run_rsc Run the rank-select compressed vector comparisons.
+void TestSVFComparison(bool run_plain = true, bool run_rsc = true)
 {
     BM_DECLARE_TEMP_BLOCK(tb)
 
@@ -8886,6 +8911,8 @@ void TestSVFComparison()
         testRangesVector[i] = toAdd;
     }
     
+    if (run_plain)
+    {
     sparseVecFloat svf(bm::use_null);
     svf.import(linData.data(), N);
     {
@@ -9013,7 +9040,10 @@ void TestSVFComparison()
         }
     }
     svf.clear();
+    }
     
+    if (run_rsc)
+    {
     sparseVecFloatRSC rscSVF;
     rscSVF.import(linData.data(), N);
     rscSVF.sync(true, true);
@@ -9144,6 +9174,7 @@ void TestSVFComparison()
             cerr << "SVF RSC Optimized and Frozen Scanner and Const Iterator do not match" << endl;
             exit(1);
         }
+    }
     }
 }
 
@@ -10133,7 +10164,10 @@ int main(int argc, char* argv[])
 
             BitTestSparseTest();
             cout << endl;
+        }
 
+        if (RunPerfGroup("bit-scan"))
+        {
             BitForEachTest();
             cout << endl;
 
@@ -10185,7 +10219,10 @@ int main(int argc, char* argv[])
             EnumeratorTestGAP();
             EnumeratorGoToTest();
             cout << endl;
+        }
 
+        if (RunPerfGroup("bit-interval"))
+        {
             BvectorShiftTest();
             cout << endl;
 
@@ -10219,17 +10256,23 @@ int main(int argc, char* argv[])
             cout << endl;
         }
 
-        if (RunPerfGroup("sparse-access"))
+        if (RunPerfGroup("sparse-transform"))
         {
             Set2SetTransformTest();
             cout << endl;
 
             SerializationTest();
             cout << endl;
+        }
 
+        if (RunPerfGroup("sparse-access"))
+        {
             SparseVectorAccessTest();
             cout << endl;
+        }
 
+        if (RunPerfGroup("sparse-access-signed"))
+        {
             SparseVectorSignedAccessTest();
             cout << endl;
         }
@@ -10241,10 +10284,16 @@ int main(int argc, char* argv[])
 
             SparseVectorScannerCmpTest();
             cout << endl;
+        }
 
+        if (RunPerfGroup("sparse-scan-signed"))
+        {
             SparseVectorScannerSignedCmpTest();
             cout << endl;
+        }
 
+        if (RunPerfGroup("sparse-scan-string"))
+        {
             SparseVectorPipelineScannerTest();
             cout << endl;
         }
@@ -10253,7 +10302,10 @@ int main(int argc, char* argv[])
         {
             SparseVectorSerializationTest();
             SparseVectorRangeDeserializationTest();
+        }
 
+        if (RunPerfGroup("sparse-gather"))
+        {
             SparseVectorANDDeserializationTest();
             cout << endl;
 
@@ -10285,25 +10337,43 @@ int main(int argc, char* argv[])
             cout << endl;
         }
 
-        if (RunPerfGroup("float-plain"))
+        if (RunPerfGroup("float-plain-scan"))
         {
             TestSVFScanner();
             cout << endl;
+        }
+        if (RunPerfGroup("float-plain-results"))
+        {
             TestSVFForEachSparseSearchResults();
             cout << endl;
         }
 
-        if (RunPerfGroup("float-rsc"))
+        if (RunPerfGroup("float-rsc-results"))
         {
             TestSVFRSCForEachSparseSearchResults();
             cout << endl;
+        }
+        if (RunPerfGroup("float-rsc-scan"))
+        {
             TestSVFScannerRSC();
             cout << endl;
         }
 
-        if (RunPerfGroup("float-compare"))
+        if (!g_perf_options.group)
         {
             TestSVFComparison();
+        }
+        else if (RunPerfGroup("float-compare-plain"))
+        {
+            TestSVFComparison(true, false);
+        }
+        else if (RunPerfGroup("float-compare-rsc"))
+        {
+            TestSVFComparison(false, true);
+        }
+
+        if (RunPerfGroup("float-compare-extra"))
+        {
             cout << endl;
             TestSVFScannerSpike();
             cout << endl;
@@ -10317,10 +10387,22 @@ int main(int argc, char* argv[])
             cout << endl;
         }
 
-        if (RunPerfGroup("mmap"))
+        if (!g_perf_options.group)
         {
             StrSparseVectorGatherMMapDeserializationPerfTest();
             cout << endl;
+        }
+        else if (RunPerfGroup("mmap-global-1"))
+        {
+            StrSparseVectorGatherMMapDeserializationPerfTest(0, 1);
+        }
+        else if (RunPerfGroup("mmap-global-rest"))
+        {
+            StrSparseVectorGatherMMapDeserializationPerfTest(0, 0, 1);
+        }
+        else if (RunPerfGroup("mmap-tail"))
+        {
+            StrSparseVectorGatherMMapDeserializationPerfTest(1);
         }
 
         if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code
