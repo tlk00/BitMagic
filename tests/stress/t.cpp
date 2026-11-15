@@ -433,6 +433,64 @@ extern "C" {
 } // extern C
 
 
+/** Compare two inclusive range copies and report the first differing bit.
+    @param bv Source vector, retained for inspection on failure.
+    @param left First bit to include.
+    @param right Last bit to include, at least left.
+*/
+template<class BV>
+static void CheckVisitorRange(const BV& bv,
+                              typename BV::size_type left,
+                              typename BV::size_type right)
+{
+    BV visited, copied;
+    bm::bit_vistor_copy_functor<BV> visitor(visited);
+    bm::for_each_bit_range(bv, left, right, visitor);
+    copied.copy_range(bv, left, right);
+
+    typename BV::size_type pos;
+    if (copied.find_first_mismatch(visited, pos))
+    {
+        unsigned i, j;
+        bm::get_block_coord(pos >> bm::set_block_shift, i, j);
+        unsigned bit = unsigned(pos & bm::set_block_mask);
+        cerr << "Visitor range mismatch [" << left << ", " << right
+             << "] pos=" << pos << " block=" << (pos >> bm::set_block_shift)
+             << " bit=" << bit << endl;
+        auto inspect = [&](const char* name, const BV& v)
+        {
+            const bm::word_t* blk = v.get_blocks_manager().get_block(i, j);
+            const char* kind = "empty";
+            bool value = false;
+            if (IS_FULL_BLOCK(blk))
+            {
+                kind = "full";
+                value = true;
+            }
+            else if (blk && BM_IS_GAP(blk))
+            {
+                kind = "GAP";
+                value = bm::gap_test(BMGAP_PTR(blk), bit) != 0;
+            }
+            else if (blk)
+            {
+                kind = "BIT";
+                value = (blk[bit >> bm::set_word_shift] >> (bit & bm::set_word_mask)) & 1u;
+            }
+            cerr << name << "=" << value << " (" << kind << ") ";
+            return value;
+        };
+        bool source_bit = inspect("source", bv);
+        inspect("visited", visited);
+        inspect("copied", copied);
+        cerr << "expected=" << (left <= pos && pos <= right && source_bit) << endl;
+        const char* path = "visitor-range-source.bv";
+        cerr << "Saving source to " << bmtest_fs::absolute(path) << endl;
+        bm::SaveBVector(path, bv, true);
+        abort();
+    }
+}
+
 template<class BV>
 void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
 {
@@ -464,17 +522,7 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
     auto pcnt = 256;
     for (auto i = left; i <= right; i+=step)
     {
-        {
-            bvect bv_control;
-            bm::bit_vistor_copy_functor<bvect> func(bv_control);
-            bm::for_each_bit_range(bv, i, right, func);
-
-            bvect bv2;
-            bv2.copy_range(bv, i, right);
-
-            bool eq = bv2.equal(bv_control);
-            assert(eq);
-        }
+        CheckVisitorRange(bv, i, right);
         next = bv.get_next(i);
         if (next)
         {
@@ -518,17 +566,7 @@ void VisitorAllRangeTest(const BV& bv, typename BV::size_type step = 1)
     pcnt = 256;
     for (; left <= right; left+=step, --right)
     {
-        {
-            bvect bv_control;
-            bm::bit_vistor_copy_functor<bvect> func(bv_control);
-            bm::for_each_bit_range(bv, left, right, func);
-
-            bvect bv2;
-            bv2.copy_range(bv, left, right);
-
-            bool eq = bv2.equal(bv_control);
-            assert(eq);
-        }
+        CheckVisitorRange(bv, left, right);
         next = bv.get_next(left);
         if (next)
         {
@@ -44242,6 +44280,30 @@ void LoadVectors(const char* dir_name, unsigned from, unsigned to)
 }
 
 
+#if defined(BMSSE2OPT) || defined(BMSSE42OPT)
+/** Check lower bounds in exact-size short and overlapping SSE search windows.
+    @param find_endpoint GAP lower-bound function for the active SSE backend.
+*/
+template<class GapFind>
+static void TestSSEGapSearch(GapFind find_endpoint)
+{
+    // An exact-size allocation lets ASan check the final SIMD search window.
+    for (unsigned size = 1; size <= 16; ++size)
+    {
+        std::vector<bm::gap_word_t> ends(size);
+        for (unsigned i = 0; i < size; ++i)
+        {
+            ends[i] = bm::gap_word_t(2 * i + 1);
+        } // for i
+        for (unsigned pos = 0; pos <= 2 * size; ++pos)
+        {
+            unsigned found = find_endpoint(ends.data(), bm::gap_word_t(pos), size);
+            assert(found == pos / 2);
+        } // for pos
+    } // for size
+}
+#endif
+
 inline
 void TestSIMDUtils()
 {
@@ -55849,6 +55911,11 @@ return 0;
 
 
         OptimGAPTest();
+#if defined(BMSSE2OPT)
+        TestSSEGapSearch(bm::sse2_gap_find);
+#elif defined(BMSSE42OPT)
+        TestSSEGapSearch(bm::sse4_gap_find);
+#endif
 
         CalcBeginMask();
         CalcEndMask();
