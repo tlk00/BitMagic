@@ -2456,10 +2456,11 @@ class Agent:
             return 'pedantic' if self.args.pedantic else 'normal'
 
         def stress_order(name):
-            """In normal cycles put GCC last, after all other release and debug runs."""
+            """Prioritize SSE4.2 release; retain normal GCC-last and debug ordering."""
             if not self.args.fast and not self.args.pedantic and name == 'stress_release_gcc':
-                return 2
-            return 1 if '_debug' in name else 0
+                return (1, 2)
+            return (0 if name == 'stress_release_sse42' else 1,
+                    1 if '_debug' in name else 0)
 
         for name in sorted(names, key=stress_order):
             if self.args.no_debug and '_debug' in name:

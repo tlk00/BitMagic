@@ -407,6 +407,40 @@ class SupervisorTests(unittest.TestCase):
                 self.assertNotIn('--fast', gcc)
                 self.assertLess(names.index('stress_release_gcc'), names.index('stress_debug'))
 
+    def test_sse42_release_starts_first_when_selected_and_supported(self):
+        """Prioritize SSE4.2 in normal and pedantic modes, preserving fast selection."""
+        self.fixture()
+        manifest = {'builds': {'stress': ['stress_debug', 'stress_release',
+                     'stress_release_sse2', 'stress_release_sse42',
+                     'stress_release_avx2', 'stress_debug_sse42', 'stress_release_gcc']}}
+        self.agent.arm = False
+        for mode, supported in (('normal', True), ('pedantic', True),
+                                ('normal', False), ('fast', True)):
+            with self.subTest(mode=mode, sse42=supported):
+                self.agent.args.fast = mode == 'fast'
+                self.agent.args.pedantic = mode == 'pedantic'
+                run = self.root / (mode + '-' + str(supported))
+                run.mkdir()
+                def is_supported(name):
+                    return supported or name != 'stress_release_sse42'
+                with patch.object(self.agent, 'supported', side_effect=is_supported), \
+                     patch.object(self.agent, 'command', return_value='') as command, \
+                     patch.object(self.agent, 'sound'), \
+                     patch.object(self.agent, 'update_waiting', return_value=False):
+                    self.assertTrue(self.agent.test_stress_stage(run, manifest))
+                calls = [(Path(call.args[1]).parent.name, call.args[0]) for call in command.call_args_list]
+                names = [name for name, _ in calls]
+                if mode == 'fast':
+                    self.assertEqual(set(names), {'stress_release', 'stress_release_avx2'})
+                elif supported:
+                    self.assertEqual(names[0], 'stress_release_sse42')
+                    self.assertEqual('--pedantic' in calls[0][1], mode == 'pedantic')
+                else:
+                    self.assertNotIn('stress_release_sse42', names)
+                    self.assertEqual(names[0], 'stress_release')
+                if mode == 'normal':
+                    self.assertEqual(names[-1], 'stress_release_gcc')
+
     def test_stress_transition_announces_each_success_twice(self):
         """Transitions name actual consecutive runners, repeat, and finish cleanly."""
         self.fixture()

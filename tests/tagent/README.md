@@ -489,6 +489,10 @@ Every produced, supported perf debug binary runs with `--fast`, including in
 normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
 `--fast` option is supplied.
 
+In normal and pedantic stress cycles, the supported `stress_release_sse42`
+variant runs first when present. Fast cycles retain their scalar and fastest
+SIMD selection; the normal-cycle GCC release remains last and uses fast mode.
+
 At startup TAgent logs its PID, parent PID, process group, session and terminal.
 SIGINT, SIGTERM and SIGHUP are reported by name and number with current process
 context and cycle before child cleanup. Python's standard signal handler does not
