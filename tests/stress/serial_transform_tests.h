@@ -915,31 +915,62 @@ static void TestPeriodicBoundary()
     bm::periodic_read_groups(dec, block.data());
     TRANSFORM_CHECK(std::count(block.begin(), block.end(), ~bm::word_t(0)) == bm::set_block_size);
 }
+/** Verify emitted superblock records, bookmark positions and masked gathers
+    in RAM and streams, including the final address-space group. */
 static void TestSuperblockEndIndexGather()
 {
     family = "SuperblockEndIndexGather";
     std::cout << "TestSuperblockEndIndexGather" << std::endl;
     using BV = bm::bvector<>;
     using Index = bm::deserialization_index<BV>;
-    const unsigned codes[] = {68, 108, 92, 108, 98};
+    const unsigned codes[] = {
+        bm::set_sblock_bienc_v3, bm::set_sblock_bienc_wave_runs,
+        bm::set_sblock_bienc_adaptive, bm::set_sblock_bienc_wave_hierarchical,
+        bm::set_sblock_bienc_large, bm::set_sblock_bienc_wave_hierarchical
+    };
     const BV::size_type groups[] = {0, 2, bm::id_max / bm::set_sub_total_bits};
-    for (unsigned kind = 0; kind < 5; ++kind)
+    for (unsigned kind = 0; kind < sizeof(codes) / sizeof(codes[0]); ++kind)
     for (bool bookmarks : {false, true})
     {
-        // Opcode 98 selection explicitly excludes bookmarked serialization.
-        if (kind == 4 && bookmarks) continue;
+        // Large-superblock post-selection (98 and FULL-map 109) requires bookmarks off.
+        if (kind >= 4 && bookmarks) continue;
         case_pattern = kind; case_split = unsigned(bookmarks);
         BV source;
         std::vector<BV::size_type> sample;
         const unsigned count = kind == 4 ? 70000u : kind == 2 ? 4093u :
-                               (kind == 1 || kind == 3) ? 100u : 2000u;
+                               kind == 1 ? 100u : 2000u;
         for (auto group : groups)
         {
+            const BV::size_type base = group * bm::set_sub_total_bits;
+            if (kind == 3)
+            {
+                for (unsigned block : {0u, 3u, 97u})
+                {
+                    for (unsigned i = 1; i < 6000; i += 7)
+                    {
+                        source.set(base + block * bm::gap_max_bits + i);
+                    } // for i
+                    sample.push_back(base + block * bm::gap_max_bits + 8);
+                } // for block
+                continue;
+            }
+            if (kind == 5)
+            {
+                source.set_range(base, base + bm::gap_max_bits - 1);
+                for (unsigned i = 0; i < 70000; ++i)
+                {
+                    source.set(base + 2 * bm::gap_max_bits + 2 * i);
+                } // for i
+                sample.push_back(base + 7);
+                sample.push_back(base + 3 * bm::gap_max_bits + 2);
+                sample.push_back(base + 4 * bm::gap_max_bits + 2);
+                continue;
+            }
             unsigned at = 10;
             for (unsigned i = 0; i < count; ++i)
             {
                 const unsigned local = kind == 0 ? 1+i*5003 :
-                    (kind == 1 || kind == 3) ? 1+i*163841 : kind == 2 ? at : 1+i*3;
+                    kind == 1 ? 1+i*163841 : kind == 2 ? at : 1+i*3;
                 const BV::size_type pos = group * bm::set_sub_total_bits + local;
                 source.set(pos);
                 if (i == 0 || i == count/2 || i == count-1) sample.push_back(pos);
@@ -959,6 +990,10 @@ static void TestSuperblockEndIndexGather()
             writer.set_sblock_wave_options(kind == 1);
             writer.set_sblock_adaptive_options(kind == 2);
         }
+        if (kind == 1 || kind == 3)
+        {
+            writer.set_sblock_wave_experiment(kind == 1 ? 0 : 2);
+        }
         writer.set_bookmarks(bookmarks, 4);
         bm::serializer<BV>::buffer bytes;
         writer.serialize(source, bytes);
@@ -966,15 +1001,45 @@ static void TestSuperblockEndIndexGather()
         bm::serialization_opcode_profile profile;
         collector.set_collect_ids();
         unsigned penultimate = 0, last = 0;
+        std::vector<size_t> superblock_offsets;
+        unsigned full_maps = 0;
         collector.add_blob(bytes.data(), bytes.size(), profile,
-            [&](const unsigned char* record, size_t) { penultimate = last; last = *record; });
+            [&](const unsigned char* record, size_t)
+            {
+                penultimate = last;
+                last = *record;
+                if (last == codes[kind])
+                {
+                    superblock_offsets.push_back(size_t(record - bytes.data()));
+                    if (last == bm::set_sblock_bienc_wave_hierarchical)
+                    {
+                        bm::decoder decoder(record + 1);
+                        bm::bit_in<bm::decoder> prefix(decoder);
+                        prefix.get_bits(8);
+                        full_maps += prefix.get_bit();
+                    }
+                }
+            });
         std::cout << "  level=" << (kind ? 10 : 6) << " bookmarks=" << bookmarks << " opcodes:";
         for (unsigned op = 0; op < 256; ++op)
             if (profile.opcode[op].count) std::cout << " " << op << ":" << profile.opcode[op].count;
         std::cout << std::endl;
         TRANSFORM_CHECK(profile.reconciles() && profile.cardinalities_reconcile());
         TRANSFORM_CHECK(profile.ids == source.count());
-        TRANSFORM_CHECK(profile.opcode[codes[kind]].count >= 3);
+        TRANSFORM_CHECK(profile.opcode[codes[kind]].count == 3);
+        TRANSFORM_CHECK(full_maps == (kind == 5 ? 3u : 0u));
+        BV restored;
+        TRANSFORM_CHECK(bm::deserialize(restored, bytes.data()) == bytes.size());
+        TRANSFORM_CHECK(restored == source);
+        for (unsigned group = 0; group < 3; ++group)
+        {
+            const auto middle = sample[group * 3 + 1];
+            BV wanted, ranged;
+            wanted.copy_range(source, middle - 1, middle + 1);
+            bm::operation_deserializer<BV> operation;
+            operation.deserialize_range(ranged, bytes.data(), middle - 1, middle + 1);
+            TRANSFORM_CHECK(ranged == wanted);
+        } // for group
         TRANSFORM_CHECK(penultimate == codes[kind] && last == bm::set_block_end);
         TRANSFORM_CHECK(profile.opcode[bm::set_block_end].count == 1 && profile.opcode[bm::set_block_end].bytes == 1);
 
@@ -1003,9 +1068,14 @@ static void TestSuperblockEndIndexGather()
         if (bookmarks) {
             BV::block_idx_type origin, target;
             size_t target_offset;
-            TRANSFORM_CHECK(ram_index.find_bookmark_target(
-                bm::set_total_blocks-1, origin, target, target_offset));
-            TRANSFORM_CHECK(target > origin && target_offset < bytes.size());
+            for (unsigned group : {1u, 2u})
+            {
+                const auto requested = sample[group * 3 + 1] >> bm::set_block_shift;
+                TRANSFORM_CHECK(ram_index.find_bookmark_target(
+                    requested, origin, target, target_offset));
+                TRANSFORM_CHECK(target > origin && target <= requested);
+                TRANSFORM_CHECK(target_offset < superblock_offsets[group]);
+            } // for group
         }
         size_t cursor = 0, ordinal = 0, offset = 0;
         while (ram_index.find_next_marker_offset(cursor, ordinal, offset)) cursor = offset;
@@ -1033,6 +1103,13 @@ static void TestSuperblockEndIndexGather()
             reader.set_block_digest_vector_use(&digest);
             TRANSFORM_CHECK(reader.deserialize(actual, bytes.data()) == bytes.size());
             BV extra(actual); extra -= source; TRANSFORM_CHECK(extra.none());
+            if (selection < sample.size() && (kind == 1 || kind == 3 || kind == 5))
+            {
+                const auto base = groups[selection / 3] * bm::set_sub_total_bits;
+                const auto end = bm::min_value(BV::size_type(bm::id_max - 1),
+                    BV::size_type(base + bm::set_sub_total_bits - 1));
+                TRANSFORM_CHECK(actual.count_range(base, end) == source.count_range(base, end));
+            }
             // Whole-superblock materialization is allowed; gather applies its mask.
             actual &= mask; TRANSFORM_CHECK(actual == expected);
             std::stringstream gathered_input(blob + "TRAILER");

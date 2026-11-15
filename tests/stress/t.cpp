@@ -19670,6 +19670,108 @@ void Check_Large_AllOnes_BVector_Serialization()
 
 #include "serial_transform_tests.h"
 
+/** Exercise endpoint-only BIC superblocks through index, gather and range
+    decoding. The current writer normally groups at least five positions. */
+static void TestTwoPositionSuperblocks()
+{
+    using BV = bm::bvector<>;
+    const unsigned last = bm::set_sub_total_bits - 7;
+    const BV expected { 5, last };
+    for (unsigned opcode : {bm::set_sblock_bienc, bm::set_sblock_bienc_v3})
+    {
+        unsigned char blob[32] = {};
+        bm::encoder enc(blob, sizeof(blob));
+        enc.put_8(bm::BM_HM_DEFAULT | bm::BM_HM_NO_GAPL | bm::BM_HM_SPARSE);
+        enc.put_8(bm::globals<true>::byte_order());
+        enc.put_8(static_cast<unsigned char>(opcode));
+        if (opcode == bm::set_sblock_bienc)
+        {
+            enc.put_8(0); // flags
+            enc.put_8(0); // superblock
+            enc.put_8(2); // endpoints only
+            enc.put_8(5);
+            enc.put_8(7);
+        }
+        else
+        {
+            bm::bit_out<bm::encoder> bits(enc);
+            bits.put_bits(0, 8);
+            bits.put_bits(2, 8);
+            bits.put_bits(5, 8);
+            bits.put_bits(7, 8);
+            bits.put_bits(0, 8);
+        }
+        enc.put_8(bm::set_block_azero);
+        bm::serialization_opcode_collector<BV> collector;
+        bm::serialization_opcode_profile report;
+        collector.add_blob(blob, enc.size(), report);
+        cout << "Two-position superblock opcode " << opcode
+             << " records=" << report.opcode[opcode].count << endl;
+        assert(report.reconciles() && report.opcode[opcode].count == 1);
+
+        BV restored, dry, mask { last, last + 1 }, digest, gathered;
+        assert(bm::deserialize(restored, blob) == enc.size());
+        assert(restored == expected);
+        bm::deserialization_index<BV> index;
+        bm::deserializer<BV, bm::decoder> reader;
+        reader.set_deserialization_index_construct(&index);
+        assert(reader.deserialize(dry, blob) == enc.size() && dry.none());
+        reader.unset_deserialization_index();
+        reader.set_deserialization_index_use(&index);
+        mask.build_block_digest(digest);
+        reader.set_block_digest_vector_use(&digest);
+        assert(reader.deserialize(gathered, blob) == enc.size());
+        gathered &= mask;
+        const BV wanted { last };
+        assert(gathered == wanted);
+
+        // Opcode 56 uses only byte fields in this fixture, so the same
+        // payload is valid with either byte-order tag.
+        if (opcode == bm::set_sblock_bienc)
+        {
+            blob[1] = blob[1] == bm::LittleEndian ? bm::BigEndian : bm::LittleEndian;
+        }
+        bm::operation_deserializer<BV> operation;
+        BV ranged;
+        operation.deserialize_range(ranged, blob, last - 1, last + 1);
+        assert(ranged == wanted);
+        assert(operation.deserialize(ranged, blob, bm::set_COUNT_AND) == 1);
+        operation.deserialize(ranged, blob, bm::set_OR);
+        assert(ranged == expected);
+    } // for opcode
+}
+
+/** Verify that reserved opcode 69 (bm::set_sblock_bienc_gaps_v3) cannot
+    silently advance over a superblock during decoding or index construction. */
+static void TestReservedSuperblockOpcode()
+{
+    using BV = bm::bvector<>;
+    const unsigned char blob[] = {
+        bm::BM_HM_DEFAULT | bm::BM_HM_NO_BO | bm::BM_HM_NO_GAPL | bm::BM_HM_SPARSE,
+        bm::set_sblock_bienc_gaps_v3, bm::set_block_azero
+    };
+    for (bool index_only : {false, true})
+    {
+        bm::deserialization_index<BV> index;
+        bm::deserializer<BV, bm::decoder> reader;
+        if (index_only)
+        {
+            reader.set_deserialization_index_construct(&index);
+        }
+        BV target;
+        bool rejected = false;
+        try
+        {
+            reader.deserialize(target, blob);
+        }
+        catch (const std::logic_error&)
+        {
+            rejected = true;
+        }
+        assert(rejected);
+    } // for index_only
+}
+
 // General serialization contracts across presets. Codec-pinned assertions in
 // SerializationCompressionLevelsTest remain at their original levels.
 static void CheckCompressionLevelMatrix(
@@ -56218,6 +56320,8 @@ return 0;
         serial_transform_test::TestAdaptiveDeltaFlags();
         serial_transform_test::TestWaveCompaction();
         serial_transform_test::TestPeriodicBoundary();
+        TestTwoPositionSuperblocks();
+        TestReservedSuperblockOpcode();
         serial_transform_test::TestSuperblockEndIndexGather();
         serial_transform_test::TestTransformedBlockIndexGather();
         CheckAllocLeaks(false);
