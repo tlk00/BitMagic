@@ -967,7 +967,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(set(self.agent.perf_completed), names)
 
     def test_grouped_perf_budget_and_progress(self):
-        """Group jobs across concurrent variants fit the global budget and progress aggregates."""
+        """Each sequential variant respects its perf cap and progress aggregates."""
         perf_dir = self.root / 'tests/perf'
         perf_dir.mkdir(parents=True)
         (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
@@ -978,13 +978,53 @@ class SupervisorTests(unittest.TestCase):
              patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
             self.assertTrue(self.agent.test_perf_stage(self.root, {'builds': {'perf': names}}))
         jobs = [int(c.args[0][c.args[0].index('--jobs') + 1]) for c in command.call_args_list]
-        self.assertEqual(sorted(jobs), [2, 3, 3])
-        self.assertEqual(sum(jobs), self.agent.jobs)
+        self.assertEqual(jobs, [8, 8, 8])
         group_dir = self.root / 'perf_release/perf-groups/run.fixture'
         group_dir.mkdir(parents=True)
         (group_dir / 'a.log').write_text('header\nfirst; 1 sec\nTOTAL; 1 sec\n')
         (group_dir / 'b.log').write_text('second; 2 ms\npartial; 3 sec')
         self.assertEqual(ta.perf_log_progress(self.root / 'perf_release/perf.log')[0], 2)
+
+    def test_perf_sequential_failure_and_worker_limit(self):
+        """A failed variant prevents later launches; perf workers fit both limits."""
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
+        self.agent.jobs = 2
+        self.agent.args.perf_jobs = 4
+        names = ['perf_release', 'perf_release_sse2']
+        with patch.object(self.agent, 'supported', return_value=True), \
+             patch.object(self.agent, 'command', side_effect=ta.CommandFailure('injected failure')) as command, \
+             patch.object(self.agent, 'sound'):
+            with self.assertRaises(ta.CommandFailure):
+                self.agent.test_perf_stage(self.root, {'builds': {'perf': names}})
+        self.assertEqual(command.call_count, 1)
+        argv = command.call_args.args[0]
+        self.assertEqual(argv[argv.index('--jobs') + 1], '2')
+        self.assertFalse((self.root / names[1]).exists())
+
+    def test_perf_jobs_cli(self):
+        """Perf concurrency defaults to the CPU budget and accepts an explicit cap."""
+        for value, expected in [('0', 0), ('3', 3)]:
+            with patch.object(sys, 'argv', ['tagent', '--perf-jobs', value]):
+                self.assertEqual(ta.arguments().perf_jobs, expected)
+        with patch.object(sys, 'argv', ['tagent', '--perf-jobs', '-1']), \
+             patch('sys.stderr', new_callable=io.StringIO):
+            with self.assertRaises(SystemExit):
+                ta.arguments()
+
+    def test_perf_update_stops_before_next_variant(self):
+        """An update observed at a variant boundary prevents the next launch."""
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
+        names = ['perf_release', 'perf_release_sse2']
+        with patch.object(self.agent, 'supported', return_value=True), \
+             patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=True):
+            self.assertEqual(self.agent.test_perf_stage(self.root, {'builds': {'perf': names}}), 'updated')
+        self.assertEqual(command.call_count, 1)
+        self.assertFalse((self.root / names[1]).exists())
 
     def test_perf_runner_stops_siblings_and_records_first_failure(self):
         """One failed perf group cancels siblings and retains the precise group log."""
@@ -1076,7 +1116,7 @@ class SupervisorTests(unittest.TestCase):
         """The real runner honors shared history in a separate script directory."""
         runner = Path(__file__).resolve().parents[1] / 'stress' / 'run_all_pl.sh'
         binary = self.root / 'worker.sh'
-        binary.write_text('#!/bin/bash\nif [ "$1" = -s ]; then sleep 1; fi\nexit 0\n')
+        binary.write_text('#!/bin/bash\nif [ "$1" = -s ]; then sleep 2; fi\nexit 0\n')
         binary.chmod(0o755)
         history = self.root / 'shared' / 'order.tsv'
         history.parent.mkdir()
@@ -1500,13 +1540,14 @@ class SupervisorTests(unittest.TestCase):
         fetch.assert_not_called()
 
     def test_update_stops_at_perf_boundary(self):
-        """A discovered update waits for all perf jobs and skips old stress builds."""
+        """An update waits for the current perf variant, then skips remaining work."""
         self.fixture()
         with patch.object(self.agent, 'update_waiting', side_effect=[False, True]):
             self.assertEqual(self.agent.cycle(), 'updated')
         run = next(self.agent.home.glob('*abc123'))
-        self.assertTrue((run / 'perf_release/perf.log').exists())
-        self.assertTrue((run / 'perf_release_neon/perf.log').exists())
+        self.assertTrue((run / 'perf_debug/perf.log').exists())
+        self.assertFalse((run / 'perf_release/perf.log').exists())
+        self.assertFalse((run / 'perf_release_neon/perf.log').exists())
         self.assertFalse(list(run.glob('stress_*/runner.log')))
         self.assertIsNone(self.agent.active_run)
 

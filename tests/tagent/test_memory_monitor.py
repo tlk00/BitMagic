@@ -24,6 +24,37 @@ class Agent:
 
 
 class MonitorTests(unittest.TestCase):
+    def test_perf_groups_are_attributed_to_owned_runner(self):
+        """Only group processes in tracked runner process groups are reported."""
+        with tempfile.TemporaryDirectory() as root:
+            monitor = memory_monitor.MemoryMonitor(Agent(root))
+            output = ('101 100 2048 /tmp/perf_release --group sparse-vector\n'
+                      '102 100 4096 /tmp/perf_release --group bit-core --fast\n'
+                      '103 200 8192 /tmp/perf_release --group unrelated\n'
+                      '104 100 100 bash runner\n')
+            with patch.object(memory_monitor.subprocess, 'check_output', return_value=output):
+                groups = monitor.perf_group_memory({100: 'perf_release'})
+            self.assertEqual([(g['variant'], g['group'], g['rss_bytes']) for g in groups],
+                             [('perf_release', 'bit-core', 4096 * 1024),
+                              ('perf_release', 'sparse-vector', 2048 * 1024)])
+
+    def test_perf_samples_include_group_observations(self):
+        """Samples attach group memory for currently tracked perf runners."""
+        with tempfile.TemporaryDirectory() as root:
+            agent = Agent(root)
+            agent.memory_phase = 'perf'
+            runner = unittest.mock.Mock()
+            runner.pid = 100
+            agent.perf_logs[runner] = Path(root) / 'perf_release' / 'perf.log'
+            monitor = memory_monitor.MemoryMonitor(agent)
+            group = {'pid': 101, 'variant': 'perf_release', 'group': 'bit-core', 'rss_bytes': 2048}
+            with patch.object(memory_monitor.platform, 'system', return_value='Darwin'), \
+                 patch.object(memory_monitor.subprocess, 'check_output', return_value='34359738368\n'), \
+                 patch.object(monitor, 'perf_group_memory', return_value=[group]) as read:
+                sample = monitor.sample()
+            read.assert_called_once_with({100: 'perf_release'})
+            self.assertEqual(sample['perf_groups'], [group])
+
     def test_thresholds_escalation_and_oom(self):
         with tempfile.TemporaryDirectory() as root:
             monitor = memory_monitor.MemoryMonitor(Agent(root))

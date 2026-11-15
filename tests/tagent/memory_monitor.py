@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import threading
 import time
@@ -56,7 +57,45 @@ class MemoryMonitor:
                           note='macOS available-memory and cgroup metrics unavailable')
         else:
             result['note'] = 'memory metrics unavailable on this platform'
+        if result['phase'] == 'perf':
+            with self.agent.mutex:
+                variants = {p.pid: log.parent.name for p, log in self.agent.perf_logs.items()}
+            if variants:
+                try:
+                    result['perf_groups'] = self.perf_group_memory(variants)
+                except (OSError, subprocess.SubprocessError, ValueError) as error:
+                    result['perf_groups_error'] = str(error)
         return result
+
+    def perf_group_memory(self, variants):
+        """Sample RSS for perf group processes owned by the given runner groups."""
+        output = subprocess.check_output(['ps', '-eo', 'pid=,pgid=,rss=,args='], text=True, timeout=8)
+        groups = []
+        for line in output.splitlines():
+            parts = line.split(None, 3)
+            if len(parts) != 4:
+                continue
+            try:
+                pid, pgid, rss = map(int, parts[:3])
+            except ValueError:
+                continue
+            match = re.search(r'(?:^|\s)--group\s+(\S+)', parts[3])
+            if match and pgid in variants:
+                entry = {'pid': pid, 'variant': variants[pgid], 'group': match.group(1),
+                         'rss_bytes': rss * 1024}
+                if platform.system() == 'Linux':
+                    try:
+                        for line in Path('/proc', str(pid), 'status').read_text().splitlines():
+                            fields = line.split()
+                            if len(fields) >= 2 and fields[1].isdigit():
+                                if fields[0] == 'VmHWM:':
+                                    entry['peak_rss_bytes'] = int(fields[1]) * 1024
+                                elif fields[0] == 'VmSwap:':
+                                    entry['swap_bytes'] = int(fields[1]) * 1024
+                    except OSError:
+                        pass  # The group may have exited between ps and /proc.
+                groups.append(entry)
+        return sorted(groups, key=lambda item: item['rss_bytes'], reverse=True)
 
     def history(self, sample):
         """Append flushed samples, rotating at 2 MiB with one previous file."""
@@ -114,6 +153,10 @@ class MemoryMonitor:
                 swap_total, swap_free = sample.get('swap_total'), sample.get('swap_free')
                 swap = '{:.2f}/{:.2f} GiB'.format((swap_total - swap_free) / 1024**3, swap_total / 1024**3) if swap_total is not None and swap_free is not None else 'unknown'
                 self.agent.say('MEMORY {} | available {} | swap used {} | evidence: {}'.format(reason.upper(), free_gib, swap, directory))
+                if sample.get('perf_groups'):
+                    top = sample['perf_groups'][0]
+                    self.agent.say('MEMORY PERF | largest sampled RSS: {} / {} | {:.2f} GiB | pid {}'.format(
+                        top['variant'], top['group'], top['rss_bytes'] / 1024**3, top['pid']))
                 self.last_snapshot = time.monotonic()
                 snapshots = sorted((base / 'diagnostics').glob('memory-*'))
                 for old in snapshots[:-20]:

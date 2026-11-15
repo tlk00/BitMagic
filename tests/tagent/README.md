@@ -453,7 +453,7 @@ samples run). Output is saved in `build-samples.log`; sample warnings are includ
 in the combined diagnostics and live spoken reports. Any sample build failure
 stops the cycle before tests.
 
-`--fast` runs all supported release perf variants in parallel within the CPU
+`--fast` runs all supported release perf variants sequentially, with parallel groups within each variant,
 budget, including generic, 64-bit and available SIMD builds. Stress runs the
 scalar release and supported AVX2 (x86) or NEON (Apple ARM) release variants.
 If that stress SIMD variant is unavailable or unsupported, the scalar release
@@ -489,10 +489,19 @@ Every produced, supported perf debug binary runs with `--fast`, including in
 normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
 `--fast` option is supplied.
 
-Perf variants use `tests/perf/run_all_pl.sh` to run independent benchmark groups
-in parallel. TAgent shares its CPU budget across concurrently running variants;
-each receives a fixed share for its group workers, with the total never exceeding
-the budget. Each variant has independent group logs under `perf-groups` and a
+Perf variants run one at a time using `tests/perf/run_all_pl.sh` to run their
+independent benchmark groups in parallel. `--perf-jobs` limits concurrent perf
+groups (default 0 uses the full `--jobs` CPU budget). The launcher
+setting `PERF_JOBS` supplies the default and the command line overrides it. This
+limit can reduce overlapping memory peaks but does not guarantee that groups fit
+in RAM; use a smaller value if memory pressure or swap rises.
+The memory monitor reports pressure but does not throttle running groups.
+During perf, each memory sample also records the RSS of observed group processes,
+their variant and group names in `resources.jsonl`. Memory warning snapshots
+print the largest sampled group. Linux samples also include each observed
+process's resident high-water mark and swap where `/proc` provides them. RSS
+includes shared resident pages, and short-lived processes can finish between samples.
+Each variant has independent group logs under `perf-groups` and a
 separate learned scheduling history in `perf-group-order`; fast runs do not
 update timing history. Progress totals aggregate completed timed records across
 the group logs. A failed group stops sibling jobs and reports its variant,

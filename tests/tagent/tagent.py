@@ -289,6 +289,7 @@ def arguments():
         ('retry-minutes', 60, 'recovery window in minutes for network errors or waiting for a fix'),
         ('reserve-cpus', 2, 'CPUs reserved when calculating the automatic worker budget'),
         ('jobs', 0, 'maximum parallel workers; 0 chooses available CPUs minus reserved CPUs'),
+        ('perf-jobs', 0, 'maximum parallel groups for one perf variant; 0 uses the --jobs CPU budget'),
         ('min-free-gb', 5, 'minimum free GiB required on both repository and log filesystems'),
         ('log-retention-days', 7, 'remove eligible old cycle log directories after this many days'),
         ('build-report-seconds', 60, 'initial build status interval; each subsequent interval grows by 10 seconds'),
@@ -408,6 +409,9 @@ def arguments():
         if not math.isfinite(value) or value < 0 or value != int(value):
             parser.error(name + ' must be a nonnegative integer')
         setattr(args, name, int(value))
+    if not math.isfinite(args.perf_jobs) or args.perf_jobs < 0 or args.perf_jobs != int(args.perf_jobs):
+        parser.error('perf_jobs must be a nonnegative integer')
+    args.perf_jobs = int(args.perf_jobs)
     if args.remote.startswith('-') or args.branch.startswith('-'):
         parser.error('remote/branch must not start with a dash')
     return args
@@ -2466,59 +2470,46 @@ class Agent:
         names = ([name for name in manifest['builds']['perf'] if '_release' in name]
                  if self.args.fast else manifest['builds']['perf'])
         eligible = [name for name in names if not (self.args.no_debug and '_debug' in name) and self.supported(name)]
-        parallel_variants = min(self.jobs, max(1, len(eligible)))
-        jobs_per_variant = max(1, self.jobs // parallel_variants)
-        extra_jobs = self.jobs % parallel_variants
-        self.say('PERF SCHEDULE | {} concurrent variants | {}-{} group workers each | budget {}'.format(
-            parallel_variants, jobs_per_variant, jobs_per_variant + bool(extra_jobs), self.jobs))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_variants) as pool:
-            futures = []
-            future_names = {}
+        variant_jobs = min(self.jobs, self.args.perf_jobs) if self.args.perf_jobs else self.jobs
+        self.say('PERF SCHEDULE | {} variants sequentially | up to {} group workers | CPU budget {}'.format(
+            len(eligible), variant_jobs, self.jobs))
+        with self.mutex:
+            self.perf_pending = set(eligible)
+            self.perf_completed = {}
+            self.perf_last_disclaimer = False
+            self.perf_last_announced = False
+        for name in names:
+            if self.args.no_debug and '_debug' in name:
+                self.say('SKIP debug perf ' + name)
+                continue
+            if name not in eligible:
+                self.say('SKIP perf ' + name)
+                continue
+            work = run / name
+            work.mkdir()
+            runner = work / 'run_all_pl.sh'
+            shutil.copy2(self.repo / 'tests/perf/run_all_pl.sh', runner)
+            order_dir = self.home / 'perf-group-order'
+            order_dir.mkdir(parents=True, exist_ok=True)
+            perf_command = ['bash', str(runner), '--binary', str(self.repo / 'tests/perf' / name),
+                            '--jobs', str(variant_jobs), '--fail-fast',
+                            '--log-dir', str(work / 'perf-groups'), '--order-file',
+                            str(order_dir / (name + '--' + self.perf_target_mode(name) + '.tsv'))]
+            if self.args.fast or '_debug' in name:
+                perf_command.append('--fast')
+            self.say('PERF START | {} | up to {} group workers'.format(name, variant_jobs))
+            result = self.command(perf_command, work / 'perf.log', work, fail_fast=True, test_allocator=True)
             with self.mutex:
-                self.perf_pending = {n for n in names if not (self.args.no_debug and '_debug' in n) and self.supported(n)}
-                self.perf_completed = {}
-                self.perf_last_disclaimer = False
-                self.perf_last_announced = False
-            for name in names:
-                if self.args.no_debug and '_debug' in name:
-                    self.say('SKIP debug perf ' + name)
-                    continue
-                if not self.supported(name):
-                    self.say('SKIP perf ' + name)
-                    continue
-                work = run / name
-                work.mkdir()
-                runner = work / 'run_all_pl.sh'
-                shutil.copy2(self.repo / 'tests/perf/run_all_pl.sh', runner)
-                order_dir = self.home / 'perf-group-order'
-                order_dir.mkdir(parents=True, exist_ok=True)
-                variant_jobs = jobs_per_variant + (eligible.index(name) < extra_jobs)
-                perf_command = ['bash', str(runner), '--binary', str(self.repo / 'tests/perf' / name),
-                                '--jobs', str(variant_jobs), '--fail-fast',
-                                '--log-dir', str(work / 'perf-groups'), '--order-file',
-                                str(order_dir / (name + '--' + self.perf_target_mode(name) + '.tsv'))]
-                if self.args.fast or '_debug' in name:
-                    perf_command.append('--fast')
-                future = pool.submit(self.command, perf_command, work / 'perf.log', work, fail_fast=True, test_allocator=True)
-                futures.append(future)
-                future_names[future] = (name, work / 'perf.log')
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    result = future.result()
-                    with self.mutex:
-                        name, path = future_names[future]
-                        self.perf_pending.discard(name)
-                        if result != 'skipped-update':
-                            self.perf_completed[name] = path
-                            self.save_perf_target(name, path)
-                        if len(self.perf_pending) == 1:
-                            self.next_perf_report = 0
-                except BaseException as error:
-                    self.stopping.set()
-                    for pending in futures:
-                        pending.cancel()
-                    self.stop_children()
-                    raise getattr(self, 'first_workload_failure', error)
+                self.perf_pending.discard(name)
+                if result != 'skipped-update':
+                    self.perf_completed[name] = work / 'perf.log'
+                    self.save_perf_target(name, work / 'perf.log')
+                if len(self.perf_pending) == 1:
+                    self.next_perf_report = 0
+            if result == 'skipped-update' or self.update_waiting():
+                self.perf_skipped = bool(self.perf_pending) or result == 'skipped-update'
+                self.args.force = True
+                return 'updated'
         if self.update_waiting() or self.perf_skipped:
             self.args.force = True
             return 'updated'
