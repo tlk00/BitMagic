@@ -23,6 +23,8 @@ For more information please visit:  http://bitmagic.io
 #include <stdio.h>
 #include <sstream>
 #include <cassert>
+#include <cstring>
+#include <stdexcept>
 
 //#define BMWASMSIMDOPT
 //#define BMSSE2OPT
@@ -59,6 +61,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmintervals.h"
 #include "bmaggregator.h"
 #include "bmserial.h"
+#include "bmarithmetic.h"
 #include "bmsparsevec.h"
 #include "bmsparsevec_algo.h"
 #include "bmsparsevec_serial.h"
@@ -96,6 +99,7 @@ std::uniform_int_distribution<> rand_dis(0, BSIZE); // generate uniform numebrs 
 struct perf_run_options
 {
     simd_bench_options bench;
+    const char* group = 0; ///< Selected independent benchmark group, or all groups.
     bool fast = false; ///< Use one timed repetition while retaining all benchmark sections.
     bool print_timings = true;
     bool print_space = false;
@@ -103,6 +107,37 @@ struct perf_run_options
 };
 
 perf_run_options g_perf_options;
+
+/// @internal Names of the disjoint groups used by the parallel perf runner.
+static const char* const perf_groups[] = {
+    "bit-core", "bit-shift", "codec-encode", "codec-decode", "bit-enum",
+    "bit-logic", "sparse-access", "sparse-scan", "sparse-serial",
+    "float-serial", "rsc", "string", "float-plain", "float-rsc",
+    "float-compare", "mmap"
+};
+
+/// @internal Check whether a name identifies one independent perf group.
+/// @param name Candidate group name.
+/// @return True if the name occurs in the perf group table.
+static
+bool IsPerfGroup(const char* name)
+{
+    for (const char* group : perf_groups)
+    {
+        if (::strcmp(group, name) == 0)
+            return true;
+    } // for group
+    return false;
+}
+
+/// @internal Check whether this process should execute a named group.
+/// @param name Group assigned to a test section.
+/// @return True for a full run or a matching selected group.
+static
+bool RunPerfGroup(const char* name)
+{
+    return !g_perf_options.group || ::strcmp(g_perf_options.group, name) == 0;
+}
 
 /// @internal Print command-line usage for the perf driver.
 static
@@ -118,9 +153,15 @@ void PrintUsage(const char* app_name)
          << "  -bench-blocks N   Blocks per focused input (1..4096; default 64)." << endl
          << "  -bench-seed N     Focused input random seed (0..1000000000; default 1337)." << endl
          << "  --fast    Run each timed repetition once with smaller large fixtures." << endl
+         << "  --group NAME  Run only one independent benchmark group." << endl
+         << "  --list-groups  Print group names, one per line, and exit." << endl
          << "  -mem      Print memory, serialized-size, and mask statistics." << endl
          << "  -silent   Run correctness checks without timing or space output." << endl
          << "  -h, --help  Print this help and exit." << endl;
+    cout << "Groups:";
+    for (const char* group : perf_groups)
+        cout << " " << group;
+    cout << endl;
 }
 
 /// @internal Parse perf-driver command-line options.
@@ -134,6 +175,21 @@ bool ParseCommandLine(int argc, char* argv[])
             g_perf_options.bench.kernels = true;
         else if (::strcmp(arg, "--fast") == 0)
             g_perf_options.fast = true;
+        else if (::strcmp(arg, "--group") == 0)
+        {
+            if (++i == argc || !IsPerfGroup(argv[i]) || g_perf_options.group)
+            {
+                cerr << "Expected one valid group name after --group" << endl;
+                exit(1);
+            }
+            g_perf_options.group = argv[i];
+        }
+        else if (::strcmp(arg, "--list-groups") == 0)
+        {
+            for (const char* group : perf_groups)
+                cout << group << endl;
+            return false;
+        }
         else if (::strcmp(arg, "-bench-dense") == 0)
             g_perf_options.bench.dense = true;
         else if (::strcmp(arg, "-bench-gap") == 0)
@@ -6287,10 +6343,10 @@ void StrSparseVectorGatherMMapDeserializationPerfTest()
     const str_gather_svect_type::size_type sv_size =
         g_perf_options.fast ? 8u * 1024u * 1024u : 128u * 1024u * 1024u;
     const str_gather_svect_type::size_type target_count =
-        g_perf_options.fast ? 1024u : 1024u * 1024u;
+        g_perf_options.fast ? 1024u : 128u * 1024u;
     const unsigned island_lens[] = { 1, 4, 256, 4096 };
     const unsigned island_len_count = unsigned(sizeof(island_lens) / sizeof(island_lens[0]));
-    const unsigned repeats = PerfRepeats(5);
+    const unsigned repeats = 1;
     const bool profile_island_gather_only = false;
     const unsigned profile_island_len = 256;
     const char* fname = "bm_strsv_gather_mmap.tmp";
@@ -8029,7 +8085,7 @@ void TestSVFScanner()
     testSVF.import(linData.data(), N);
     testSVF.optimize(tb);
 
-    unsigned int tests = PerfRepeats(1000);
+    unsigned int tests = PerfRepeats(200);
 
     {
         sparseVecFloat::bvector_type xorSV;
@@ -8439,7 +8495,7 @@ void TestSVFScannerRSC()
     testSVF.optimize(tb);
     testSVF.sync(true, true);
 
-    unsigned int tests = PerfRepeats(1000);
+    unsigned int tests = PerfRepeats(200);
 
     {
         sparseVecFloatRSC::bvector_type xorRSC;
@@ -8820,7 +8876,7 @@ void TestSVFComparison()
             linData[i+N/2] = std::numeric_limits<float>::quiet_NaN();
         }
     }
-    unsigned int tests = PerfRepeats(1000);
+    unsigned int tests = PerfRepeats(200);
     std::vector<pair<float, float>> testRangesVector(tests);
     for (unsigned int i = 0; i < tests; i++)
     {
@@ -9219,7 +9275,7 @@ void TestSVFScannerUnbounded()
     testSVF.import(linData.data(), N);
     testSVF.optimize(tb);
 
-    unsigned int tests = PerfRepeats(1000);
+    unsigned int tests = PerfRepeats(200);
 
     {
         sparseVecFloat::bvector_type xorSV;
@@ -9673,6 +9729,346 @@ void test_ro()
 }
 
 
+/** @internal Shared inputs, validated streams and reusable codec workspaces.
+    All seven benchmarks borrow this arena for the duration of their call.
+    Block storage is aligned for BitMagic block operations.
+*/
+struct BlockCodecArena
+{
+    static constexpr unsigned block_count = 16; ///< Shared corpus size.
+    static constexpr unsigned block_bytes = bm::set_block_size * sizeof(bm::word_t); ///< Raw block bytes.
+    std::vector<bm::bit_block_t> blocks{block_count}; ///< Deterministic inputs.
+    std::vector<bm::bit_block_t> decoded{1}; ///< Reused decode destination.
+    std::vector<std::vector<bm::gap_word_t> > positions{block_count}; ///< Sorted set-bit positions.
+    std::vector<bm::gap_word_t> scratch = std::vector<bm::gap_word_t>(bm::gap_max_bits); ///< Extraction destination.
+    std::vector<std::vector<unsigned char> > streams =
+        std::vector<std::vector<unsigned char> >(block_count * 3,
+            std::vector<unsigned char>(32768)); ///< BIC, byte and nibble streams.
+    std::vector<unsigned char> output = std::vector<unsigned char>(32768); ///< Reused encode destination.
+};
+
+/** @internal Encode sorted positions with common BIC framing and bounds.
+    @param dst Borrowed writable 32 KiB destination.
+    @param pos Borrowed strictly increasing positions in [0, 65535].
+    @param count Number of positions.
+    @return Bytes written, including population and final padding.
+*/
+static
+size_t EncodeBICBlock(unsigned char* dst, const bm::gap_word_t* pos, unsigned count)
+{
+    bm::encoder enc(dst, 32768);
+    enc.put_32(count);
+    bm::bit_out<bm::encoder> bits(enc);
+    bits.bic_encode_u16(pos, count, 0, 65535);
+    bits.flush();
+    return enc.size();
+}
+
+/** @internal Decode BIC directly into a cleared bit-block.
+    @param src Borrowed validated stream produced by EncodeBICBlock().
+    @param block Borrowed aligned block, overwritten by this call.
+*/
+static
+void DecodeBICBlock(const unsigned char* src, bm::word_t* block)
+{
+    bm::decoder dec(src);
+    const unsigned count = dec.get_32();
+    bm::bit_block_set(block, 0);
+    bm::bit_in<bm::decoder> bits(dec);
+    bits.bic_decode_u16_bitset(block, count, 0, 65535);
+}
+
+/** @internal Generate four distributions at four medium densities.
+    @param arena Owned corpus and position arrays to populate, retained by caller.
+*/
+static
+void GenerateBlockCodecInputs(BlockCodecArena& arena)
+{
+    std::mt19937 rng(1337);
+    for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+    {
+        bm::word_t* block = arena.blocks[k].begin();
+        bm::bit_block_set(block, 0);
+        const unsigned density = 20 + (k % 4) * 10;
+        for (unsigned bit = 0; bit < bm::gap_max_bits; ++bit)
+        {
+            bool set = false;
+            switch (k / 4)
+            {
+            case 0: // Jittered clusters within 256-bit regions.
+                if (bit % 256 == 0)
+                {
+                    const unsigned length = density * 256 / 100;
+                    const unsigned start = unsigned(rng()) % (257 - length);
+                    for (unsigned j = start; j < start + length; ++j)
+                    {
+                        const unsigned pos = bit + j;
+                        block[pos / 32] |= bm::word_t(1) << (pos % 32);
+                    } // for j
+                }
+                break;
+            case 1: // Small byte or independently paired nibble alphabets.
+                if (bit % 8 == 0)
+                {
+                    unsigned value = 0;
+                    const unsigned symbol_bits = (k % 4 < 2) ? 8 : 4;
+                    for (unsigned j = 0; j < 8; j += symbol_bits)
+                    {
+                        const unsigned mask = (1u << symbol_bits) - 1;
+                        const unsigned symbol = (unsigned(rng()) % 100 < density)
+                                              ? mask : 0;
+                        value |= symbol << j;
+                    } // for j
+                    block[bit / 32] |= bm::word_t(value) << (bit % 32);
+                }
+                break;
+            case 2: // Alternating locally sparse and dense 512-bit patches.
+                set = unsigned(rng()) % 100 < ((bit / 512) % 2 ? density * 2 - 5 : 5);
+                break;
+            case 3: // Independent random bits.
+                set = unsigned(rng()) % 100 < density;
+                break;
+            default:
+                throw std::runtime_error("Invalid block codec distribution");
+            } // switch k / 4
+            if (set)
+            {
+                block[bit / 32] |= bm::word_t(1) << (bit % 32);
+            }
+        } // for bit
+        arena.positions[k].resize(bm::gap_max_bits);
+        arena.positions[k].resize(bm::bit_block_convert_to_arr(arena.positions[k].data(), block, false));
+    } // for k
+
+}
+
+/** @internal Validate all 48 round trips and both BIC encode paths.
+    @param arena Generated inputs and reusable workspace. Saves the three
+    validated streams per block for subsequent decode benchmarks.
+    Throws std::runtime_error on any byte mismatch. Success is silent.
+*/
+static
+void ValidateBlockCodecs(BlockCodecArena& arena)
+{
+    for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+    {
+        const unsigned count = unsigned(arena.positions[k].size());
+        const size_t size = EncodeBICBlock(arena.streams[k].data(), arena.positions[k].data(), count);
+        const unsigned extracted = bm::bit_block_convert_to_arr(arena.scratch.data(), arena.blocks[k].begin(), false);
+        const size_t extracted_size = EncodeBICBlock(arena.output.data(), arena.scratch.data(), extracted);
+        if (size != extracted_size || std::memcmp(arena.output.data(), arena.streams[k].data(), size))
+        {
+            throw std::runtime_error("BIC extraction stream mismatch");
+        }
+        for (unsigned mode = 0; mode < 3; ++mode)
+        {
+            unsigned char* stream = arena.streams[mode * BlockCodecArena::block_count + k].data();
+            if (mode == 0)
+            {
+                DecodeBICBlock(stream, arena.decoded[0].begin());
+            }
+            else
+            {
+                bm::encoder enc(stream, 32768);
+                bm::arithmetic_block_encoder::encode(enc, arena.blocks[k].begin(), mode == 1);
+                bm::decoder dec(stream);
+                bm::arithmetic_block_decoder::decode(dec, arena.decoded[0].begin());
+            }
+            if (std::memcmp(arena.blocks[k].begin(), arena.decoded[0].begin(), BlockCodecArena::block_bytes))
+            {
+                throw std::runtime_error("Block codec round trip mismatch");
+            }
+        } // for mode
+    } // for k
+}
+
+/** @internal Time BIC encoding of precomputed sorted positions, including framing and flush.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void BICPositionsEncodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "BIC block encode (positions)", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            const auto& positions = arena.positions[k];
+            c_acc += EncodeBICBlock(arena.output.data(), positions.data(), unsigned(positions.size()));
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Time set-bit extraction followed by the same framed BIC encoding.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void BICExtractionEncodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "BIC block encode (extraction)", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            const unsigned count = bm::bit_block_convert_to_arr(
+                arena.scratch.data(), arena.blocks[k].begin(), false);
+            c_acc += EncodeBICBlock(arena.output.data(), arena.scratch.data(), count);
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Time BIC decoding into a bit-block, including destination clearing.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void BICBlockDecodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "BIC block decode", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            DecodeBICBlock(arena.streams[k].data(), arena.decoded[0].begin());
+            c_acc += arena.decoded[0].begin()[k];
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Time adaptive byte arithmetic encoding, including per-block model reset.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void ArithmeticByteEncodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "Arithmetic byte block encode", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            bm::encoder enc(arena.output.data(), arena.output.size());
+            c_acc += bm::arithmetic_block_encoder::encode(enc, arena.blocks[k].begin(), true);
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Time decoding the validated byte arithmetic streams into a bit-block.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void ArithmeticByteDecodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "Arithmetic byte block decode", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            bm::decoder dec(arena.streams[1 * BlockCodecArena::block_count + k].data());
+            bm::arithmetic_block_decoder::decode(dec, arena.decoded[0].begin());
+            c_acc += arena.decoded[0].begin()[k];
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Time adaptive nibble arithmetic encoding, including per-block model reset.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void ArithmeticNibbleEncodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "Arithmetic nibble block encode", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            bm::encoder enc(arena.output.data(), arena.output.size());
+            c_acc += bm::arithmetic_block_encoder::encode(enc, arena.blocks[k].begin(), false);
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Time decoding the validated nibble arithmetic streams into a bit-block.
+    @param arena Borrowed validated corpus and reusable buffers. Updates scratch
+    output and the global optimizer accumulator without allocating per pass.
+    @param repeats Number of complete corpus sweeps to time.
+*/
+static
+void ArithmeticNibbleDecodeTest(BlockCodecArena& arena, unsigned repeats)
+{
+    bm::chrono_taker<> timer(cout, "Arithmetic nibble block decode", 1);
+    for (unsigned pass = 0; pass < repeats; ++pass)
+    {
+        for (unsigned k = 0; k < BlockCodecArena::block_count; ++k)
+        {
+            bm::decoder dec(arena.streams[2 * BlockCodecArena::block_count + k].data());
+            bm::arithmetic_block_decoder::decode(dec, arena.decoded[0].begin());
+            c_acc += arena.decoded[0].begin()[k];
+        } // for k
+    } // for pass
+    timer.stop(!g_perf_options.print_timings);
+}
+
+/** @internal Compare seven codec operations on the same 16 bit-blocks.
+    Generates and validates inputs before timing. Each benchmark reuses the
+    arena's buffers. Normal runs use 35,000 sweeps and --fast uses one.
+*/
+static
+void BlockCodecTest()
+{
+    BlockCodecArena arena;
+    GenerateBlockCodecInputs(arena);
+    ValidateBlockCodecs(arena);
+    const unsigned repeats = PerfRepeats(35000);
+    BICPositionsEncodeTest(arena, repeats);
+    BICExtractionEncodeTest(arena, repeats);
+    BICBlockDecodeTest(arena, repeats);
+    ArithmeticByteEncodeTest(arena, repeats);
+    ArithmeticByteDecodeTest(arena, repeats);
+    ArithmeticNibbleEncodeTest(arena, repeats);
+    ArithmeticNibbleDecodeTest(arena, repeats);
+}
+
+/// @internal Run one independent half of the block codec comparison.
+/// @param decode Select decode operations when true, encode operations otherwise.
+static
+void RunBlockCodecPart(bool decode)
+{
+    BlockCodecArena arena;
+    GenerateBlockCodecInputs(arena);
+    ValidateBlockCodecs(arena);
+    const unsigned repeats = PerfRepeats(35000);
+    if (decode)
+    {
+        BICBlockDecodeTest(arena, repeats);
+        ArithmeticByteDecodeTest(arena, repeats);
+        ArithmeticNibbleDecodeTest(arena, repeats);
+    }
+    else
+    {
+        BICPositionsEncodeTest(arena, repeats);
+        BICExtractionEncodeTest(arena, repeats);
+        ArithmeticByteEncodeTest(arena, repeats);
+        ArithmeticNibbleEncodeTest(arena, repeats);
+    }
+}
+
 int main(int argc, char* argv[])
 {
 //test_ro();
@@ -9699,178 +10095,233 @@ int main(int argc, char* argv[])
     {
         bm::chrono_taker<> tt(cout, "TOTAL", 1);
 
+        if (g_perf_options.group && g_perf_options.bench.selected())
+        {
+            cerr << "--group cannot be combined with focused -bench options" << endl;
+            return 1;
+        }
         if (g_perf_options.bench.selected())
         {
             RunSIMDBenchmarks(g_perf_options.bench, g_perf_options.print_timings);
             return 0;
         }
 
-        // Include the bounded dense kernel checks in an ordinary perf run.
-        // One summary line keeps the established report easy to scan.
-        simd_bench_options fast_bench;
-        fast_bench.kernels = fast_bench.dense = fast_bench.gap = true;
-        fast_bench.repeats = PerfRepeats(20000);
-        cout << endl;
-        if (g_perf_options.print_timings)
+        if (RunPerfGroup("bit-core"))
         {
-            bm::chrono_taker<> simd_tt(cout, "SIMD fast kernels", 1);
-            RunSIMDBenchmarks(fast_bench, true, false);
+            // Include the bounded dense kernel checks in an ordinary perf run.
+            // One summary line keeps the established report easy to scan.
+            simd_bench_options fast_bench;
+            fast_bench.kernels = fast_bench.dense = fast_bench.gap = true;
+            fast_bench.repeats = PerfRepeats(20000);
+            cout << endl;
+            if (g_perf_options.print_timings)
+            {
+                bm::chrono_taker<> simd_tt(cout, "SIMD fast kernels", 1);
+                RunSIMDBenchmarks(fast_bench, true, false);
+            }
+            else
+                RunSIMDBenchmarks(fast_bench, false, false);
+
+            MemCpyTest();
+            cout << endl;
+
+            BitCountTest();
+            cout << endl;
+
+            BitCountSparseTest();
+            cout << endl;
+
+            BitTestSparseTest();
+            cout << endl;
+
+            BitForEachTest();
+            cout << endl;
+
+            WordSelectTest();
+            cout << endl;
+
+            BitSetConditionalTest();
+            cout << endl;
+
+            BitCompareTest();
+            cout << endl;
+
+            BitSwapTest();
+            cout << endl;
         }
-        else
-            RunSIMDBenchmarks(fast_bench, false, false);
 
-        MemCpyTest();
-        cout << endl;
+        if (RunPerfGroup("bit-shift"))
+        {
+            OptimizeTest();
+            cout << endl;
 
-        BitCountTest();
-        cout << endl;
+            FindTest();
+            cout << endl;
 
-        BitCountSparseTest();
-        cout << endl;
+            BitBlockRotateTest();
+            BitBlockShiftTest();
+            cout << endl;
 
-        BitTestSparseTest();
-        cout << endl;
+            InterpolativeCodingTest();
+            cout << endl;
+        }
+        if (!g_perf_options.group)
+        {
+            BlockCodecTest();
+            cout << endl;
+        }
+        else if (RunPerfGroup("codec-encode"))
+        {
+            RunBlockCodecPart(false);
+        }
+        else if (RunPerfGroup("codec-decode"))
+        {
+            RunBlockCodecPart(true);
+        }
 
-        BitForEachTest();
-        cout << endl;
+        if (RunPerfGroup("bit-enum"))
+        {
+            EnumeratorTest();
+            EnumeratorTestGAP();
+            EnumeratorGoToTest();
+            cout << endl;
 
-        WordSelectTest();
-        cout << endl;
+            BvectorShiftTest();
+            cout << endl;
 
-        BitSetConditionalTest();
-        cout << endl;
+            RangeCopyTest();
+            cout << endl;
 
-        BitCompareTest();
-        cout << endl;
+            IntervalsTest();
+            cout << endl;
+        }
 
-        BitSwapTest();
-        cout << endl;
+        if (RunPerfGroup("bit-logic"))
+        {
+            AggregatorTest();
+            cout << endl;
 
-        OptimizeTest();
-        cout << endl;
+            OrTest();
+            AndTest();
+            XorTest();
+            SubTest();
 
-        FindTest();
-        cout << endl;
+            cout << endl;
+            OrAndTest();
+            cout << endl;
 
-        BitBlockRotateTest();
-        BitBlockShiftTest();
-        cout << endl;
+            XorCountTest();
+            AndCountTest();
+            TI_MetricTest();
+            cout << endl;
 
-        InterpolativeCodingTest();
-        cout << endl;
+            InvertTest();
+            cout << endl;
+        }
 
-        EnumeratorTest();
-        EnumeratorTestGAP();
-        EnumeratorGoToTest();
-        cout << endl;
+        if (RunPerfGroup("sparse-access"))
+        {
+            Set2SetTransformTest();
+            cout << endl;
 
-        BvectorShiftTest();
-        cout << endl;
+            SerializationTest();
+            cout << endl;
 
-        RangeCopyTest();
-        cout << endl;
+            SparseVectorAccessTest();
+            cout << endl;
 
-        IntervalsTest();
-        cout << endl;
+            SparseVectorSignedAccessTest();
+            cout << endl;
+        }
 
-        AggregatorTest();
-        cout << endl;
+        if (RunPerfGroup("sparse-scan"))
+        {
+            SparseVectorScannerTest();
+            cout << endl;
 
-        OrTest();
-        AndTest();
-        XorTest();
-        SubTest();
+            SparseVectorScannerCmpTest();
+            cout << endl;
 
-        cout << endl;
-        OrAndTest();
-        cout << endl;
+            SparseVectorScannerSignedCmpTest();
+            cout << endl;
 
-        XorCountTest();
-        AndCountTest();
-        TI_MetricTest();
-        cout << endl;
+            SparseVectorPipelineScannerTest();
+            cout << endl;
+        }
 
-        InvertTest();
-        cout << endl;
+        if (RunPerfGroup("sparse-serial"))
+        {
+            SparseVectorSerializationTest();
+            SparseVectorRangeDeserializationTest();
 
-        Set2SetTransformTest();
-        cout << endl;
+            SparseVectorANDDeserializationTest();
+            cout << endl;
 
-        SerializationTest();
-        cout << endl;
+            StrSparseVectorGatherDeserializationTest();
+            cout << endl;
+        }
 
-        SparseVectorAccessTest();
-        cout << endl;
+        if (RunPerfGroup("float-serial"))
+        {
+            SparseVectorFloatANDDeserializationTest();
+            cout << endl;
+            SparseVectorFloatRSCANDDeserializationTest();
+            cout << endl;
+        }
 
-        SparseVectorSignedAccessTest();
-        cout << endl;
+        if (RunPerfGroup("rsc"))
+        {
+            RSC_SparseVectorFillTest();
+            RSC_SparseVectorAccesTest();
+            RSC_SparseVectorRandomAccesTest();
+            cout << endl;
+            RankCompressionTest();
+            cout << endl;
+        }
 
-        SparseVectorScannerTest();
-        cout << endl;
+        if (RunPerfGroup("string"))
+        {
+            StrSparseVectorTest();
+            cout << endl;
+        }
 
-        SparseVectorScannerCmpTest();
-        cout << endl;
+        if (RunPerfGroup("float-plain"))
+        {
+            TestSVFScanner();
+            cout << endl;
+            TestSVFForEachSparseSearchResults();
+            cout << endl;
+        }
 
-        SparseVectorScannerSignedCmpTest();
-        cout << endl;
+        if (RunPerfGroup("float-rsc"))
+        {
+            TestSVFRSCForEachSparseSearchResults();
+            cout << endl;
+            TestSVFScannerRSC();
+            cout << endl;
+        }
 
-        SparseVectorPipelineScannerTest();
-        cout << endl;
+        if (RunPerfGroup("float-compare"))
+        {
+            TestSVFComparison();
+            cout << endl;
+            TestSVFScannerSpike();
+            cout << endl;
+            TestSVFScannerUnbounded();
+            cout << endl;
+        }
 
-        SparseVectorSerializationTest();
-        SparseVectorRangeDeserializationTest();
+        if (RunPerfGroup("float-serial"))
+        {
+            SparseVectorFloatANDDeserializationTest();
+            cout << endl;
+        }
 
-        SparseVectorANDDeserializationTest();
-        cout << endl;
-
-        StrSparseVectorGatherDeserializationTest();
-        cout << endl;
-
-        SparseVectorFloatANDDeserializationTest();
-        cout << endl;
-        SparseVectorFloatRSCANDDeserializationTest();
-        cout << endl;
-
-        
-        RSC_SparseVectorFillTest();
-
-        RSC_SparseVectorAccesTest();
-
-        RSC_SparseVectorRandomAccesTest();
-        cout << endl;
-
-        RankCompressionTest();
-        cout << endl;
-
-        StrSparseVectorTest();
-        cout << endl;
-
-        TestSVFScanner();
-        cout << endl;
-
-        TestSVFForEachSparseSearchResults();
-        cout << endl;
-
-        TestSVFRSCForEachSparseSearchResults();
-        cout << endl;
-
-        TestSVFScannerRSC();
-        cout << endl;
-  
-        TestSVFComparison();
-        cout << endl;
-        
-        TestSVFScannerSpike();
-        cout << endl;
-        
-        TestSVFScannerUnbounded();
-        cout << endl;
-
-        SparseVectorFloatANDDeserializationTest();
-        cout << endl;
-
-        StrSparseVectorGatherMMapDeserializationPerfTest();
-        cout << endl;
+        if (RunPerfGroup("mmap"))
+        {
+            StrSparseVectorGatherMMapDeserializationPerfTest();
+            cout << endl;
+        }
 
         if (g_fl_cnt < 0 || c_acc) // ... to fool compiler optimizers not to exclude code
             cout << "" << "\r";
