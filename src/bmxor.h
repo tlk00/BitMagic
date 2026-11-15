@@ -62,13 +62,15 @@ struct xor_sim_params
     unsigned stop_gain;
     float    target_gain_ratio;
     unsigned min_gaps;
+    unsigned admission_max_metric; ///< Maximum admitted residual metric; zero uses the scanner default unless overridden by the caller.
 
     xor_sim_params()
     : min_lookup_depth(0),
       max_lookup_depth(~0u/2),
       stop_gain(bm::gap_max_bits-3),
       target_gain_ratio(0.89f),
-      min_gaps(3)
+      min_gaps(3),
+      admission_max_metric(0)
     {}
 };
 
@@ -801,6 +803,10 @@ public:
                                                              matrix_chain_type;
 
 public:
+    // Rows address reference-vector entries; columns address the set block
+    // indices in bv_blocks. Recipes use collection indices, not external row IDs.
+    bool four_candidates = false; ///< Retain incumbent plus up to three alternatives for actual serialization trials.
+    matrix_chain_type alternatives[3]; ///< Single-reference recipes at the same coordinates as matr; zero chain_size means unused.
     matrix_chain_type  matr; ///< model matrix
     bvector_type       bv_blocks;  ///< blocks digest
 };
@@ -902,19 +908,34 @@ public:
     /**
         Calculate matrix of best XOR match metrics per block
         for the attached collection of bit-vectors
+        @param sim_model Receives incumbent recipes and, when four_candidates
+            is set, up to three single-reference alternatives per matrix entry.
+        @param params Search bounds and residual admission thresholds.
+        Rebuilds the block digest and recipe matrices using the attached references.
         @return true if computed successfully
      */
     bool compute_sim_model(xor_sim_model<BV> &sim_model,
                            const bm::xor_sim_params& params);
 
-    /**
-        Compute similarity model for block
-     */
+    /** Compute similarity model for one vertical block slice.
+        A slice contains the blocks at index nb across the reference vectors.
+        The incumbent may use several references with disjoint wave masks;
+        alternatives each use one reference. A mask bit selects a 1024-bit wave
+        at the same position in the source and reference block.
+        @param sim_model_matr Incumbent recipe matrix; sized before entry.
+        @param nb Block index in each reference vector.
+        @param nb_rank Column corresponding to nb in the model digest.
+        @param params Search bounds, estimator thresholds and residual admission limit.
+        @param experiment Optional model receiving up to three alternatives;
+            its matrices must be sized and zeroed before entry. Borrowed for
+            this call. Null preserves the ordinary model-building policy.
+    */
     void compute_sim_model(
         typename xor_sim_model<BV>::matrix_chain_type &sim_model_matr,
                            size_type                 nb,
                            size_type                 nb_rank,
-                           const bm::xor_sim_params& params);
+                           const bm::xor_sim_params& params,
+                           bm::xor_sim_model<BV>* experiment = nullptr);
     /**
         Compute reference complexity descriptor based on XOR vector.
         Returns the digest of sub-blocks where XOR filtering improved the metric
@@ -1218,25 +1239,6 @@ void xor_scanner<BV>::compute_xor_complexity_descr(
     default:
         break;
     } // switch
-#if 0
-    // Disabled as cases compression ratio degradation in some tests
-    if (!xmd.xor_d64) // best metric choice did not work try best gain
-    {
-        if (block_gc_gain >= block_bc_gain && block_gc_gain >= block_ibc_gain)
-        {
-            xmd.block_gain = block_gc_gain; xmd.xor_d64 = gc_digest;
-        }
-        else
-        if (block_bc_gain > block_gc_gain && block_bc_gain > block_ibc_gain)
-        {
-            xmd.block_gain = block_bc_gain; xmd.xor_d64 = bc_digest;
-        }
-        else
-        {
-            xmd.block_gain = block_ibc_gain; xmd.xor_d64 = ibc_digest;
-        }
-    }
-#endif
 }
 
 // --------------------------------------------------------------------------
@@ -1354,10 +1356,11 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
 
     if (best_ri != -1) // found some gain, validate it now
     {
-        // assumed that if XOR compression c_level is at the highest
-        const float bie_bits_per_int = 3.0f; // c_level_ < 6 ? 3.75f : 3.0f;
-        const unsigned bie_limit =
-                unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
+        // Bound the residual's best count metric (bits, inverse bits or gaps),
+        // not encoded bytes. The serializer can supply a level-specific limit;
+        // direct scanner calls retain the default estimate of three bits/item.
+        const unsigned bie_limit = params.admission_max_metric ?
+            params.admission_max_metric : bm::gap_max_bits / 3;
 
         unsigned xor_bc, xor_gc;
         const bm::word_t* ref_block = get_ref_block(size_type(best_ri), i, j);
@@ -1462,13 +1465,25 @@ bool xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
     if (!ret)
         return ret;
 
+    // Match the incumbent matrix geometry. Zeroed entries denote absent
+    // alternatives, including rows skipped by the bounded reference search.
+    if (sim_model.four_candidates)
+    {
+        for (unsigned k = 0; k < 3; ++k)
+        {
+            sim_model.alternatives[k].resize(sim_model.matr.rows(), sim_model.matr.cols(), false);
+            sim_model.alternatives[k].set_zero();
+        } // for k
+    }
     sync_nb_vect();
 
     typename bvector_type::enumerator en(sim_model.bv_blocks);
     for (size_type col = 0; en.valid(); ++en, ++col)
     {
+        // Digest rank is the matrix column; nb is the actual block coordinate.
         size_type nb = *en;
-        compute_sim_model(sim_model.matr, nb, col, params);
+        compute_sim_model(sim_model.matr, nb, col, params,
+                          sim_model.four_candidates ? &sim_model : nullptr);
     } // for en
     return true;
 }
@@ -1480,13 +1495,15 @@ void xor_scanner<BV>::compute_sim_model(
                 typename xor_sim_model<BV>::matrix_chain_type &sim_model_matr,
                         size_type                 nb,
                         size_type                 nb_rank,
-                        const bm::xor_sim_params& params)
+                        const bm::xor_sim_params& params,
+                        bm::xor_sim_model<BV>* experiment)
 {
     BM_ASSERT(nb_rank < sim_model_matr.cols());
 
-    const float bie_bits_per_int = 3.0f; // c_level_ < 6 ? 3.75f : 3.0f;
-    const unsigned bie_limit =
-            unsigned(float(bm::gap_max_bits) / bie_bits_per_int);
+    // Apply the same residual admission ceiling when a refined chain rescues
+    // a source block that had no admissible single-reference incumbent.
+    const unsigned bie_limit = params.admission_max_metric ?
+        params.admission_max_metric : bm::gap_max_bits / 3;
 
     deoptimize_gap_blocks(nb, params);
 
@@ -1495,6 +1512,8 @@ void xor_scanner<BV>::compute_sim_model(
     unsigned i0, j0;
     bm::get_block_coord(nb, i0, j0);
 
+    // Build one source row at a time using only subsequent reference entries.
+    // The final row is initialized but has no later reference to search.
     for (size_type ri=0; true; ++ri)
     {
         bm::block_match_chain<size_type>* m_row = sim_model_matr.row(ri);
@@ -1527,6 +1546,45 @@ void xor_scanner<BV>::compute_sim_model(
         //
         bmc.match = search_best_xor_mask(s_block, ri, ri+1, rsize,
                                           i0, j0, xor_tmp_block_, params);
+
+        // Retain the best estimated single-reference recipes before chain
+        // refinement mutates match_vect_. Only matches recorded by the bounded
+        // search participate; early-stop candidates need not be in match_vect_.
+        bm::block_xor_match_descr shortlist[4];
+        unsigned shortlist_size = 0;
+        if (experiment)
+        {
+            for (size_t m = 0; m < match_vect_.size(); ++m)
+            {
+                const auto& candidate = match_vect_[m];
+                if (!candidate.match_type || !candidate.xor_d64)
+                {
+                    continue;
+                }
+                // Descending heuristic gain; equal gains keep discovery order.
+                // Keep four slots so removing the incumbent can leave three.
+                unsigned pos = 0;
+                while (pos < shortlist_size &&
+                       shortlist[pos].block_gain >= candidate.block_gain)
+                {
+                    ++pos;
+                } // while pos
+                if (pos >= 4)
+                {
+                    continue;
+                }
+                if (shortlist_size < 4)
+                {
+                    ++shortlist_size;
+                }
+                // Shift the retained suffix, discarding its worst entry if full.
+                for (unsigned k = shortlist_size - 1; k > pos; --k)
+                {
+                    shortlist[k] = shortlist[k - 1];
+                } // for k
+                shortlist[pos] = candidate;
+            } // for m
+        }
 
         // take index in the ref-vector (not translated to a plain number)
         //
@@ -1596,6 +1654,35 @@ void xor_scanner<BV>::compute_sim_model(
             }
 
         } // switch
+
+        // Alternatives supplement an admitted incumbent; they do not rescue an
+        // otherwise rejected block. The serializer will compare complete records.
+        if (experiment && bmc.match != bm::e_no_xor_match)
+        {
+            unsigned count = 0;
+            for (unsigned k = 0; k < shortlist_size && count < 3; ++k)
+            {
+                const auto& candidate = shortlist[k];
+                // Skip a single-reference recipe already represented by the
+                // incumbent; a multi-reference chain remains a separate trial.
+                if (bmc.chain_size == 1 && bmc.ref_idx[0] == candidate.ref_idx &&
+                    (bmc.match == bm::e_xor_match_EQ || bmc.xor_d64[0] == candidate.xor_d64))
+                {
+                    continue;
+                }
+                BM_ASSERT(candidate.ref_idx > ri && candidate.ref_idx < rsize);
+                auto& alternative = experiment->alternatives[count].row(ri)[nb_rank];
+                alternative.nb = nb;
+                alternative.chain_size = 1;
+                // Only the incumbent search verifies full-block equality.
+                // An estimated EQ must still build and encode its XOR residual.
+                alternative.match = candidate.match_type == bm::e_xor_match_EQ ?
+                    bm::e_xor_match_BC : candidate.match_type;
+                alternative.ref_idx[0] = unsigned(candidate.ref_idx);
+                alternative.xor_d64[0] = candidate.xor_d64;
+                ++count;
+            } // for k
+        }
 
     } // for ri
 }

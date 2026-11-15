@@ -84,11 +84,10 @@ inline void CheckCodecWorkspaces()
         groups.push_back(chain);
         Serializer::buffer bytes;
         bytes.resize(4096);
-        for (unsigned grouped = 0; grouped < 2; ++grouped)
+        for (unsigned reduced = 0; reduced < 2; ++reduced)
         {
             bm::encoder enc(bytes.data(), bytes.size());
-            if (grouped) bm::periodic_write_groups(enc, groups, true);
-            else bm::periodic_write_formula(enc, chain, true);
+            bm::periodic_write_groups(enc, groups, true, reduced != 0);
             bm::bit_block_set(block, 0);
             // Set each word explicitly: the scalar block fill repeats bytes.
             for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -96,8 +95,7 @@ inline void CheckCodecWorkspaces()
                 guard[i] = 0x12345678u;
             } // for i
             bm::decoder dec(bytes.data());
-            if (grouped) bm::periodic_read_groups(dec, block);
-            else bm::periodic_read_formula(dec, block);
+            bm::periodic_read_groups(dec, block, reduced != 0);
             for (unsigned i = 0; i < bm::set_block_size; ++i)
             {
                 const bm::word_t mask = i == 0 ? 0xF80u : 0u;
@@ -105,7 +103,7 @@ inline void CheckCodecWorkspaces()
                 assert(guard[i] == 0x12345678u);
             } // for i
             assert(dec.get_pos() == bytes.data() + enc.size());
-        } // for grouped
+        } // for reduced
     }
     bm::bwt_full_workspace<Alloc> workspace;
     size_t before = tracking_block_allocator::allocations;
@@ -184,13 +182,10 @@ inline void CheckCodecWorkspaces()
         values[i] = 7 + i * 67;
     } // for i
     bm::sblock_wave_record record;
-    bm::sblock_wave1024_model<Alloc> fixed;
     bm::sblock_wave_adaptive_model<Alloc> adaptive;
-    assert(fixed.prepare(values.data(), unsigned(values.size()), record));
     adaptive.build(values.data(), unsigned(values.size()));
     assert(adaptive.prepare(values.data(), unsigned(values.size()), record));
     before = tracking_block_allocator::allocations;
-    assert(fixed.prepare(values.data(), unsigned(values.size()), record));
     adaptive.build(values.data(), unsigned(values.size()));
     assert(adaptive.prepare(values.data(), unsigned(values.size()), record));
     assert(tracking_block_allocator::allocations == before);
@@ -203,14 +198,15 @@ inline void CheckCodecWorkspaces()
         {
             bm::bit_out<bm::encoder> out(enc);
             bm::sblock_wave_cost cost;
-            fixed.encode(out, [&]() { return bm::id64_t(0); },
+            out.put_bits(0, 3);
+            adaptive.encode(out, [&]() { return bm::id64_t(0); },
                          3, mode, cost);
         }
         bm::decoder dec(bytes.data());
         bm::bit_in<bm::decoder> in(dec);
         unsigned restored[256], sb = 0;
         before = tracking_block_allocator::allocations;
-        assert(bm::sblock_wave1024_model<Alloc>::decode(in, restored, sb) == 256);
+        assert(bm::sblock_wave_adaptive_model<Alloc>::decode(in, restored, sb) == 256);
         assert(tracking_block_allocator::allocations > before);
         assert(sb == 3 && !::memcmp(restored, values.data(), sizeof(restored)));
         bm::heap_vector<unsigned, Alloc, true> map, occupied;
@@ -219,7 +215,7 @@ inline void CheckCodecWorkspaces()
             bm::decoder repeated(bytes.data());
             bm::bit_in<bm::decoder> bits(repeated);
             before = tracking_block_allocator::allocations;
-            assert(bm::sblock_wave1024_model<Alloc>::decode(bits, restored, sb,
+            assert(bm::sblock_wave_adaptive_model<Alloc>::decode(bits, restored, sb,
                                                          map, occupied) == 256);
             // Non-inverse mode swaps the two retained buffers; warm both sides.
             if (pass > 1) assert(tracking_block_allocator::allocations == before);
@@ -228,15 +224,19 @@ inline void CheckCodecWorkspaces()
     } // for mode
 }
 
-/** \brief Check fixed-wave reset, capacity retention and serializer reuse.
+/** \brief Check adaptive-wave reset, capacity retention and serializer reuse.
     Exercises eligible, smaller, ineligible and eligible inputs without
     reconstructing the model or serializer between records.
 */
 inline
 void CheckWaveStateReuse()
 {
-    using Model = bm::sblock_wave1024_model<Alloc>;
+    using Model = bm::sblock_wave_adaptive_model<Alloc>;
+    constexpr unsigned wave_size = 1024;
+    constexpr unsigned wave_count = 16384;
     Model model;
+    model.wave_size = wave_size;
+    model.wave_count = wave_count;
     bm::sblock_wave_record record;
     bm::heap_vector<unsigned, Alloc, true> positions;
     positions.resize(32768);
@@ -245,47 +245,35 @@ void CheckWaveStateReuse()
         for (unsigned kind = 0; kind < 4; ++kind)
         {
             const unsigned n = kind == 0 ? 32768u : kind == 2 ?
-                               unsigned(Model::wave_count) : 100u;
+                               unsigned(wave_count) : 100u;
             positions.resize(n);
             for (unsigned i = 0; i < n; ++i)
             {
-                positions[i] = kind == 2 ? i * Model::wave_size :
+                positions[i] = kind == 2 ? i * wave_size :
                                kind == 0 ? 17 + i * 67 : 1 + i * 163841;
             } // for i
             record.eligible = true;
-            record.best = 3;
-            for (unsigned mode = 0; mode < 4; ++mode)
-            {
-                record.costs[mode].bytes = 7;
-                record.costs[mode].header = 8;
-                record.costs[mode].map = 9;
-                record.costs[mode].bic = 10;
-                record.costs[mode].padding = 11;
-            } // for mode
             const size_t before = tracking_block_allocator::allocations;
+            model.build(positions.data(), n);
             const bool eligible = model.prepare(positions.data(), n, record);
             if (pass)
             {
                 assert(tracking_block_allocator::allocations == before);
             }
             assert(eligible == (kind != 2) && record.eligible == eligible);
-            assert(record.best == 0);
-            for (unsigned mode = 0; mode < 4; ++mode)
-            {
-                const auto& cost = record.costs[mode];
-                assert(!cost.bytes && !cost.header && !cost.map &&
-                       !cost.bic && !cost.padding);
-            } // for mode
             if (!eligible)
             {
                 assert(model.correction == 0 && model.upper == 0);
-                assert(model.empty.empty() && model.occupied.size() == Model::wave_count);
+                assert(model.empty.empty() && model.occupied.size() == wave_count);
             }
             else
             {
                 // An independently prepared model must have identical state.
                 Model fresh;
                 bm::sblock_wave_record fresh_record;
+                fresh.wave_size = wave_size;
+                fresh.wave_count = wave_count;
+                fresh.build(positions.data(), n);
                 assert(fresh.prepare(positions.data(), n, fresh_record));
                 assert(model.values.equal(fresh.values));
                 assert(model.occupied.equal(fresh.occupied));
@@ -344,30 +332,30 @@ void CheckWaveStateReuse()
     assert(adaptive.occupied.empty() && adaptive.empty.empty() && adaptive.values.empty());
     assert(!adaptive.correction && !adaptive.upper && adaptive.wave_size == 4096);
     assert(tracking_block_allocator::allocations == before_adaptive_init);
-    positions.resize(Model::wave_count);
+    positions.resize(wave_count);
     for (unsigned i = 0; i < positions.size(); ++i)
     {
-        positions[i] = i * Model::wave_size;
+        positions[i] = i * wave_size;
     } // for i
     adaptive.build(positions.data(), unsigned(positions.size()));
-    adaptive.wave_size = Model::wave_size;
-    adaptive.wave_count = Model::wave_count;
+    adaptive.wave_size = wave_size;
+    adaptive.wave_count = wave_count;
     assert(!adaptive.prepare(positions.data(), unsigned(positions.size()), record));
-    assert(!record.eligible && !record.best && !adaptive.correction && !adaptive.upper);
+    assert(!record.eligible && !adaptive.correction && !adaptive.upper);
 
     BV sources[4];
     for (unsigned kind = 0; kind < 4; ++kind)
     {
-        const unsigned n = kind == 2 ? unsigned(Model::wave_count) : kind == 1 ? 40u : 100u;
+        const unsigned n = kind == 2 ? unsigned(wave_count) : kind == 1 ? 40u : 100u;
         for (unsigned i = 0; i < n; ++i)
         {
-            sources[kind].set(kind == 2 ? i * Model::wave_size : 1 + i * 163841 + kind);
+            sources[kind].set(kind == 2 ? i * wave_size : 1 + i * 163841 + kind);
         } // for i
         sources[kind].optimize();
     } // for kind
     Serializer serializer;
     serializer.set_compression_level(6);
-    serializer.set_sblock_wave1024_options(true);
+    serializer.set_sblock_wave_options(true);
     Serializer::buffer bytes;
     for (unsigned pass = 0; pass < 3; ++pass)
     {
@@ -379,13 +367,218 @@ void CheckWaveStateReuse()
             {
                 assert(tracking_block_allocator::allocations == before);
             }
-            assert(bool(serializer.get_compression_stat()[bm::set_sblock_bienc_wave1024]) ==
-                   (kind != 2));
             BV restored;
             bm::deserialize(restored, bytes.data());
             assert(restored == sources[kind]);
         } // for kind
     } // for pass
+}
+
+/** Verify hierarchical buffers retain their allocations across input changes.
+    Exercises all widths/payloads, FULL-map reset, inverse maps and reused
+    top-level serializer/deserializer objects with the application allocator.
+*/
+inline
+void CheckHierarchicalStateReuse()
+{
+    using Model = bm::sblock_hier_model<Alloc>;
+    Model model;
+    bm::heap_vector<unsigned, Alloc, true> ids;
+    ids.reserve(70000);
+    Serializer::buffer bytes;
+    bytes.resize(4 * 1024 * 1024);
+    const void* retained[6] = {};
+    for (unsigned pass = 0; pass < 3; ++pass)
+    {
+        for (unsigned n : {70000u, 12000u, 2u})
+        {
+            ids.resize(n);
+            unsigned pos = 0;
+            for (unsigned i = 0; i < n; ++i)
+            {
+                pos += 1 + (i % 13 ? i % 7 : 1024);
+                ids[i] = pos;
+            } // for i
+            const size_t before = tracking_block_allocator::allocations;
+            model.build(ids.data(), n);
+            if (n > 65535)
+            {
+                model.full_blocks.push_back(255);
+            }
+            else
+            {
+                assert(model.full_blocks.empty());
+            }
+            for (unsigned width = 0; width < 6; ++width)
+            {
+                model.wave.wave_size = 128u << width;
+                model.wave.wave_count = unsigned(model.blocks.size()) *
+                    bm::gap_max_bits / model.wave.wave_size;
+                bm::sblock_wave_record record;
+                assert(model.wave.prepare(model.source.data(), n, record, true));
+                model.pairs();
+                for (unsigned mode = 0; mode < 4; ++mode)
+                {
+                    if (mode == 3 && !model.entries)
+                    {
+                        continue;
+                    }
+                    bm::encoder enc(bytes.data(), bytes.size());
+                    bm::bit_out<bm::encoder> out(enc);
+                    model.encode(out, 3, width, mode);
+                } // for mode
+            } // for width
+            const void* current[] = {model.full_blocks.data(), model.blocks.data(),
+                model.source.data(), model.complement.data(), model.runs.data(),
+                model.keys.data()};
+            if (pass)
+            {
+                assert(tracking_block_allocator::allocations == before);
+                for (unsigned i = 0; i < 6; ++i)
+                {
+                    assert(current[i] == retained[i]);
+                } // for i
+            }
+            for (unsigned i = 0; i < 6; ++i)
+            {
+                retained[i] = current[i];
+            } // for i
+        } // for n
+    } // for pass
+
+    // A single missing coordinate makes inverse BIC cheaper than run coding.
+    // Alternate domain sizes so both growth and retained capacity are tested.
+    bm::heap_vector<unsigned, Alloc, true> map;
+    for (unsigned pass = 0; pass < 3; ++pass)
+    {
+        for (unsigned domain : {131072u, 256u, 4096u})
+        {
+            ids.clear();
+            for (unsigned i = 0; i < domain; ++i)
+            {
+                if (i != domain / 2)
+                {
+                    ids.push_back(i);
+                }
+            } // for i
+            bm::encoder enc(bytes.data(), bytes.size());
+            {
+                bm::bit_out<bm::encoder> out(enc);
+                assert(model.map(out, ids, domain) == 3);
+            }
+            bm::decoder dec(bytes.data());
+            bm::bit_in<bm::decoder> in(dec);
+            const size_t before = tracking_block_allocator::allocations;
+            Model::read_map(in, map, domain);
+            assert(map.equal(ids));
+            if (pass)
+            {
+                assert(tracking_block_allocator::allocations == before);
+            }
+        } // for domain
+    } // for pass
+
+    // Force inverse BIC for every nontrivial small-domain subset. This also
+    // covers more empty than occupied coordinates and overlapping compaction.
+    for (unsigned domain = 2; domain <= 10; ++domain)
+    {
+        for (unsigned mask = 1; mask < (1u << domain) - 1; ++mask)
+        {
+            ids.clear();
+            for (unsigned i = 0; i < domain; ++i)
+            {
+                if (mask & (1u << i))
+                {
+                    ids.push_back(i);
+                }
+            } // for i
+            bm::encoder enc(bytes.data(), bytes.size());
+            {
+                bm::bit_out<bm::encoder> out(enc);
+                out.put_bits(0, 1); // Not all occupied.
+                out.put_bits(0, 1); // BIC map.
+                out.put_bits(1, 1); // Encoded coordinates are empty.
+                out.gamma(unsigned(ids.size()));
+                out.bic_encode_u32_cm(ids.data(), unsigned(ids.size()), 0, domain - 1);
+            }
+            bm::decoder dec(bytes.data());
+            bm::bit_in<bm::decoder> in(dec);
+            const size_t before = tracking_block_allocator::allocations;
+            Model::read_map(in, map, domain);
+            assert(tracking_block_allocator::allocations == before);
+            unsigned rank = 0;
+            for (unsigned i = 0; i < domain; ++i)
+            {
+                if (!(mask & (1u << i)))
+                {
+                    assert(rank < map.size() && map[rank++] == i);
+                }
+            } // for i
+            assert(rank == map.size());
+        } // for mask
+    } // for domain
+
+    BV sources[4];
+    for (unsigned kind = 0; kind < 3; ++kind)
+    {
+        for (unsigned sb : {0u, 2u})
+        {
+            const unsigned base = sb * bm::set_sub_total_bits;
+            if (kind == 2)
+            {
+                sources[kind].set_range(base, base + bm::gap_max_bits - 1);
+            }
+            const unsigned count = kind == 2 ? 70000u : kind == 1 ? 300u : 3000u;
+            for (unsigned i = 0; i < count; ++i)
+            {
+                const unsigned blocks[] = {0, 3, 97};
+                const unsigned position = kind == 0 ?
+                    blocks[i % 3] * bm::gap_max_bits + (i / 3) * 7 + 1 :
+                    2 * bm::gap_max_bits + 2 * i;
+                sources[kind].set(base + position);
+            } // for i
+        } // for sb
+        sources[kind].optimize();
+    } // for kind
+    Serializer serializer;
+    serializer.set_compression_level(8);
+    bm::deserializer<BV, bm::decoder> decoder;
+    // A full OR target isolates decoder workspace from destination allocation.
+    BV target;
+    target.set_range(0, 3 * bm::set_sub_total_bits - 1);
+    target.optimize();
+    const auto target_count = target.count();
+    unsigned seen = 0;
+    for (unsigned policy : {1u, 2u, 3u, 4u})
+    {
+        serializer.set_sblock_wave_experiment(policy);
+        for (unsigned pass = 0; pass < 4; ++pass)
+        {
+            for (unsigned kind = 0; kind < 4; ++kind)
+            {
+                const size_t before = tracking_block_allocator::allocations;
+                serializer.serialize(sources[kind], bytes);
+                // Explicit development histories may allocate observation rows.
+                if (pass > 1 && !BM_SERIALIZATION_DIAGNOSTICS)
+                {
+                    assert(tracking_block_allocator::allocations == before);
+                }
+                seen += unsigned(serializer.get_compression_stat()[
+                    bm::set_sblock_bienc_wave_hierarchical]);
+                const size_t before_decode = tracking_block_allocator::allocations;
+                decoder.deserialize(target, bytes.data());
+                assert(target.count() == target_count);
+                if (pass > 1)
+                {
+                    assert(tracking_block_allocator::allocations == before_decode);
+                }
+                BV restored;
+                decoder.deserialize(restored, bytes.data());
+                assert(restored == sources[kind]);
+            } // for kind
+        } // for pass
+    } // for policy
+    assert(seen);
 }
 
 inline void CheckIteratorFailure(const unsigned char* bytes)
@@ -527,7 +720,7 @@ inline void CheckRetainedScratch()
     assert(tracking_block_allocator::allocations == before);
 }
 
-/** Validate legacy periodic ranking and retained storage through repeated encoding. */
+/** Validate independent periodic ranking and retained storage through repeated encoding. */
 inline void CheckPeriodicIndexRanking()
 {
     BV source;
@@ -538,39 +731,35 @@ inline void CheckPeriodicIndexRanking()
             source.set(i);
         }
     } // for i
-    for (unsigned diagnostics = 0; diagnostics < 2; ++diagnostics)
+    Serializer serializer;
+    bm::periodic_options options;
+    options.order = 1;
+    options.max_step = 8;
+    options.max_chains = 16;
+    serializer.set_periodic_options(options);
+    Serializer::buffer bytes;
+    Serializer::buffer expected;
+    for (unsigned pass = 0; pass < 3; ++pass)
     {
-        Serializer serializer;
-        bm::periodic_options options;
-        options.order = 0;
-        options.max_step = 8;
-        options.max_chains = 16;
-        options.max_variants = 4;
-        options.diagnostics = diagnostics != 0;
-        serializer.set_periodic_options(options);
-        Serializer::buffer bytes;
-        Serializer::buffer expected;
-        for (unsigned pass = 0; pass < 3; ++pass)
+        const size_t before = tracking_block_allocator::allocations;
+        serializer.serialize(source, bytes);
+        if (pass)
         {
-            const size_t before = tracking_block_allocator::allocations;
-            serializer.serialize(source, bytes);
-            if (pass)
-            {
-                assert(tracking_block_allocator::allocations == before);
-                assert(bytes.size() == expected.size());
-                assert(::memcmp(bytes.data(), expected.data(), bytes.size()) == 0);
-            }
-            else
-            {
-                expected.resize(bytes.size());
-                ::memcpy(expected.data(), bytes.data(), bytes.size());
-            }
-            BV restored;
-            bm::deserialize(restored, bytes.data());
-            assert(restored == source);
-        } // for pass
-        assert(serializer.get_periodic_statistics().trials > 0);
-    } // for diagnostics
+            assert(tracking_block_allocator::allocations == before);
+            assert(bytes.size() == expected.size());
+            assert(::memcmp(bytes.data(), expected.data(), bytes.size()) == 0);
+        }
+        else
+        {
+            expected.resize(bytes.size());
+            ::memcpy(expected.data(), bytes.data(), bytes.size());
+        }
+        BV restored;
+        bm::deserialize(restored, bytes.data());
+        assert(restored == source);
+    } // for pass
+    assert(serializer.get_periodic_statistics().trials > 0);
+
 }
 
 /** Verify initialization, aggregation, and external-storage statistics. */
@@ -611,6 +800,7 @@ inline void Run()
         CheckStatisticsAggregation();
         CheckCodecWorkspaces();
         CheckWaveStateReuse();
+        CheckHierarchicalStateReuse();
         CheckRetainedScratch();
         CheckPeriodicIndexRanking();
         Stats stats;

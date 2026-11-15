@@ -1,10 +1,15 @@
 /*! \file bmperiodic.h
     Internal arithmetic-progression prediction for bvector BIT-block serialization.
-    Supports independent and ordered multi-group searches and formula codecs.
+    Supports independent chain-prefix searches and retained grouped formula codecs.
     Include after bm.h or bm64.h, as for other serialization utilities.
     \ingroup bvserial
     \internal
-    The residual is the XOR of the normalized block and all recorded chains.
+    "Periodic" describes the spacing of predicted set-bit positions within a
+    65536-bit block, not repetition of the whole block. A chain predicts the
+    positions start + i * step; it may include missing set bits (holes). A
+    group contains chains with a common step. The residual is the XOR of the
+    normalized block and the predicted positions, so holes remain as residual
+    bits. The formula records the chains needed to reverse that XOR.
 */
 #ifndef BM_PERIODIC_H_INCLUDED
 #define BM_PERIODIC_H_INCLUDED
@@ -16,26 +21,24 @@
 namespace bm
 {
 
-/** \brief Bounds and policy for periodic block search.
+/** \brief Bounds and policy for searching predicted bit-position chains in a block.
     \ingroup bvserial
     \internal
 */
 struct periodic_options
 {
-    unsigned min_step = 1; ///< first arithmetic-progression step
-    unsigned max_step = 16; ///< last arithmetic-progression step
-    unsigned max_variants = 4; ///< actual residual serialization trials
-    unsigned min_length = 4; ///< Minimum chain length.
-    unsigned max_holes = 1; ///< 0 or 1 missing bit per chain
-    unsigned max_chains = 256; ///< bounds search and formula size
+    unsigned min_step = 1; ///< First spacing between predicted bit positions.
+    unsigned max_step = 16; ///< Last spacing between predicted bit positions.
+    unsigned min_length = 4; ///< Minimum number of predicted positions per chain.
+    unsigned max_holes = 1; ///< Maximum missing set bits per chain.
+    unsigned max_chains = 256; ///< Maximum chains retained per step and hole scan.
     unsigned sample = 1; ///< deterministic 1-in-N BIT-block sample
-    unsigned order = 0; ///< 0 legacy; 1 independent; 2 dense; 3 sparse; 4 middle
+    unsigned order = 1; ///< Independent chain-prefix search.
     unsigned trial_budget = 2304; ///< residual encodings per sampled block
     unsigned formula_chains = 256; ///< total serialized chains, independent of pool cap
-    unsigned min_step_gain = 0; ///< bytes per step before counting it as marginal
+    unsigned min_step_gain = 0; ///< Minimum improvement in bytes to avoid a marginal step.
     unsigned marginal_streak = 0; ///< consecutive marginal steps before stopping; 0 disables
     unsigned min_stop_step = 1; ///< do not stop for a marginal streak before this step
-    bool diagnostics = false; ///< measure candidates regardless of score
 };
 
 /** \brief Diagnostic measurements for one searched block.
@@ -138,48 +141,11 @@ struct periodic_statistics
     bm::id64_t positive_candidates = 0; ///< Candidates with positive heuristic score.
     bm::id64_t candidate_blocks = 0; ///< candidate blocks.
     bm::id64_t positive_blocks = 0; ///< positive blocks.
-    bm::id64_t positive_trials = 0; ///< positive trials.
-    bm::id64_t nonpositive_trials = 0; ///< nonpositive trials.
-    bm::id64_t positive_wins = 0; ///< positive wins.
-    bm::id64_t nonpositive_wins = 0; ///< nonpositive wins.
-    bm::id64_t payload_improved = 0; ///< payload improved.
-    bm::id64_t near_miss_32 = 0; ///< near miss 32.
-    bm::id64_t near_miss_128 = 0; ///< near miss 128.
-    bm::id64_t best_miss_bytes = 0; ///< Bytes by which best candidates missed the baseline.
-    bm::id64_t best_candidate_blocks = 0; ///< best candidate blocks.
-    bm::id64_t best_baseline_bytes = 0; ///< best baseline bytes.
-    bm::id64_t best_formula_bytes = 0; ///< best formula bytes.
-    bm::id64_t best_residual_bytes = 0; ///< best residual bytes.
-    bm::id64_t best_chains = 0; ///< best chains.
-    bm::id64_t best_covered = 0; ///< best covered.
-    bm::id64_t best_exceptions = 0; ///< best exceptions.
     bm::id64_t sampled_density[4] = {}; ///< sampled density.
     bm::id64_t candidate_density[4] = {}; ///< candidate density.
     bm::id64_t accepted_density[4] = {}; ///< accepted density.
-    bm::id64_t trial_score_bucket[6] = {}; ///< trial score bucket.
-    bm::id64_t win_score_bucket[6] = {}; ///< win score bucket.
     bm::id64_t trial_step[129] = {}; ///< trial step.
-    bm::id64_t best_step[129] = {}; ///< best step.
-    bm::id64_t accepted_step[129] = {}; ///< accepted step.
-    bm::id64_t saved_step[129] = {}; ///< saved step.
 };
-
-/** \brief Select a candidate-score diagnostics bucket.
-    \ingroup bvserial
-    \internal
-    \param score Heuristic candidate score.
-    \return Bucket index.
-*/
-inline
-unsigned periodic_score_bucket(int score) BMNOEXCEPT
-{
-    if (score < -256) return 0;
-    if (score < -64) return 1;
-    if (score <= 0) return 2;
-    if (score < 64) return 3;
-    if (score < 256) return 4;
-    return 5;
-}
 
 /** \brief Select a block-density diagnostics bucket.
     \ingroup bvserial
@@ -274,7 +240,7 @@ void periodic_flip(bm::word_t* block, unsigned pos) BMNOEXCEPT
 { block[pos >> 5] ^= bm::word_t(1u << (pos & 31)); }
 
 // Enumerate disjoint maximal chains separately for every residue modulo step.
-// A chain begins and ends on a one; a single internal zero is an XOR exception.
+// A chain begins and ends on a one; internal zeros are XOR exceptions.
 /** \brief Find bounded disjoint arithmetic-progressions in a BIT block.
     \ingroup bvserial
     \internal
@@ -304,12 +270,15 @@ bool periodic_find(const bm::word_t* block, bool inverted,
     out.step = step; out.max_holes = holes;
     const auto better = [](const periodic_chain& a, const periodic_chain& b)
         { return a.length - a.holes > b.length - b.holes; };
+    // Each residue visits one sequence of positions separated by step.
     for (unsigned residue = 0; residue < step; ++residue)
     {
         unsigned pos = residue;
         while (pos < 65536)
         {
             if (!bm::periodic_bit(block, pos, inverted)) { pos += step; continue; }
+            // Extend from a set bit until the hole allowance is exceeded;
+            // trailing holes are excluded by ending at the last set bit.
             const unsigned first = pos;
             unsigned last = pos, seen_holes = 0, used_holes = 0;
             for (unsigned next = pos + step; next < 65536; next += step)
@@ -325,6 +294,7 @@ bool periodic_find(const bm::word_t* block, bool inverted,
                 const periodic_chain chain = {
                     bm::gap_word_t(first), length,
                     static_cast<unsigned char>(used_holes)};
+                // Once full, retain chains covering the most actual set bits.
                 if (out.chains.size() < max_chains)
                 {
                     out.chains.push_back(chain);
@@ -351,6 +321,7 @@ bool periodic_find(const bm::word_t* block, bool inverted,
                 }
                 pos = last + step;
             }
+            // A rejected short chain may contain a later viable starting point.
             else pos = first + step;
         }
     } // for residue
@@ -391,91 +362,7 @@ void periodic_apply(bm::word_t* block,
     } // for chain
 }
 
-// Formula: polarity(8), step(8), chain count(16), BIC starts, gamma lengths.
-// The bit stream is padded to a 32-bit boundary by bit_out::flush.
-/** \brief Encode the single-group formula following set_block_periodic_post (75).
-    \ingroup bvserial
-    \internal
-    \tparam ENC Encoder type.
-    \tparam Alloc Application allocator.
-    \param enc Destination encoder.
-    \param c Candidate chains to encode.
-    \param inverted Original block polarity.
-*/
-template<class ENC, class Alloc>
-inline
-void periodic_write_formula(ENC& enc, const periodic_candidate<Alloc>& c,
-                                   bool inverted)
-{
-    enc.put_8(static_cast<unsigned char>(inverted));
-    enc.put_8(static_cast<unsigned char>(c.step));
-    enc.put_16(bm::short_t(c.chains.size()));
-    BM_ASSERT(c.chains.size() <= 256);
-    bm::gap_word_t starts[256];
-    for (size_t i = 0; i < c.chains.size(); ++i)
-    {
-        starts[i] = c.chains[i].start;
-    } // for i
-    bm::bit_out<ENC> bout(enc);
-    bout.bic_encode_u16_cm(starts, unsigned(c.chains.size()), 0, 65535);
-    for (const auto& chain : c.chains)
-    {
-        bout.gamma(chain.length);
-    } // for chain
-    bout.flush();
-}
-
-/** \brief Read and apply set_block_periodic_post (75).
-    \ingroup bvserial
-    \internal
-    \tparam DEC Decoder type.
-    \param dec Source decoder.
-    \param block SIMD-aligned writable residual, or an invalid address to consume only.
-*/
-template<class DEC>
-inline
-void periodic_read_formula(DEC& dec, bm::word_t* block)
-{
-    const unsigned inverted = dec.get_8();
-    const unsigned step = dec.get_8();
-    const unsigned count = dec.get_16();
-    bm::serialization_require(inverted <= 1 && step && step <= 64 &&
-                           count && count <= 256);
-    bm::gap_word_t starts[256];
-    bm::bit_in<DEC> bin(dec);
-    bin.bic_decode_u16_cm(starts, count, 0, 65535);
-    for (unsigned i = 0; i < count; ++i)
-    {
-        const unsigned length = bin.gamma();
-        bm::serialization_require(length && length <= 65536u &&
-              (i == 0 || starts[i-1] < starts[i]) &&
-              unsigned(starts[i]) + bm::id64_t(length - 1u) * step < 65536u);
-        if (IS_VALID_ADDR(block))
-            for (unsigned j = 0, p = starts[i]; j < length; ++j, p += step)
-            { bm::periodic_flip(block, p); } // for j
-    } // for i
-    if (IS_VALID_ADDR(block) && inverted)
-    {
-        BM_ASSERT(bm::is_aligned(block));
-        bm::bit_invert(block);
-    }
-}
-
-
-// Ordered multi-group prediction and formula coding.
-
-/** \brief Name an ordered-search policy.
-    \ingroup bvserial
-    \internal
-    \param order Search order identifier.
-    \return Static policy name, or invalid.
-*/
-inline
-const char* periodic_order_name(unsigned order)
-{
-    const char* names[] = {"legacy", "independent", "dense", "sparse", "middle"};
-    return order <= 4 ? names[order] : "invalid";
-}
+// Grouped formula coding; the current search evaluates one group per trial.
 
 /** \brief Bit counts for the components of a grouped formula.
     \ingroup bvserial
@@ -1022,14 +909,10 @@ struct periodic_search_workspace
     bm::heap_vector<bm::word_t, Alloc, true> blocks; ///< Two aligned blocks, allocated through the application block allocator.
     bm::periodic_candidate_slots<Alloc> groups; ///< Active search groups.
     bm::periodic_candidate_slots<Alloc> result; ///< Best group combination.
-    bm::periodic_candidate_slots<Alloc> candidates; ///< Legacy search candidates.
     bm::periodic_candidate<Alloc> pool; ///< Reusable discovered chains.
     bm::periodic_candidate<Alloc> trial; ///< Reusable trial prefix.
-    bm::periodic_candidate<Alloc> best; ///< Best addition at the current step.
     bm::heap_vector<unsigned, Alloc, true> steps; ///< Ordered search steps.
     bm::heap_vector<unsigned, Alloc, true> counts; ///< Chain prefix lengths.
-    bm::heap_vector<unsigned, Alloc, true> candidate_order; ///< Retained score-ranked candidate indexes; candidates stay in place.
-    bm::heap_vector<unsigned, Alloc, true> selected; ///< Legacy selected candidate indexes.
 
     /** \brief Prepare two retained, SIMD-aligned scratch blocks.
         \note Allocation is lazy and bounded. A serializer may prewarm this
@@ -1066,7 +949,9 @@ void periodic_search_workspace<Alloc>::prepare_blocks()
     \param workspace Exclusive scratch, reused across blocks without cumulative growth.
     \param trace Optional last-step and termination diagnostics.
     \return Best groups, valid until the workspace is reused or destroyed.
-    Each step commits only its best strict improvement over the current record.
+    Steps and hole allowances are scanned in order. Each trial applies one
+    chain prefix to the original normalized block, and the smallest complete
+    record strictly smaller than the ordinary record is retained.
 */
 template<class EVAL, class SAVE, class Alloc>
 const bm::periodic_candidate_slots<Alloc>& periodic_search_order(
@@ -1094,28 +979,12 @@ const bm::periodic_candidate_slots<Alloc>& periodic_search_order(
     auto& ds = stats.order_stats;
     auto& steps = workspace.steps;
     steps.clear(); steps.reserve(o.max_step - o.min_step + 1);
-    if (o.order == 4)
+    BM_ASSERT(o.order == 1);
+    for (unsigned step = o.min_step; step <= o.max_step; ++step)
     {
-        unsigned mid = (o.min_step + o.max_step) / 2;
-        steps.push_back(mid);
-        for (unsigned d = 1; steps.size() < o.max_step - o.min_step + 1; ++d)
-        {
-            if (mid + d <= o.max_step) steps.push_back(mid + d);
-            if (mid >= o.min_step + d) steps.push_back(mid - d);
-        } // for d
-    }
-    else
-    {
-        for (unsigned step = o.min_step; step <= o.max_step; ++step)
-        { steps.push_back(step); } // for step
-        if (o.order == 3)
-        {
-            for (size_t left = 0, right = steps.size(); left < right && left < --right; ++left)
-            {
-                bm::simple_swap(&steps[left], &steps[right]);
-            } // for left
-        }
-    }
+        steps.push_back(step);
+    } // for step
+    // Search each spacing independently; the normalized source is unchanged.
     for (unsigned step : steps)
     {
         if (used == o.trial_budget)
@@ -1125,7 +994,7 @@ const bm::periodic_candidate_slots<Alloc>& periodic_search_order(
         if (trace) trace->last_step = step;
         ++ds.step_visits[step];
         const size_t before = best_size;
-        auto& best_addition = workspace.best;
+        // Scan separately for each allowed number of missing positions.
         for (unsigned holes = 0; holes <= o.max_holes; ++holes)
         {
             auto& pool = workspace.pool;
@@ -1152,8 +1021,10 @@ const bm::periodic_candidate_slots<Alloc>& periodic_search_order(
             unsigned limit = chain_count < available ? chain_count : available;
             auto& counts = workspace.counts; counts.clear();
             counts.reserve(10);
+            // Try power-of-two prefixes and the full permitted prefix, rather
+            // than encoding every possible chain count.
             for (unsigned n = 1; n < limit; n *= 2)
-            { counts.push_back(n); } // for n
+                { counts.push_back(n); } // for n
             counts.push_back(limit);
             for (unsigned n : counts)
             {
@@ -1173,25 +1044,18 @@ const bm::periodic_candidate_slots<Alloc>& periodic_search_order(
                 groups.push_back(c);
                 ++used; ++stats.trials; ++stats.trial_step[step];
                 ++ds.trial_counts[total_chains + n];
+                // Compare complete record bytes, including formula and residual.
                 size_t size = evaluate(trial, groups);
                 if (size < best_size)
                 {
                     best_size = size;
-                    best_addition = c;
                     result.assign(groups);
                     save(size);
                 }
                 groups.pop_back();
             } // for n
         } // for holes
-        if (best_size < before && o.order != 1)
-        {
-            bm::periodic_apply(current, best_addition);
-            total_chains += unsigned(best_addition.chains.size());
-            groups.push_back(best_addition);
-            ++ds.additions; ++ds.groups_step[step];
-            ds.gain_step[step] += before - best_size;
-        }
+        // Optionally stop after successive spacings yield too little improvement.
         if (o.marginal_streak)
         {
             marginal = before - best_size >= o.min_step_gain ? 0 : marginal + 1;
@@ -1200,7 +1064,7 @@ const bm::periodic_candidate_slots<Alloc>& periodic_search_order(
         }
     } // for step
     // Independent trials always use the original normalized block and one group.
-    if (o.order == 1 && !result.empty())
+    if (!result.empty())
     {
         ++ds.additions; ++ds.groups_step[result[0].step];
         ds.gain_step[result[0].step] += plain_size - best_size;
@@ -1222,15 +1086,23 @@ void periodic_order_add(periodic_order_statistics<Alloc>& d,
                                const periodic_order_statistics<Alloc>& s)
 {
     for (unsigned i = 0; i < 44; ++i)
-    { d.discovered[i] += s.discovered[i]; d.retained[i] += s.retained[i];
-      d.selected[i] += s.selected[i]; } // for i
+    {
+        d.discovered[i] += s.discovered[i]; d.retained[i] += s.retained[i];
+        d.selected[i] += s.selected[i];
+    } // for i
     for (unsigned i = 0; i < 257; ++i)
-    { d.trial_counts[i] += s.trial_counts[i]; d.selected_counts[i] += s.selected_counts[i]; } // for i
+    {
+        d.trial_counts[i] += s.trial_counts[i]; d.selected_counts[i] += s.selected_counts[i];
+    } // for i
     for (unsigned i = 0; i < 129; ++i)
-    { d.group_counts[i] += s.group_counts[i]; d.step_visits[i] += s.step_visits[i];
-      d.groups_step[i] += s.groups_step[i]; d.gain_step[i] += s.gain_step[i]; } // for i
+    {
+        d.group_counts[i] += s.group_counts[i]; d.step_visits[i] += s.step_visits[i];
+        d.groups_step[i] += s.groups_step[i]; d.gain_step[i] += s.gain_step[i];
+    } // for i
     for (unsigned i = 0; i < 4; ++i)
-    { d.trial_bits[i] += s.trial_bits[i]; d.selected_bits[i] += s.selected_bits[i]; } // for i
+    {
+        d.trial_bits[i] += s.trial_bits[i]; d.selected_bits[i] += s.selected_bits[i];
+    } // for i
     for (unsigned i = 0; i < 2; ++i)
     {
         d.trial_formula_modes[i] += s.trial_formula_modes[i];

@@ -31,8 +31,11 @@ struct inv_list_serial_options
     bool block_endpoints = false; ///< Enable complete-size block endpoint selection.
     bool sblock_correction = false; ///< Enable global superblock correction selection.
     bool sblock_large = false; ///< Enable large-count superblocks explicitly.
-    bool wave_fixed = false; ///< Enable fixed-width superblock wave compaction.
-    bool wave_adaptive = false; ///< Enable adaptive-width superblock wave compaction.
+    void (*wave_observer)(void*, const bm::sblock_wave_score_observation&) = nullptr; ///< Optional borrowed observer.
+    void* wave_context = nullptr; ///< Borrowed observer state.
+    unsigned wave_experiment = 0; ///< 108/109 comparison policy.
+    bool wave_experiment_specified = false; ///< Apply an explicit wave override.
+    bool wave = false; ///< Enable opcode-108 adaptive wave compaction.
     bool bwt_shared = false; ///< Share BWT across competing block encodings.
 };
 
@@ -77,14 +80,15 @@ void configure_inv_serializer(bm::serializer<bm::bvector<> >& serializer,
     {
         serializer.set_sblock_large_options(true);
     }
-    serializer.set_sblock_large_inverse_limit(options.inverse_limit);
-    if (options.wave_fixed)
+    serializer.set_wave_score_observer(options.wave_observer, options.wave_context);
+    if (options.wave_experiment_specified)
     {
-        serializer.set_sblock_wave1024_options(true);
+        serializer.set_sblock_wave_experiment(options.wave_experiment);
     }
-    if (options.wave_adaptive)
+    serializer.set_sblock_large_inverse_limit(options.inverse_limit);
+    if (options.wave)
     {
-        serializer.set_sblock_wave_adaptive_options(true);
+        serializer.set_sblock_wave_options(true);
     }
     if (options.bwt_shared)
     {

@@ -36,7 +36,7 @@ namespace bm
     Each independent candidate includes its ordinary-codec fallback. The kind
     identifies the selected representation: 0 ordinary, 1 periodic step 1,
     2 whole-block BWT, 3 BWT followed by periodic step 1, 4 BWT followed by
-    greedy periodic steps (or independent step 2 in its separate experiment),
+    independent periodic step 2,
     and 5 BWT with direct BIC encoding (opcode 96). Sizes are bytes unless noted.
 */
 struct block_selection_observation
@@ -54,16 +54,7 @@ struct block_selection_observation
     unsigned previous = 0;               ///< Best size before the composed BWT/periodic trial.
     unsigned composed = 0;               ///< Composed BWT/periodic size, including fallback.
     unsigned compose_trials = 0;         ///< Residual encoding trials for the composed candidate.
-    unsigned fourway = 0;                ///< Best size before greedy multistep or step-2 trials.
-    unsigned multistep = 0;              ///< Greedy multistep BWT candidate size, including fallback.
-    unsigned multistep_trials = 0;       ///< Greedy multistep residual encoding trials.
-    unsigned multistep_groups = 0;       ///< Selected arithmetic-progression groups in the greedy trial.
-    unsigned multistep_chains = 0;       ///< Selected progression chains in the greedy trial.
-    unsigned multistep_last_step = 0;    ///< Last progression step visited by greedy search.
-    unsigned multistep_stop = 0;         ///< Greedy stop code: 0 end, 1 marginal, 2 budget, 3 chain cap.
-    unsigned multistep_formula = 0;      ///< Selected greedy formula size.
-    unsigned multistep_residual = 0;     ///< Selected greedy residual size.
-    id64_t multistep_mask = 0;           ///< Selected progression steps, with bit (step-1) set.
+    unsigned fourway = 0;                ///< Best size before step-2 trials.
     unsigned step2 = 0;                  ///< Independent step-2 BWT candidate size, including fallback.
     unsigned step2_trials = 0;           ///< Independent step-2 residual encoding trials.
     unsigned step2_chains = 0;           ///< Selected progression chains in the step-2 trial.
@@ -104,9 +95,7 @@ struct block_selection_statistics
     id64_t compose_ns = 0;               ///< Time spent in composed BWT/periodic trials, nanoseconds.
     id64_t compose_trials = 0;           ///< Total composed residual encoding trials.
     id64_t previous_bytes = 0;           ///< Sum of best sizes before composition.
-    id64_t multistep_ns = 0;             ///< Time spent in greedy multistep trials, nanoseconds.
-    id64_t multistep_trials = 0;          ///< Total greedy multistep residual encoding trials.
-    id64_t fourway_bytes = 0;            ///< Sum of best sizes before multistep or step-2 trials.
+    id64_t fourway_bytes = 0;            ///< Sum of best sizes before step-2 trials.
     id64_t step2_ns = 0;                 ///< Time spent in independent step-2 trials, nanoseconds.
     id64_t step2_trials = 0;             ///< Total independent step-2 residual encoding trials.
     id64_t formula_trial_bits[4] = {};    ///< Trial formula bits: header, starts, lengths, padding.
@@ -117,7 +106,6 @@ struct block_selection_statistics
     id64_t threshold_lost_bytes = 0;     ///< Savings forgone due to those rejected BWT wins.
     unsigned bwt_min_gain = 0;           ///< Required complete-record BWT saving, in bytes.
     bool composed = false;              ///< Composed BWT/periodic measurements are present.
-    bool multistep = false;             ///< Greedy multistep measurements are present.
     bool step2 = false;                 ///< Independent step-2 measurements are present.
 
     /**
@@ -217,10 +205,7 @@ inline void block_selection_add(block_selection_statistics<BV>& d,
     d.compose_trials += s.compose_trials;
     d.previous_bytes += s.previous_bytes;
     d.composed |= s.composed;
-    d.multistep_ns += s.multistep_ns;
-    d.multistep_trials += s.multistep_trials;
     d.fourway_bytes += s.fourway_bytes;
-    d.multistep |= s.multistep;
     d.step2_ns += s.step2_ns;
     d.step2_trials += s.step2_trials;
     d.step2 |= s.step2;

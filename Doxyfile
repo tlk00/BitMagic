@@ -61,6 +61,9 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmneon.
                          ./src/bmdef.h ./src/bmtrans.h ./src/bmutil.h ./src/bmaggregator.h \
                          ./src/bmundef.h ./src/bmserial.h ./src/bmfio.h ./src/bmalloc.h ./src/bmrandom.h \
                          ./src/bmadaptivedelta.h \
+                         ./src/bm64.h ./src/bmarithmetic.h ./src/bmavx512.h ./src/bmblocks.h \
+                         ./src/bmbmi1.h ./src/bmbmi2.h ./src/bmbuffer.h ./src/bmbvhash.h \
+                         ./src/bmdbg.h ./src/bmfwd.h ./src/bmrs.h ./src/sse2neon.h \
                          ./src/bmblockselection.h \
                          ./src/bmbwt.h \
                          ./src/bmgaproute.h \
@@ -68,9 +71,11 @@ INPUT                  = ./src/bm.h ./src/bmfunc.h  ./src/bmsimd.h ./src/bmneon.
                          ./src/bmperiodic.h \
                          ./src/bmsblocklarge.h \
                          ./src/bmsblockwave.h \
+                         ./src/bmsblockhier.h \
                          ./src/bmserial_profile.h \
                          ./src/bmsparsevec.h ./src/bmsparsevec_algo.h ./src/bmsparsevec_serial.h \
-                         ./src/bmsparsevec_compr.h ./src/bmstrsparsevec.h ./src/bmsparsevec_util.h ./src/bmtimer.h \ 
+                         ./src/bmsparsevec_float.h ./src/bmsparsevec_float_serial.h \
+                         ./src/bmsparsevec_compr.h ./src/bmstrsparsevec.h ./src/bmsparsevec_util.h ./src/bmtimer.h \
 ./samples/bvsample01/sample1.cpp \
 ./samples/bvsample01_64/bvsample01_64.cpp \
 ./samples/bvsample02/sample2.cpp \

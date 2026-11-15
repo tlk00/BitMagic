@@ -37,8 +37,10 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmalgo_impl.h
                ${PROJECT_SOURCE_DIR}/src/bmalgo_similarity.h
                ${PROJECT_SOURCE_DIR}/src/bmalloc.h
+               ${PROJECT_SOURCE_DIR}/src/bmarithmetic.h
                ${PROJECT_SOURCE_DIR}/src/bmbmatrix.h
                ${PROJECT_SOURCE_DIR}/src/bmbuffer.h
+               ${PROJECT_SOURCE_DIR}/src/bmbvhash.h
                ${PROJECT_SOURCE_DIR}/src/bmcomplexity.h
                ${PROJECT_SOURCE_DIR}/src/bmconst.h
                ${PROJECT_SOURCE_DIR}/src/bmdbg.h
@@ -78,6 +80,7 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmperiodic.h
                ${PROJECT_SOURCE_DIR}/src/bmsblocklarge.h
                ${PROJECT_SOURCE_DIR}/src/bmsblockwave.h
+               ${PROJECT_SOURCE_DIR}/src/bmsblockhier.h
                ${PROJECT_SOURCE_DIR}/src/bmserial_profile.h
                ${PROJECT_SOURCE_DIR}/src/encoding.h
                ${PROJECT_SOURCE_DIR}/src/bmsse2.h
@@ -87,6 +90,7 @@ set(BM_HEADERS ${PROJECT_SOURCE_DIR}/src/bm.h
                ${PROJECT_SOURCE_DIR}/src/bmavx512.h
                ${PROJECT_SOURCE_DIR}/src/bmbmi1.h
                ${PROJECT_SOURCE_DIR}/src/bmbmi2.h
+               ${PROJECT_SOURCE_DIR}/src/sse2neon.h
 )
 
 

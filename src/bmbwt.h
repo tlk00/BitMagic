@@ -34,11 +34,8 @@ limitations under the License.
     every sorted row to represent a distinct bit sequence.
 
     The whole-block path sorts 65,536 rotations by prefix doubling with linear
-    scratch storage. The wave path independently transforms each of 64 waves
-    of 1,024 bits using an explicit byte-per-bit rotation matrix. Its matrix is
-    temporary sorting storage, not the packed output or a serialized payload.
-    A whole block needs one 16-bit primary index; each wave needs 10 bits, so
-    all 64 wave indexes occupy 80 bytes. The serializer supplies the framing.
+    scratch storage. A whole block stores one 16-bit primary index.
+    The serializer supplies the framing.
 
     The direct BIC payload encoder/decoder implement the internal whole-block
     bm::set_block_bwt_unpacked format (opcode 96). Callers retain their scratch
@@ -56,10 +53,6 @@ limitations under the License.
 namespace bm
 {
 
-const unsigned bwt_wave_bits = 1024; ///< Binary symbols per independently transformed wave.
-const unsigned bwt_matrix_bytes = bm::bwt_wave_bits * bm::bwt_wave_bits; ///< Byte-per-bit wave rotation matrix size.
-const unsigned bwt_index_bytes = 80; ///< Packed size of 64 ten-bit wave primary indexes.
-
 /**
     \brief Serializer controls for optional binary BWT trials.
     \ingroup bvserial
@@ -68,7 +61,6 @@ const unsigned bwt_index_bytes = 80; ///< Packed size of 64 ten-bit wave primary
 struct bwt_options
 {
     unsigned sample = 1;       ///< Evaluate one in every N eligible BIT blocks; must be positive.
-    bool whole_block = false; ///< Transform one 65,536-bit block instead of its independent waves.
     bool diagnostics = false; ///< Collect per-block measurements for whole-block trials.
 };
 
@@ -252,84 +244,6 @@ void bwt_inverse_full(word_t* block, unsigned short primary,
                       bwt_full_workspace<Alloc>& ws);
 
 /**
-    \brief Sort fixed-size wave rotation indexes without STL algorithms.
-    \ingroup bvserial
-    \internal
-    \param order Input/output permutation of 0..bm::bwt_wave_bits-1, sorted by
-        rotation contents and then by original start index.
-    \param matrix Read-only byte-per-bit rotation matrix of bm::bwt_matrix_bytes
-        bytes; row i starts at matrix + i*bm::bwt_wave_bits. Must not overlap order.
-    \note Iterative merge sort performs O(n log n) rotation comparisons with
-        n=bm::bwt_wave_bits. It uses one n-element unsigned-short scratch array
-        (2 KiB for a 1,024-bit wave), with no heap allocation or recursion.
-        The start-index tie break preserves the previous total rotation order,
-        including primary indexes for periodic input with equal rotations.
-*/
-inline
-void bwt_sort_wave_rotations(
-                        unsigned short (&order)[bm::bwt_wave_bits],
-                        const unsigned char* matrix);
-
-/**
-    \brief Apply independent binary BWT to every 1,024-bit wave of a BM block.
-    \ingroup bvserial
-    \internal
-    \param src Read-only input of bm::set_block_size words, LSB-first per word.
-    \param dst Packed last columns in wave order; must not overlap src or matrix.
-    \param matrix Reusable scratch of at least bm::bwt_matrix_bytes bytes, disjoint
-        from src, dst, and primary. Each byte temporarily holds one bit symbol.
-    \param primary Output row indexes, one per wave, each in 0..1,023.
-    \note Rotations are sorted by binary symbols with 0 before 1. Equal rotations
-        are ordered by their input start index to make wave indexes deterministic.
-        No rotation crosses a wave boundary. The same 1 MiB matrix is reused for
-        each wave, and the caller owns its allocation policy. Sorting uses another
-        2 KiB of bounded automatic scratch storage.
-*/
-inline
-void bwt_transform_block(const word_t* src, word_t* dst,
-                         unsigned char* matrix,
-                         unsigned short (&primary)[bm::block_waves]);
-
-/**
-    \brief Restore all independently transformed waves of one BM block in place.
-    \ingroup bvserial
-    \internal
-    \param block Input/output array of bm::set_block_size words containing wave last columns.
-    \param primary One primary row per wave, each less than bm::bwt_wave_bits.
-    \note Zero/one occurrence ranks are local to each wave. Repeating a shorter
-        LF cycle is valid for periodic waves; exactly 1,024 symbols are restored.
-        Scratch arrays are bounded automatic storage; no heap allocation occurs.
-*/
-inline
-void bwt_inverse_block(word_t* block,
-                       const unsigned short (&primary)[bm::block_waves]);
-
-/**
-    \brief Pack the 64 wave primary indexes into 80 bytes.
-    \ingroup bvserial
-    \internal
-    \param primary Input indexes, each in 0..1,023 (ten significant bits).
-    \param packed Output bytes, disjoint from primary. Bit b of primary[i] is
-        written at packed bit 10*i+b, LSB-first within each byte. No host-endian
-        word representation is serialized.
-*/
-inline
-void bwt_pack_indexes(const unsigned short (&primary)[bm::block_waves],
-                             unsigned char (&packed)[bm::bwt_index_bytes]);
-
-/**
-    \brief Unpack the 80-byte wave-index representation.
-    \ingroup bvserial
-    \internal
-    \param packed Input bytes in the format written by bm::bwt_pack_indexes().
-    \param primary Output indexes, disjoint from packed, each in 0..1,023.
-*/
-inline
-void bwt_unpack_indexes(const unsigned char (&packed)[bm::bwt_index_bytes],
-                        unsigned short (&primary)[bm::block_waves]);
-
-
-/**
     \brief Encode the direct-position payload of a whole-block binary BWT record.
     \ingroup bvserial
     \internal
@@ -415,6 +329,10 @@ struct bwt_bic_decoder
             validation without reconstructing bits or running inverse BWT.
         \param workspace Exclusive caller-owned inverse-transform scratch. Its
             capacity is retained between calls; dry traversal does not allocate it.
+        \param shared Optional caller-owned bit reader bound to dec and positioned
+            at this payload's first bit. Its buffered bits and position are updated
+            in place so the caller can read following reference metadata from the
+            same word. Null selects a local reader for a standalone payload.
         \note Checks the supported polarity, reserved fields, position-count
             bound, and absent chain formula through bm::serialization_require().
             Malformed/truncated input handling additionally depends on DEC.
@@ -423,7 +341,7 @@ struct bwt_bic_decoder
     */
     template<class DEC>
     static void decode(DEC& dec, bm::word_t* block,
-                       bm::bwt_full_workspace<Alloc>& workspace);
+                       bm::bwt_full_workspace<Alloc>& workspace, bm::bit_in<DEC>* shared = nullptr);
 };
 
 
@@ -606,193 +524,6 @@ void bwt_inverse_full(word_t* block, unsigned short primary,
 }
 
 
-inline
-void bwt_sort_wave_rotations(
-                        unsigned short (&order)[bm::bwt_wave_bits],
-                        const unsigned char* matrix)
-{
-    static_assert(bm::bwt_wave_bits >= 2 && !(bm::bwt_wave_bits & (bm::bwt_wave_bits - 1)),
-                  "Binary BWT wave width must be a power of two");
-    BM_ASSERT(matrix);
-    unsigned short scratch[bm::bwt_wave_bits];
-    unsigned short* src = order;
-    unsigned short* dst = scratch;
-    for (unsigned width = 1; width < bm::bwt_wave_bits; width <<= 1)
-    {
-        // Every run has exactly width entries: the wave size is a power of
-        // two. Merge adjacent runs and alternate the source/destination arrays.
-        for (unsigned first = 0; first < bm::bwt_wave_bits; first += width * 2)
-        {
-            const unsigned middle = first + width;
-            const unsigned end = middle + width;
-            unsigned left = first;
-            unsigned right = middle;
-            unsigned out = first;
-            while (left < middle && right < end)
-            {
-                const unsigned a = src[left];
-                const unsigned b = src[right];
-                BM_ASSERT(a < bm::bwt_wave_bits && b < bm::bwt_wave_bits);
-                const int cmp = ::memcmp(matrix + a * bm::bwt_wave_bits,
-                                         matrix + b * bm::bwt_wave_bits,
-                                         bm::bwt_wave_bits);
-                // Equal binary rotations retain ascending start indexes,
-                // exactly as with the original wave comparator.
-                if (cmp < 0 || (cmp == 0 && a <= b))
-                    dst[out++] = src[left++];
-                else
-                    dst[out++] = src[right++];
-            } // while left, right
-            while (left < middle)
-            {
-                dst[out++] = src[left++];
-            } // while left
-            while (right < end)
-            {
-                dst[out++] = src[right++];
-            } // while right
-            BM_ASSERT(out == end);
-        } // for first
-        unsigned short* previous = src;
-        src = dst;
-        dst = previous;
-    } // for width
-    if (src != order)
-        ::memcpy(order, src, sizeof(order));
-}
-
-
-inline
-void bwt_transform_block(const word_t* src, word_t* dst,
-                         unsigned char* matrix,
-                         unsigned short (&primary)[bm::block_waves])
-{
-    BM_ASSERT(src && dst && matrix && src != dst);
-    unsigned short order[bm::bwt_wave_bits];
-    for (unsigned wave = 0; wave < bm::block_waves; ++wave)
-    {
-        const word_t* in = src + wave * bm::set_block_digest_wave_size;
-        word_t* out = dst + wave * bm::set_block_digest_wave_size;
-        unsigned char bits[bm::bwt_wave_bits];
-        unsigned ones = 0;
-        for (unsigned i = 0; i < bm::bwt_wave_bits; ++i)
-        {
-            // Expanding each bit to a byte makes memcmp compare binary
-            // symbols in logical order, independent of packed bit layout.
-            bits[i] = static_cast<unsigned char>((in[i >> 5] >> (i & 31u)) & 1u);
-            ones += bits[i];
-        } // for i
-        if (ones == 0 || ones == bm::bwt_wave_bits)
-        {
-            ::memcpy(out, in, bm::bwt_wave_bits / 8);
-            primary[wave] = 0;
-            continue;
-        }
-        for (unsigned r = 0; r < bm::bwt_wave_bits; ++r)
-        {
-            unsigned char* row = matrix + r * bm::bwt_wave_bits;
-            ::memcpy(row, bits + r, bm::bwt_wave_bits - r);
-            ::memcpy(row + bm::bwt_wave_bits - r, bits, r);
-            order[r] = static_cast<unsigned short>(r);
-        } // for r
-        // The explicit start-index tie break makes the order total even for
-        // periodic waves, whose distinct starts can describe equal rotations.
-        bm::bwt_sort_wave_rotations(order, matrix);
-        for (unsigned i = 0; i < bm::set_block_digest_wave_size; ++i)
-        {
-            out[i] = 0;
-        } // for i
-        for (unsigned row = 0; row < bm::bwt_wave_bits; ++row)
-        {
-            const unsigned r = order[row];
-            BM_ASSERT(r < bm::bwt_wave_bits);
-            if (r == 0)
-                primary[wave] = static_cast<unsigned short>(row);
-            if (bits[(r + bm::bwt_wave_bits - 1) & (bm::bwt_wave_bits - 1)])
-                out[row >> 5] |= word_t(1) << (row & 31u);
-        } // for row
-    } // for wave
-}
-
-
-inline
-void bwt_inverse_block(word_t* block,
-                       const unsigned short (&primary)[bm::block_waves])
-{
-    BM_ASSERT(block);
-    for (unsigned wave = 0; wave < bm::block_waves; ++wave)
-    {
-        BM_ASSERT(primary[wave] < bm::bwt_wave_bits);
-        word_t* out = block + wave * bm::set_block_digest_wave_size;
-        unsigned char last[bm::bwt_wave_bits];
-        unsigned short zeros_before[bm::bwt_wave_bits];
-        unsigned short ones_before[bm::bwt_wave_bits];
-        unsigned zeros = 0;
-        unsigned ones = 0;
-        for (unsigned i = 0; i < bm::bwt_wave_bits; ++i)
-        {
-            last[i] = static_cast<unsigned char>((out[i >> 5] >> (i & 31u)) & 1u);
-            zeros_before[i] = static_cast<unsigned short>(zeros);
-            ones_before[i] = static_cast<unsigned short>(ones);
-            if (last[i])
-                ++ones;
-            else
-                ++zeros;
-        } // for i
-        BM_ASSERT(zeros + ones == bm::bwt_wave_bits);
-        word_t restored[bm::set_block_digest_wave_size] = {};
-        unsigned row = primary[wave];
-        for (unsigned pos = bm::bwt_wave_bits; pos; )
-        {
-            --pos;
-            BM_ASSERT(row < bm::bwt_wave_bits);
-            const unsigned bit = last[row];
-            if (bit)
-                restored[pos >> 5] |= word_t(1) << (pos & 31u);
-            row = bit ? zeros + ones_before[row] : zeros_before[row];
-        } // for pos
-        ::memcpy(out, restored, sizeof(restored));
-    } // for wave
-}
-
-
-inline
-void bwt_pack_indexes(const unsigned short (&primary)[bm::block_waves],
-                             unsigned char (&packed)[bm::bwt_index_bytes])
-{
-    static_assert(bm::bwt_index_bytes * 8 == bm::block_waves * 10, "Each binary wave index occupies ten bits");
-    ::memset(packed, 0, sizeof(packed));
-    for (unsigned i = 0; i < bm::block_waves; ++i)
-    {
-        BM_ASSERT(primary[i] < bm::bwt_wave_bits);
-        for (unsigned b = 0; b < 10; ++b)
-        {
-            if (primary[i] & (1u << b))
-            {
-                const unsigned bit = i * 10 + b;
-                packed[bit >> 3] |= static_cast<unsigned char>(1u << (bit & 7u));
-            }
-        } // for b
-    } // for i
-}
-
-
-inline
-void bwt_unpack_indexes(const unsigned char (&packed)[bm::bwt_index_bytes],
-                        unsigned short (&primary)[bm::block_waves])
-{
-    for (unsigned i = 0; i < bm::block_waves; ++i)
-    {
-        unsigned p = 0;
-        for (unsigned b = 0; b < 10; ++b)
-        {
-            const unsigned bit = i * 10 + b;
-            p |= ((packed[bit >> 3] >> (bit & 7u)) & 1u) << b;
-        } // for b
-        primary[i] = static_cast<unsigned short>(p);
-    } // for i
-}
-
 template<class Alloc>
 template<class ENC, class PositionsVect>
 inline
@@ -829,15 +560,20 @@ template<class Alloc>
 template<class DEC>
 inline
 void bwt_bic_decoder<Alloc>::decode(DEC& dec, bm::word_t* block,
-                                   bm::bwt_full_workspace<Alloc>& workspace)
+                                   bm::bwt_full_workspace<Alloc>& workspace, bm::bit_in<DEC>* shared)
 {
-    bm::bit_in<DEC> in(dec);
+    // Shared records can place reference metadata in the payload's final word.
+    // Continue through the borrowed reader so prefetched bits remain available;
+    // restarting from dec alone would lose its position within that word.
+    bm::bit_in<DEC> local(dec);
+    auto& in = shared ? *shared : local;
     bm::serialization_require(in.get_bit() == 0); // original polarity only
     const unsigned primary = in.get_bits(16);
     const unsigned reserved = in.get_bits(9);
     const unsigned reserved_map = in.get_bit();
     bm::serialization_require(!reserved && !reserved_map);
     const unsigned active = 65536;
+    // Gamma requires a positive value; count+1 also represents an empty column.
     const unsigned residual_count_plus = in.gamma();
     bm::serialization_require(residual_count_plus && residual_count_plus <= active + 1);
     const unsigned residual_count = residual_count_plus - 1;
@@ -856,14 +592,130 @@ void bwt_bic_decoder<Alloc>::decode(DEC& dec, bm::word_t* block,
     }
     else
     {
+        // Indexing and skipping consume the same BIC positions without building
+        // the last column, while keeping the reader ready for following metadata.
         in.bic_decode_u16_dry(residual_count, 0, bm::gap_word_t(active - 1));
     }
+    // This layout has no chain formula. Consume its marker before returning,
+    // including in skip mode, so the next field starts at the correct bit.
     bm::serialization_require(in.gamma() == 1); // no chain formula
     if (!IS_VALID_ADDR(block))
         return;
+    // BIC restores the transformed last column; LF traversal then recovers the
+    // original bit order using the stored primary row.
     bm::bit_block_copy(block, packed);
     bm::bwt_inverse_full(block, bm::short_t(primary), workspace);
 }
 
 } // namespace bm
+#if 0 // Archived sparse byte/nibble BWT experiment, November 2026.
+// Input to transform(): a nonempty, symbol-aligned trimmed bitmap, with the
+// first and last symbols occupied. pos is strictly increasing and value holds
+// the corresponding nonzero symbols (1..15 or 1..255). length counts symbols.
+// Both routines own their returned vectors. Pass the primary row to inverse().
+// See utils/inv_list/experiments/sblock_correction/RESULTS.md for measurements.
+#include <algorithm>
+#include <numeric>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace bm { namespace experimental_symbol_bwt {
+using Vec = std::vector<unsigned>;
+
+/// Sparse symbol sequence; positions are zero-based within a trimmed domain.
+struct Symbols {
+    unsigned length;
+    Vec pos;
+    Vec value;
+};
+
+/// Return BWT last column and primary row using cyclic rank doubling on occupied
+/// symbols, then count rotations by leading-zero length and suffix order.
+inline
+Symbols transform(const Symbols& s, unsigned& primary)
+{
+    const unsigned m = unsigned(s.pos.size());
+    Vec order(m), rank(m), next(m), gap(m);
+    std::iota(order.begin(), order.end(), 0u);
+    for (unsigned i=0; i<m; ++i)
+        gap[i]=(i+1<m ? s.pos[i+1] : s.length+s.pos[0])-s.pos[i]-1;
+    auto classify = [&](auto key) {
+        std::sort(order.begin(),order.end(),[&](unsigned a,unsigned b){return key(a)<key(b);});
+        unsigned r=0;
+        for (unsigned j=0;j<m;++j) {
+            if (j && key(order[j-1]) != key(order[j])) ++r;
+            next[order[j]]=r;
+        }
+        rank.swap(next);
+        return r+1;
+    };
+    unsigned classes=classify([&](unsigned i){return std::make_pair(s.value[i],~gap[i]);});
+    for (unsigned step=1;classes<m && step<m;step*=2)
+        classes=classify([&](unsigned i){return std::make_pair(rank[i],rank[(i+step)%m]);});
+    // For periodic ties, order rotations by starting offset. Equal rotations
+    // have identical preceding symbols, so any such stable order is valid.
+    std::sort(order.begin(),order.end(),[&](unsigned a,unsigned b){
+        return std::make_pair(rank[a],a)<std::make_pair(rank[b],b);
+    });
+    for (unsigned j=0;j<m;++j) rank[order[j]]=j;
+    primary=s.length-m+rank[0]; // trimmed domain starts at an occupied symbol
+    std::sort(order.begin(),order.end(),[&](unsigned a,unsigned b){return gap[a]>gap[b];});
+    Vec tree(m+1), row(m);
+    unsigned base=0;
+    for (unsigned j=0;j<m;) {
+        unsigned end=j;
+        while (end<m && gap[order[end]]==gap[order[j]]) {
+            unsigned i=(order[end++]+1)%m;
+            for (unsigned x=rank[i]+1;x<=m;x+=x&-x) ++tree[x];
+        }
+        for (unsigned t=j;t<end;++t) {
+            unsigned i=order[t], r=base;
+            for (unsigned x=rank[(i+1)%m];x;x-=x&-x) r+=tree[x];
+            row[i]=r;
+        }
+        if (end<m) base+=end*(gap[order[j]]-gap[order[end]]);
+        j=end;
+    }
+    std::sort(order.begin(),order.end(),[&](unsigned a,unsigned b){return row[a]<row[b];});
+    Symbols out{s.length,{},{}};
+    for (unsigned i:order) { out.pos.push_back(row[i]); out.value.push_back(s.value[i]); }
+    return out;
+}
+
+/// Inverse LF traversal. Within a zero interval LF subtracts the same rank,
+/// permitting an exact jump across several successive zero predecessor symbols.
+inline
+Symbols inverse(const Symbols& last,unsigned row)
+{
+    unsigned count[256]={}, start[256]={};
+    for (unsigned v:last.value) ++count[v];
+    unsigned offset=last.length-unsigned(last.pos.size());
+    for (unsigned v=1;v<256;++v) {start[v]=offset;offset+=count[v];}
+    Vec lf;
+    for (unsigned v:last.value) lf.push_back(start[v]++);
+    Symbols out{last.length,{},{}};
+    unsigned remaining=last.length;
+    while (remaining) {
+        auto it=std::lower_bound(last.pos.begin(),last.pos.end(),row);
+        unsigned i=unsigned(it-last.pos.begin());
+        if (it!=last.pos.end() && *it==row) {
+            out.pos.push_back(--remaining);
+            out.value.push_back(last.value[i]);
+            row=lf[i];
+        } else {
+            if (!i) throw std::logic_error("Invalid zero LF cycle");
+            unsigned jump=std::min(remaining,(row-last.pos[i-1]-1)/i+1);
+            remaining-=jump;
+            row-=jump*i;
+        }
+    }
+    std::reverse(out.pos.begin(),out.pos.end());
+    std::reverse(out.value.begin(),out.value.end());
+    return out;
+}
+
+} } // namespace bm::experimental_symbol_bwt
+#endif
+
 #endif

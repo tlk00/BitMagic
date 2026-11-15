@@ -106,7 +106,7 @@ void gap_route_report(OUT& out, const Statistics& s)
     \tparam Statistics Statistics exposing the fields of bm::block_selection_statistics<BV>.
     \param out Destination stream; no flushing is performed.
     \param s Measurements to report, including optional candidate families
-        indicated by the composed, multistep, step2, and bwt_min_gain fields.
+        indicated by the composed, step2, and bwt_min_gain fields.
 */
 template<class OUT, class Statistics>
 inline
@@ -121,7 +121,6 @@ void block_selection_report(OUT& out, const Statistics& s)
         << " ordinary=" << s.chosen[0] << " periodic=" << s.chosen[1]
         << " bwt=" << s.chosen[2];
     if (s.composed) out << " composed=" << s.chosen[3];
-    if (s.multistep) out << " multistep=" << s.chosen[4];
     if (s.step2) out << " step2=" << s.chosen[4];
     if (s.chosen[5]) out << " bwt_unpacked=" << s.chosen[5];
     if (s.bwt_min_gain)
@@ -137,10 +136,6 @@ void block_selection_report(OUT& out, const Statistics& s)
         out << " compose_ns=" << s.compose_ns
             << " compose_trials=" << s.compose_trials
             << " previous=" << s.previous_bytes;
-    if (s.multistep)
-        out << " multistep_ns=" << s.multistep_ns
-            << " multistep_trials=" << s.multistep_trials
-            << " fourway=" << s.fourway_bytes;
     if (s.step2)
         out << " step2_ns=" << s.step2_ns
             << " step2_trials=" << s.step2_trials
@@ -172,24 +167,18 @@ void block_selection_report(OUT& out, const Statistics& s)
             << " bwt_payload=" << b.bwt_payload
             << " bwt_candidate=" << b.bwt_candidate;
         if (s.composed)
+        {
             out << " previous=" << b.previous << " composed=" << b.composed
                 << " compose_trials=" << b.compose_trials;
-        if (s.multistep)
-            out << " fourway=" << b.fourway << " multistep=" << b.multistep
-                << " multistep_trials=" << b.multistep_trials
-                << " multistep_groups=" << b.multistep_groups
-                << " multistep_chains=" << b.multistep_chains
-                << " multistep_last_step=" << b.multistep_last_step
-                << " multistep_stop=" << b.multistep_stop
-                << " multistep_formula=" << b.multistep_formula
-                << " multistep_residual=" << b.multistep_residual
-                << " multistep_mask=" << b.multistep_mask;
+        }
         if (s.step2)
+        {
             out << " fourway=" << b.fourway << " step2=" << b.step2
                 << " step2_trials=" << b.step2_trials
                 << " step2_chains=" << b.step2_chains
                 << " step2_formula=" << b.step2_formula
                 << " step2_residual=" << b.step2_residual;
+        }
         if (s.bwt_min_gain)
             out << " prethreshold_selected=" << b.prethreshold_selected
                 << " prethreshold_kind=" << b.prethreshold_kind;
@@ -329,6 +318,11 @@ inline const char* serialization_opcode_name(unsigned code)
     case bm::set_block_bitgap_bienc: return "set_block_bitgap_bienc";
     case bm::set_block_bit_digest0: return "set_block_bit_digest0";
     case bm::set_block_ref_eq: return "set_block_ref_eq";
+    case bm::set_block_xor_parallel_gather: return "set_block_xor_parallel_gather";
+    case bm::set_block_xor_ref_shared: return "set_block_xor_ref_shared";
+    case bm::set_block_xor_ref_delta: return "set_block_xor_ref_delta";
+    case bm::set_block_xor_gather: return "set_block_xor_gather";
+    case bm::set_block_xor_ref8_h64: return "set_block_xor_ref8_h64";
     case bm::set_block_xor_ref8: return "set_block_xor_ref8";
     case bm::set_block_xor_ref16: return "set_block_xor_ref16";
     case bm::set_block_xor_ref32: return "set_block_xor_ref32";
@@ -365,9 +359,9 @@ inline const char* serialization_opcode_name(unsigned code)
     case bm::set_sblock_bienc_gaps_v3: return "set_sblock_bienc_gaps_v3";
     case bm::set_block_bwt: return "set_block_bwt";
     case bm::set_block_bwt_unpacked: return "set_block_bwt_unpacked";
-    case bm::set_block_bwt_post: return "set_block_bwt_post";
+    case bm::set_block_arithmetic: return "set_block_arithmetic";
+    case bm::set_block_bit_0runs_arithmetic: return "set_block_bit_0runs_arithmetic";
     case bm::set_block_bwt_full_post: return "set_block_bwt_full_post";
-    case bm::set_block_periodic_post: return "set_block_periodic_post";
     case bm::set_block_periodic_groups: return "set_block_periodic_groups";
     case bm::set_block_bwt_periodic_post: return "set_block_bwt_periodic_post";
     case bm::set_block_periodic_groups_reduced: return "set_block_periodic_groups_reduced";
@@ -378,9 +372,9 @@ inline const char* serialization_opcode_name(unsigned code)
     case bm::set_block_bwt_interleaved_fixed: return "set_block_bwt_interleaved_fixed";
     case bm::set_block_gap_xor_framed: return "set_block_gap_xor_framed";
     case bm::set_sblock_bienc_adaptive: return "set_sblock_bienc_adaptive";
-    case bm::set_sblock_bienc_wave_adaptive: return "set_sblock_bienc_wave_adaptive";
+    case bm::set_sblock_bienc_wave_hierarchical: return "set_sblock_bienc_wave_hierarchical";
+    case bm::set_sblock_bienc_wave_runs: return "set_sblock_bienc_wave_runs";
     case bm::set_sblock_bienc_large: return "set_sblock_bienc_large";
-    case bm::set_sblock_bienc_wave1024: return "set_sblock_bienc_wave1024";
     default: return "unlabelled_opcode";
     }
 }
@@ -388,13 +382,14 @@ inline const char* serialization_opcode_name(unsigned code)
 inline const char* serialization_opcode_group(unsigned code)
 {
     if (code & 128u) return "zero/full runs";
+    if (code == bm::set_block_arithmetic || code == bm::set_block_bit_0runs_arithmetic) return "arithmetic";
     if (code == bm::set_block_gap_xor_framed) return "GAP-XOR";
     if (code == bm::set_block_bwt ||
         code == bm::set_block_bwt_unpacked)
         return "BIT transforms";
     if (code == bm::set_sblock_bienc || code == bm::set_sblock_bienc_v3 ||
         code == bm::set_sblock_bienc_gaps_v3 || code == bm::set_sblock_bienc_adaptive ||
-        code == bm::set_sblock_bienc_large || code == bm::set_sblock_bienc_wave1024 || code == bm::set_sblock_bienc_wave_adaptive)
+        code == bm::set_sblock_bienc_wave_hierarchical || code == bm::set_sblock_bienc_wave_runs || code == bm::set_sblock_bienc_large)
         return "superblocks";
     if (code == bm::set_block_end || code == bm::set_block_azero ||
         (code >= bm::set_nb_bookmark16 && code <= bm::set_nb_sync_mark64))
@@ -402,7 +397,9 @@ inline const char* serialization_opcode_group(unsigned code)
     if ((code >= bm::set_block_1zero && code <= bm::set_block_32one) ||
         code == bm::set_block_64zero || code == bm::set_block_64one)
         return "zero/full runs";
-    if ((code >= bm::set_block_ref_eq && code <= bm::set_block_xor_chain) ||
+    if (code == bm::set_block_xor_parallel_gather || code == bm::set_block_xor_ref_shared ||
+        code == bm::set_block_xor_ref_delta || code == bm::set_block_xor_gather || code == bm::set_block_xor_ref8_h64 ||
+        (code >= bm::set_block_ref_eq && code <= bm::set_block_xor_chain) ||
         (code >= bm::set_block_xor_ref8_um && code <= bm::set_block_xor_ref32_um))
         return "reference XOR";
     switch (code)
@@ -467,6 +464,22 @@ void print_serialization_opcode_profile(Out& out,
             << std::setw(10) << std::fixed << std::setprecision(3)
             << (profile.bytes ? 100.0*double(r.bytes)/double(profile.bytes) : 0.0)
             << '\n';
+    const char* arithmetic_contexts[] = {"original", "legacy_xor", "shared_reference", "shared_gather"};
+    for (unsigned context = 0; context < 4; ++context)
+    {
+        const auto* modes = profile.arithmetic_modes[context];
+        if (modes[0] || modes[1])
+        {
+            out << "Arithmetic final context=" << arithmetic_contexts[context]
+                << " nibble=" << modes[0] << " byte=" << modes[1] << '\n';
+        }
+        const auto* runs = profile.arithmetic_0runs_modes[context];
+        if (runs[0] || runs[1])
+        {
+            out << "0runs arithmetic final context=" << arithmetic_contexts[context]
+                << " nibble=" << runs[0] << " byte=" << runs[1] << '\n';
+        }
+    } // for context
     out << "Opcode profile scope=top_level embedded_formula_bytes=in_parent_payload\n";
     if (profile.cardinality_blobs)
     {

@@ -53,20 +53,24 @@ For more information please visit:  http://bitmagic.io
 #include "bmbuffer.h"
 #include "bmxor.h"
 #include "bmbwt.h"
+#include "bmarithmetic.h"
 #include "bmblockselection.h"
 #include "bmperiodic.h"
 #include "bmgaproute.h"
 #include "bmgapxor.h"
 #include "bmsblockwave.h"
+#include "bmsblockhier.h"
+#include "bmsblocklarge.h"
 #include "bmadaptivedelta.h"
+#include <cmath>
 
 // Development-only histories and timing. Define consistently in all translation
 // units before including BM headers; applies to bvector and every sparse-vector
 // serializer built on it. Aggregate counters used by codec policy remain available.
 #ifndef BM_SERIALIZATION_DIAGNOSTICS
 # define BM_SERIALIZATION_DIAGNOSTICS 0
-#else
-// Measure compression trial timings for development diagnostics only.
+#endif
+#if BM_SERIALIZATION_DIAGNOSTICS
 # include <chrono>
 #endif
 
@@ -164,15 +168,16 @@ public:
         4 | Legacy delta transforms and Elias gamma coding.
         5 | Binary interpolative coding (BIC), light settings.
         6 | Balanced BIC settings; released wire formats only.
-        7 | Level 6 plus complete-record endpoint and superblock correction selection; released formats only.
-        8 | Level 7 plus GAP-XOR and adaptive, fixed/adaptive-wave, large-count and inverse superblocks.
-        9 | Level 8 plus shared whole-block BWT and retained chain competition; minimum BWT saving 16 bytes.
+        7 | Endpoint/correction selection and four-reference XOR with H64, polarity and shared metadata; nibble arithmetic fallbacks for raw and 0runs blocks.
+        8 | Level 7 plus parallel-wave gather XOR, adaptive nibble arithmetic, GAP-XOR and adaptive superblocks.
+        9 | Level 8 plus byte/nibble arithmetic competition and shared whole-block BWT and retained chain competition; minimum BWT saving 16 bytes.
         10 | Same candidates as 9; accept any positive BWT saving (one byte).
 
         Savings include complete record framing, metadata and padding. BWT is
-        compared against the best non-BWT candidate; ties favor non-BWT.
+        compared within the native candidate policy; arithmetic subsequently
+        competes against that winner. Ties favor the existing encoding.
         Chains are part of the BWT selection at levels 9 and 10.
-        Levels 8-10 may emit formats unsupported by older library readers.
+        Levels 7-10 may emit formats unsupported by older library readers.
         Higher levels increase search effort; decoding time is data dependent.
 
         Calling this function resets codec selectors and their preset parameters,
@@ -196,6 +201,35 @@ public:
         gap_xor_enabled_ = enabled;
     }
 
+    /** Enable opcode 107 (bm::set_block_bit_0runs_arithmetic) for 0runs winners at levels 7 and higher.
+        The level-7 and level-8 presets select pooled nibbles.
+        Opcode 106 (bm::set_block_arithmetic) competes at levels 8 and higher,
+        with a raw-block fallback at 7.
+        @param enabled False restores the native block-codec policy.
+        Apply after set_compression_level(), which installs the level default.
+    */
+    void set_arithmetic_coding(bool enabled) BMNOEXCEPT { arithmetic_enabled_ = enabled; }
+    /// Return the configured arithmetic option.
+    bool get_arithmetic_coding() const BMNOEXCEPT { return arithmetic_enabled_; }
+
+    /** Select eligible arithmetic alphabets for original and residual blocks.
+        @param mode Nibble-only, byte-only, or both complete candidates.
+        Applies to opcodes 106 (bm::set_block_arithmetic) and 107
+        (bm::set_block_bit_0runs_arithmetic). Call after set_compression_level(),
+        which installs nibble at L7/L8 and all at other levels. Arithmetic
+        eligibility and the enable switch are controlled separately.
+    */
+    void set_arithmetic_coding_mode(bm::arithmetic_coding_mode mode)
+    {
+        bm::serialization_require(mode == bm::arithmetic_coding_mode::nibble ||
+            mode == bm::arithmetic_coding_mode::byte ||
+            mode == bm::arithmetic_coding_mode::all);
+        arithmetic_coding_mode_ = mode;
+    }
+    /// Return the eligible arithmetic alphabets configured for selection.
+    bm::arithmetic_coding_mode get_arithmetic_coding_mode() const BMNOEXCEPT
+        { return arithmetic_coding_mode_; }
+
     void set_gap_route_diagnostics(bool enabled) BMNOEXCEPT
         { gap_route_diagnostics_ = enabled; }
     const bm::gap_route_statistics& get_gap_route_statistics() const BMNOEXCEPT
@@ -208,7 +242,6 @@ public:
     void set_sblock_large_options(bool enabled) BMNOEXCEPT { sblock_large_enabled_=enabled; }
     void set_sblock_large_inverse_limit(unsigned limit)
     { bm::serialization_require(limit<bm::set_sub_total_bits/2);sblock_large_inverse_limit_=limit; }
-
     void set_sblock_adaptive_options(bool enabled) BMNOEXCEPT
         { sblock_adaptive_enabled_ = enabled; }
     /// Exactly score both opcode-65 layouts; ties keep the heuristic.
@@ -218,21 +251,31 @@ public:
     /// Requires whole-block composed selection; the caller retains its policy.
     void set_bwt_shared_options(bool enabled=true) BMNOEXCEPT
     {
-        BM_ASSERT(!enabled || (selection_compose_enabled_ &&
-                              bwt_options_.whole_block));
+        BM_ASSERT(!enabled || selection_compose_enabled_);
         bwt_shared_enabled_=enabled;
     }
 
 
-    void set_sblock_wave_adaptive_options(bool enabled) BMNOEXCEPT
-        { sblock_wave_adaptive_enabled_=enabled;
-          if (enabled) sblock_wave1024_enabled_=true; }
-
-    void set_sblock_wave1024_options(bool enabled) BMNOEXCEPT
-        { sblock_wave1024_enabled_ = enabled; }
-
-
-
+    /** Set optional exact wave-score observations.
+        @param observer Synchronous borrowed callback, null disables diagnostics.
+        @param context Borrowed state valid throughout serialization.
+    */
+    void set_wave_score_observer(
+        void (*observer)(void*, const bm::sblock_wave_score_observation&), void* context)
+    {
+        wave_score_observer_ = observer;
+        wave_score_context_ = context;
+    }
+    /** @brief Override the wave-superblock selection preset.
+        Opcode 108 (bm::set_sblock_bienc_wave_runs) uses a flat wave map;
+        opcode 109 (bm::set_sblock_bienc_wave_hierarchical) uses a hierarchy.
+        @param mode 0=108 only, 1=exact 108/109, 2=109 only,
+        3=occupied-block gate, 4=source-metadata tree.
+    */
+    void set_sblock_wave_experiment(unsigned mode) { bm::serialization_require(mode<=4); wave_experiment_=mode; }
+    /// Enable wave-superblock candidates and compare them with the ordinary record.
+    void set_sblock_wave_options(bool enabled) BMNOEXCEPT
+        { sblock_wave_enabled_ = enabled; }
 
     // GAP-length tolerance for sparse-superblock grouping; 14 restores legacy routing.
     void set_sblock_gap_tolerance(unsigned percent) BMNOEXCEPT
@@ -240,6 +283,7 @@ public:
           sblock_gap_tolerance_ = percent; }
 
 
+private:
     /// Exhaustive choice: ordinary, independent periodic step 1, whole-block BWT.
     void set_block_selection_options()
     {
@@ -251,7 +295,7 @@ public:
         periodic_options_.max_chains = periodic_options_.formula_chains = 256;
         periodic_options_.trial_budget = 2304;
         bwt_options_ = bm::bwt_options();
-        bwt_options_.whole_block = bwt_options_.diagnostics = true;
+        bwt_options_.diagnostics = true;
         selection_enabled_ = periodic_enabled_ = bwt_enabled_ = true;
         selection_bwt_min_gain_ = selection_stats_.bwt_min_gain = 16;
     }
@@ -260,23 +304,7 @@ public:
         set_block_selection_options();
         selection_compose_enabled_ = selection_stats_.composed = true;
     }
-    void set_block_selection_multistep_options(unsigned max_step = 64,
-                                               unsigned min_gain = 2,
-                                               unsigned streak = 4,
-                                               unsigned min_stop_step = 8)
-    {
-        bm::serialization_require(max_step >= 1 && max_step <= 64 &&
-                               min_gain >= 1 && min_gain <= 65535 && streak <= 64 &&
-                               min_stop_step >= 1 && min_stop_step <= max_step);
-        set_block_selection_compose_options();
-        multistep_options_ = periodic_options_;
-        multistep_options_.order = 2;
-        multistep_options_.max_step = max_step;
-        multistep_options_.min_step_gain = min_gain;
-        multistep_options_.marginal_streak = streak;
-        multistep_options_.min_stop_step = min_stop_step;
-        selection_multistep_enabled_ = selection_stats_.multistep = true;
-    }
+public:
     void set_block_selection_step2_options()
     {
         set_block_selection_compose_options();
@@ -291,16 +319,16 @@ public:
         bm::serialization_require(selection_enabled_ && bytes <= 65535);
         selection_bwt_min_gain_ = selection_stats_.bwt_min_gain = bytes;
     }
-    /// Experimental step-1 formula start reduction; changes only opt-in records.
+    /// Step-1 formula start reduction for retained chain records.
     void set_periodic_step1_start_reduction(bool enabled) BMNOEXCEPT
         { periodic_step1_start_reduction_ = enabled; }
-    /// Experimental first-start metadata and bounded BIC for the remainder.
+    /// First-start metadata and bounded BIC for the remainder.
     void set_periodic_step1_first_start(bool enabled) BMNOEXCEPT
     {
         periodic_step1_first_start_ = enabled;
         if (enabled) periodic_step1_start_reduction_ = true;
     }
-    /// Experimental BIC of interleaved step-1 starts and ends.
+    /// BIC of interleaved step-1 starts and ends.
     /// 1=fixed interleaving, 4=choose gamma or fixed per formula.
     void set_periodic_step1_interleaved(unsigned mode)
     {
@@ -311,42 +339,23 @@ public:
     const block_selection_statistics_type& get_block_selection_statistics() const BMNOEXCEPT
         { return selection_stats_; }
 
-    /// Experimental independent binary BWT of the 64 BIT-block waves.
-    void set_bwt_options(const bm::bwt_options& options)
-    {
-        bm::serialization_require(options.sample && !periodic_enabled_);
-        bwt_options_ = options;
-        bwt_options_.whole_block = false;
-        bwt_enabled_ = true;
-    }
-    /// One binary BWT across the complete BIT block, with byte-size fallback.
-    void set_bwt_full_options(const bm::bwt_options& options)
-    {
-        bm::serialization_require(options.sample &&
-                               !bwt_enabled_ && !periodic_enabled_);
-        bwt_options_ = options;
-        bwt_options_.whole_block = true;
-        bwt_enabled_ = true;
-    }
     void set_bwt_vector_index(bm::id64_t index) BMNOEXCEPT
         { bwt_vector_index_ = index; }
     const bwt_statistics_type& get_bwt_statistics() const BMNOEXCEPT
         { return bwt_stats_; }
 
-    /// Experimental periodic-chain predictor; ordinary block wins ties.
+    /// Independent periodic-chain predictor; ordinary block wins ties.
     void set_periodic_options(const bm::periodic_options& options)
     {
         bm::serialization_require(!bwt_enabled_ &&
               options.min_step >= 1 &&
               options.min_step <= options.max_step &&
-              options.max_step <= (options.order ? 128u : 64u) && options.max_variants >= 1 &&
-              options.max_variants <= 64 && options.min_length >= 4 &&
+              options.max_step <= 128u && options.min_length >= 4 &&
               options.max_chains >= 1 && options.max_chains <= 256 &&
               options.max_holes <= 1 && options.sample >= 1 &&
-              options.order <= 4 && options.trial_budget >= 1 &&
+              options.order == 1 && options.trial_budget >= 1 &&
               options.trial_budget <= 65535 && options.formula_chains >= 1 &&
-              options.formula_chains <= 256 &&
-              (!options.diagnostics || options.max_variants >= 2));
+              options.formula_chains <= 256);
         periodic_options_ = options;
         periodic_enabled_ = true;
     }
@@ -518,6 +527,120 @@ public:
      */
     void set_sim_model(const xor_sim_model_type* sim_model) BMNOEXCEPT;
 
+    /** Enable four-recipe reference-XOR trials for models built by this serializer.
+        Call before compute_sim_model(). Enabled by the level 7 and higher presets.
+        @param enabled Preserve incumbent plus up to three estimated alternatives.
+        Existing codecs, estimator, search bounds and wire format are unchanged.
+    */
+    void set_xor_candidate_trials(bool enabled) BMNOEXCEPT
+        { xor_candidate_trials_ = enabled; }
+
+    /** Enable opcode 99 (bm::set_block_xor_ref8_h64) for single masked references.
+        @param enabled Allow the H64 mask when strictly smaller than eight bytes.
+    */
+    void set_xor_ref8_h64(bool enabled) BMNOEXCEPT
+        { xor_ref8_h64_ = enabled; }
+
+    /** Enable parallel-wave gather XOR trials, enabled at levels 8 and higher.
+        Parallel gather records use opcode 102 (bm::set_block_xor_parallel_gather).
+        Reference metadata and the residual share one bit accumulator.
+        Reference waves retain the target wave position; no permutation is used.
+        The legacy layout uses opcode 100 (bm::set_block_xor_gather).
+        @param enabled Search sixteen subsequent reference rows for each parallel wave.
+        @param positive_deltas Permit relative IDs when the reader knows the target row.
+        Trials current, sparse and dense polarity against the existing block winner.
+        Requires attached references and a similarity model.
+    */
+    void set_xor_gather(bool enabled, bool positive_deltas = false) BMNOEXCEPT
+    {
+        xor_gather_ = enabled;
+        gather_deltas_ = positive_deltas;
+    }
+
+    /** Enable the experimental pooled-score runner-up trial for parallel gather.
+        @param enabled Try one wave substitution on winning opcode 102 records.
+        Apply after setting the compression level and enabling reference XOR.
+    */
+    void set_xor_gather_runner_up(bool enabled) BMNOEXCEPT
+        { gather_runner_up_ = enabled; }
+
+    /** @internal Borrowed view of one completed XOR trial.
+        @ingroup bvserial
+        Residual storage is valid only during the observer call; null for EQ.
+    */
+    struct xor_trial_observation
+    {
+        const bm::word_t* residual; ///< Borrowed residual BIT block, or null for EQ.
+        size_type plane; ///< Original source plane number.
+        block_idx_type block; ///< Block number within the source plane.
+        unsigned candidate; ///< Zero denotes incumbent, 1..3 alternatives.
+        unsigned chain_size; ///< Number of references in this recipe.
+        size_t overhead; ///< Complete reference/mask/chain header bytes.
+        size_t bytes; ///< Complete trial record bytes.
+        size_t plain_bytes; ///< Ordinary block encoding bytes.
+        unsigned opcode; ///< First residual opcode; zero for EQ.
+        unsigned reference_opcode; ///< Reference token before the residual.
+        bm::id64_t single_mask; ///< Single-reference wave mask, zero for chains and equality.
+    };
+
+    /** Set an optional development observer; null disables diagnostics.
+        @param observer Callback invoked after each completed trial, before selection.
+        @param context Borrowed state passed to observer, valid through serialization.
+        The callback must not mutate the serializer or borrowed residual. Timing
+        measurements should disable it. Observer exceptions propagate to the caller.
+    */
+    void set_xor_trial_observer(void (*observer)(void*, const xor_trial_observation&),
+                                void* context = nullptr) BMNOEXCEPT
+    {
+        xor_trial_observer_ = observer;
+        xor_trial_context_ = context;
+    }
+
+    /** @internal Borrowed view of a completed arithmetic mode trial.
+        @ingroup bvserial
+        The block remains valid only during the observer call.
+    */
+    struct arithmetic_trial_observation
+    {
+        const bm::word_t* block; ///< Original or XOR residual BIT block.
+        block_idx_type block_index; ///< Block number within its plane.
+        unsigned mode; ///< Zero for pooled nibbles, one for bytes.
+        unsigned payload_bits; ///< Actual coded bits including lookahead.
+        size_t record_bytes; ///< Candidate size including known shared coordinates.
+        size_t incumbent_bytes; ///< Best size before this mode trial.
+    };
+
+    /** Observe completed arithmetic trials for development diagnostics.
+        @param observer Borrowed callback, or null to disable observations.
+        @param context Borrowed callback state valid during serialization.
+    */
+    void set_arithmetic_trial_observer(
+        void (*observer)(void*, const arithmetic_trial_observation&),
+        void* context = nullptr) BMNOEXCEPT
+    {
+        arithmetic_trial_observer_ = observer;
+        arithmetic_trial_context_ = context;
+    }
+
+    /** @internal Reference-XOR selection counters.
+        @ingroup bvserial
+    */
+    struct xor_trial_statistics
+    {
+        bm::id64_t blocks = 0; ///< Blocks with an incumbent XOR recipe.
+        bm::id64_t alternatives = 0; ///< Additional recipes actually encoded.
+        bm::id64_t changed = 0; ///< Blocks improved by an alternative.
+        bm::id64_t saved_bytes = 0; ///< Complete bytes saved versus incumbent selection.
+    };
+
+    /** Return counters since reset_compression_stats(); borrowed until reset.
+        @return Read-only selection counters, accumulated across planes.
+    */
+    const xor_trial_statistics& get_xor_trial_statistics() const BMNOEXCEPT
+        { return xor_trial_stats_; }
+
+
+
     /**
         Set current index in rer.vector collection
         (not a row idx or plain idx)
@@ -566,9 +689,74 @@ protected:
     void encode_gap_xor_block(const bm::gap_word_t* gap_block, bm::encoder& enc);
     /// Apply block transforms; try_gap also scores BIT-to-GAP for both sides
     /// of a reference-XOR comparison, whose residual has no stored GAP form.
+    unsigned char encode_native_block(const bm::word_t* blk,
+        const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc, bool try_gap);
+
+    /** @internal Alternate metadata layout for the same residual candidates.
+        @ingroup bvserial
+    */
+    struct residual_layout
+    {
+        unsigned char* begin; ///< Borrowed start of winner storage.
+        bm::encoder* encoder; ///< Borrowed retained winner storage.
+        unsigned metadata_bits; ///< Following shared metadata, or ~0u.
+        size_t best_size; ///< Complete incumbent score.
+        size_type stats[256]; ///< Incumbent compression counters.
+    };
+
+    /** Retain a candidate if it improves the alternate layout.
+        @param layout Optional borrowed alternate winner.
+        @param data Borrowed record bytes.
+        @param size Record byte length.
+        @param padding Retained accumulator padding.
+        @param stats Candidate compression counters.
+    */
+    static void score_residual_layout(residual_layout* layout,
+        const unsigned char* data, size_t size, unsigned padding,
+        const size_type* stats);
+
+    /** Compare the native winner with complete arithmetic trials.
+        @param blk Borrowed original or residual block.
+        @param sub_stat Existing block survey.
+        @param nb Logical block coordinate.
+        @param enc Borrowed writable candidate encoder.
+        @param try_gap Also compare a GAP representation of BIT residuals.
+        @param shared_meta_bits Known following metadata bits, or ~0u for
+            standalone scoring. Shared scores include final joint-word padding.
+        @param allow_raw_fallback Permit whole-block arithmetic at L7.
+        @param alternate Optional alternate metadata layout, scored independently.
+        @return Caller-owned zero/full sentinel, or zero for an encoded block.
+    */
     unsigned char encode_selected_block(const bm::word_t* blk,
         const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc,
-        bool try_gap = false);
+        bool try_gap = false, unsigned shared_meta_bits = ~0u,
+        bool allow_raw_fallback = true, residual_layout* alternate = nullptr);
+
+    /** Score a residual record including any following shared metadata.
+        @param data Borrowed encoded record of size bytes.
+        @param size Standalone record size.
+        @param padding Unused bits in the last accumulator word.
+        @param shared_meta_bits Following metadata bits, or ~0u for standalone.
+        @return Complete size for comparing candidates in this context.
+    */
+    static size_t arithmetic_record_size(const unsigned char* data, size_t size,
+                                         unsigned padding, unsigned shared_meta_bits);
+
+    /** Compare both whole-block arithmetic modes with an existing winner.
+        @param blk Borrowed BIT block.
+        @param nb Block coordinate for trial observers.
+        @param enc Destination containing the incumbent record.
+        @param begin Start of that record in enc.
+        @param best_size Incumbent score, updated on a strict improvement.
+        @param before Compression counters immediately before the record.
+        @param shared_meta_bits Following metadata bits, or ~0u for standalone.
+        @param alternate Optional alternate layout for these same trial bytes.
+        Requires initialized arithmetic candidate storage and incumbent counters.
+    */
+    void try_block_arithmetic(const bm::word_t* blk, block_idx_type nb,
+        bm::encoder& enc, unsigned char* begin, size_t& best_size,
+        const size_type (&before)[256], unsigned shared_meta_bits,
+        residual_layout* alternate = nullptr);
 
     /*! Encode GAP block with Elias Gamma coder */
     void gamma_gap_block(const bm::gap_word_t* gap_block,
@@ -597,8 +785,7 @@ protected:
 
     void bienc_arr_sblock(const BV& bv, unsigned sb,
                           bm::encoder& enc, int correction_mode = -1);
-    void prepare_sblock_wave1024(unsigned sb, unsigned len);
-    bool try_sblock_wave(unsigned sb, unsigned len, bm::encoder& enc,
+    bool try_sblock_wave(const BV& bv, unsigned sb, unsigned len, bm::encoder& enc,
                          unsigned char* begin, size_t rival_bytes);
     void bienc_arr_sblock_select(const BV& bv, unsigned sb,
                                  bm::encoder& enc);
@@ -692,19 +879,88 @@ protected:
     unsigned char encode_block(const bm::word_t* blk,
                                const bm::bv_sub_survey& sub_stat,
                                block_idx_type nb, bm::encoder& enc);
-    /// Compare complete ordinary and reference encodings, keeping the smaller.
+    /** @internal Pack a residual and reference metadata using one final accumulator flush.
+        @param trial Borrowed candidate encoder, updated in place.
+        @param meta Start of the padded reference bit stream.
+        @param meta_bits Number of meaningful reference bits.
+        @param residual Start of the encoded residual opcode.
+        @param record Start of the complete XOR record.
+        @return True if the supported residual was repacked; false preserves it.
+    */
+    /** Count supported residual body bits for final shared-record scoring.
+        @param residual Borrowed record including its opcode.
+        @param size Complete standalone residual bytes.
+        @param padding Retained final padding, ignored by byte-oriented codecs.
+        @param count Receives meaningful body bits, excluding the opcode.
+        @return True when shared packing supports this opcode.
+    */
+    static bool xor_residual_bits(const unsigned char* residual, size_t size,
+                                  unsigned padding, unsigned& count);
+
+    bool pack_shared_xor_residual(bm::encoder& trial, unsigned char* meta,
+        unsigned meta_bits, unsigned char* residual, unsigned char* record);
+
+    /** Compare gather records with the already encoded block, preserving stats on rejection.
+        @param blk Original BIT block, borrowed.
+        @param sub_stat Existing block survey.
+        @param nb Block index.
+        @param begin Start of the existing winner in enc.
+        @param before Compression counters before the baseline block.
+        @param enc Writable output, positioned after the winner.
+    */
+    void encode_gather_block(const bm::word_t* blk, const bm::bv_sub_survey& sub_stat,
+                            block_idx_type nb, unsigned char* begin, const size_type* before, bm::encoder& enc);
+
     void encode_xor_block(const bm::word_t* blk,
                          const bm::bv_sub_survey& sub_stat, block_idx_type nb,
                          const block_match_chain_type& mchain, bm::encoder& enc);
 
+    /** @internal Native record shared by periodic and BWT selection.
+        @ingroup bvserial
+    */
+    struct native_block_record
+    {
+        unsigned char* data; ///< Borrowed retained byte storage.
+        size_t size; ///< Encoded record bytes.
+        unsigned padding; ///< Retained accumulator padding.
+        size_type stats[256]; ///< Counters after native encoding.
+    };
+
+    /** Compare BWT with a native record.
+        @param blk Borrowed BIT block.
+        @param sub_stat Existing survey.
+        @param nb Block coordinate.
+        @param enc Borrowed candidate destination.
+        @param transformed_out Optional transformed-block output.
+        @param primary_out Primary index paired with transformed_out.
+        @param baseline Optional native record for this same block.
+        @param transformed_baseline Optional output snapshot with caller-owned
+            writable storage for the transformed block's native record.
+        @return Caller-owned zero/full sentinel, or zero.
+    */
     unsigned char encode_bwt_block(const bm::word_t* blk,
                          const bm::bv_sub_survey& sub_stat, block_idx_type nb,
                          bm::encoder& enc, bm::word_t* transformed_out = 0,
-                         unsigned short* primary_out = 0);
+                         unsigned short* primary_out = 0,
+                         const native_block_record* baseline = nullptr,
+                         native_block_record* transformed_baseline = nullptr);
+    /** Compare periodic transforms with native encoding.
+        @param blk Borrowed BIT block.
+        @param sub_stat Existing survey.
+        @param nb Block coordinate.
+        @param enc Borrowed candidate destination.
+        @param override_options Optional search policy.
+        @param baseline_out Optional native snapshot with caller-owned writable
+            data storage large enough for one complete native record.
+        @param baseline Optional native input record for the same BIT block.
+        @return Caller-owned zero/full sentinel, or zero.
+    */
     unsigned char encode_periodic_block(const bm::word_t* blk,
                          const bm::bv_sub_survey& sub_stat, block_idx_type nb,
                          bm::encoder& enc,
-                         const bm::periodic_options* override_options = nullptr);
+                         const bm::periodic_options* override_options = nullptr,
+                         native_block_record* baseline_out = nullptr,
+                         const native_block_record* baseline = nullptr);
 
     unsigned char encode_selection_block(const bm::word_t* blk,
                          const bm::bv_sub_survey& sub_stat, block_idx_type nb,
@@ -783,19 +1039,26 @@ private:
     bool sblock_correction_selection_ = false;
     bm::heap_vector<unsigned char, allocator_type, true> sblock_correction_record_;
     bool sblock_adaptive_enabled_ = false;
-    bool sblock_wave1024_enabled_ = false;
-    bool sblock_wave_adaptive_enabled_ = false;
-    bm::sblock_wave_adaptive_model<allocator_type> sblock_wave_adaptive_model_;
-    bm::sblock_wave_record sblock_wave1024_pending_;
-    bm::sblock_wave1024_model<allocator_type> sblock_wave1024_model_;
-    buffer sblock_wave1024_buffer_;
-    buffer sblock_wave1024_best_buffer_;
+    bool sblock_wave_enabled_ = false; ///< Enable opcode 108 wave compaction.
+    void (*wave_score_observer_)(void*, const bm::sblock_wave_score_observation&) = nullptr; ///< Optional search observer.
+    void* wave_score_context_ = nullptr; ///< Borrowed observer state.
+    unsigned wave_experiment_ = 0; ///< 0=108, 1=both, 2=109 only, 3=gate, 4=tree.
+    bm::sblock_hier_model<allocator_type> hier_model_; ///< Retained hierarchical wave workspace.
+    bm::sblock_wave_adaptive_model<allocator_type> sblock_wave_model_; ///< Reused opcode 108 workspace.
     bm::heap_vector<unsigned, allocator_type, true> sblock_original_values_;
     unsigned sblock_gap_tolerance_ = 100;
     buffer sblock_adaptive_buffer_;
     buffer sblock_adaptive_best_buffer_;
     bm::heap_vector<unsigned, allocator_type, true> sblock_adaptive_values_;
     bm::heap_vector<unsigned, allocator_type, true> sblock_adaptive_corrections_;
+    bm::arithmetic_coding_mode arithmetic_coding_mode_ = bm::arithmetic_coding_mode::all; ///< Eligible arithmetic alphabets.
+    bool arithmetic_enabled_ = false; ///< Nibble presets at L7/L8, byte/nibble competition at L9+.
+    bm::heap_vector<unsigned char, allocator_type, true> residual_layout_buffer_; ///< Retained alternate-layout winner.
+    bm::heap_vector<unsigned char, allocator_type, true> arithmetic_candidate_; ///< Retained trial bytes.
+    bm::heap_vector<bm::word_t, allocator_type, true> arithmetic_words_; ///< Retained copied-word workspace for opcode 107.
+    bm::heap_vector<bm::gap_word_t, allocator_type, true> arithmetic_runs_; ///< Retained run lengths for opcode 107.
+    void (*arithmetic_trial_observer_)(void*, const arithmetic_trial_observation&) = nullptr; ///< Optional completed-trial callback.
+    void* arithmetic_trial_context_ = nullptr; ///< Borrowed callback state.
     bool gap_route_diagnostics_ = false;
     bm::gap_route_statistics gap_route_stats_;
     // Fixed block bounds permit an optional speculative reservation at startup.
@@ -821,14 +1084,14 @@ private:
     bm::id64_t bwt_full_transforms_ = 0;
     buffer bwt_unpacked_trial_buffer_;
     bool               selection_compose_enabled_ = false;
-    bool               selection_multistep_enabled_ = false;
     bool               selection_step2_enabled_ = false;
     unsigned           selection_bwt_min_gain_ = 0;
-    bm::periodic_options multistep_options_;
     bm::periodic_options step2_options_;
     block_selection_statistics_type selection_stats_;
     bm::bwt_block_observation last_bwt_observation_; ///< Current candidate metadata, not a history.
     bm::periodic_order_block last_periodic_observation_; ///< Current periodic candidate metadata.
+    buffer             selection_transformed_buffer_; ///< Retained native BWT output for both composed searches.
+    buffer             selection_native_buffer_; ///< Retained native baseline for transform comparison.
     buffer             selection_best_buffer_;
     buffer             selection_nonbwt_buffer_;
     bool               bwt_enabled_ = false;
@@ -843,7 +1106,6 @@ private:
     bm::bwt_options    bwt_options_;
     bwt_statistics_type bwt_stats_;
     bm::id64_t bwt_vector_index_ = 0;
-    buffer             bwt_matrix_buffer_;
     bm::bwt_full_workspace<allocator_type> bwt_full_workspace_;
     buffer             transform_best_buffer_; ///< Retained best periodic/transform candidate.
     buffer             xor_trial_buffer_; ///< inner codec trial storage
@@ -878,6 +1140,17 @@ private:
 
     // XOR compression
     //
+    void (*xor_trial_observer_)(void*, const xor_trial_observation&) = nullptr; ///< Optional trial observer.
+    void* xor_trial_context_ = nullptr; ///< Borrowed observer state.
+    xor_trial_statistics xor_trial_stats_; ///< Optional-mode counters; no dynamic storage.
+    bool joint_wire_ = false; ///< Enable shared reference and residual bit packing.
+    unsigned single_delta_trials_ = 0; ///< Direct and inverted single-reference trial count.
+    bm::word_t* gather_workspace_ = nullptr; ///< Eighteen aligned blocks for lazy depth-16 gather trials.
+    bool gather_deltas_ = false; ///< Allow positive plane distances in gather records.
+    bool gather_runner_up_ = false; ///< Enable one extra gather compression trial.
+    bool xor_gather_ = false; ///< Enable depth-16 parallel gather.
+    bool xor_ref8_h64_ = false; ///< Permit compact masks for single 8-bit references.
+    bool xor_candidate_trials_ = false; ///< Four-recipe policy for newly built models.
     const bv_ref_vector_type* ref_vect_; ///< ref.vector for XOR compression
     const xor_sim_model_type* sim_model_; ///< similarity model matrix
     bm::xor_scanner<BV>       xor_scan_; ///< scanner for XOR similarity
@@ -935,11 +1208,17 @@ protected:
 
     deseriaizer_base() {}
     
-    /// Read GAP block from the stream
+    /** Read a GAP block from the stream.
+        @param decoder Borrowed byte decoder.
+        @param block_type GAP codec opcode.
+        @param dst_block Writable GAP workspace.
+        @param gap_head Incoming legacy header, updated with the decoded header.
+        @param shared Optional borrowed bit accumulator for following metadata.
+    */
     void read_gap_block(decoder_type&   decoder, 
                         unsigned        block_type, 
                         bm::gap_word_t* dst_block,
-                        bm::gap_word_t& gap_head);
+                        bm::gap_word_t& gap_head, bit_in_type* shared = nullptr);
 
 	/// Read list of bit ids
 	///
@@ -948,9 +1227,14 @@ protected:
                           unsigned        block_type, 
                           bm::gap_word_t* dst_arr);
     
-    /// Read binary interpolated list into a bit-set
+    /** Read a binary interpolated list into a bit-set.
+        @param decoder Borrowed byte decoder.
+        @param blk Output block, or null to traverse without storing bits.
+        @param block_type Position-list opcode.
+        @param shared Optional borrowed bit accumulator for following metadata.
+    */
     void read_bic_arr(decoder_type&   decoder, 
-                      bm::word_t* blk, unsigned block_type);
+                      bm::word_t* blk, unsigned block_type, bit_in_type* shared = nullptr);
 
 	/// Read list of bit ids for super-blocks
 	///
@@ -973,6 +1257,18 @@ protected:
     
     /// Read a framed BWT/periodic residual and restore it before merging.
     void read_bwt_block(decoder_type& decoder, bm::word_t* blk);
+    /** Decode opcode 106, or skip its bounded payload when blk is null.
+        @param decoder Borrowed byte channel.
+        @param blk Exclusive restored BIT block, or null for traversal.
+    */
+    void read_arithmetic_block(decoder_type& decoder, bm::word_t* blk)
+        { bm::arithmetic_block_decoder::decode(decoder, blk); }
+    /** Dispatch framed BIT payloads (72, 96, 106, 107).
+        @param decoder Borrowed byte channel positioned after the opcode.
+        @param type One of the supported BIT payload opcodes.
+        @param blk Exclusive output, or null for traversal.
+    */
+    void read_transform_block(decoder_type& decoder, unsigned type, bm::word_t* blk);
     void read_bwt_unpacked_block(decoder_type& decoder, bm::word_t* blk)
         { bm::bwt_bic_decoder<Alloc>::decode(decoder, blk, *bwt_decode_workspace_); }
 
@@ -997,6 +1293,8 @@ protected:
     bm::bwt_full_workspace<Alloc>* bwt_decode_workspace_ = &bwt_decode_storage_; ///< Owned or borrowed inverse scratch.
     bm::heap_vector<unsigned, Alloc, true> wave_map_; ///< Reusable encoded wave map.
     bm::heap_vector<unsigned, Alloc, true> wave_occupied_; ///< Reusable expanded occupied waves.
+    bm::heap_vector<unsigned, Alloc, true> wave_full_; ///< Opcode-109 FULL-block positions.
+    bm::heap_vector<unsigned, Alloc, true> arithmetic_word_positions_; ///< Copied-word scatter positions for opcode 107.
     bm::gap_word_t*   id_array_ = 0; ///< ptr to idx array for temp decode use
     unsigned*         sb_id_array_=0; ///< ptr to super-block idx array (temp)
     bool large_sb_inverse_=false;
@@ -1039,6 +1337,17 @@ public:
 public:
     deserializer();
     ~deserializer();
+
+protected:
+    /** @internal Decode a residual while retaining its final word for XOR coordinates.
+        @param op Residual opcode.
+        @param dec Borrowed decoder positioned after the opcode.
+        @param bits Borrowed accumulator shared with the reference metadata.
+        @param dst Output block, or null for traversal without reconstruction.
+    */
+    void joint_residual(unsigned op, DEC& dec, bm::bit_in<DEC>& bits,
+                        bm::word_t* dst);
+public:
 
     /// Optional in-memory logical block starts for top-level record profiling.
     /// Cleared on each traversal; not part of the serialized index or wire format.
@@ -1111,6 +1420,12 @@ public:
         @internal
     */
     void set_ref_vectors(const bv_ref_vector_type* ref_vect);
+
+    /** Supply the target row when decoding a delta gather into a separate vector.
+        @param id Global reference row ID, or not_found() for lookup by destination.
+    */
+    void set_gather_target_id(size_type id) BMNOEXCEPT { gather_target_id_ = id; }
+
 
 
     /**
@@ -1216,6 +1531,9 @@ protected:
     block_idx_type            x_nb_;
     unsigned                  xor_chain_size_;
     bm::match_pair            xor_chain_[64];
+    size_type gather_target_id_ = bv_ref_vector_type::not_found(); ///< Explicit target for standalone reads.
+    bool gather_pending_ = false; ///< Delayed gather reconstruction.
+    bm::id64_t gather_polarity_ = 0; ///< Waves whose XOR product is inverted.
 
     // Range deserialization settings
     //
@@ -3108,15 +3426,15 @@ const unsigned char set_block_arr_bienc_v3s     = 65; //!< Interpolated array (v
 const unsigned char set_block_arr_bienc_inv_v3s = 66; //!< Interpolated array (v3)
 const unsigned char set_block_gap_egamma_v3     = 67; //!< Gamma compressed GAP block (v3)
 const unsigned char set_sblock_bienc_v3         = 68; //!< super-block interpolated list v3
-const unsigned char set_sblock_bienc_gaps_v3    = 69; //!< super-block of sparse GAPs
+const unsigned char set_sblock_bienc_gaps_v3    = 69; //!< Reserved sparse GAP superblock (69), no wire payload defined.
 
 // Released opcode IDs 0..69 above are permanent, including reserved entries.
 // New retained top-level records and inner frame markers share this registry.
 // 70..71 VACANT: retired unreleased horizontal residual/formula formats.
 const unsigned char set_block_bwt              = 72; //!< framed BWT and/or periodic residual
-const unsigned char set_block_bwt_post         = 73; //!< per-wave BWT primary indexes
+// 73 VACANT: frozen unreleased wave-BWT format.
 const unsigned char set_block_bwt_full_post    = 74; //!< whole-block BWT primary index
-const unsigned char set_block_periodic_post    = 75; //!< single periodic-chain formula
+// 75 VACANT: frozen unreleased single-chain periodic format.
 const unsigned char set_block_periodic_groups  = 76; //!< grouped periodic formula
 const unsigned char set_block_bwt_periodic_post = 77; //!< grouped formula then full BWT inverse
 const unsigned char set_block_periodic_groups_reduced = 78; //!< min-length reduced step-1 starts
@@ -3127,31 +3445,43 @@ const unsigned char set_block_bwt_periodic_first = 81; //!< explicit first start
 const unsigned char set_block_periodic_interleaved_fixed = 84; //!< fixed start/end interleaving
 const unsigned char set_block_bwt_interleaved_fixed = 85; //!< fixed interleaving then BWT inverse
 // 86..89 VACANT: retired unreleased formula variants.
-const unsigned char set_sblock_bienc_wave1024 = 90; //!< fixed 1,024-bit wave map (occupied)
+// 90 VACANT: retired unreleased fixed-wave superblock format.
 // 91 VACANT: retired unreleased interleaved correction flags.
 const unsigned char set_sblock_bienc_adaptive = 92; //!< adaptive steps and grouped flags
 // 93 VACANT: retired unreleased adaptive GAP-XOR.
 const unsigned char set_block_gap_xor_framed = 94; //!< GAP base plus global BIC XOR residual
 // 95 VACANT: retired unreleased packed-wave BWT.
 const unsigned char set_block_bwt_unpacked = 96; //!< whole-block BWT with direct BIC payload
-const unsigned char set_sblock_bienc_wave_adaptive = 97; //!< adaptive wave width
+// 97 VACANT: retired unreleased BIC-only adaptive-wave superblock format.
 const unsigned char set_sblock_bienc_large = 98; //!< positive/inverse high-count superblock BIC
-// 99..127 VACANT: unassigned.
+const unsigned char set_block_xor_ref8_h64 = 99; //!< Opcode 99 (bm::set_block_xor_ref8_h64): 8-bit row ID and H64 wave mask.
+const unsigned char set_block_xor_gather = 100; //!< Opcode 100 (bm::set_block_xor_gather): flags, H64 wave mask, gamma row IDs, optional polarity bits, residual.
+const unsigned char set_block_xor_ref_delta = 101; //!< Opcode 101 (bm::set_block_xor_ref_delta): H64, gamma distance, one polarity bit.
+/// Opcode 102 (bm::set_block_xor_parallel_gather): same-position reference waves.
+/// Residual and reference metadata share a bit accumulator.
+const unsigned char set_block_xor_parallel_gather = 102;
+const unsigned char set_block_xor_ref_shared = 103; //!< opcode 103 (bm::set_block_xor_ref_shared): shared residual followed by one positive plane delta and polarity.
+// 104..105 VACANT: archived standalone byte-BWT prototypes.
+const unsigned char set_block_arithmetic = 106; //!< Opcode 106 (bm::set_block_arithmetic): bounded byte/nibble adaptive arithmetic.
+const unsigned char set_block_bit_0runs_arithmetic = 107; //!< Opcode 107 (bm::set_block_bit_0runs_arithmetic): copied 0runs words with bounded virtual-zero arithmetic.
+const unsigned char set_sblock_bienc_wave_runs = 108; //!< Opcode 108 (bm::set_sblock_bienc_wave_runs): experimental adaptive BIC/gamma map and paired-run payload; zero extension bit after width.
+const unsigned char set_sblock_bienc_wave_hierarchical = 109; //!< Opcode 109 (bm::set_sblock_bienc_wave_hierarchical): two-level wave maps, optional FULL-block map and up to eight run/gap dictionary entries.
+// 110..127 VACANT: unassigned.
 // 128..255 are packed zero-run framing, NOT available for ordinary opcodes.
 // Retired experimental streams require their original decoder. In particular,
-// earlier unrelated experiments using 90 do not define the retained 90 format.
+// earlier experiments using 90 or 97 require their original decoder.
 
 /// Compile-time guard for new assignments; do not include vacant IDs here.
 constexpr unsigned char serialization_new_opcodes[] = {
     set_block_bwt,
-    set_block_bwt_post, set_block_bwt_full_post, set_block_periodic_post,
+    set_block_bwt_full_post,
     set_block_periodic_groups, set_block_bwt_periodic_post,
     set_block_periodic_groups_reduced, set_block_bwt_periodic_reduced,
     set_block_periodic_groups_first, set_block_bwt_periodic_first,
     set_block_periodic_interleaved_fixed, set_block_bwt_interleaved_fixed,
-    set_sblock_bienc_wave1024, set_sblock_bienc_adaptive,
-    set_block_gap_xor_framed, set_block_bwt_unpacked,
-    set_sblock_bienc_wave_adaptive, set_sblock_bienc_large
+    set_sblock_bienc_adaptive,
+    set_block_gap_xor_framed, set_block_bwt_unpacked, bm::set_block_arithmetic, bm::set_block_bit_0runs_arithmetic,
+    set_sblock_bienc_wave_runs, set_sblock_bienc_wave_hierarchical, set_sblock_bienc_large, bm::set_block_xor_ref8_h64, bm::set_block_xor_gather, bm::set_block_xor_ref_delta, bm::set_block_xor_parallel_gather, bm::set_block_xor_ref_shared
 };
 constexpr bool serialization_new_opcode_numbers_valid()
 {
@@ -3240,6 +3570,8 @@ struct large_sblock_workspace
     bm::heap_vector<unsigned, allocator_type, true> values; ///< Original positions.
     bm::heap_vector<unsigned, allocator_type, true> transformed; ///< Corrected positions.
     bm::heap_vector<unsigned char, allocator_type, true> trial; ///< Trial record bytes.
+    bm::heap_vector<unsigned, allocator_type, true> full_blocks; ///< FULL indexes for opcode-109 trial.
+    bm::heap_vector<unsigned char, allocator_type, true> wave_trial; ///< FULL-aware opcode-109 record.
 };
 
 template<class BV>
@@ -3363,12 +3695,17 @@ serializer<BV>::~serializer()
     if (try_buf_)
         alloc_.free_bit_block(try_buf_, tmp_buff_alloc_factor);
 
+    if (gather_workspace_)
+    {
+        alloc_.free_bit_block(gather_workspace_, 18);
+    }
 }
 
 
 template<class BV>
 void serializer<BV>::reset_compression_stats() BMNOEXCEPT
 {
+    xor_trial_stats_ = xor_trial_statistics();
     for (unsigned i = 0; i < 256; ++i)
         compression_stat_[i] = 0;
 }
@@ -3379,22 +3716,33 @@ void serializer<BV>::set_compression_level(unsigned clevel) BMNOEXCEPT
     if (clevel > bm::set_compression_max)
         return;
     compression_level_ = clevel;
+    arithmetic_enabled_ = clevel >= 7;
+    arithmetic_coding_mode_ = (clevel == 7 || clevel == 8) ?
+        bm::arithmetic_coding_mode::nibble : bm::arithmetic_coding_mode::all;
+    xor_candidate_trials_ = xor_ref8_h64_ = joint_wire_ = clevel >= 7;
+    single_delta_trials_ = clevel >= 7 ? 2u : 0u;
+    gather_runner_up_ = false;
+    xor_gather_ = clevel >= 8;
+    gather_deltas_ = clevel >= 8;
     sparse_cutoff_ = clevel == 5 ? sparse_max_l5 : sparse_max_l6;
     block_endpoint_selection_ = sblock_correction_selection_ = clevel >= 7;
     gap_xor_enabled_ = sblock_adaptive_enabled_ = clevel >= 8;
-    sblock_wave1024_enabled_ = sblock_wave_adaptive_enabled_ = clevel >= 8;
+    sblock_wave_enabled_ = clevel >= 8;
+    // Levels 8/9 route by source metadata; level 10 scores both complete
+    // padded records before choosing the wave format.
+    wave_experiment_ = clevel == 10 ? 1u : clevel >= 8 ? 4u : 0u;
     sblock_large_enabled_ = clevel >= 8;
     sblock_large_inverse_limit_ = 196607;
     sblock_gap_tolerance_ = 100;
     bwt_enabled_ = periodic_enabled_ = false;
     selection_enabled_ = selection_compose_enabled_ = false;
-    selection_multistep_enabled_ = selection_step2_enabled_ = bwt_shared_enabled_ = false;
+    selection_step2_enabled_ = bwt_shared_enabled_ = false;
     periodic_step1_start_reduction_ = periodic_step1_first_start_ = false;
     periodic_step1_interleaved_ = 0;
     selection_bwt_min_gain_ = 0;
     bwt_options_ = bm::bwt_options();
     periodic_options_ = bm::periodic_options();
-    multistep_options_ = step2_options_ = bm::periodic_options();
+    step2_options_ = bm::periodic_options();
     selection_stats_ = block_selection_statistics_type();
     if (clevel >= 9)
     {
@@ -3405,6 +3753,30 @@ void serializer<BV>::set_compression_level(unsigned clevel) BMNOEXCEPT
         set_bwt_shared_options(true);
         set_block_selection_bwt_min_gain(clevel == 9 ? 16 : 1);
     }
+}
+
+template<class DEC, class BLOCK_IDX, class Alloc>
+void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_transform_block(
+    decoder_type& decoder, unsigned type, bm::word_t* blk)
+{
+    switch (type)
+    {
+    case bm::set_block_arithmetic:
+        read_arithmetic_block(decoder, blk);
+        break;
+    case bm::set_block_bit_0runs_arithmetic:
+        bm::arithmetic_0runs_decoder::decode(decoder, blk, arithmetic_word_positions_);
+        break;
+    case bm::set_block_bwt_unpacked:
+        read_bwt_unpacked_block(decoder, blk);
+        break;
+    case bm::set_block_bwt:
+        read_bwt_block(decoder, blk);
+        break;
+    default:
+        bm::serialization_require(false);
+        break;
+    } // switch type
 }
 
 template<class BV>
@@ -3463,7 +3835,16 @@ bool serializer<BV>::compute_sim_model(xor_sim_model_type&       sim_model,
                                        const bv_ref_vector_type& ref_vect,
                                        const bm::xor_sim_params& params)
 {
-    return xor_scan_.compute_sim_model(sim_model, ref_vect, params);
+    sim_model.four_candidates = xor_candidate_trials_;
+    bm::xor_sim_params effective_params = params;
+    if (!effective_params.admission_max_metric)
+    {
+        // Level 7 admits medium-density residuals for the real codec trial.
+        // The gain estimate and final complete-record comparison still apply.
+        effective_params.admission_max_metric = compression_level_ >= 7 ?
+            unsigned(float(bm::gap_max_bits) / 2.2f) : bm::gap_max_bits / 3;
+    }
+    return xor_scan_.compute_sim_model(sim_model, ref_vect, effective_params);
 }
 
 template<class BV>
@@ -4316,36 +4697,6 @@ serializer<BV>::find_bit_best_encoding_l5(
             min_score = scores_[i]; model = models_[i];
         }
     } // for i
-#if 0
-    if (model == set_block_bit_0runs)
-    {
-        std::cout << "   0runs=" << (bit_model_0run_size_ * 8) << std::endl;
-        std::cout << " GAP BIC=" << (16 * 4 + unsigned(gcf * bie_bits_per_int)) << std::endl;
-        std::cout << " ARR BIC=" << (16 * 3 + unsigned(bcf * bie_bits_per_int)) << std::endl;
-        std::cout << "BC,GC=[" << bc <<", " << gc << "]" << std::endl;
-        std::cout << "bie_limit=" << bie_limit << std::endl;
-
-    }
-    switch(model)
-    {
-    case set_block_bit: std::cout << "BIT=" << "[" << bc <<", " << gc << "]"; break;
-    case set_block_bit_1bit: std::cout << "1bit "; break;
-    case set_block_arrgap: std::cout << "arr_gap "; break;
-    case set_block_arrgap_egamma: std::cout << "arrgap_egamma "; break;
-    case set_block_arrgap_bienc: std::cout << "arrgap_BIC "; break;
-    case set_block_arrgap_inv: std::cout << "arrgap_INV "; break;
-    case set_block_arrgap_egamma_inv: std::cout << "arrgap_egamma_INV "; break;
-    case set_block_arrgap_bienc_inv: std::cout << "arrgap_BIC_INV "; break;
-    case set_block_gap_egamma: std::cout << "gap_egamma "; break;
-    case set_block_gap_bienc: std::cout << "gap_BIC "; break;
-    case set_block_bitgap_bienc: std::cout << "bitgap_BIC "; break;
-    case set_block_bit_digest0: std::cout << "D0 "; break;
-    case set_block_bit_0runs: std::cout << "0runs=[" << bc <<", " << gc << " lmt=" << bie_limit << "]"; break;
-    case set_block_arr_bienc_inv: std::cout << "arr_BIC_INV "; break;
-    case set_block_arr_bienc: std::cout << "arr_BIC "; break;
-    default: std::cout << "UNK=" << int(model); break;
-    }
-#endif
 
     // -------------------------------------------------------------------
     // Note on 8189 - 8191 is max we can fit into 16-bit gap head word
@@ -5060,7 +5411,7 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
     bm::convert_sub_to_arr(bv, sb, sb_bit_idx_arr_);
     unsigned len = (unsigned)sb_bit_idx_arr_.size();
     BM_ASSERT(len);
-    if (sblock_wave1024_enabled_ || sblock_adaptive_enabled_ || sblock_correction_selection_)
+    if (sblock_wave_enabled_ || sblock_adaptive_enabled_ || sblock_correction_selection_)
     {
 
         if (sblock_original_values_.capacity() < bm::gap_max_bits)
@@ -5233,79 +5584,92 @@ void serializer<BV>::bienc_arr_sblock(const BV& bv, unsigned sb,
 }
 
 template<class BV>
-void serializer<BV>::prepare_sblock_wave1024(unsigned sb, unsigned len)
-{
-    auto& r = sblock_wave1024_pending_;
-    if (!sblock_wave1024_model_.prepare(sblock_original_values_.data(), len, r)) return;
-    const size_t capacity = (size_t(len) + bm::sblock_wave1024_model<allocator_type>::wave_count) * 4 + 4096;
-    if (sblock_wave1024_buffer_.size() < capacity) sblock_wave1024_buffer_.resize(capacity, false);
-    for (unsigned mode = 0; mode < 4; ++mode)
-    {
-        auto& c = r.costs[mode];
-        bm::encoder trial(sblock_wave1024_buffer_.data(), sblock_wave1024_buffer_.size());
-        trial.put_8(bm::set_sblock_bienc_wave1024);
-        {
-            bit_out_type out(trial);
-            auto position = [&]() -> bm::id64_t
-                { return bm::id64_t(trial.size()) * 8 + out.pending_bits(); };
-            sblock_wave1024_model_.encode(out, position, sb, mode, c);
-        }
-        c.bytes = trial.size();
-        c.padding = c.bytes * 8 - c.header - c.map - c.bic;
-        BM_ASSERT(c.reconciles());
-        if (mode == 0 || c.bytes < r.costs[r.best].bytes)
-        {
-            r.best = mode;
-            if (sblock_wave1024_enabled_)
-            {
-                if (sblock_wave1024_best_buffer_.size() < capacity)
-                    sblock_wave1024_best_buffer_.resize(capacity, false);
-                ::memcpy(sblock_wave1024_best_buffer_.data(), sblock_wave1024_buffer_.data(), c.bytes);
-            }
-        }
-    }
-}
-
-template<class BV>
-bool serializer<BV>::try_sblock_wave(unsigned sb, unsigned len, bm::encoder& enc,
+bool serializer<BV>::try_sblock_wave(const BV& bv, unsigned sb, unsigned len, bm::encoder& enc,
                                     unsigned char* begin, size_t rival_bytes)
 {
-    prepare_sblock_wave1024(sb, len);
-    const auto& r = sblock_wave1024_pending_;
-    const size_t fixed_bytes=r.eligible?size_t(r.costs[r.best].bytes):rival_bytes;
-    if(sblock_wave_adaptive_enabled_) {
-        const size_t incumbent=bm::min_value(rival_bytes,fixed_bytes);
-        auto choice=bm::sblock_wave_adaptive_select(sblock_wave_adaptive_model_,
-            sblock_original_values_.data(),len,sb,incumbent);
-        if(choice.bytes<incumbent) {
-            auto& model=sblock_wave_adaptive_model_;
-            model.wave_size=128u<<choice.width;model.wave_count=(1u<<24)/model.wave_size;
-            bm::sblock_wave_record selected;
-            bool ok=model.prepare(sblock_original_values_.data(),len,selected);BM_ASSERT(ok);(void)ok;
-            enc.set_pos(begin);enc.put_8(bm::set_sblock_bienc_wave_adaptive);
-            bm::sblock_wave_cost cost;
-            { bit_out_type out(enc);out.put_bits(choice.width,3);
-              auto position=[&](){return bm::id64_t(enc.get_pos()-begin)*8+out.pending_bits();};
-              model.encode(out,position,sb,choice.mode,cost); }
-            if(size_t(enc.get_pos()-begin)!=choice.bytes)
-                bm::serialization_require(false);
+    bool hierarchical = false;
+    bm::sblock_wave_tree_features features;
+    const bm::sblock_wave_tree_features* feature_ptr = nullptr;
+    // The metadata tree and observer need source-block features in addition to
+    // the positions used by the wave models.
+    if (wave_experiment_ == 4 || wave_score_observer_)
+    {
+        bm::bv_sub_survey survey;
+        survey.init(nullptr, sb);
+        bv.get_blocks_manager().is_sparse_sblock(sb, 0, survey);
+        features.gap_words = unsigned(survey.gap_len_sum);
+        unsigned first = 256, last = 0;
+        for (unsigned j = 0; j < 256; ++j)
+        {
+            if (survey.blocks[j] && survey.blocks[j] != FULL_BLOCK_FAKE_ADDR &&
+                BM_IS_GAP(survey.blocks[j]) &&
+                bm::gap_level(BMGAP_PTR(survey.blocks[j])) == 0)
+            {
+                ++features.gap_level0;
+            }
+            if (survey.bc_arr[j])
+            {
+                first = bm::min_value(first, j);
+                last = j;
+                features.occupied_runs += !j || !survey.bc_arr[j-1];
+            }
+        } // for j
+        features.occupied_span = last - first + 1;
+        feature_ptr = &features;
+    }
+    // Score complete records against the already encoded ordinary superblock.
+    auto choice = wave_experiment_ ?
+        bm::sblock_wave_shared_select(sblock_wave_model_, hier_model_,
+            sblock_original_values_.data(), len, sb, rival_bytes,
+            wave_experiment_, hierarchical, wave_score_observer_, wave_score_context_,
+            feature_ptr) :
+        bm::sblock_wave_adaptive_select(sblock_wave_model_,
+            sblock_original_values_.data(), len, sb, rival_bytes);
+    if (wave_experiment_)
+    {
+        auto& h = hier_model_;
+        if(hierarchical)
+        {
+            h.wave.wave_size=128u<<choice.width;
+            h.wave.wave_count=unsigned(h.blocks.size())*(65536/h.wave.wave_size);
+            bm::sblock_wave_record r;h.wave.prepare(h.source.data(),len,r,true);h.pairs();
+            enc.set_pos(begin);enc.put_8(bm::set_sblock_bienc_wave_hierarchical);
+            {bit_out_type out(enc);h.encode(out,sb,choice.width,choice.mode);}
+            bm::serialization_require(size_t(enc.get_pos()-begin)==choice.bytes);
             --compression_stat_[bm::set_sblock_bienc_v3];
-            ++compression_stat_[bm::set_sblock_bienc_wave_adaptive];
+            ++compression_stat_[bm::set_sblock_bienc_wave_hierarchical];
             return true;
         }
     }
-    if (!r.eligible) return false;
-    const size_t wave_bytes = size_t(r.costs[r.best].bytes);
-    if (wave_bytes >= rival_bytes) return false; // ties preserve existing codec
+    // Keep the ordinary record on ties; rebuild only the selected wave layout.
+    if (choice.bytes >= rival_bytes)
+    {
+        return false;
+    }
+    auto& model = sblock_wave_model_;
+    model.wave_size = 128u << choice.width;
+    model.wave_count = (1u << 24) / model.wave_size;
+    bm::sblock_wave_record selected;
+    const bool ok = model.prepare(sblock_original_values_.data(), len, selected);
+    BM_ASSERT(ok);
+    (void)ok;
     enc.set_pos(begin);
-    enc.memcpy(sblock_wave1024_best_buffer_.data(), wave_bytes);
-    BM_ASSERT(compression_stat_[bm::set_sblock_bienc_v3]);
+    enc.put_8(bm::set_sblock_bienc_wave_runs);
+    bm::sblock_wave_cost cost;
+    {
+        bit_out_type out(enc);
+        out.put_bits(choice.width, 3);
+        auto position = [&]()
+        {
+            return bm::id64_t(enc.get_pos() - begin) * 8 + out.pending_bits();
+        };
+        model.encode(out, position, sb, choice.mode, cost);
+    }
+    bm::serialization_require(size_t(enc.get_pos() - begin) == choice.bytes);
     --compression_stat_[bm::set_sblock_bienc_v3];
-    ++compression_stat_[bm::set_sblock_bienc_wave1024];
+    ++compression_stat_[bm::set_sblock_bienc_wave_runs];
     return true;
 }
-
-
 
 template<class BV>
 void serializer<BV>::bienc_arr_sblock_select(const BV& bv, unsigned sb,
@@ -5318,7 +5682,7 @@ void serializer<BV>::bienc_arr_sblock_select(const BV& bv, unsigned sb,
     if (!sblock_adaptive_enabled_ ||
         len < bm::superblock_delta_model::minimum_entries)
     {
-        if (sblock_wave1024_enabled_ && try_sblock_wave(sb, len, enc, begin,
+        if (sblock_wave_enabled_ && try_sblock_wave(bv, sb, len, enc, begin,
                                                       ordinary_bytes))
             return;
         return;
@@ -5386,7 +5750,7 @@ void serializer<BV>::bienc_arr_sblock_select(const BV& bv, unsigned sb,
             best_bytes = trial.size();
         }
     } // for si
-    if (sblock_wave1024_enabled_ && try_sblock_wave(sb, len, enc, begin,
+    if (sblock_wave_enabled_ && try_sblock_wave(bv, sb, len, enc, begin,
                           best_bytes))
         return;
     if (best_bytes < ordinary_bytes)
@@ -5399,75 +5763,6 @@ void serializer<BV>::bienc_arr_sblock_select(const BV& bv, unsigned sb,
     }
 }
 
-#if (0)
-template<class BV>
-void serializer<BV>::bienc_gaps_sblock(const BV& bv, unsigned sb,
-                                       const bm::bv_sub_survey& sub_stat,
-                                       bm::encoder& enc) BMNOEXCEPT
-{
-//std::cout << "+";
-    encoder::position_type enc_pos0 = enc.get_pos();
-    unsigned char scode = bm::set_sblock_bienc_gaps_v3;
-
-    bm::gap_word_t sub_idx[bm::set_sub_array_size];
-
-    unsigned sub_gap_len = 0;
-    for (unsigned i = 0; i < bm::set_sub_array_size; ++i)
-    {
-        if (sub_stat.blocks[i])
-        {
-            sub_idx[sub_gap_len] = (bm::gap_word_t)i;
-            ++sub_gap_len;
-            BM_ASSERT(BM_IS_GAP(sub_stat.blocks[i]));
-        }
-    } // for i
-
-    enc.put_8(scode);
-    {
-        bit_out_type bout(enc);
-
-        bout.gamma8(sb);
-        bout.gamma8(sub_gap_len);
-        bout.bic_encode_u16_cm(sub_idx, sub_gap_len, 0, 255);
-
-        for (unsigned i = 0; i < sub_gap_len; ++i)
-        {
-            auto block_idx = sub_idx[i];
-            const bm::gap_word_t* gap_block = BMGAP_PTR(sub_stat.blocks[block_idx]);
-
-            bm::gap_word_t head = gap_block[0];
-            head &= bm::gap_word_t(~(3 << 1)); // clear the level flags
-            unsigned len = bm::gap_length(gap_block)-1;
-            bout.gamma(len);
-            bout.put_bits(head, 1);
-            if (len < bm::gap_len_cut_off_v3)
-            {
-                for (unsigned j = 1; j < len; ++j)
-                {
-                    bout.gamma8(gap_block[j]);
-                }
-                continue;
-            }
-
-            bm::gap_word_t min_v = gap_block[1];
-            bm::gap_word_t max_v = gap_block[len-1];
-            bm::gap_word_t tail_delta = bm::gap_word_t(65535 - max_v);
-
-            bout.gamma8(min_v);
-            bout.gamma8(tail_delta);
-            bout.bic_encode_u16(&gap_block[2], len-3, min_v, max_v);
-
-        } // for i
-
-        bout.flush();
-    } // bout scope
-
-    encoder::position_type enc_pos1 = enc.get_pos();
-    unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0); (void) enc_size;
-
-    compression_stat_[scode]++;
-}
-#endif
 
 
 template<class BV>
@@ -5717,62 +6012,6 @@ serializer<BV>::interpolated_arr_bit_block(const bm::word_t* block,
     encode_bit_digest(block, enc, bit_stat_.d0);
     return;
 
-#if (0)
-    // non-BIC_DR or DR failed to produce good result...
-    {
-        unsigned arr_len = bm::bit_block_convert_to_arr(
-                                block_positions_.data(), block, inverted);
-        if (arr_len)
-        {
-            unsigned char scode =
-                inverted ? bm::set_block_arr_bienc_inv : bm::set_block_arr_bienc;
-
-            encoder::position_type enc_pos0 = enc.get_pos();
-            {
-                bit_out_type bout(enc);
-
-                bm::gap_word_t min_v = block_positions_[0];
-                bm::gap_word_t max_v = block_positions_[arr_len-1];
-                BM_ASSERT(max_v > min_v);
-                bm::gap_word_t max_delta = bm::gap_word_t(65536 - max_v);
-
-                if (!inverted && min_v <= 0xFF && max_delta <= 0xFF) // 8-bit header
-                {
-                    enc.put_8(bm::set_block_arr_bienc_8bh);
-                    enc.put_8((unsigned char)min_v);
-                    enc.put_8((unsigned char)max_delta);
-                }
-                else
-                {
-                    enc.put_8(scode);
-                    enc.put_16(min_v);
-                    enc.put_16(max_v);
-                }
-                enc.put_16(bm::gap_word_t(arr_len));
-
-                bout.bic_encode_u16(&block_positions_[1], arr_len-2, min_v, max_v);
-                bout.flush();
-            }
-            encoder::position_type enc_pos1 = enc.get_pos();
-            unsigned enc_size = (unsigned)(enc_pos1 - enc_pos0);
-            unsigned raw_size = sizeof(word_t) * bm::set_block_size;
-            if (enc_size >= raw_size)
-                enc.set_pos(enc_pos0); // rollback the bit stream
-            else
-            {
-                if (bit_stat_.d0 != ~0ull && enc_size > bit_stat_.bit_model_d0_size_)
-                    enc.set_pos(enc_pos0); // rollback the bit stream
-                else
-                {
-                    compression_stat_[scode]++;
-                    return;
-                }
-            }
-        }
-    }
-    // coding did not result in best compression, use simpler method
-    encode_bit_digest(block, enc, bit_stat_.d0);
-#endif
 }
 
 
@@ -6038,13 +6277,24 @@ unsigned char serializer<BV>::encode_block(const bm::word_t* blk,
 template<class BV>
 unsigned char serializer<BV>::encode_bwt_block(const bm::word_t* blk,
                 const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc,
-                bm::word_t* transformed_out, unsigned short* primary_out)
+                bm::word_t* transformed_out, unsigned short* primary_out,
+                const native_block_record* baseline, native_block_record* transformed_baseline)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     const auto begin = enc.get_pos();
     size_type stats_before[256], stats_plain[256];
     ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
-    unsigned char type = encode_block(blk, sub_stat, nb, enc);
+    unsigned char type = 0;
+    if (baseline)
+    {
+        enc.memcpy(baseline->data, baseline->size);
+        enc.retain_padding(baseline->padding);
+        ::memcpy(compression_stat_, baseline->stats, sizeof(baseline->stats));
+    }
+    else
+    {
+        type = encode_block(blk, sub_stat, nb, enc);
+    }
     if (type) return type;
     ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
     ++bwt_stats_.eligible;
@@ -6053,17 +6303,14 @@ unsigned char serializer<BV>::encode_bwt_block(const bm::word_t* blk,
     const size_t plain_size = size_t(enc.get_pos() - begin);
     ++bwt_stats_.evaluated;
     bwt_stats_.baseline_bytes += plain_size;
-    const bool baseline_bic = bwt_options_.whole_block && bm::bwt_is_bic_marker(*begin);
+    const bool baseline_bic = bm::bwt_is_bic_marker(*begin);
     bwt_stats_.bic_baseline += baseline_bic;
-    if (!bwt_options_.whole_block && bwt_matrix_buffer_.size() < bm::bwt_matrix_bytes)
-        bwt_matrix_buffer_.resize(bm::bwt_matrix_bytes, false);
     const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
     if (xor_trial_buffer_.size() < capacity) xor_trial_buffer_.resize(capacity, false);
     BM_DECLARE_TEMP_BLOCK(transformed)
-    unsigned short primary[bm::block_waves];
     unsigned short full_primary = 0;
     const bool diagnostics = BM_SERIALIZATION_DIAGNOSTICS &&
-                             bwt_options_.diagnostics && bwt_options_.whole_block;
+                             bwt_options_.diagnostics;
 #if BM_SERIALIZATION_DIAGNOSTICS
     typedef std::chrono::steady_clock bwt_clock;
     bwt_clock::time_point transform_start;
@@ -6072,16 +6319,13 @@ unsigned char serializer<BV>::encode_bwt_block(const bm::word_t* blk,
         transform_start = bwt_clock::now();
     }
 #endif
-    if (bwt_options_.whole_block)
-    {
-        full_primary = bm::bwt_transform_full(blk, transformed, bwt_full_workspace_);
-        ++bwt_full_transforms_;
-    }
-    else
-        bm::bwt_transform_block(blk, transformed, bwt_matrix_buffer_.data(), primary);
+    // Binary BWT sorts rotations of the complete bit block. Its last column
+    // is encoded as a block; the primary index permits the inverse transform.
+    full_primary = bm::bwt_transform_full(blk, transformed, bwt_full_workspace_);
+    ++bwt_full_transforms_;
     if (transformed_out)
     {
-        BM_ASSERT(bwt_options_.whole_block && primary_out);
+        BM_ASSERT(primary_out);
         bm::bit_block_copy(transformed_out, transformed);
         *primary_out = full_primary;
     }
@@ -6135,26 +6379,27 @@ unsigned char serializer<BV>::encode_bwt_block(const bm::word_t* blk,
     if (type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
     if (type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
     const size_t payload_size = size_t(trial.get_pos() - payload);
+    // Composition can reuse this native encoding of the BWT last column.
+    if (transformed_baseline)
+    {
+        BM_ASSERT(!type); // Composition receives a nonuniform BWT last column.
+        BM_ASSERT(payload_size <= selection_transformed_buffer_.size());
+        transformed_baseline->size = payload_size;
+        transformed_baseline->padding = trial.retained_padding();
+        ::memcpy(transformed_baseline->data, payload, payload_size);
+        ::memcpy(transformed_baseline->stats, compression_stat_,
+                 sizeof(transformed_baseline->stats));
+    }
 
     BM_ASSERT(payload_size && payload_size <= 65535);
-    const bool transformed_bic = bwt_options_.whole_block && bm::bwt_is_bic_marker(*payload);
+    const bool transformed_bic = bm::bwt_is_bic_marker(*payload);
     bwt_stats_.bic_transformed += transformed_bic;
     const auto tail = trial.get_pos();
     trial.set_pos(xor_trial_buffer_.data() + 1);
     trial.put_16((bm::short_t)payload_size);
     trial.set_pos(tail);
-    if (bwt_options_.whole_block)
-    {
-        trial.put_8(bm::set_block_bwt_full_post);
-        trial.put_16(full_primary);
-    }
-    else
-    {
-        unsigned char packed[bm::bwt_index_bytes];
-        bm::bwt_pack_indexes(primary, packed);
-        trial.put_8(bm::set_block_bwt_post);
-        trial.memcpy(packed, sizeof(packed));
-    }
+    trial.put_8(bm::set_block_bwt_full_post);
+    trial.put_16(full_primary);
     if (diagnostics || selection_enabled_)
     {
         bm::bwt_block_observation b;
@@ -6210,7 +6455,15 @@ unsigned char serializer<BV>::encode_selection_block(
     typedef std::chrono::steady_clock clock_type;
     auto start = clock_type::now();
 #endif
-    unsigned char type = encode_periodic_block(blk, sub_stat, nb, enc);
+    const size_t native_capacity =
+        size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (selection_native_buffer_.size() < native_capacity)
+    {
+        selection_native_buffer_.resize(native_capacity, false);
+    }
+    native_block_record baseline = {};
+    baseline.data = selection_native_buffer_.data();
+    unsigned char type = encode_periodic_block(blk, sub_stat, nb, enc, nullptr, &baseline);
 #if BM_SERIALIZATION_DIAGNOSTICS
     selection_stats_.periodic_ns += bm::id64_t(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -6223,6 +6476,8 @@ unsigned char serializer<BV>::encode_selection_block(
     b.periodic = unsigned(enc.get_pos() - begin); b.trials = periodic.trials;
     if (selection_best_buffer_.size() < b.periodic)
         selection_best_buffer_.resize(b.periodic, false);
+    unsigned best_padding = enc.retained_padding();
+    const unsigned periodic_padding = best_padding;
     ::memcpy(selection_best_buffer_.data(), begin, b.periodic);
     if (selection_bwt_min_gain_)
     {
@@ -6240,9 +6495,19 @@ unsigned char serializer<BV>::encode_selection_block(
 #endif
     BM_DECLARE_TEMP_BLOCK(transformed)
     unsigned short primary = 0;
+    native_block_record transformed_baseline = {};
+    if (selection_compose_enabled_)
+    {
+        if (selection_transformed_buffer_.size() < native_capacity)
+        {
+            selection_transformed_buffer_.resize(native_capacity, false);
+        }
+        transformed_baseline.data = selection_transformed_buffer_.data();
+    }
     type = encode_bwt_block(blk, sub_stat, nb, enc,
                  selection_compose_enabled_ ? transformed.begin() : nullptr,
-                 selection_compose_enabled_ ? &primary : 0);
+                 selection_compose_enabled_ ? &primary : 0, &baseline,
+                 selection_compose_enabled_ ? &transformed_baseline : nullptr);
 #if BM_SERIALIZATION_DIAGNOSTICS
     selection_stats_.bwt_ns += bm::id64_t(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -6261,8 +6526,11 @@ unsigned char serializer<BV>::encode_selection_block(
         b.kind = b.periodic < b.baseline ? 1u : 0u;
         enc.set_pos(begin);
         enc.memcpy(selection_best_buffer_.data(), b.periodic);
+            enc.retain_padding(best_padding);
         ::memcpy(compression_stat_, periodic_counters, sizeof(periodic_counters));
     }
+    // Also search chains in the BWT last column, then append the BWT primary
+    // index so decoding reverses the chain prediction before inverse BWT.
     if (selection_compose_enabled_)
     {
         b.previous = b.selected;
@@ -6272,6 +6540,7 @@ unsigned char serializer<BV>::encode_selection_block(
         {
             if (selection_best_buffer_.size() < b.selected)
                 selection_best_buffer_.resize(b.selected, false);
+            best_padding = enc.retained_padding();
             ::memcpy(selection_best_buffer_.data(), begin, b.selected);
         }
         size_type winner_counters[256];
@@ -6281,7 +6550,8 @@ unsigned char serializer<BV>::encode_selection_block(
 #if BM_SERIALIZATION_DIAGNOSTICS
         start = clock_type::now();
 #endif
-        type = encode_periodic_block(transformed, sub_stat, nb, enc);
+        type = encode_periodic_block(transformed, sub_stat, nb, enc,
+                                     nullptr, nullptr, &transformed_baseline);
 #if BM_SERIALIZATION_DIAGNOSTICS
         selection_stats_.compose_ns += bm::id64_t(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -6318,19 +6588,21 @@ unsigned char serializer<BV>::encode_selection_block(
         {
             enc.set_pos(begin);
             enc.memcpy(selection_best_buffer_.data(), b.previous);
+            enc.retain_padding(best_padding);
             ::memcpy(compression_stat_, winner_counters, sizeof(winner_counters));
         }
         selection_stats_.compose_trials += b.compose_trials;
         selection_stats_.previous_bytes += b.previous;
     }
-    if (selection_multistep_enabled_ || selection_step2_enabled_)
+    // An additional composed trial restricts chain spacing to two bits.
+    if (selection_step2_enabled_)
     {
-        const bool step2 = selection_step2_enabled_;
         b.fourway = b.selected;
-        unsigned& candidate_size = step2 ? b.step2 : b.multistep;
+        unsigned& candidate_size = b.step2;
         candidate_size = b.baseline;
         if (selection_best_buffer_.size() < b.fourway)
             selection_best_buffer_.resize(b.fourway, false);
+        best_padding = enc.retained_padding();
         ::memcpy(selection_best_buffer_.data(), begin, b.fourway);
         size_type winner_counters[256];
         ::memcpy(winner_counters, compression_stat_, sizeof(winner_counters));
@@ -6340,42 +6612,25 @@ unsigned char serializer<BV>::encode_selection_block(
         start = clock_type::now();
 #endif
         type = encode_periodic_block(transformed, sub_stat, nb, enc,
-                                     step2 ? &step2_options_ : &multistep_options_);
+                                     &step2_options_,
+                                     nullptr, &transformed_baseline);
 #if BM_SERIALIZATION_DIAGNOSTICS
         const bm::id64_t elapsed_ns = bm::id64_t(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 clock_type::now() - start).count());
-        if (step2)
-        {
-            selection_stats_.step2_ns += elapsed_ns;
-        }
-        else
-        {
-            selection_stats_.multistep_ns += elapsed_ns;
-        }
+
+        selection_stats_.step2_ns += elapsed_ns;
+
 #endif
         bm::serialization_require(!type);
         const auto& trial = last_periodic_observation_;
-        if (step2)
-        {
-            b.step2_trials = trial.trials;
-            b.step2_chains = trial.chains;
-            b.step2_formula = trial.formula_bytes;
-            b.step2_residual = trial.residual_bytes;
-            bm::serialization_require(trial.groups <= 1 &&
-                                   (!trial.groups || trial.step_mask == 2));
-        }
-        else
-        {
-            b.multistep_trials = trial.trials;
-            b.multistep_groups = trial.groups;
-            b.multistep_chains = trial.chains;
-            b.multistep_last_step = trial.last_step;
-            b.multistep_stop = trial.stop_reason;
-            b.multistep_formula = trial.formula_bytes;
-            b.multistep_residual = trial.residual_bytes;
-            b.multistep_mask = trial.step_mask;
-        }
+        b.step2_trials = trial.trials;
+        b.step2_chains = trial.chains;
+        b.step2_formula = trial.formula_bytes;
+        b.step2_residual = trial.residual_bytes;
+        bm::serialization_require(trial.groups <= 1 &&
+                               (!trial.groups || trial.step_mask == 2));
+
         if (trial.groups)
         {
             bm::decoder frame(begin);
@@ -6402,12 +6657,14 @@ unsigned char serializer<BV>::encode_selection_block(
         {
             enc.set_pos(begin);
             enc.memcpy(selection_best_buffer_.data(), b.fourway);
+            enc.retain_padding(best_padding);
             ::memcpy(compression_stat_, winner_counters, sizeof(winner_counters));
         }
-        if (step2) selection_stats_.step2_trials += b.step2_trials;
-        else selection_stats_.multistep_trials += b.multistep_trials;
+        selection_stats_.step2_trials += b.step2_trials;
         selection_stats_.fourway_bytes += b.fourway;
     }
+    // A BWT-based winner must clear the configured gain over the best
+    // non-BWT record; otherwise restore its bytes, padding and statistics.
     if (selection_bwt_min_gain_)
     {
         b.prethreshold_selected = b.selected;
@@ -6416,6 +6673,7 @@ unsigned char serializer<BV>::encode_selection_block(
         {
             enc.set_pos(begin);
             enc.memcpy(selection_nonbwt_buffer_.data(), b.periodic);
+            enc.retain_padding(periodic_padding);
             ::memcpy(compression_stat_, periodic_counters, sizeof(periodic_counters));
             b.selected = b.periodic;
             b.kind = b.periodic < b.baseline ? 1u : 0u;
@@ -6479,6 +6737,7 @@ size_t serializer<BV>::encode_bwt_shared_candidate(
     {
         selected = trial.size();
         enc.set_pos(begin); enc.memcpy(bwt_unpacked_trial_buffer_.data(), selected);
+        enc.retain_padding(trial.retained_padding());
     }
     return selected;
 }
@@ -6487,15 +6746,34 @@ template<class BV>
 unsigned char serializer<BV>::encode_periodic_block(
     const bm::word_t* blk, const bm::bv_sub_survey& sub_stat,
     block_idx_type nb, bm::encoder& enc,
-    const bm::periodic_options* override_options)
+    const bm::periodic_options* override_options, native_block_record* baseline_out,
+    const native_block_record* baseline)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     const bm::periodic_options& options = override_options ? *override_options : periodic_options_;
     const auto begin = enc.get_pos();
     size_type stats_before[256], stats_plain[256];
     ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
-    unsigned char type = encode_block(blk, sub_stat, nb, enc);
+    unsigned char type = 0;
+    if (baseline)
+    {
+        BM_ASSERT(baseline->size && baseline->data);
+        enc.memcpy(baseline->data, baseline->size);
+        enc.retain_padding(baseline->padding);
+        ::memcpy(compression_stat_, baseline->stats, sizeof(baseline->stats));
+    }
+    else
+    {
+        type = encode_block(blk, sub_stat, nb, enc);
+    }
     if (type) return type;
+    if (baseline_out)
+    {
+        baseline_out->size = size_t(enc.get_pos() - begin);
+        baseline_out->padding = enc.retained_padding();
+        ::memcpy(baseline_out->data, begin, baseline_out->size);
+        ::memcpy(baseline_out->stats, compression_stat_, sizeof(baseline_out->stats));
+    }
     ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
     ++periodic_stats_.eligible;
     const size_t plain_size = size_t(enc.get_pos() - begin);
@@ -6507,375 +6785,413 @@ unsigned char serializer<BV>::encode_periodic_block(
     ++periodic_stats_.sampled;
     periodic_stats_.sampled_baseline_bytes += plain_size;
 
+    // Search the sparser polarity; the formula records whether to invert back.
     const unsigned pop = bm::bit_block_count(blk);
     const bool inverted = pop > 32768;
     const unsigned density = bm::periodic_density_bucket(
                                  inverted ? 65536 - pop : pop);
     ++periodic_stats_.sampled_density[density];
-    if (options.order)
-    {
-        const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
-        if (xor_trial_buffer_.size() < capacity)
-            xor_trial_buffer_.resize(capacity, false);
-        if (transform_best_buffer_.size() < capacity)
-            transform_best_buffer_.resize(capacity, false);
-        
-        size_t payload_size = 0, best_payload = 0, best_size = plain_size;
-        bm::periodic_formula_bits bits, best_bits;
-        unsigned formula_choice = 0, best_formula_choice = 0;
-        bool formula_has_step1 = false, best_has_step1 = false;
-        auto evaluate = [&](const bm::word_t* residual,
-                            const auto& groups)
-        {
-            ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
-            bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
-            trial.put_8(bm::set_block_bwt); trial.put_16(0);
-            const auto payload = trial.get_pos();
-            unsigned char residual_type = encode_block(residual, sub_stat, nb, trial);
-            if (residual_type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
-            if (residual_type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
-            payload_size = size_t(trial.get_pos() - payload);
-            bm::serialization_require(payload_size && payload_size <= 65535);
-            const auto tail = trial.get_pos();
-            trial.set_pos(xor_trial_buffer_.data() + 1);
-            trial.put_16(bm::short_t(payload_size)); trial.set_pos(tail);
-            formula_has_step1 = false;
-            for (unsigned i = 0; i < groups.size(); ++i)
-            {
-                if (groups[i].step == 1)
-                {
-                    formula_has_step1 = true;
-                    break;
-                }
-            } // for i
-            const bool reduced = periodic_step1_start_reduction_ && formula_has_step1;
-            const bool first = reduced && periodic_step1_first_start_;
-            const bool auto_formula = reduced && periodic_step1_interleaved_ == 4;
-            auto emit_formula = [&](unsigned mode)
-            {
-                trial.set_pos(tail);
-                const unsigned char post = mode ?
-                    bm::set_block_periodic_interleaved_fixed :
-                    (first ? bm::set_block_periodic_groups_first :
-                      (reduced ? bm::set_block_periodic_groups_reduced :
-                                 bm::set_block_periodic_groups));
-                trial.put_8(post);
-                auto formula_bits = bm::periodic_write_groups(trial, groups, inverted,
-                                        reduced, first, mode);
-                BM_ASSERT(trial.size() - payload_size == 4 +
-                    (formula_bits.header + formula_bits.starts +
-                     formula_bits.lengths + formula_bits.padding) / 8);
-                return formula_bits;
-            };
-            if (auto_formula)
-            {
-                unsigned best_mode = 0, best_words = unsigned(-1);
-                bm::periodic_formula_bits best_score;
-                for (unsigned mode = 0; mode <= 1; ++mode)
-                {
-                    const auto score = bm::periodic_score_explicit_groups(groups, mode);
-                    const unsigned words = (score.header + score.starts +
-                                            score.lengths + score.padding) / 32;
-                    if (words < best_words)
-                    {
-                        best_words = words;
-                        best_mode = mode;
-                        best_score = score;
-                    }
-                }
-                bits = emit_formula(best_mode);
-                BM_ASSERT(bits.header == best_score.header &&
-                          bits.starts == best_score.starts &&
-                          bits.lengths == best_score.lengths &&
-                          bits.padding == best_score.padding &&
-                          trial.size() == payload_size + 4 + 4 * best_words);
-                formula_choice = best_mode;
-            }
-            else
-            {
-                const unsigned mode = reduced ? periodic_step1_interleaved_ : 0;
-                bits = emit_formula(mode);
-                formula_choice = mode;
-            }
-            if (formula_has_step1)
-                ++periodic_stats_.order_stats.trial_formula_modes[formula_choice];
-            bm::periodic_accumulate_bits(periodic_stats_.order_stats.trial_bits, bits);
-            return trial.size();
-        };
-        auto save = [&](size_t size)
-        {
-            best_size = size; best_payload = payload_size; best_bits = bits;
-            best_formula_choice = formula_choice;
-            best_has_step1 = formula_has_step1;
-            ::memcpy(transform_best_buffer_.data(), xor_trial_buffer_.data(), size);
-        };
-        const auto trials_before = periodic_stats_.trials;
-        const auto candidates_before = periodic_stats_.raw_candidates;
-        const auto positive_before = periodic_stats_.positive_candidates;
-        bm::periodic_search_trace trace;
-        const auto& groups = bm::periodic_search_order(blk, inverted, plain_size,
-                                  options, periodic_stats_, evaluate, save, periodic_workspace_, &trace);
-        const bool candidates_found = periodic_stats_.raw_candidates != candidates_before;
-        periodic_stats_.candidate_blocks += candidates_found;
-        periodic_stats_.candidate_density[density] += candidates_found;
-        periodic_stats_.positive_blocks += periodic_stats_.positive_candidates != positive_before;
-        periodic_stats_.no_candidates += !candidates_found;
-        bm::periodic_order_block observation;
-        observation.vector = periodic_vector_index_; observation.block = unsigned(nb);
-        observation.baseline = unsigned(plain_size); observation.encoded = unsigned(best_size);
-        observation.trials = unsigned(periodic_stats_.trials - trials_before);
-        observation.groups = unsigned(groups.size());
-        observation.popcount = inverted ? 65536 - pop : pop;
-        observation.gaps = bm::bit_block_calc_change(blk);
-        observation.last_step = trace.last_step;
-        observation.stop_reason = trace.stop_reason;
-        if (!groups.empty())
-        {
-            observation.formula_bytes = unsigned(best_size - best_payload);
-            observation.residual_bytes = unsigned(best_payload);
-        }
-        for (const auto& g : groups)
-        {
-            observation.chains += unsigned(g.chains.size());
-            if (g.step <= 64) observation.step_mask |= bm::id64_t(1) << (g.step - 1);
-        }
-        last_periodic_observation_ = observation;
-#if BM_SERIALIZATION_DIAGNOSTICS
-        if (periodic_stats_.order_stats.blocks.size() == periodic_stats_.order_stats.blocks.capacity())
-            periodic_stats_.order_stats.blocks.reserve(periodic_stats_.order_stats.blocks.capacity() ? periodic_stats_.order_stats.blocks.capacity() * 2 : 64);
-        periodic_stats_.order_stats.blocks.push_back(observation);
-#endif
-        if (!groups.empty())
-        {
-            enc.set_pos(begin); enc.memcpy(transform_best_buffer_.data(), best_size);
-            ++periodic_stats_.accepted;
-            periodic_stats_.saved_bytes += plain_size - best_size;
-            periodic_stats_.residual_bytes += best_payload;
-            periodic_stats_.formula_bytes += best_size - best_payload;
-            periodic_stats_.inverted_accepted += inverted;
-            auto& ds = periodic_stats_.order_stats;
-            bm::periodic_accumulate_bits(ds.selected_bits, best_bits);
-            if (best_has_step1)
-                ++ds.selected_formula_modes[best_formula_choice];
-            ++ds.group_counts[groups.size()]; ds.multi_group += groups.size() > 1;
-            unsigned total = 0; bool approximate = false;
-            for (const auto& g : groups)
-            {
-                total += unsigned(g.chains.size());
-                periodic_stats_.exceptions_accepted += g.exceptions;
-                approximate |= g.max_holes != 0;
-                for (const auto& c : g.chains)
-                    ++ds.selected[bm::periodic_length_bucket(c.length)];
-            }
-            ++ds.selected_counts[total];
-            periodic_stats_.chains_accepted += total;
-            periodic_stats_.approximate_accepted += approximate;
-            ++periodic_stats_.accepted_density[density];
-            ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
-            ++compression_stat_[bm::set_block_bwt];
-        }
-        else // if groups.empty()
-        {
-            ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
-        }
-        return 0;
-    }
-    auto& candidates = periodic_workspace_.candidates;
-    candidates.clear();
-    candidates.reserve((periodic_options_.max_step - periodic_options_.min_step + 1) *
-                       (periodic_options_.max_holes + 1));
-    unsigned raw_candidates = 0, positive_candidates = 0;
-    for (unsigned step = periodic_options_.min_step;
-         step <= periodic_options_.max_step; ++step)
-        for (unsigned holes = 0; holes <= periodic_options_.max_holes; ++holes)
-        {
-            auto& c = periodic_workspace_.pool;
-            ++periodic_stats_.scanned;
-            const bool found = bm::periodic_find(blk, inverted, step, holes,
-                                  periodic_options_.min_length,
-                                  periodic_options_.max_chains, c);
-            periodic_stats_.chain_cap += c.truncated;
-            if (found)
-            {
-                ++raw_candidates;
-                positive_candidates += c.score > 0;
-            }
-            if (found && (periodic_options_.diagnostics || c.score > 0))
-            {
-                candidates.push_back(c);
-            }
-        }
-    periodic_stats_.raw_candidates += raw_candidates;
-    periodic_stats_.positive_candidates += positive_candidates;
-    if (raw_candidates)
-    {
-        ++periodic_stats_.candidate_blocks;
-        ++periodic_stats_.candidate_density[density];
-    }
-    periodic_stats_.positive_blocks += positive_candidates != 0;
-    if (candidates.empty())
-    {
-        ++periodic_stats_.no_candidates;
-        return 0;
-    }
-    // Rank lightweight indexes; candidate chain buffers remain in their slots.
-    auto& order = periodic_workspace_.candidate_order;
-    order.resize(candidates.size());
-    for (unsigned i = 0; i < candidates.size(); ++i)
-    {
-        order[i] = i;
-    } // for i
-    bm::heap_sort(order.data(), order.size(),
-                  [&](unsigned a, unsigned b)
-                  {
-                      // Resolve score ties in discovery order for reproducibility.
-                      return candidates[a].score != candidates[b].score ?
-                          candidates[a].score > candidates[b].score : a < b;
-                  });
-    auto& selected = periodic_workspace_.selected;
-    selected.clear();
-    selected.reserve(periodic_options_.max_variants);
-    if (periodic_options_.diagnostics && candidates[order[0]].score > 0)
-    {
-        selected.push_back(order[0]);
-        for (unsigned i = 1; i < order.size(); ++i)
-        {
-            if (candidates[order[i]].score <= 0)
-            {
-                selected.push_back(order[i]);
-                break;
-            }
-        } // for i
-    }
-    for (unsigned i = 0; i < order.size() &&
-                         selected.size() < periodic_options_.max_variants; ++i)
-    {
-        bool found = false;
-        for (unsigned j = 0; j < selected.size(); ++j)
-        {
-            if (selected[j] == order[i])
-            {
-                found = true;
-                break;
-            }
-        } // for j
-        if (!found)
-        {
-            selected.push_back(order[i]);
-        }
-    } // for i
+    BM_ASSERT(options.order == 1);
     const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
     if (xor_trial_buffer_.size() < capacity)
         xor_trial_buffer_.resize(capacity, false);
     if (transform_best_buffer_.size() < capacity)
         transform_best_buffer_.resize(capacity, false);
-    size_t best_size = plain_size, best_payload = 0, best_formula = 0;
-    const periodic_candidate_type* best = nullptr;
-    periodic_workspace_.prepare_blocks();
-    bm::word_t* residual = periodic_workspace_.blocks.data();
-    size_t best_trial_size = size_t(-1), best_trial_payload = 0;
-    size_t best_trial_formula = 0;
-    const periodic_candidate_type* best_trial = nullptr;
-    for (unsigned i : selected)
+
+    size_t payload_size = 0, best_payload = 0, best_size = plain_size;
+    bm::periodic_formula_bits bits, best_bits;
+    unsigned formula_choice = 0, best_formula_choice = 0;
+    bool formula_has_step1 = false, best_has_step1 = false;
+    // Each trial encodes the XOR residual and its chain formula as one framed
+    // record. The search compares these complete sizes with the native record.
+    auto evaluate = [&](const bm::word_t* residual,
+                        const auto& groups)
     {
-        const auto& c = candidates[i];
-        bm::bit_block_copy(residual, blk);
-        if (inverted)
-        {
-            bm::bit_invert(residual);
-        }
-        bm::periodic_apply(residual, c);
         ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
         bm::encoder trial(xor_trial_buffer_.data(), xor_trial_buffer_.size());
-        trial.put_8(bm::set_block_bwt);
-        trial.put_16(0);
+        trial.put_8(bm::set_block_bwt); trial.put_16(0);
         const auto payload = trial.get_pos();
-        type = encode_block(residual, sub_stat, nb, trial);
-        if (type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
-        if (type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
-        const size_t payload_size = size_t(trial.get_pos() - payload);
-        BM_ASSERT(payload_size && payload_size <= 65535);
+        unsigned char residual_type = encode_block(residual, sub_stat, nb, trial);
+        if (residual_type == bm::set_block_azero) trial.put_8(bm::set_block_1zero);
+        if (residual_type == bm::set_block_aone) trial.put_8(bm::set_block_1one);
+        payload_size = size_t(trial.get_pos() - payload);
+        bm::serialization_require(payload_size && payload_size <= 65535);
         const auto tail = trial.get_pos();
         trial.set_pos(xor_trial_buffer_.data() + 1);
-        trial.put_16(bm::short_t(payload_size));
-        trial.set_pos(tail);
-        trial.put_8(bm::set_block_periodic_post);
-        bm::periodic_write_formula(trial, c, inverted);
-        ++periodic_stats_.trials;
-        ++periodic_stats_.trial_step[c.step];
-        const unsigned score_bucket = bm::periodic_score_bucket(c.score);
-        ++periodic_stats_.trial_score_bucket[score_bucket];
-        
-        if (c.score > 0)
-            ++periodic_stats_.positive_trials;
+        trial.put_16(bm::short_t(payload_size)); trial.set_pos(tail);
+        formula_has_step1 = false;
+        for (unsigned i = 0; i < groups.size(); ++i)
+        {
+            if (groups[i].step == 1)
+            {
+                formula_has_step1 = true;
+                break;
+            }
+        } // for i
+        const bool reduced = periodic_step1_start_reduction_ && formula_has_step1;
+        const bool first = reduced && periodic_step1_first_start_;
+        const bool auto_formula = reduced && periodic_step1_interleaved_ == 4;
+        auto emit_formula = [&](unsigned mode)
+        {
+            trial.set_pos(tail);
+            const unsigned char post = mode ?
+                bm::set_block_periodic_interleaved_fixed :
+                (first ? bm::set_block_periodic_groups_first :
+                  (reduced ? bm::set_block_periodic_groups_reduced :
+                             bm::set_block_periodic_groups));
+            trial.put_8(post);
+            auto formula_bits = bm::periodic_write_groups(trial, groups, inverted,
+                                    reduced, first, mode);
+            BM_ASSERT(trial.size() - payload_size == 4 +
+                (formula_bits.header + formula_bits.starts +
+                 formula_bits.lengths + formula_bits.padding) / 8);
+            return formula_bits;
+        };
+        // For step-1 chains compare gamma lengths with interleaved endpoints,
+        // including word padding; ties retain the first layout.
+        if (auto_formula)
+        {
+            unsigned best_mode = 0, best_words = unsigned(-1);
+            bm::periodic_formula_bits best_score;
+            for (unsigned mode = 0; mode <= 1; ++mode)
+            {
+                const auto score = bm::periodic_score_explicit_groups(groups, mode);
+                const unsigned words = (score.header + score.starts +
+                                        score.lengths + score.padding) / 32;
+                if (words < best_words)
+                {
+                    best_words = words;
+                    best_mode = mode;
+                    best_score = score;
+                }
+            }
+            bits = emit_formula(best_mode);
+            BM_ASSERT(bits.header == best_score.header &&
+                      bits.starts == best_score.starts &&
+                      bits.lengths == best_score.lengths &&
+                      bits.padding == best_score.padding &&
+                      trial.size() == payload_size + 4 + 4 * best_words);
+            formula_choice = best_mode;
+        }
         else
-            ++periodic_stats_.nonpositive_trials;
-        periodic_stats_.payload_improved += payload_size < plain_size;
-        
-        if (trial.size() < plain_size)
         {
-            ++periodic_stats_.win_score_bucket[score_bucket];
-            if (c.score > 0) ++periodic_stats_.positive_wins;
-            else ++periodic_stats_.nonpositive_wins;
+            const unsigned mode = reduced ? periodic_step1_interleaved_ : 0;
+            bits = emit_formula(mode);
+            formula_choice = mode;
         }
-        if (trial.size() < best_trial_size)
-        {
-            best_trial_size = trial.size();
-            best_trial_payload = payload_size;
-            best_trial_formula = trial.size() - payload_size;
-            best_trial = &c;
-        }
-        if (trial.size() < best_size)
-        {
-            best_size = trial.size();
-            best_payload = payload_size;
-            best_formula = best_size - payload_size;
-            best = &c;
-            ::memcpy(transform_best_buffer_.data(), xor_trial_buffer_.data(), best_size);
-        }
-    }
-    BM_ASSERT(best_trial);
-    
-    ++periodic_stats_.best_candidate_blocks;
-    periodic_stats_.best_baseline_bytes += plain_size;
-    periodic_stats_.best_residual_bytes += best_trial_payload;
-    periodic_stats_.best_formula_bytes += best_trial_formula;
-    periodic_stats_.best_chains += best_trial->chains.size();
-    periodic_stats_.best_covered += best_trial->covered;
-    periodic_stats_.best_exceptions += best_trial->exceptions;
-    ++periodic_stats_.best_step[best_trial->step];
-    
-    if (best_trial_size >= plain_size)
+        if (formula_has_step1)
+            ++periodic_stats_.order_stats.trial_formula_modes[formula_choice];
+        bm::periodic_accumulate_bits(periodic_stats_.order_stats.trial_bits, bits);
+        return trial.size();
+    };
+    auto save = [&](size_t size)
     {
-        const size_t miss = best_trial_size - plain_size;
-        periodic_stats_.best_miss_bytes += miss;
-        periodic_stats_.near_miss_32 += miss <= 32;
-        periodic_stats_.near_miss_128 += miss <= 128;
-    }
-    if (best)
+        best_size = size; best_payload = payload_size; best_bits = bits;
+        best_formula_choice = formula_choice;
+        best_has_step1 = formula_has_step1;
+        ::memcpy(transform_best_buffer_.data(), xor_trial_buffer_.data(), size);
+    };
+    const auto trials_before = periodic_stats_.trials;
+    const auto candidates_before = periodic_stats_.raw_candidates;
+    const auto positive_before = periodic_stats_.positive_candidates;
+    bm::periodic_search_trace trace;
+    const auto& groups = bm::periodic_search_order(blk, inverted, plain_size,
+                              options, periodic_stats_, evaluate, save, periodic_workspace_, &trace);
+    const bool candidates_found = periodic_stats_.raw_candidates != candidates_before;
+    periodic_stats_.candidate_blocks += candidates_found;
+    periodic_stats_.candidate_density[density] += candidates_found;
+    periodic_stats_.positive_blocks += periodic_stats_.positive_candidates != positive_before;
+    periodic_stats_.no_candidates += !candidates_found;
+    bm::periodic_order_block observation;
+    observation.vector = periodic_vector_index_; observation.block = unsigned(nb);
+    observation.baseline = unsigned(plain_size); observation.encoded = unsigned(best_size);
+    observation.trials = unsigned(periodic_stats_.trials - trials_before);
+    observation.groups = unsigned(groups.size());
+    observation.popcount = inverted ? 65536 - pop : pop;
+    observation.gaps = bm::bit_block_calc_change(blk);
+    observation.last_step = trace.last_step;
+    observation.stop_reason = trace.stop_reason;
+    if (!groups.empty())
     {
-        enc.set_pos(begin);
-        enc.memcpy(transform_best_buffer_.data(), best_size);
+        observation.formula_bytes = unsigned(best_size - best_payload);
+        observation.residual_bytes = unsigned(best_payload);
+    }
+    for (const auto& g : groups)
+    {
+        observation.chains += unsigned(g.chains.size());
+        if (g.step <= 64) observation.step_mask |= bm::id64_t(1) << (g.step - 1);
+    }
+    last_periodic_observation_ = observation;
+#if BM_SERIALIZATION_DIAGNOSTICS
+    if (periodic_stats_.order_stats.blocks.size() == periodic_stats_.order_stats.blocks.capacity())
+        periodic_stats_.order_stats.blocks.reserve(periodic_stats_.order_stats.blocks.capacity() ? periodic_stats_.order_stats.blocks.capacity() * 2 : 64);
+    periodic_stats_.order_stats.blocks.push_back(observation);
+#endif
+    if (!groups.empty())
+    {
+        enc.set_pos(begin); enc.memcpy(transform_best_buffer_.data(), best_size);
         ++periodic_stats_.accepted;
         periodic_stats_.saved_bytes += plain_size - best_size;
         periodic_stats_.residual_bytes += best_payload;
-        periodic_stats_.formula_bytes += best_formula;
-        periodic_stats_.chains_accepted += best->chains.size();
-        periodic_stats_.exceptions_accepted += best->exceptions;
+        periodic_stats_.formula_bytes += best_size - best_payload;
         periodic_stats_.inverted_accepted += inverted;
-        periodic_stats_.approximate_accepted += best->max_holes != 0;
+        auto& ds = periodic_stats_.order_stats;
+        bm::periodic_accumulate_bits(ds.selected_bits, best_bits);
+        if (best_has_step1)
+            ++ds.selected_formula_modes[best_formula_choice];
+        ++ds.group_counts[groups.size()]; ds.multi_group += groups.size() > 1;
+        unsigned total = 0; bool approximate = false;
+        for (const auto& g : groups)
+        {
+            total += unsigned(g.chains.size());
+            periodic_stats_.exceptions_accepted += g.exceptions;
+            approximate |= g.max_holes != 0;
+            for (const auto& c : g.chains)
+                ++ds.selected[bm::periodic_length_bucket(c.length)];
+        }
+        ++ds.selected_counts[total];
+        periodic_stats_.chains_accepted += total;
+        periodic_stats_.approximate_accepted += approximate;
         ++periodic_stats_.accepted_density[density];
-        ++periodic_stats_.accepted_step[best->step];
-        periodic_stats_.saved_step[best->step] += plain_size - best_size;
         ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
         ++compression_stat_[bm::set_block_bwt];
     }
-    else ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+    else // if groups.empty()
+    {
+        ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+    }
+    return 0;
+   }
+
+template<class BV>
+unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
+    const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc,
+    bool try_gap, unsigned shared_meta_bits, bool allow_raw_fallback,
+    residual_layout* alternate)
+{
+    if (!arithmetic_enabled_ || compression_level_ < 7 || BM_IS_GAP(blk))
+    {
+        const auto begin = enc.get_pos();
+        const auto type = encode_native_block(blk, sub_stat, nb, enc, try_gap);
+        if (!type)
+        {
+            score_residual_layout(alternate, begin, size_t(enc.get_pos() - begin),
+                                  enc.retained_padding(), compression_stat_);
+        }
+        return type;
+    }
+    size_type before[256];
+    ::memcpy(before, compression_stat_, sizeof(before));
+    const auto begin = enc.get_pos();
+    const unsigned char type = encode_native_block(blk, sub_stat, nb, enc, try_gap);
+    if (type)
+    {
+        return type;
+    }
+    if (arithmetic_candidate_.size() < 32768)
+    {
+        arithmetic_candidate_.resize(32768);
+    }
+    score_residual_layout(alternate, begin, size_t(enc.get_pos() - begin),
+                          enc.retained_padding(), compression_stat_);
+    size_t best_size = arithmetic_record_size(begin, size_t(enc.get_pos() - begin), enc.retained_padding(), shared_meta_bits);
+    // Opcode 107 (bm::set_block_bit_0runs_arithmetic) keeps the native run
+    // lengths and arithmetic-codes only the copied words from literal runs.
+    if (*begin == bm::set_block_bit_0runs)
+    {
+        bm::decoder source(begin + 1);
+        const unsigned start = source.get_8();
+        BM_ASSERT(start <= 1);
+        arithmetic_words_.resize(bm::set_block_size);
+        arithmetic_runs_.resize(0);
+        unsigned word = 0, copied = 0, kind = start;
+        // Recover alternating zero and copied-word runs from the native record.
+        while (word < bm::set_block_size)
+        {
+            const unsigned length = source.get_16();
+            BM_ASSERT(length && length <= bm::set_block_size - word);
+            arithmetic_runs_.push_back(bm::gap_word_t(length));
+            if (kind)
+            {
+                source.get_32(arithmetic_words_.data() + copied, length);
+                copied += length;
+            }
+            word += length;
+            kind ^= 1;
+        } // while word
+        BM_ASSERT(source.get_pos() == enc.get_pos());
+        unsigned byte_counts[256] = {};
+        for (unsigned i = 0; i < copied; ++i)
+        {
+            const unsigned value = arithmetic_words_[i];
+            for (unsigned shift = 0; shift < 32; shift += 8)
+            {
+                ++byte_counts[(value >> shift) & 255u];
+            } // for shift
+        } // for i
+        unsigned nibble_counts[16] = {};
+        for (unsigned i = 0; i < 256; ++i)
+        {
+            nibble_counts[i & 15u] += byte_counts[i];
+            nibble_counts[i >> 4] += byte_counts[i];
+        } // for i
+        const unsigned run_bytes = 2 + unsigned(arithmetic_runs_.size()) * 2;
+        const unsigned first_mode = arithmetic_coding_mode_ == bm::arithmetic_coding_mode::byte ? 1u : 0u;
+        const unsigned end_mode = arithmetic_coding_mode_ == bm::arithmetic_coding_mode::nibble ? 1u : 2u;
+        // Estimate each allowed alphabet before paying for an actual encode.
+        // Both the primary and any alternate shared-metadata layout can admit it.
+        for (unsigned mode = first_mode; mode < end_mode; ++mode)
+        {
+            const unsigned alphabet = mode ? 256 : 16;
+            const unsigned symbols = copied * (mode ? 4 : 8);
+            const unsigned* histogram = mode ? byte_counts : nibble_counts;
+            double ideal = std::lgamma(double(symbols + alphabet)) -
+                           std::lgamma(double(alphabet));
+            for (unsigned i = 0; i < alphabet; ++i)
+            {
+                ideal -= std::lgamma(double(histogram[i] + 1));
+            } // for i
+            ideal /= std::log(2.0);
+            // One word of favorable slack keeps near-tie trials eligible.
+            const double payload = 19.0 + ideal - 32.0;
+            const double estimated_bits = payload > 0.0 ? payload : 0.0;
+            const size_t metadata_bits = size_t(run_bytes - 1) * 8;
+            const size_t predicted = shared_meta_bits == ~0u ?
+                size_t(run_bytes + 4 * std::ceil(estimated_bits / 32.0)) :
+                size_t(1 + 4 * std::ceil((double(metadata_bits) + estimated_bits + shared_meta_bits) / 32.0));
+            const size_t alternate_prediction = !alternate ? 0 :
+                alternate->metadata_bits == ~0u ? predicted :
+                size_t(1 + 4 * std::ceil((double(metadata_bits) + estimated_bits +
+                    alternate->metadata_bits) / 32.0));
+            const bool primary_admitted = predicted < best_size;
+            const bool alternate_admitted = alternate &&
+                alternate_prediction < alternate->best_size;
+            if (!primary_admitted && !alternate_admitted)
+            {
+                continue;
+            }
+            bm::encoder candidate(arithmetic_candidate_.data(), arithmetic_candidate_.size());
+            candidate.put_8(bm::set_block_bit_0runs_arithmetic);
+            candidate.put_8(static_cast<unsigned char>(start));
+            for (unsigned i = 0; i < arithmetic_runs_.size(); ++i)
+            {
+                candidate.put_16(arithmetic_runs_[i]);
+            } // for i
+            bm::arithmetic_words_encoder::encode(candidate, arithmetic_words_.data(),
+                                                  copied, bool(mode), false);
+            const size_t candidate_size = arithmetic_record_size(arithmetic_candidate_.data(),
+                candidate.size(), candidate.retained_padding(), shared_meta_bits);
+            if (alternate_admitted)
+            {
+                size_type candidate_stats[256];
+                ::memcpy(candidate_stats, before, sizeof(candidate_stats));
+                ++candidate_stats[bm::set_block_bit_0runs_arithmetic];
+                score_residual_layout(alternate, arithmetic_candidate_.data(),
+                    candidate.size(), candidate.retained_padding(), candidate_stats);
+            }
+            if (primary_admitted && candidate_size < best_size)
+            {
+                best_size = candidate_size;
+                enc.set_pos(begin);
+                enc.memcpy(arithmetic_candidate_.data(), candidate.size());
+                enc.retain_padding(candidate.retained_padding());
+                ::memcpy(compression_stat_, before, sizeof(before));
+                ++compression_stat_[bm::set_block_bit_0runs_arithmetic];
+            }
+        } // for mode
+    }
+    // At level 7 full-block arithmetic is only the permitted raw fallback.
+    if (compression_level_ == 7 &&
+        (!allow_raw_fallback || *begin != bm::set_block_bit))
+    {
+        return 0;
+    }
+    try_block_arithmetic(blk, nb, enc, begin, best_size, before, shared_meta_bits, alternate);
     return 0;
 }
 
 template<class BV>
-unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
+void serializer<BV>::score_residual_layout(residual_layout* layout,
+    const unsigned char* data, size_t size, unsigned padding,
+    const size_type* stats)
+{
+    if (!layout)
+    {
+        return;
+    }
+    const size_t score = arithmetic_record_size(data, size, padding, layout->metadata_bits);
+    if (score < layout->best_size)
+    {
+        layout->best_size = score;
+        auto& enc = *layout->encoder;
+        enc.set_pos(layout->begin);
+        enc.memcpy(data, size);
+        enc.retain_padding(padding);
+        ::memcpy(layout->stats, stats, sizeof(layout->stats));
+    }
+}
+
+template<class BV>
+size_t serializer<BV>::arithmetic_record_size(const unsigned char* data,
+    size_t size, unsigned padding, unsigned shared_meta_bits)
+{
+    if (shared_meta_bits == ~0u)
+    {
+        return size;
+    }
+    unsigned body_bits;
+    // Compatible residual bits share a final word with reference metadata;
+    // other encodings require a separately padded metadata stream.
+    if (xor_residual_bits(data, size, padding, body_bits))
+    {
+        return size_t(1 + ((body_bits + shared_meta_bits + 31) / 32) * 4);
+    }
+    return size + ((shared_meta_bits + 31) / 32) * 4;
+}
+
+template<class BV>
+void serializer<BV>::try_block_arithmetic(const bm::word_t* blk, block_idx_type nb,
+    bm::encoder& enc, unsigned char* begin, size_t& best_size,
+    const size_type (&before)[256], unsigned shared_meta_bits, residual_layout* alternate)
+{
+    const unsigned first_mode = arithmetic_coding_mode_ == bm::arithmetic_coding_mode::byte ? 1u : 0u;
+    const unsigned end_mode = arithmetic_coding_mode_ == bm::arithmetic_coding_mode::nibble ? 1u : 2u;
+    // Opcode 106 (bm::set_block_arithmetic) encodes the complete BIT block.
+    // Compare actual sizes for the allowed nibble and/or byte alphabets.
+    for (unsigned mode = first_mode; mode < end_mode; ++mode)
+    {
+        bm::encoder candidate(arithmetic_candidate_.data(), arithmetic_candidate_.size());
+        candidate.put_8(bm::set_block_arithmetic);
+        const unsigned payload_bits = bm::arithmetic_block_encoder::encode(candidate, blk, bool(mode));
+        const size_t candidate_size = arithmetic_record_size(arithmetic_candidate_.data(), candidate.size(), candidate.retained_padding(), shared_meta_bits);
+        if (arithmetic_trial_observer_)
+        {
+            const arithmetic_trial_observation observation = {
+                blk, nb, mode, payload_bits, candidate_size, best_size};
+            arithmetic_trial_observer_(arithmetic_trial_context_, observation);
+        }
+        if (alternate)
+        {
+            size_type candidate_stats[256];
+            ::memcpy(candidate_stats, before, sizeof(candidate_stats));
+            ++candidate_stats[bm::set_block_arithmetic];
+            score_residual_layout(alternate, arithmetic_candidate_.data(),
+                candidate.size(), candidate.retained_padding(), candidate_stats);
+        }
+        if (candidate_size < best_size)
+        {
+            best_size = candidate_size;
+            enc.set_pos(begin);
+            enc.memcpy(arithmetic_candidate_.data(), candidate.size());
+            enc.retain_padding(candidate.retained_padding());
+            ::memcpy(compression_stat_, before, sizeof(before));
+            ++compression_stat_[bm::set_block_arithmetic];
+        }
+    } // for mode
+}
+
+template<class BV>
+unsigned char serializer<BV>::encode_native_block(const bm::word_t* blk,
     const bm::bv_sub_survey& sub_stat, block_idx_type nb, bm::encoder& enc, bool try_gap)
 {
     const auto begin = enc.get_pos();
@@ -6915,10 +7231,502 @@ unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
         {
             enc.set_pos(begin);
             enc.memcpy(gap_candidate_buffer_.data(), candidate.size());
+            enc.retain_padding(candidate.retained_padding());
         }
         else ::memcpy(compression_stat_, chosen, sizeof(chosen));
     }
     return 0;
+}
+
+template<class BV, class DEC>
+void deserializer<BV, DEC>::joint_residual(unsigned op, DEC& dec, bm::bit_in<DEC>& bits,
+                        bm::word_t* dst)
+{
+    // Decode the residual first so the same bit reader can continue into the
+    // reference coordinates. A null destination consumes without storing it.
+    if (op == bm::set_block_arithmetic)
+    {
+        bm::arithmetic_block_decoder::decode(dec, dst, &bits);
+        return;
+    }
+    if (op == bm::set_block_bit_0runs_arithmetic)
+    {
+        bm::arithmetic_0runs_decoder::decode(dec, dst, this->arithmetic_word_positions_, &bits);
+        return;
+    }
+    const auto start = dec.get_pos();
+    if (dst)
+    {
+        bm::bit_block_set(dst, 0);
+    }
+    if (op == bm::set_block_bwt_unpacked)
+    {
+        bm::bwt_bic_decoder<allocator_type>::decode(dec, dst, *this->bwt_decode_workspace_, &bits);
+        return;
+    }
+    if (op >= bm::set_block_arr_bienc_v3 && op <= bm::set_block_arr_bienc_inv_v3s)
+    {
+        this->read_bic_arr(dec, dst, op, &bits);
+        if (dst && (op == bm::set_block_arr_bienc_inv_v3 ||
+                    op == bm::set_block_arr_bienc_inv_v3s))
+        {
+            bm::bit_invert(dst);
+        }
+        return;
+    }
+    if (op == bm::set_block_gap_bienc_v3 || op == bm::set_block_gap_bienc_v3s || op == bm::set_block_gap_egamma_v3)
+    {
+        bm::gap_word_t head = 0;
+        this->read_gap_block(dec, op, gap_temp_block_.data(), head, &bits);
+        if (dst)
+        {
+            bm::gap_convert_to_bitset(dst, gap_temp_block_.data());
+        }
+        return;
+    }
+    auto block = dst ? dst : temp_block_;
+    switch (op)
+    {
+    case bm::set_block_bwt:
+        this->read_bwt_block(dec, dst);
+        break;
+    case bm::set_block_gap_xor_framed:
+    {
+        bm::gap_word_t head = 0;
+        this->read_gap_block(dec, op, gap_temp_block_.data(), head);
+        bm::gap_convert_to_bitset(block, gap_temp_block_.data());
+        break;
+    }
+    case bm::set_block_1zero:
+        break;
+    case bm::set_block_1one:
+        bm::bit_block_set(block, ~0u);
+        break;
+    case bm::set_block_bit:
+        dec.get_32(block, bm::set_block_size);
+        break;
+    case bm::set_block_bit_1bit:
+        bm::set_bit(block, dec.get_16());
+        break;
+    case bm::set_block_bit_0runs:
+        this->read_0runs_block(dec, block);
+        break;
+    case bm::set_block_bit_interval:
+    {
+        unsigned lo = dec.get_16(), hi = dec.get_16();
+        bm::serialization_require(lo <= hi && hi < bm::set_block_size);
+        dec.get_32(block + lo, hi - lo + 1);
+        break;
+    }
+    case bm::set_block_arrbit:
+    case bm::set_block_arrbit_inv:
+    {
+        unsigned count = dec.get_16();
+        for (unsigned i = 0; i < count; ++i)
+        {
+            bm::set_bit(block, dec.get_16());
+        } // for i
+        if (op == bm::set_block_arrbit_inv)
+        {
+            bm::bit_invert(block);
+        }
+        break;
+    }
+    default:
+        bm::serialization_require(false);
+        break;
+    } // switch op
+    // Byte-oriented decoders may have consumed part of the shared final word;
+    // return that tail to the bit reader before reading reference metadata.
+    const unsigned tail = unsigned(dec.get_pos() - start) % 4;
+    if (tail)
+    {
+        dec.seek(-int(tail));
+        bits.get_bits(8 * tail);
+    }
+}
+
+
+template<class BV>
+bool serializer<BV>::xor_residual_bits(const unsigned char* residual, size_t size,
+                                      unsigned padding, unsigned& count)
+{
+    BM_ASSERT(size && padding < 32);
+    const unsigned op = *residual;
+    switch (op)
+    {
+    case bm::set_block_1zero:
+    case bm::set_block_1one:
+    case bm::set_block_bit:
+    case bm::set_block_bit_1bit:
+    case bm::set_block_bit_0runs:
+    case bm::set_block_bit_interval:
+    case bm::set_block_arrbit:
+    case bm::set_block_arrbit_inv:
+    case bm::set_block_gap_bienc_v3:
+    case bm::set_block_gap_bienc_v3s:
+    case bm::set_block_gap_egamma_v3:
+    case bm::set_block_arr_bienc_v3:
+    case bm::set_block_arr_bienc_inv_v3:
+    case bm::set_block_arr_bienc_v3s:
+    case bm::set_block_arr_bienc_inv_v3s:
+    case bm::set_block_bwt:
+    case bm::set_block_gap_xor_framed:
+    case bm::set_block_bwt_unpacked:
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        break;
+    default:
+        return false;
+    } // switch op
+    count = unsigned(size - 1) * 8;
+    if ((op >= bm::set_block_gap_bienc_v3 && op <= bm::set_block_gap_egamma_v3) || op == bm::set_block_bwt_unpacked || op == bm::set_block_arithmetic || op == bm::set_block_bit_0runs_arithmetic)
+    {
+        count -= padding;
+    }
+    return true;
+}
+
+/// Repack one selected residual and its original metadata into a single bit stream.
+/// Whole residual words copy directly. Resume the partial word for gamma and flags.
+template<class BV>
+bool serializer<BV>::pack_shared_xor_residual(bm::encoder& trial, unsigned char* meta, unsigned meta_bits,
+                unsigned char* residual, unsigned char* record)
+{
+    const unsigned op = *residual;
+    unsigned count;
+    if (!xor_residual_bits(residual, size_t(trial.get_pos() - residual), trial.retained_padding(), count))
+    {
+        return false;
+    }
+    const unsigned meta_bytes = unsigned(residual - meta);
+    unsigned char coords[1024];
+    bm::serialization_require(meta_bytes <= sizeof(coords));
+    ::memcpy(coords, meta, meta_bytes);
+    const auto payload = residual + 1;
+    const unsigned whole = count / 32 * 4;
+    const unsigned tail = count % 32;
+    unsigned last = 0;
+    if (tail)
+    {
+        ::memcpy(&last, payload + whole, (tail + 7) / 8);
+    }
+    // Opcode 103 (bm::set_block_xor_ref_shared) carries one reference;
+    // opcode 102 (bm::set_block_xor_parallel_gather) carries one per wave.
+    *record = *record == bm::set_block_xor_ref_delta ? bm::set_block_xor_ref_shared : bm::set_block_xor_parallel_gather;
+    *meta = static_cast<unsigned char>(op);
+    ::memmove(meta + 1, payload, whole);
+    trial.set_pos(meta + 1 + whole);
+    bm::bit_out<bm::encoder> joint(trial);
+    if (tail)
+    {
+        joint.put_bits(last, tail);
+    }
+    for (unsigned offset = 0; offset < meta_bits; offset += 32)
+    {
+        unsigned word;
+        ::memcpy(&word, coords + offset / 8, sizeof(word));
+        const unsigned n = meta_bits - offset;
+        joint.put_bits(word, n < 32 ? n : 32);
+    } // for offset
+    return true;
+}
+
+template<class BV>
+void serializer<BV>::encode_gather_block(const bm::word_t* blk,
+    const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+    unsigned char* begin, const size_type* before, bm::encoder& enc)
+{
+    // Sixteen reference slots and two scratch blocks; missing blocks still
+    // consume search depth. Reference waves stay at their original offsets.
+    if (!gather_workspace_)
+    {
+        gather_workspace_ = alloc_.alloc_bit_block(18);
+    }
+    bm::word_t* sources = gather_workspace_;
+    size_type rows[16];
+    unsigned count = 0, i0, j0;
+    bm::get_block_coord(nb, i0, j0);
+    for (unsigned depth = 1; depth <= 16 && ref_idx_ + depth < ref_vect_->size(); ++depth)
+    {
+        const auto index = ref_idx_ + depth;
+        const auto* source = ref_vect_->get_bv(index)->get_blocks_manager().get_block(i0, j0);
+        if (!source) continue;
+        if (IS_FULL_BLOCK(source))
+            ::memset(sources + count * bm::set_block_size, 255, sizeof(bm::word_t) * bm::set_block_size);
+        else if (BM_IS_GAP(source))
+            bm::gap_convert_to_bitset(sources + count * bm::set_block_size, BMGAP_PTR(source));
+        else
+            ::memcpy(sources + count * bm::set_block_size, source, sizeof(bm::word_t) * bm::set_block_size);
+        rows[count++] = ref_vect_->get_row_idx(index);
+    } // for depth
+    bm::word_t* residual = sources + 16 * bm::set_block_size;
+    ::memcpy(residual, blk, bm::set_block_size * sizeof(bm::word_t));
+    /// One alternative reference and its changes relative to the greedy wave.
+    struct wave_alternative
+    {
+        unsigned wave;
+        unsigned row;
+        unsigned score_gap;
+        double residual_delta;
+    };
+    wave_alternative shortlist[4];
+    unsigned shortlist_size = 0;
+    unsigned selected[64] = {};
+    bm::id64_t mask = 0;
+    bm::id64_t polarity_masks[3] = {};
+    // For each 1024-bit target wave, compare no reference with each available
+    // same-position reference wave, using a density/run heuristic.
+    for (unsigned wave = 0; wave < 64; ++wave)
+    {
+        // Symmetric density/run score, matching the shadow experiment.
+        int minority, runs;
+        auto score = [&](const bm::word_t* source, bool& invert_wave)
+        {
+            unsigned ones = 0, transitions = 0, previous = 0;
+            for (unsigned word = 0; word < 32; ++word)
+            {
+                const unsigned value = blk[wave * 32 + word] ^ (source ? source[word] : 0u);
+                ones += bm::word_bitcount(value);
+                transitions += bm::word_bitcount(
+                    (value ^ ((value << 1) | previous)) & (word ? ~0u : ~1u));
+                previous = value >> 31;
+            } // for word
+            invert_wave = ones > 512;
+            unsigned best = ones < 1024 - ones ? ones : 1024 - ones;
+            minority = int(best);
+            runs = int(transitions + 1);
+            return best < transitions + 1 ? best : transitions + 1;
+        };
+        bool invert_wave = false;
+        unsigned best = score(nullptr, invert_wave);
+        unsigned second = ~0u, second_row = 0;
+        int best_minority = minority, best_runs = runs;
+        int second_minority = 0, second_runs = 0;
+        for (unsigned row = 0; row < count; ++row)
+        {
+            const unsigned cost = score(sources + row * bm::set_block_size + wave * 32,
+                                        invert_wave);
+            if (gather_runner_up_)
+            {
+                if (cost < best)
+                {
+                    if (mask & (bm::id64_t(1) << wave))
+                    {
+                        second = best;
+                        second_row = selected[wave];
+                        second_minority = best_minority;
+                        second_runs = best_runs;
+                    }
+                    best_minority = minority;
+                    best_runs = runs;
+                }
+                else if (cost < second)
+                {
+                    second = cost;
+                    second_row = row;
+                    second_minority = minority;
+                    second_runs = runs;
+                }
+            }
+            if (cost >= best) continue;
+            best = cost;
+            selected[wave] = row;
+            const bm::id64_t wave_bit = bm::id64_t(1) << wave;
+            mask |= wave_bit;
+            // A later winner can change either polarity. Replace its bit.
+            polarity_masks[1] = (polarity_masks[1] & ~wave_bit) |
+                               (invert_wave ? wave_bit : 0);
+
+        } // for row
+        if (!((mask >> wave) & 1)) continue;
+        if (gather_runner_up_ && second != ~0u)
+        {
+            // Stable insertion preserves wave order on equal score gaps.
+            unsigned pos = shortlist_size;
+            while (pos && second - best < shortlist[pos - 1].score_gap)
+            {
+                if (pos < 4)
+                    shortlist[pos] = shortlist[pos - 1];
+                --pos;
+            } // while pos
+            if (pos < 4)
+            {
+                // Pooled NED fit, in residual bits per minority bit and per run.
+                double estimate = 0.448563202253 * (second_minority - best_minority)
+                                + 0.509053005571 * (second_runs - best_runs);
+                shortlist[pos] = {wave, second_row, second - best, estimate};
+                if (shortlist_size < 4)
+                    ++shortlist_size;
+            }
+        }
+        for (unsigned word = 0; word < 32; ++word)
+            residual[wave * 32 + word] ^= sources[selected[wave] * bm::set_block_size + wave * 32 + word];
+    } // for wave
+    if (!mask) return;
+    const auto target_row = ref_vect_->get_row_idx(ref_idx_);
+    // Relative row IDs are usable only when every selected row follows the
+    // target and each encoded positive distance fits the gamma writer.
+    bool relative = gather_deltas_;
+    for (unsigned wave = 0; relative && wave < 64; ++wave)
+    {
+        if (((mask >> wave) & 1) && rows[selected[wave]] <= target_row)
+            relative = false;
+    } // for wave
+    // The gamma writer accepts a positive 32-bit value. Wider external row
+    // IDs can still participate when their relative distances fit.
+    for (unsigned wave = 0; wave < 64; ++wave)
+    {
+        if (!((mask >> wave) & 1)) continue;
+        const size_type row = rows[selected[wave]];
+        if (relative ? row - target_row > ~0u : row >= ~0u)
+            return;
+    } // for wave
+    const size_t capacity = size_t(bm::set_block_size) * sizeof(bm::word_t) * 8 + 1024;
+    if (ref_xor_trial_buffer_.size() < capacity)
+        ref_xor_trial_buffer_.resize(capacity, false);
+    size_type winner_stats[256];
+    ::memcpy(winner_stats, compression_stat_, sizeof(winner_stats));
+    size_t best_size = size_t(enc.get_pos() - begin);
+    // Both polarity rules partition the selected waves. An empty partition
+    // leaves the original residual intact, with one extra flag per wave.
+    polarity_masks[2] = mask ^ polarity_masks[1];
+    const bool reuse_unmodified = !polarity_masks[1] || !polarity_masks[2];
+    if (reuse_unmodified && residual_layout_buffer_.size() < capacity)
+    {
+        residual_layout_buffer_.resize(capacity);
+    }
+    unsigned char* alternate_begin = reuse_unmodified ?
+        residual_layout_buffer_.data() : ref_xor_trial_buffer_.data();
+    bm::encoder alternate_encoder(alternate_begin, capacity);
+    residual_layout alternate = {};
+    alternate.begin = alternate_begin;
+    alternate.encoder = &alternate_encoder;
+    alternate.best_size = size_t(-1);
+    // Three complete records compete. Current polarity has priority on ties.
+    unsigned winning_polarity = 0;
+    for (unsigned attempt = 0; attempt < (shortlist_size ? 4u : 3u); ++attempt)
+    {
+        bm::word_t* trial_block = sources + 17 * bm::set_block_size;
+        ::memcpy(trial_block, residual, bm::set_block_size * sizeof(bm::word_t));
+        const bool substitute = attempt == 3;
+        const unsigned polarity = substitute ? winning_polarity : attempt;
+        // Optionally test one runner-up wave in the winning gather recipe;
+        // its estimated gain includes both residual and row-ID coding costs.
+        if (substitute)
+        {
+            if (*begin != bm::set_block_xor_parallel_gather)
+                break;
+            unsigned pick = shortlist_size;
+            double best_estimate = 0;
+            for (unsigned j = 0; j < shortlist_size; ++j)
+            {
+                const auto& alt = shortlist[j];
+                const size_type row = rows[alt.row];
+                if (relative ? (row <= target_row || row - target_row > ~0u) : row >= ~0u)
+                    continue;
+                const size_type old = rows[selected[alt.wave]];
+                const unsigned old_code = unsigned(relative ? old - target_row : old + 1);
+                const unsigned new_code = unsigned(relative ? row - target_row : row + 1);
+                const int gamma_delta = 2 * (int(bm::bit_scan_reverse(new_code)) -
+                                             int(bm::bit_scan_reverse(old_code)));
+                const double estimate = alt.residual_delta + gamma_delta;
+                if (pick == shortlist_size || estimate < best_estimate)
+                {
+                    pick = j;
+                    best_estimate = estimate;
+                }
+            } // for j
+            if (pick == shortlist_size)
+                break;
+            const auto& alt = shortlist[pick];
+            selected[alt.wave] = alt.row;
+            const unsigned offset = alt.wave * 32;
+            const bm::word_t* source = sources + alt.row * bm::set_block_size;
+            for (unsigned word = offset; word < offset + 32; ++word)
+            {
+                trial_block[word] = blk[word] ^ source[word];
+            } // for word
+        }
+        const bm::id64_t inverted = polarity_masks[polarity];
+        for (unsigned wave = 0; wave < 64; ++wave)
+        {
+            if (!((inverted >> wave) & 1))
+            {
+                continue;
+            }
+            for (unsigned word = 0; word < 32; ++word)
+            {
+                trial_block[wave * 32 + word] = ~trial_block[wave * 32 + word];
+            } // for word
+        } // for wave
+        bm::encoder trial(ref_xor_trial_buffer_.data(), capacity);
+        trial.put_8(bm::set_block_xor_gather);
+        trial.put_8(static_cast<unsigned char>((polarity != 0) | (relative ? 2 : 0)));
+        trial.put_h64(mask);
+        auto meta = trial.get_pos();
+        unsigned meta_bits;
+        {
+            bm::bit_out<bm::encoder> bits(trial);
+            for (unsigned wave = 0; wave < 64; ++wave)
+            {
+                if (!((mask >> wave) & 1)) continue;
+                const size_type row = rows[selected[wave]];
+                bits.gamma(relative ? unsigned(row - target_row) : unsigned(row + 1));
+                if (polarity) bits.put_bit(unsigned((inverted >> wave) & 1));
+            } // for wave
+            meta_bits = unsigned(trial.get_pos() - meta) * 8 + bits.pending_bits();
+        }
+        auto residual_start = trial.get_pos();
+        ::memcpy(compression_stat_, before, sizeof(winner_stats));
+        ++compression_stat_[bm::set_block_xor_gather];
+        if (!substitute && polarity && !inverted)
+        {
+            BM_ASSERT(reuse_unmodified && alternate_encoder.size());
+            BM_ASSERT(alternate.metadata_bits == (joint_wire_ ? meta_bits : ~0u));
+            trial.memcpy(alternate_begin, alternate_encoder.size());
+            trial.retain_padding(alternate_encoder.retained_padding());
+            ::memcpy(compression_stat_, alternate.stats, sizeof(alternate.stats));
+        }
+        else
+        {
+            residual_layout* alternate_layout = !substitute && !polarity && reuse_unmodified ?
+                &alternate : nullptr;
+            if (alternate_layout)
+            {
+                alternate.metadata_bits = joint_wire_ ?
+                    meta_bits + bm::word_bitcount64(mask) : ~0u;
+            }
+            const auto type = encode_selected_block(trial_block, sub_stat, nb,
+                trial, true, joint_wire_ ? meta_bits : ~0u, true, alternate_layout);
+            if (type == bm::set_block_azero || type == bm::set_block_aone)
+            {
+                trial.put_8(type == bm::set_block_azero ?
+                    bm::set_block_1zero : bm::set_block_1one);
+                score_residual_layout(alternate_layout, residual_start,
+                    size_t(trial.get_pos() - residual_start),
+                    trial.retained_padding(), compression_stat_);
+            }
+        }
+        // If supported by the residual codec, share its final word with the
+        // row IDs and polarity flags before comparing complete record sizes.
+        if (joint_wire_ && pack_shared_xor_residual(trial, meta, meta_bits,
+                                            residual_start, ref_xor_trial_buffer_.data()))
+        {
+            --compression_stat_[bm::set_block_xor_gather];
+            ++compression_stat_[bm::set_block_xor_parallel_gather];
+        }
+        if (trial.size() < best_size)
+        {
+
+            winning_polarity = polarity;
+            enc.set_pos(begin);
+            enc.memcpy(ref_xor_trial_buffer_.data(), trial.size());
+            best_size = trial.size();
+            ::memcpy(winner_stats, compression_stat_, sizeof(winner_stats));
+        }
+    } // for attempt
+    ::memcpy(compression_stat_, winner_stats, sizeof(winner_stats));
 }
 
 template<class BV>
@@ -6936,78 +7744,573 @@ void serializer<BV>::encode_xor_block(const bm::word_t* blk,
     ::memcpy(stats_before, compression_stat_, sizeof(stats_before));
     const auto plain_begin = enc.get_pos();
     auto encode_single = [this, &sub_stat, nb](const bm::word_t* block,
-                                              bm::encoder& dst)
+                                              bm::encoder& dst, unsigned meta_bits = ~0u,
+                                              residual_layout* alternate = nullptr)
     {
-        const unsigned char type = encode_selected_block(block, sub_stat, nb, dst, true);
+        const auto begin = dst.get_pos();
+        const unsigned char type = encode_selected_block(block, sub_stat, nb, dst, true, meta_bits, false, alternate);
         // A residual is exactly one block, never a run of source blocks.
         if (type == bm::set_block_azero)
             dst.put_8(bm::set_block_1zero);
         else if (type == bm::set_block_aone)
             dst.put_8(bm::set_block_1one);
+        if (type)
+        {
+            score_residual_layout(alternate, begin, size_t(dst.get_pos() - begin),
+                                  dst.retained_padding(), compression_stat_);
+        }
     };
     encode_single(blk, enc);
     const size_t plain_size = size_t(enc.get_pos() - plain_begin);
     ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
     ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
 
-    bm::encoder trial(ref_xor_trial_buffer_.data(), ref_xor_trial_buffer_.size());
-    BM_ASSERT(mchain.chain_size);
-    if (mchain.match == e_xor_match_EQ)
+    size_t best_size = plain_size;
+    const size_type model_rank = sim_model_->four_candidates ?
+        sim_model_->bv_blocks.count_range(0, nb) - 1 : 0;
+    size_t incumbent_size = plain_size;
+    const unsigned trials = sim_model_->four_candidates ? 4 : 1;
+    // Try the similarity model's incumbent first, followed by its optional
+    // alternatives. Each recipe includes reference metadata and a residual.
+    for (unsigned candidate_idx = 0; candidate_idx < trials; ++candidate_idx)
     {
-        BM_ASSERT(mchain.chain_size == 1);
-        const size_type ridx = ref_vect_->get_row_idx(mchain.ref_idx[0]);
-        trial.put_8(bm::set_block_ref_eq);
-        trial.put_32(unsigned(ridx));
-        compression_stat_[bm::set_block_ref_eq]++;
-    }
-    else
-    {
-        BM_ASSERT(mchain.match == e_xor_match_GC ||
-                  mchain.match == e_xor_match_BC ||
-                  mchain.match == e_xor_match_iBC);
-        unsigned i0, j0;
-        bm::get_block_coord(nb, i0, j0);
-        xor_tmp_product(blk, mchain, i0, j0);
-        if (mchain.chain_size == 1)
+        const block_match_chain_type& recipe = candidate_idx ?
+            sim_model_->alternatives[candidate_idx - 1].get(ref_idx_, model_rank) : mchain;
+        if (!recipe.chain_size)
         {
-            const size_type ridx = ref_vect_->get_row_idx(mchain.ref_idx[0]);
-            const bm::id64_t d64 = mchain.xor_d64[0];
-            if (d64 == ~0ull)
-                trial.put_8_16_32(unsigned(ridx), bm::set_block_xor_ref8_um,
-                                 bm::set_block_xor_ref16_um,
-                                 bm::set_block_xor_ref32_um);
-            else
-            {
-                trial.put_8_16_32(unsigned(ridx), bm::set_block_xor_ref8,
-                                 bm::set_block_xor_ref16,
-                                 bm::set_block_xor_ref32);
-                trial.put_64(d64);
-            }
-            compression_stat_[bm::set_block_xor_ref32]++;
+            continue;
+        }
+        if (candidate_idx)
+        {
+            ++xor_trial_stats_.alternatives;
+        }
+        ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+        bm::encoder trial(ref_xor_trial_buffer_.data(), ref_xor_trial_buffer_.size());
+        BM_ASSERT(recipe.chain_size);
+        if (residual_layout_buffer_.size() < trial_capacity)
+            residual_layout_buffer_.resize(trial_capacity);
+        bm::encoder alternate_encoder(residual_layout_buffer_.data(), trial_capacity);
+        residual_layout alternate = {};
+        alternate.begin = residual_layout_buffer_.data();
+        alternate.encoder = &alternate_encoder;
+        alternate.best_size = size_t(-1);
+        const auto source_plane = ref_vect_->get_row_idx(recipe.ref_idx[0]);
+        const auto target_plane = ref_vect_->get_row_idx(ref_idx_);
+        const bool reuse_residual = single_delta_trials_ && recipe.chain_size == 1 &&
+            recipe.match != bm::e_xor_match_EQ && source_plane > target_plane &&
+            source_plane - target_plane <= ~0u && recipe.xor_d64[0];
+        alternate.metadata_bits = joint_wire_ && reuse_residual ?
+            2 * bm::bit_scan_reverse(unsigned(source_plane - target_plane)) + 2 : ~0u;
+        unsigned legacy_parent = 0;
+        size_t reference_bytes = 5;
+        if (recipe.match == e_xor_match_EQ)
+        {
+            BM_ASSERT(recipe.chain_size == 1);
+            const size_type ridx = ref_vect_->get_row_idx(recipe.ref_idx[0]);
+            trial.put_8(bm::set_block_ref_eq);
+            trial.put_32(unsigned(ridx));
+            compression_stat_[bm::set_block_ref_eq]++;
         }
         else
-            encode_xor_match_chain(trial, mchain);
-        encode_single(xor_tmp_block_, trial);
-    }
-    // Include all reference/mask/chain bytes; ties keep the original block.
-    if (trial.size() < plain_size)
+        {
+            BM_ASSERT(recipe.match == e_xor_match_GC ||
+                      recipe.match == e_xor_match_BC ||
+                      recipe.match == e_xor_match_iBC);
+            unsigned i0, j0;
+            bm::get_block_coord(nb, i0, j0);
+            xor_tmp_product(blk, recipe, i0, j0);
+            if (recipe.chain_size == 1)
+            {
+                const size_type ridx = ref_vect_->get_row_idx(recipe.ref_idx[0]);
+                const bm::id64_t d64 = recipe.xor_d64[0];
+                if (d64 == ~0ull)
+                    trial.put_8_16_32(unsigned(ridx), bm::set_block_xor_ref8_um,
+                                     bm::set_block_xor_ref16_um,
+                                     bm::set_block_xor_ref32_um);
+                else if (xor_ref8_h64_ && ridx < 256 &&
+                         bm::word_bitcount(bm::compute_h64_mask(d64)) < 7)
+                {
+                    trial.put_8(bm::set_block_xor_ref8_h64);
+                    trial.put_8(static_cast<unsigned char>(ridx));
+                    trial.put_h64(d64);
+                }
+                else
+                {
+                    trial.put_8_16_32(unsigned(ridx), bm::set_block_xor_ref8,
+                                     bm::set_block_xor_ref16,
+                                     bm::set_block_xor_ref32);
+                    trial.put_64(d64);
+                }
+                compression_stat_[ref_xor_trial_buffer_.data()[0]]++;
+            }
+            else
+                encode_xor_match_chain(trial, recipe);
+            legacy_parent = ref_xor_trial_buffer_.data()[0];
+            reference_bytes = trial.size();
+            encode_single(xor_tmp_block_, trial, ~0u, reuse_residual ? &alternate : nullptr);
+        }
+        if (xor_trial_observer_)
+        {
+            const xor_trial_observation observation = {
+                recipe.match == bm::e_xor_match_EQ ? nullptr : xor_tmp_block_,
+                ref_vect_->get_row_idx(ref_idx_), nb, candidate_idx,
+                recipe.chain_size, reference_bytes, trial.size(), plain_size,
+                recipe.match == bm::e_xor_match_EQ ? 0u :
+                    unsigned(ref_xor_trial_buffer_.data()[reference_bytes]),
+                unsigned(ref_xor_trial_buffer_.data()[0]),
+                recipe.chain_size == 1 && recipe.match != bm::e_xor_match_EQ
+                    ? recipe.xor_d64[0] : 0};
+            xor_trial_observer_(xor_trial_context_, observation);
+        }
+        // Include all reference/mask/chain bytes. Ties preserve the ordinary
+        // block or the previously selected recipe (incumbent first).
+        if (trial.size() < best_size)
+        {
+
+            enc.set_pos(plain_begin);
+            enc.memcpy(ref_xor_trial_buffer_.data(), trial.size());
+            best_size = trial.size();
+            ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+        }
+        else
+        {
+            ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+        }
+        // For one later reference, also try positive row-distance metadata and
+        // the configured polarity variants against the current complete winner.
+        if (single_delta_trials_ && recipe.chain_size == 1 &&
+            recipe.match != bm::e_xor_match_EQ)
+        {
+            const auto source = ref_vect_->get_row_idx(recipe.ref_idx[0]);
+            const auto target = ref_vect_->get_row_idx(ref_idx_);
+            const auto mask = recipe.xor_d64[0];
+            if (source > target && source - target <= ~0u && mask)
+            {
+                for (unsigned inverse = 0; inverse < single_delta_trials_; ++inverse)
+                {
+                    trial.set_pos(ref_xor_trial_buffer_.data());
+                    trial.put_8(bm::set_block_xor_ref_delta);
+                    trial.put_h64(mask);
+                    auto meta = trial.get_pos();
+                    unsigned meta_bits;
+                    {
+                        bm::bit_out<bm::encoder> bits(trial);
+                        bits.gamma(unsigned(source - target));
+                        bits.put_bit(inverse);
+                        meta_bits = unsigned(trial.get_pos() - meta) * 8 + bits.pending_bits();
+                    }
+                    auto residual_start = trial.get_pos();
+                    if (inverse)
+                    {
+                        for (unsigned wave = 0; wave < 64; ++wave)
+                        {
+                            if ((mask >> wave) & 1)
+                            {
+                                for (unsigned word = 0; word < 32; ++word)
+                                {
+                                    xor_tmp_block_[wave * 32 + word] ^= ~0u;
+                                } // for word
+                            }
+                        } // for wave
+                    }
+                    ::memcpy(compression_stat_, stats_before, sizeof(stats_before));
+                    ++compression_stat_[bm::set_block_xor_ref_delta];
+                    if (!inverse && reuse_residual && alternate_encoder.size())
+                    {
+                        BM_ASSERT(alternate.metadata_bits == (joint_wire_ ? meta_bits : ~0u));
+                        ::memcpy(compression_stat_, alternate.stats, sizeof(alternate.stats));
+                        --compression_stat_[legacy_parent];
+                        // Replace the legacy parent counter with the delta parent.
+                        ++compression_stat_[bm::set_block_xor_ref_delta];
+                        trial.memcpy(residual_layout_buffer_.data(), alternate_encoder.size());
+                        trial.retain_padding(alternate_encoder.retained_padding());
+                    }
+                    else
+                    {
+                        encode_single(xor_tmp_block_, trial, joint_wire_ ? meta_bits : ~0u);
+                    }
+                    if (joint_wire_ && pack_shared_xor_residual(trial, meta, meta_bits,
+                                                        residual_start, ref_xor_trial_buffer_.data()))
+                    {
+                        --compression_stat_[bm::set_block_xor_ref_delta];
+                        ++compression_stat_[bm::set_block_xor_ref_shared];
+                    }
+                    if (trial.size() < best_size)
+                    {
+
+                        enc.set_pos(plain_begin);
+                        enc.memcpy(ref_xor_trial_buffer_.data(), trial.size());
+                        best_size = trial.size();
+                        ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+                    }
+                } // for inverse
+            }
+        }
+        if (!candidate_idx)
+        {
+            incumbent_size = best_size;
+        }
+    } // for candidate_idx
+    if (compression_level_ == 7 && arithmetic_enabled_ &&
+        *plain_begin == bm::set_block_bit)
     {
-        enc.set_pos(plain_begin);
-        enc.memcpy(ref_xor_trial_buffer_.data(), trial.size());
+        ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+        try_block_arithmetic(blk, nb, enc, plain_begin, best_size, stats_before, ~0u);
+        ::memcpy(stats_plain, compression_stat_, sizeof(stats_plain));
+    }
+    if (sim_model_->four_candidates)
+    {
+        ++xor_trial_stats_.blocks;
+        if (best_size < incumbent_size)
+        {
+            ++xor_trial_stats_.changed;
+            xor_trial_stats_.saved_bytes += incumbent_size - best_size;
+        }
+    }
+    ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+}
+
+/** \brief Replace eligible superblock spans only when opcode 98 saves bytes.
+    \ingroup bvserial
+    \internal
+    \tparam BV Application bvector type, including its allocator.
+    \param bv Source bvector used to enumerate candidate positions.
+    \param baseline Ordinary serialized stream, retained as the exact fallback.
+    \param selected Receives the selected stream, no larger than baseline.
+    \note Uses the serializer's retained workspace. The caller excludes
+        reference XOR, bookmarks and destructive serialization.
+*/
+template<class BV>
+inline
+void serializer<BV>::select_large_sblocks(const BV& bv, buffer& baseline,
+                                          buffer& selected)
+{
+    // encoder::memcpy requires a spare byte even when the unchanged baseline
+    // exactly fills the output. Trim the workspace to the actual record below.
+    selected.resize(baseline.size() + 1, false);
+    if (bv.count() < bm::sblock_large_format::minimum ||
+        (baseline.data()[0] & bm::BM_HM_ID_LIST))
+    {
+        ::memcpy(selected.data(), baseline.data(), baseline.size());
+        selected.resize(baseline.size());
+        return;
+    }
+    auto& workspace = large_sblock_scratch();
+    auto& index = workspace.index;
+    auto& starts = workspace.starts;
+    auto& reader = workspace.reader;
+    auto& scratch = workspace.scratch;
+    index.clear();
+    starts.clear();
+    reader.reset();
+    scratch.clear();
+    reader.set_deserialization_index_construct(&index);
+    reader.set_record_block_starts(&starts);
+    const size_t consumed = reader.deserialize(scratch, baseline.data());
+    // Legacy memory traversal stops at the address-space end before END.
+    if (consumed + 1 == baseline.size() && baseline.data()[consumed] == bm::set_block_end)
+    {
+        index.add_marker_offset(consumed);
+        starts.push_back(bm::set_total_blocks);
     }
     else
     {
-        ::memcpy(compression_stat_, stats_plain, sizeof(stats_plain));
+        bm::serialization_require(consumed == baseline.size());
     }
+    bm::serialization_require(index.size() == starts.size());
+    auto& offsets = workspace.offsets;
+    offsets.clear();
+    offsets.reserve(starts.size() + 1);
+    size_t cursor = 0, idx = 0, next;
+    while (index.find_next_marker_offset(cursor, idx, next))
+    {
+        offsets.push_back(next);
+        cursor = next;
+    }
+    bm::serialization_require(offsets.size() == starts.size() && !offsets.empty());
+    offsets.push_back(baseline.size());
+    bm::encoder output(selected.data(), selected.size());
+    output.memcpy(baseline.data(), offsets[0]);
+    auto& values = workspace.values;
+    auto& transformed = workspace.transformed;
+    auto& trial = workspace.trial;
+    unsigned char tail[16];
+    block_idx_type previous_sb = block_idx_type(-1);
+    bool changed = false;
+    // A run crossing the group boundary is split only in the winning trial.
+    auto write_run = [](bm::encoder& enc, block_idx_type n, bool ones)
+    {
+        if (!n)
+        {
+            return;
+        }
+        if (n == 1)
+        {
+            enc.put_8(ones ? bm::set_block_1one : bm::set_block_1zero);
+            return;
+        }
+        if (!ones && n < 128)
+        {
+            enc.put_8(static_cast<unsigned char>(128 + n));
+            return;
+        }
+        if (n < 256)
+        {
+            enc.put_8(ones ? bm::set_block_8one : bm::set_block_8zero);
+            enc.put_8(static_cast<unsigned char>(n));
+        }
+        else if (n < 65536)
+        {
+            enc.put_8(ones ? bm::set_block_16one : bm::set_block_16zero);
+            enc.put_16(static_cast<unsigned short>(n));
+        }
+        else if (bm::id64_t(n) <= 0xFFFFFFFFull)
+        {
+            enc.put_8(ones ? bm::set_block_32one : bm::set_block_32zero);
+            enc.put_32(unsigned(n));
+        }
+        else
+        {
+            enc.put_8(ones ? bm::set_block_64one : bm::set_block_64zero);
+            enc.put_64(n);
+        }
+    };
+
+    for (size_t i = 0; i < starts.size();)
+    {
+        unsigned code = baseline.data()[offsets[i]];
+        if (code == bm::set_block_end || code == bm::set_block_azero || code == bm::set_block_aone)
+        {
+            output.memcpy(baseline.data() + offsets[i], baseline.size() - offsets[i]);
+            break;
+        }
+        block_idx_type sb = starts[i] / bm::set_sub_array_size;
+        const block_idx_type end = (sb + 1) * bm::set_sub_array_size;
+        const typename BV::size_type first =
+            typename BV::size_type(sb) * bm::set_sub_total_bits;
+        // The final superblock includes the reserved id_max sentinel in its
+        // geometric extent. Use only valid bit positions for counting too.
+        const auto last = bm::min_value(
+            typename BV::size_type(first + bm::set_sub_total_bits - 1),
+            typename BV::size_type(bm::id_max - 1));
+        unsigned count = 0;
+        if (sb != previous_sb)
+        {
+            previous_sb = sb;
+            count = unsigned(bv.count_range(first, last));
+        }
+        unsigned span = unsigned(last - first + 1), zeros = span - count;
+        bool inverse = count > span / 2 && zeros <= sblock_large_inverse_limit_;
+        if (inverse || (count >= bm::sblock_large_format::minimum &&
+                        count <= bm::sblock_large_format::maximum))
+        {
+            const unsigned listed = inverse ? zeros : count;
+            values.clear();
+            values.reserve(listed);
+            if (inverse)
+            {
+                auto& holes = workspace.holes;
+                holes.clear();
+                holes.set_range(first, last);
+                holes -= bv;
+                for (auto e = holes.first(); e.valid(); ++e)
+                {
+                    values.push_back(unsigned(*e - first));
+                } // for e
+            }
+            else
+            {
+                for (auto e = bv.get_enumerator(first);
+                     e.valid() && bm::id64_t(*e) - first < bm::set_sub_total_bits; ++e)
+                {
+                    values.push_back(unsigned(*e - first));
+                } // for e
+            }
+            bm::serialization_require(values.size() == listed);
+            // A preceding full run may already own leading set bits in this
+            // group. Leave such shared records intact in this first experiment.
+            if (bm::id64_t(*bv.get_enumerator(first)) >=
+                bm::id64_t(starts[i]) * bm::gap_max_bits)
+            {
+                size_t j = i;
+                while (j < starts.size() && starts[j] < end)
+                {
+                    unsigned c = baseline.data()[offsets[j]];
+                    if (c == bm::set_block_end || c == bm::set_block_azero || c == bm::set_block_aone)
+                    {
+                        break;
+                    }
+                    ++j;
+                }
+                if (j > i)
+                {
+                    bm::encoder tail_enc(tail, sizeof(tail));
+                    if (j < starts.size() && starts[j] > end)
+                    {
+                        unsigned c = baseline.data()[offsets[j - 1]];
+                        bool ones = c == bm::set_block_1one || c == bm::set_block_8one ||
+                                    c == bm::set_block_16one || c == bm::set_block_32one ||
+                                    c == bm::set_block_64one;
+                        bool zero_run = c >= 128 || c == bm::set_block_1zero ||
+                                        c == bm::set_block_8zero || c == bm::set_block_16zero ||
+                                        c == bm::set_block_32zero || c == bm::set_block_64zero;
+                        bm::serialization_require(ones || zero_run);
+                        write_run(tail_enc, starts[j] - end, ones);
+                    }
+                    trial.resize(size_t(listed) * sizeof(unsigned) + 1024);
+                    bm::encoder encoded(trial.data(), trial.size());
+                    encoded.put_8(bm::set_sblock_bienc_large);
+                    unsigned gap = ~0u;
+                    for (unsigned k = 1; k < listed; ++k)
+                    {
+                        gap = bm::min_value(gap, values[k] - values[k - 1]);
+                    } // for k
+                    unsigned correction = listed < 2 ? 0 : bm::min_value(gap - 1, 65535u);
+                    {
+                        bit_out_type bits(encoded);
+                        bm::sblock_large_encoder<decltype(bits)>::encode(
+                            bits, values.data(), listed, unsigned(sb), correction,
+                            transformed, inverse);
+                    }
+                    const size_t old_bytes = offsets[j] - offsets[i];
+                    size_t best_record_bytes = encoded.size();
+                    const unsigned char* best_record = trial.data();
+                    unsigned best_opcode = bm::set_sblock_bienc_large;
+
+                    // The FULL map is part of opcode 109 whenever hierarchical
+                    // wave selection is enabled by the active policy.
+                    if (sblock_wave_enabled_ && wave_experiment_ && !inverse)
+                    {
+                        auto& full = workspace.full_blocks;
+                        full.clear();
+                        const auto& blocks = bv.get_blocks_manager();
+                        for (unsigned block = 0; block < bm::set_sub_array_size; ++block)
+                        {
+                            if (IS_FULL_BLOCK(blocks.get_block_ptr(unsigned(sb), block)))
+                            {
+                                full.push_back(block);
+                            }
+                        } // for block
+                        if (!full.empty())
+                        {
+                            transformed.clear();
+                            unsigned full_index = 0;
+                            for (unsigned position : values)
+                            {
+                                const unsigned block = position >> bm::set_block_shift;
+                                while (full_index < full.size() && full[full_index] < block)
+                                {
+                                    ++full_index;
+                                }
+                                if (full_index == full.size() || full[full_index] != block)
+                                {
+                                    transformed.push_back(position);
+                                }
+                            } // for position
+                            const unsigned residual_count = unsigned(transformed.size());
+                            bm::serialization_require(
+                                listed == residual_count + unsigned(full.size()) * bm::gap_max_bits);
+                            if (residual_count >= 2 && residual_count <= 131071)
+                            {
+                                auto& model = hier_model_;
+                                model.build(transformed.data(), residual_count);
+                                for (unsigned block : full)
+                                {
+                                    model.full_blocks.push_back(block);
+                                } // for block
+                                unsigned best_width = 0, best_mode = 0;
+                                size_t best_wave_bytes = best_record_bytes;
+                                for (unsigned width = 0; width < 6; ++width)
+                                {
+                                    model.wave.wave_size = 128u << width;
+                                    model.wave.wave_count = unsigned(model.blocks.size()) *
+                                        bm::gap_max_bits / model.wave.wave_size;
+                                    bm::sblock_wave_record wave_record;
+                                    model.wave.prepare(model.source.data(), residual_count,
+                                                       wave_record, true);
+                                    model.pairs();
+                                    for (unsigned mode = 0; mode < 4; ++mode)
+                                    {
+                                        if (mode == 3 && !model.entries)
+                                        {
+                                            continue;
+                                        }
+                                        bm::sblock_wave_bit_counter counter;
+                                        model.encode(counter, unsigned(sb), width, mode);
+                                        const size_t candidate = 1 +
+                                            size_t(4 * ((counter.bits + 31) / 32));
+                                        if (candidate < best_wave_bytes)
+                                        {
+                                            best_wave_bytes = candidate;
+                                            best_width = width;
+                                            best_mode = mode;
+                                        }
+                                    } // for mode
+                                } // for width
+                                if (best_wave_bytes < best_record_bytes)
+                                {
+                                    auto& wave_trial = workspace.wave_trial;
+                                    wave_trial.resize(best_wave_bytes + 1);
+                                    bm::encoder wave_encoded(wave_trial.data(), wave_trial.size());
+                                    wave_encoded.put_8(bm::set_sblock_bienc_wave_hierarchical);
+                                    model.wave.wave_size = 128u << best_width;
+                                    model.wave.wave_count = unsigned(model.blocks.size()) *
+                                        bm::gap_max_bits / model.wave.wave_size;
+                                    bm::sblock_wave_record wave_record;
+                                    model.wave.prepare(model.source.data(), residual_count,
+                                                       wave_record, true);
+                                    model.pairs();
+                                    {
+                                        bit_out_type bits(wave_encoded);
+                                        model.encode(bits, unsigned(sb), best_width, best_mode);
+                                    }
+                                    bm::serialization_require(wave_encoded.size() == best_wave_bytes);
+                                    best_record_bytes = best_wave_bytes;
+                                    best_record = wave_trial.data();
+                                    best_opcode = bm::set_sblock_bienc_wave_hierarchical;
+                                }
+                            }
+                        }
+                    }
+                    const size_t new_bytes = best_record_bytes + tail_enc.size();
+                    if (new_bytes < old_bytes)
+                    {
+                        output.memcpy(best_record, best_record_bytes);
+                        output.memcpy(tail, tail_enc.size());
+                        changed = true;
+                        for (size_t k = i; k < j; ++k)
+                        {
+                            unsigned c = baseline.data()[offsets[k]];
+                            if (compression_stat_[c])
+                            {
+                                --compression_stat_[c];
+                            }
+                        } // for k
+                        ++compression_stat_[best_opcode];
+                        if (end == bm::set_total_blocks && j < starts.size() &&
+                            (baseline.data()[offsets[j]] == bm::set_block_azero ||
+                             baseline.data()[offsets[j]] == bm::set_block_end))
+                        {
+                            output.put_8(bm::set_block_end);
+                            i = starts.size();
+                            continue;
+                        }
+                        i = j;
+                        continue;
+                    }
+                }
+            }
+        }
+        output.memcpy(baseline.data() + offsets[i], offsets[i + 1] - offsets[i]);
+        ++i;
+    } // for i
+    selected.resize(output.size());
+    if (changed)
+    {
+        selected.data()[0] |= bm::BM_HM_SPARSE;
+    }
+    bm::serialization_require(selected.size() <= baseline.size());
 }
-
-} // namespace bm
-
-// Large-superblock selection needs the serializer, index and opcode declarations.
-#include "bmsblocklarge.h"
-
-namespace bm
-{
 
 template<class BV>
 template<class OUT>
@@ -7089,7 +8392,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                             return false;
                         const unsigned char* route_begin =
                             gap_route_diagnostics_ ? enc.get_pos() : 0;
-                        if (sblock_adaptive_enabled_ || sblock_wave1024_enabled_)
+                        if (sblock_adaptive_enabled_ || sblock_wave_enabled_)
                             bienc_arr_sblock_select(bv, i0, enc);
                         else
                         {
@@ -7227,6 +8530,11 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             }
         }
 
+        size_type gather_stats[256];
+        if (xor_gather_ && ref_vect_ && !BM_IS_GAP(blk))
+            ::memcpy(gather_stats, compression_stat_, sizeof(gather_stats));
+        unsigned char* gather_begin = enc.get_pos();
+
         if (ref_vect_) // XOR candidates are accepted independently per block
         {
             BM_ASSERT(sim_model_);
@@ -7242,6 +8550,8 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                 if (mchain.match != e_no_xor_match)
                 {
                     encode_xor_block(blk, sub_stat, i, mchain, enc);
+                    if (xor_gather_ && !BM_IS_GAP(blk))
+                        encode_gather_block(blk, sub_stat, i, gather_begin, gather_stats, enc);
                     if (free_)
                         const_cast<blocks_manager_type&>(bman).zero_block(i);
                     continue;
@@ -7257,6 +8567,8 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
         if (block_type == bm::set_block_aone)
             goto full_block;
 
+        if (xor_gather_ && ref_vect_ && !BM_IS_GAP(blk))
+            encode_gather_block(blk, sub_stat, i, gather_begin, gather_stats, enc);
         if (gap_route_diagnostics_)
         {
             const bm::id64_t bytes = bm::id64_t(enc.get_pos() - route_begin);
@@ -7719,8 +9031,6 @@ void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bwt_block(
             post == bm::set_block_periodic_groups_first ||
             post == bm::set_block_periodic_interleaved_fixed,
             post == bm::set_block_periodic_interleaved_fixed);
-    else if (post == bm::set_block_periodic_post)
-        bm::periodic_read_formula(dec, blk);
     else if (post == bm::set_block_bwt_full_post)
     {
         unsigned short primary = dec.get_16();
@@ -7747,15 +9057,7 @@ void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bwt_block(
     }
     else
     {
-        bm::serialization_require(post == bm::set_block_bwt_post);
-        unsigned char packed[bm::bwt_index_bytes];
-        for (unsigned i = 0; i < sizeof(packed); ++i) packed[i] = dec.get_8();
-        if (IS_VALID_ADDR(blk))
-        {
-            unsigned short primary[bm::block_waves];
-            bm::bwt_unpack_indexes(packed, primary);
-            bm::bwt_inverse_block(blk, primary);
-        }
+        bm::serialization_require(false);
     }
 
 }
@@ -7764,7 +9066,7 @@ template<typename DEC, typename BLOCK_IDX, class Alloc>
 void
 deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_arr(decoder_type& dec,
                                                bm::word_t*   blk,
-                                               unsigned block_type)
+                                               unsigned block_type, bit_in_type* shared)
 {
     BM_ASSERT(!BM_IS_GAP(blk));
     bm::gap_word_t min_v, max_v, max_delta, arr_len;
@@ -7787,7 +9089,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_arr(decoder_type& dec,
             bm::gap_word_t* arr_s = (bm::gap_word_t*) ex0_arr_;
             unsigned s_cnt, r_cnt;
 
-            bit_in_type bin(dec);
+            bit_in_type local(dec);
+            bit_in_type& bin = shared ? *shared : local;
             // TODO: add proper _dry() function
 
             unsigned h3f =
@@ -7848,7 +9151,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_arr(decoder_type& dec,
         {
             bm::word_t* tblk = blk;
 
-            bit_in_type bin(dec);
+            bit_in_type local(dec);
+            bit_in_type& bin = shared ? *shared : local;
 
             arr_len = (bm::gap_word_t) bin.delta16s();
             bool need_min_max = bin.get_bits(1);
@@ -7888,7 +9192,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_arr(decoder_type& dec,
 
     arr_len = dec.get_16();
     
-    bit_in_type bin(dec);
+    bit_in_type local(dec);
+    bit_in_type& bin = shared ? *shared : local;
 
     if (!IS_VALID_ADDR(blk))
     {
@@ -7975,7 +9280,10 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_sb_arr(
             }
             dst_arr[0] = min_v;
             dst_arr[len-1] = max_v;
-            bin.bic_decode_u32_cm(&dst_arr[1], len-2, min_v, max_v);
+            if (len > 2)
+            {
+                bin.bic_decode_u32_cm(&dst_arr[1], len - 2, min_v, max_v);
+            }
 
             if (min0)
             {
@@ -8070,7 +9378,10 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_sb_arr(
 
             dst_arr[0] = min_v;
             dst_arr[len-1] = max_v;
-            bin.bic_decode_u32_cm(&dst_arr[1], len-2, min_v+1, max_v-1);
+            if (len > 2)
+            {
+                bin.bic_decode_u32_cm(&dst_arr[1], len - 2, min_v + 1, max_v - 1);
+            }
 
             if (min0)
             {
@@ -8080,11 +9391,27 @@ unsigned deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_bic_sb_arr(
         }
         break;
 
-    case bm::set_sblock_bienc_wave_adaptive:
+    case bm::set_sblock_bienc_wave_hierarchical:
+    {
+        // Opcode 109 (bm::set_sblock_bienc_wave_hierarchical) can describe
+        // FULL blocks separately, requiring a larger decoded-position buffer.
+        decoder_type probe = dec;
+        bit_in_type prefix(probe);
+        prefix.get_bits(8); // Width, extension, index mode and payload mode.
+        const bool has_full = bool(prefix.get_bits(1));
+        if (has_full)
+        {
+            large_sb_ids_.resize(131071);
+            len = bm::sblock_hier_model<Alloc>::decode(bin, large_sb_ids_.data(),
+                *sb_idx, wave_map_, wave_occupied_, wave_full_);
+            sb_id_array_ = large_sb_ids_.data();
+            return len;
+        }
+        return bm::sblock_hier_model<Alloc>::decode(bin, dst_arr, *sb_idx,
+            wave_map_, wave_occupied_, wave_full_);
+    }
+    case bm::set_sblock_bienc_wave_runs:
         return bm::sblock_wave_adaptive_model<Alloc>::decode(bin, dst_arr, *sb_idx, wave_map_, wave_occupied_);
-    case bm::set_sblock_bienc_wave1024:
-        return bm::sblock_wave1024_model<Alloc>::decode(bin, dst_arr, *sb_idx, wave_map_, wave_occupied_);
-
     case bm::set_sblock_bienc_adaptive:
         {
             *sb_idx = bin.get_32_no();
@@ -8339,7 +9666,7 @@ void
 deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
                                            unsigned        block_type, 
                                            bm::gap_word_t* dst_block,
-                                           bm::gap_word_t& gap_head)
+                                           bm::gap_word_t& gap_head, bit_in_type* shared)
 {
     switch (block_type)
     {
@@ -8363,7 +9690,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
             };
             read_component(dst_block);
             gap_head = dst_block[0];
-            bit_in_type bin(decoder);
+            bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
             const unsigned n = bin.gamma();
             const unsigned min_delta = bin.gamma();
             bm::serialization_require(n && n <= 4095u &&
@@ -8442,7 +9770,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
             *dst_block = gap_head;
             gap_word_t* gap_data_ptr = dst_block + 1;
 
-            bit_in_type bin(decoder);
+            bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
             gap_word_t v = (gap_word_t)bin.gamma();
             gap_word_t gap_sum = *gap_data_ptr = (gap_word_t)(v - 1);
             for (unsigned i = 1; i < len; ++i)
@@ -8460,7 +9789,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
             *dst_block = gap_head;
             bm::gap_word_t min_v = decoder.get_16();
             dst_block[1] = min_v;
-            bit_in_type bin(decoder);
+            bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
             bin.bic_decode_u16(&dst_block[2], len-2, min_v, 65535);
             dst_block[len] = bm::gap_max_bits - 1;
         }
@@ -8484,7 +9814,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
 
             dst_block[0] = gap_head;
             dst_block[1] = min_v;
-            bit_in_type bin(decoder);
+            bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
             bin.bic_decode_u16(&dst_block[2], len-3, min_v, max_v);
             dst_block[len-1] = max_v;
             dst_block[len] = bm::gap_max_bits - 1;
@@ -8495,7 +9826,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
             bm::gap_word_t min_v, max_v;
             BM_ASSERT(!gap_head);
 
-            bit_in_type bin(decoder);
+            bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
 
             gap_head = (bm::gap_word_t) bin.delta16s();
 
@@ -8522,7 +9854,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
 
             BM_ASSERT(gap_head == 0);
 
-            bit_in_type bin(decoder);
+            bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
 
             unsigned char head_v3 = (unsigned char) bin.get_bits(8);
             gap_head = (bm::gap_word_t) bin.delta16s();
@@ -8626,7 +9959,8 @@ deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
         {
         BM_ASSERT(gap_head == 0);
 
-        bit_in_type bin(decoder);
+        bit_in_type local(decoder);
+        bit_in_type& bin = shared ? *shared : local;
         unsigned len = bin.gamma() + 1;
         unsigned start_flag = bin.get_bit();
         unsigned use_gamma = bin.get_bit();
@@ -9065,9 +10399,15 @@ void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
 
     const unsigned char* rec_begin = sblock_bic_records_ ? dec.get_pos() : 0;
     unsigned len = this->read_bic_sb_arr(dec, btype, arr, &sb);
-    if (btype==bm::set_sblock_bienc_large) arr=this->sb_id_array_;
+    if (btype==bm::set_sblock_bienc_large ||
+        btype==bm::set_sblock_bienc_wave_hierarchical)
+    {
+        arr=this->sb_id_array_;
+    }
     if(btype==bm::set_sblock_bienc_large && this->large_sb_inverse_)
     {
+        // Opcode 98 (bm::set_sblock_bienc_large) may list zero positions.
+        // Reconstruct the intervening one ranges, clipped to the request.
         const size_type first=size_type(sb)*bm::set_sub_total_bits;
         const size_type last=bm::min_value(size_type(first+bm::set_sub_total_bits-1),size_type(bm::id_max-1));
         size_type next=first;
@@ -9101,9 +10441,31 @@ void deserializer<BV, DEC>::decode_arr_sblock(unsigned char  btype,
             {unsigned(last-first+1)-len,unsigned(dec.get_pos()-rec_begin)+1});
         return;
     }
+    if (btype == bm::set_sblock_bienc_wave_hierarchical &&
+        !this->wave_full_.empty())
+    {
+        // Restore FULL blocks separately from the decoded individual positions.
+        const size_type first = size_type(sb) * bm::set_sub_total_bits;
+        for (unsigned block : this->wave_full_)
+        {
+            size_type lo = first + size_type(block) * bm::gap_max_bits;
+            size_type hi = lo + bm::gap_max_bits - 1;
+            if (is_range_set_)
+            {
+                lo = lo < idx_from_ ? idx_from_ : lo;
+                hi = bm::min_value(hi, idx_to_);
+            }
+            if (lo <= hi)
+            {
+                bv.set_range(lo, hi);
+            }
+        } // for block
+    }
     if (sblock_bic_records_)
         sblock_bic_records_->push_back(
-            {len, unsigned(dec.get_pos() - rec_begin) + 1});
+            {len + (btype == bm::set_sblock_bienc_wave_hierarchical ?
+                    unsigned(this->wave_full_.size()) * bm::gap_max_bits : 0u),
+             unsigned(dec.get_pos() - rec_begin) + 1});
 
     const typename BV::size_type sb_max_bc = bm::set_sub_array_size * bm::gap_max_bits;
     typename BV::size_type from = sb * sb_max_bc;
@@ -9452,11 +10814,23 @@ std::cout << "size=" << dec_last_size;
         size_t record_bound = 8 * bm::set_block_size * sizeof(bm::word_t) + 1024;
         if (btype == bm::set_sblock_bienc || btype == bm::set_sblock_bienc_v3 ||
             btype == bm::set_sblock_bienc_adaptive ||
-            btype == bm::set_sblock_bienc_wave1024 || btype == bm::set_sblock_bienc_wave_adaptive ||
+            btype == bm::set_sblock_bienc_wave_hierarchical ||
+            btype == bm::set_sblock_bienc_wave_runs ||
             btype == set_block_arrbit || btype == bm::set_block_arrbit_inv ||
             btype == set_block_arrgap || btype == set_block_arrgap_inv ||
             btype == set_block_arrgap_egamma || btype == set_block_arrgap_egamma_inv)
             record_bound = size_t(65536) * sizeof(unsigned) + 1024;
+        if (btype == bm::set_sblock_bienc_wave_hierarchical)
+        {
+            if (!in.prepare(8)) return size_t(-1);
+            decoder_type probe = dec;
+            bm::bit_in<decoder_type> prefix(probe);
+            prefix.get_bits(8);
+            if (prefix.get_bits(1))
+            {
+                record_bound = size_t(131071) * sizeof(unsigned) + 1024;
+            }
+        }
         if (btype==bm::set_sblock_bienc_large)
         {
             // Peek only the fixed prefix to size the bounded stream window to
@@ -9481,6 +10855,81 @@ std::cout << "size=" << dec_last_size;
                 deserialization_index_out_->add_bookmark(nb_i, marker_pos);
         }
         
+        if (btype == bm::set_block_xor_parallel_gather || btype == bm::set_block_xor_ref_shared)
+        {
+            // Shared layouts put the residual before gamma-coded reference
+            // coordinates in one bit stream. Decode even when only scanning.
+            if (x_ref_d64_)
+            {
+                xor_decode(bman);
+            }
+            const bool single = btype == bm::set_block_xor_ref_shared;
+            const unsigned flags = single ? 3u : dec.get_8();
+            const auto mask = dec.get_h64();
+            bm::serialization_require(flags <= 3 && mask);
+            const unsigned residual_op = dec.get_8();
+            bm::bit_in<decoder_type> bits(dec);
+            const bool restore = !deserialization_index_out_ && !scan_tail && is_block_requested(nb_i);
+            joint_residual(residual_op, dec, bits, restore ? temp_block_ : nullptr);
+            auto base = gather_target_id_;
+            if (restore && (flags & 2) && base == bv_ref_vector_type::not_found())
+            {
+                bm::serialization_require(ref_vect_ != nullptr);
+                auto index = ref_vect_->find_bv(&bv);
+                bm::serialization_require(index != ref_vect_->not_found());
+                base = ref_vect_->get_row_idx(index);
+            }
+            bm::id64_t inversions = 0;
+            // The mask selects same-position waves; a single-reference record
+            // assigns its one row and polarity to the entire mask.
+            for (unsigned wave = 0; wave < 64; ++wave)
+            {
+                const auto bit = bm::id64_t(1) << wave;
+                if (!(mask & bit)) continue;
+                const unsigned delta = bits.gamma();
+                bm::serialization_require(delta != 0);
+                const auto selected = single ? mask : bit;
+                if ((flags & 1) && bits.get_bit())
+                {
+                    inversions |= selected;
+                }
+                if (restore)
+                {
+                    bm::serialization_require(delta && (!(flags & 2) || base <= ~size_type(0) - delta));
+                    const auto id = (flags & 2) ? base + delta : delta - 1;
+                    bm::serialization_require(ref_vect_ && ref_vect_->find(id) != ref_vect_->not_found());
+                    auto& entry = xor_chain_[xor_chain_size_++];
+                    entry.ref_idx = id;
+                    entry.xor_d64 = selected;
+                }
+                if (single)
+                {
+                    break;
+                }
+            } // for wave
+            // Rebuild the source before OR-ing it into an existing destination.
+            if (restore)
+            {
+                x_nb_ = nb_i;
+                xor_decode_chain(temp_block_);
+                for (unsigned wave = 0; wave < 64; ++wave)
+                {
+                    if ((inversions >> wave) & 1)
+                    {
+                        for (unsigned j = 0; j < 32; ++j)
+                        {
+                            temp_block_[wave * 32 + j] ^= ~0u;
+                        } // for j
+                    }
+                } // for wave
+                bv.combine_operation_with_block(nb_i, temp_block_, 0, BM_OR);
+                normalize_decoded_blocks(bman, nb_i, nb_i);
+                xor_reset();
+            }
+            ++nb_i;
+            continue;
+        }
+
         if (btype & (1 << 7)) // check if short zero-run packed here
         {
             nb = btype & ~(1 << 7);
@@ -9712,9 +11161,10 @@ dec_last_size = dec_size;
                 this->read_bic_gap(dec, 0);
                 break;
             case bm::set_block_bwt:
-    case bm::set_block_bwt_unpacked:
-                if (btype == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(dec, 0);
-                else this->read_bwt_block(dec, 0);
+            case bm::set_block_bwt_unpacked:
+            case bm::set_block_arithmetic:
+            case bm::set_block_bit_0runs_arithmetic:
+                this->read_transform_block(dec, btype, nullptr);
                 break;
             case bm::set_block_bit_digest0:
                 this->read_digest0_block(dec, 0);
@@ -9722,8 +11172,8 @@ dec_last_size = dec_size;
             case bm::set_sblock_bienc:
             case bm::set_sblock_bienc_v3:
             case bm::set_sblock_bienc_adaptive:
-            case bm::set_sblock_bienc_wave_adaptive:
-            case bm::set_sblock_bienc_wave1024:
+            case bm::set_sblock_bienc_wave_hierarchical:
+            case bm::set_sblock_bienc_wave_runs:
             case bm::set_sblock_bienc_large:
             {
                 unsigned sb = 0;
@@ -9732,8 +11182,8 @@ dec_last_size = dec_size;
                 continue; // bypass ++i;
             }
             case bm::set_sblock_bienc_gaps_v3:
-                nb_i += (bm::set_sub_array_size - j0);
-                continue; // bypass ++i;
+                bm::serialization_require(false); // reserved opcode 69
+                break;
             case set_nb_bookmark32:
                 this->bookmark_idx_ = nb_i;
                 this->skip_offset_ = dec.get_32();
@@ -9767,6 +11217,33 @@ dec_last_size = dec_size;
             case bm::set_block_ref_eq:
                 dec.get_32();
                 break;
+            case bm::set_block_xor_ref_delta:
+            {
+                if (!dec.get_h64()) goto throw_err;
+                bm::bit_in<decoder_type> bits(dec);
+                bits.gamma();
+                bits.get_bit();
+                continue;
+            }
+            case bm::set_block_xor_gather:
+            {
+                const unsigned flags = dec.get_8();
+                if (flags > 3) goto throw_err;
+                bm::id64_t mask = dec.get_h64();
+                if (!mask) goto throw_err;
+                bm::bit_in<decoder_type> bits(dec);
+                for (unsigned wave = 0; wave < 64; ++wave)
+                {
+                    if (!((mask >> wave) & 1)) continue;
+                    bits.gamma();
+                    if (flags & 1) bits.get_bit();
+                } // for wave
+                continue;
+            }
+            case bm::set_block_xor_ref8_h64:
+                dec.get_8();
+                dec.get_h64();
+                continue; // XOR marker does not advance nb_i
             case bm::set_block_xor_ref8:
             case bm::set_block_xor_ref8_um:
                 dec.get_8();
@@ -9968,6 +11445,8 @@ dec_last_size = dec_size;
             break;
         case bm::set_block_bwt:
         case bm::set_block_bwt_unpacked:
+        case bm::set_block_arithmetic:
+        case bm::set_block_bit_0runs_arithmetic:
         {
             if (btype == bm::set_block_bwt_unpacked && !blk &&
                 !skip_payload && !x_ref_d64_)
@@ -9981,8 +11460,7 @@ dec_last_size = dec_size;
             // FULL OR source is unchanged. Pending reference-XOR must first
             // reconstruct its residual, so only ordinary OR can take this path.
             const bool dry_payload = skip_payload || (IS_FULL_BLOCK(blk) && !x_ref_d64_);
-            if (btype == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(dec, dry_payload ? 0 : temp_block);
-            else this->read_bwt_block(dec, dry_payload ? 0 : temp_block);
+            this->read_transform_block(dec, btype, dry_payload ? nullptr : temp_block);
             if (!dry_payload)
                 bv.combine_operation_with_block(nb_i, temp_block, 0, BM_OR);
             break;
@@ -9995,16 +11473,15 @@ dec_last_size = dec_size;
         case bm::set_sblock_bienc:
         case bm::set_sblock_bienc_v3:
         case bm::set_sblock_bienc_adaptive:
-        case bm::set_sblock_bienc_wave_adaptive:
-        case bm::set_sblock_bienc_wave1024:
+        case bm::set_sblock_bienc_wave_hierarchical:
+        case bm::set_sblock_bienc_wave_runs:
         case bm::set_sblock_bienc_large:
             decode_arr_sblock(btype, dec, bv);
             nb_i += (bm::set_sub_array_size - j0);
             continue; // bypass ++i;
         case bm::set_sblock_bienc_gaps_v3:
-            //decode_gaps_sblock(btype, dec, bv);
-            nb_i += (bm::set_sub_array_size - j0);
-            continue; // bypass ++i;
+            bm::serialization_require(false); // reserved opcode 69
+            break;
 
         // --------------------------------------- bookmarks and skip jumps
         //
@@ -10162,6 +11639,53 @@ dec_last_size = dec_size;
                                                     BM_IS_GAP(ref_blk), BM_OR);
                 break;
             }
+        case bm::set_block_xor_ref_delta:
+        case bm::set_block_xor_gather:
+        {
+            // Legacy layouts precede the residual with reference metadata;
+            // defer XOR reconstruction until that residual has been read.
+            if (x_ref_d64_) xor_decode(bman);
+            const bool single = btype == bm::set_block_xor_ref_delta;
+            const unsigned flags = single ? 3u : dec.get_8();
+            if (flags > 3) goto throw_err;
+            x_ref_d64_ = dec.get_h64();
+            if (!x_ref_d64_) goto throw_err;
+            if (!ref_vect_) goto throw_err;
+            auto base = gather_target_id_;
+            if ((flags & 2) && base == bv_ref_vector_type::not_found())
+            {
+                const auto idx = ref_vect_->find_bv(&bv);
+                if (idx == ref_vect_->not_found()) goto throw_err;
+                base = ref_vect_->get_row_idx(idx);
+            }
+            gather_pending_ = true;
+            x_nb_ = nb_i;
+            bm::bit_in<decoder_type> bits(dec);
+            for (unsigned wave = 0; wave < 64; ++wave)
+            {
+                if (!((x_ref_d64_ >> wave) & 1)) continue;
+                auto& entry = xor_chain_[xor_chain_size_++];
+                const unsigned code = bits.gamma();
+                if (!code || ((flags & 2) && base > ~size_type(0) - code))
+                    goto throw_err;
+                entry.ref_idx = (flags & 2) ? base + code : code - 1;
+                if (!ref_vect_ || ref_vect_->find(entry.ref_idx) == ref_vect_->not_found()) goto throw_err;
+                entry.xor_d64 = single ? x_ref_d64_ : bm::id64_t(1) << wave;
+                if ((flags & 1) && bits.get_bit()) gather_polarity_ |= entry.xor_d64;
+                if (single)
+                {
+                    break;
+                }
+            } // for wave
+            if (blk)
+            {
+                or_block_ = bman.deoptimize_block(nb_i);
+                bman.set_block_ptr(nb_i, 0);
+                or_block_idx_ = nb_i;
+            }
+            continue;
+        }
+        case bm::set_block_xor_ref8_h64:
         case bm::set_block_xor_ref8:
         case bm::set_block_xor_ref8_um:
                 if (x_ref_d64_) // previous delayed XOR post proc.
@@ -10181,7 +11705,11 @@ dec_last_size = dec_size;
                     xor_decode(bman);
                 row_idx = dec.get_32();
             process_xor:
-                if (btype <= bm::set_block_xor_ref32)
+                if (btype == bm::set_block_xor_ref8_h64)
+                {
+                    x_ref_d64_ = dec.get_h64();
+                }
+                else if (btype <= bm::set_block_xor_ref32)
                     x_ref_d64_ = dec.get_64();
                 else
                     x_ref_d64_ = ~0ull;
@@ -10282,9 +11810,9 @@ dec_last_size = dec_size;
     // Consume and index its trailing END identically in RAM and streams.
     if (nb_i == bm::set_total_blocks &&
         (btype == set_sblock_bienc || btype == set_sblock_bienc_v3 ||
-         btype == set_sblock_bienc_wave1024 ||
          btype == set_sblock_bienc_adaptive ||
-         btype == set_sblock_bienc_wave_adaptive ||
+         btype == set_sblock_bienc_wave_hierarchical ||
+         btype == set_sblock_bienc_wave_runs ||
          btype == set_sblock_bienc_large))
     {
         const size_t end_pos=in.tell();
@@ -10396,6 +11924,8 @@ bool deserializer<BV, DEC>::is_single_block_payload_marker(
 {
     switch (btype)
     {
+    case bm::set_block_xor_parallel_gather:
+    case bm::set_block_xor_ref_shared:
     case bm::set_block_bit:
     case bm::set_block_bit_1bit:
     case bm::set_block_bit_0runs:
@@ -10430,6 +11960,8 @@ bool deserializer<BV, DEC>::is_single_block_payload_marker(
     case bm::set_block_bit_digest0:
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
         return true;
     default:
         return false;
@@ -10497,6 +12029,32 @@ void deserializer<BV, DEC>::xor_decode(blocks_manager_type& bman)
 
     unsigned i0, j0;
     const bm::word_t* ref_blk;
+
+    if (gather_pending_)
+    {
+        // Undo the selected reference waves and polarity, then merge any
+        // pre-existing target block to preserve deserialization OR semantics.
+        bm::get_block_coord(x_nb_, i0, j0);
+        bm::word_t* target = bman.deoptimize_block(i0, j0, true);
+        xor_decode_chain(target);
+        for (unsigned wave = 0; wave < 64; ++wave)
+        {
+            if (!((gather_polarity_ >> wave) & 1)) continue;
+            for (unsigned word = 0; word < 32; ++word)
+                target[wave * 32 + word] = ~target[wave * 32 + word];
+        } // for wave
+        if (or_block_)
+        {
+            bm::bit_block_or(target, or_block_);
+            alloc_.free_bit_block(or_block_);
+            or_block_ = 0;
+            or_block_idx_ = 0;
+        }
+        xor_reset();
+        bman.optimize_block(i0, j0, target, temp_block_,
+                            bvector_type::opt_compress, 0);
+        return;
+    }
 
     {
         const bvector_type* ref_bv = ref_vect_->get_bv(x_ref_idx_);
@@ -10622,6 +12180,8 @@ void deserializer<BV, DEC>::xor_reset() BMNOEXCEPT
 {
     x_ref_idx_ = 0; x_ref_d64_ = 0; xor_chain_size_ = 0;
     x_nb_ = 0;
+    gather_pending_ = false;
+    gather_polarity_ = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -10839,7 +12399,9 @@ void serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::next()
         case bm::set_block_bitgap_bienc:
         case bm::set_block_bit_digest0:
         case bm::set_block_bwt:
-    case bm::set_block_bwt_unpacked:
+        case bm::set_block_bwt_unpacked:
+        case bm::set_block_arithmetic:
+        case bm::set_block_bit_0runs_arithmetic:
             state_ = e_bit_block;
             break;
         case set_block_gap:
@@ -10939,6 +12501,11 @@ void serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::next()
         // throw or assert here
         //
         case set_block_ref_eq:
+        case bm::set_block_xor_parallel_gather:
+        case bm::set_block_xor_ref_shared:
+        case bm::set_block_xor_ref_delta:
+        case bm::set_block_xor_gather:
+        case bm::set_block_xor_ref8_h64:
         case set_block_xor_ref8:
         case set_block_xor_ref16:
         case set_block_xor_ref32:
@@ -10950,8 +12517,8 @@ void serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::next()
         case set_sblock_bienc:
         case set_sblock_bienc_v3:
         case set_sblock_bienc_adaptive:
-        case set_sblock_bienc_wave_adaptive:
-        case set_sblock_bienc_wave1024:
+        case set_sblock_bienc_wave_hierarchical:
+        case set_sblock_bienc_wave_runs:
         case set_sblock_bienc_large:
             BM_ASSERT(0); 
             BM_FALLTHROUGH;
@@ -11042,8 +12609,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_ASSIGN(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, dst_block);
-        else this->read_bwt_block(decoder_, dst_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, dst_block);
         break;
     case set_block_bit:
         decoder_.get_32(dst_block, bm::set_block_size);
@@ -11148,8 +12716,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_OR(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         bm::bit_block_or(dst_block, tmp_block);
         break;
 
@@ -11236,8 +12805,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_AND(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, dst_block ? tmp_block : 0);
-        else this->read_bwt_block(decoder_, dst_block ? tmp_block : 0);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, dst_block ? tmp_block : 0);
         if (dst_block) bm::bit_block_and(dst_block, tmp_block);
         break;
     case set_block_bit:
@@ -11361,8 +12931,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_XOR(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         bm::bit_block_xor(dst_block, tmp_block);
         break;
     case set_block_bit:
@@ -11477,8 +13048,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_SUB(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         bm::bit_block_sub(dst_block, tmp_block);
         break;
     case set_block_bit:
@@ -11590,8 +13162,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
         for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -11689,8 +13262,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_A(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, 0);
-        else this->read_bwt_block(decoder_, 0);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, 0);
         break;
     case set_block_bit:
         decoder_.get_32(0, bm::set_block_size);
@@ -11778,8 +13352,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_AND(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
         for (unsigned i = 0; i < bm::set_block_size; ++i)
@@ -11873,8 +13448,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_OR(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
         {
@@ -11984,8 +13560,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_XOR(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
         {
@@ -12096,8 +13673,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_AB(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
         {
@@ -12208,8 +13786,9 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_BA(
     {
     case bm::set_block_bwt:
     case bm::set_block_bwt_unpacked:
-        if (block_type_ == bm::set_block_bwt_unpacked) this->read_bwt_unpacked_block(decoder_, tmp_block);
-        else this->read_bwt_block(decoder_, tmp_block);
+    case bm::set_block_arithmetic:
+    case bm::set_block_bit_0runs_arithmetic:
+        this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
         {
@@ -12617,29 +14196,24 @@ operation_deserializer<BV>::deserialize(bvector_type&        bv,
 
     if (header_flag & BM_HM_SPARSE)
     {
-        size_type count = 0;
+        // Sparse OR can decode directly; other operations need a temporary
+        // vector. The generic entry point handles differing byte order.
+        bvector_type& target = op == bm::set_OR ? bv : bv_tmp_;
+        if (op != bm::set_OR)
+        {
+            target.clear(true);
+            target.set_new_blocks_strat(bm::BM_GAP);
+        }
         if (bo_current == bo)
         {
-            if (op == bm::set_OR)
-            {
-                de_.reset();
-                de_.deserialize(bv, buf);
-            }
-            else
-            {
-                bv_tmp_.clear(true);
-                bv_tmp_.set_new_blocks_strat(bm::BM_GAP);
-                de_.reset();
-                de_.deserialize(bv_tmp_, buf);
-                count = bm::process_operation(bv, bv_tmp_, op);
-            }
+            de_.reset();
+            de_.deserialize(target, buf);
         }
         else
         {
-            // TODO: implement byte-order aware sparse deserialization
-            BM_ASSERT(0);
+            bm::deserialize(target, buf);
         }
-        return count;
+        return op == bm::set_OR ? 0 : bm::process_operation(bv, target, op);
     }
 
     if (bo_current == bo)
@@ -12710,29 +14284,26 @@ void operation_deserializer<BV>::deserialize_range(
 
     if (header_flag & BM_HM_SPARSE)
     {
+        bv_tmp_.clear(true);
+        bv_tmp_.set_new_blocks_strat(bm::BM_GAP);
         if (bo_current == bo)
         {
-            bv_tmp_.clear(true);
-            bv_tmp_.set_new_blocks_strat(bm::BM_GAP);
             de_.reset();
             de_.set_range(idx_from, idx_to);
             de_.deserialize(bv_tmp_, buf);
             de_.reset();
-
-            if (bv.any())
-            {
-                bv.bit_and(bv_tmp_, bvector_type::opt_compress);
-            }
-            else
-            {
-                bv.swap(bv_tmp_);
-            }
-
         }
         else
         {
-            // TODO: implement byte-order aware sparse deserialization
-            BM_ASSERT(0);
+            bm::deserialize_range(bv_tmp_, buf, idx_from, idx_to);
+        }
+        if (bv.any())
+        {
+            bv.bit_and(bv_tmp_, bvector_type::opt_compress);
+        }
+        else
+        {
+            bv.swap(bv_tmp_);
         }
         return;
     }
@@ -13061,7 +14632,9 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
             bm::word_t* blk = bman.get_block_ptr(i0, j0);
             if (IS_FULL_BLOCK(blk) && op == bm::set_OR &&
                 (sit.get_block_type() == bm::set_block_bwt ||
-                 sit.get_block_type() == bm::set_block_bwt_unpacked))
+                 sit.get_block_type() == bm::set_block_bwt_unpacked ||
+                 sit.get_block_type() == bm::set_block_arithmetic ||
+                 sit.get_block_type() == bm::set_block_bit_0runs_arithmetic))
             {
                 // Consume and validate without deoptimizing FULL or running BWT.
                 sit.get_bit_block(nullptr, temp_block, bm::set_ASSIGN);

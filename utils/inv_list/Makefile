@@ -57,7 +57,7 @@ endif
 include ../../makefile.in
 
 # Shared serializer settings must rebuild the app even without generated dependencies.
-$(CXXOBJECTS): $(wildcard inv_list*.h) ../../src/bmbvhash.h
+$(CXXOBJECTS): $(wildcard inv_list*.h) ../../src/bmbvhash.h ../../src/bmarithmetic.h
 
 # Build this utility with BitMagic's native AArch64 NEON backend. Force the
 # object rebuild because changing BMOPTFLAGS alone does not update timestamps.
@@ -88,3 +88,8 @@ gov2-block-stats-neon:
 gov2-playlist-neon:
 	$(CXX) $(CXXFLAGS) -DBMNEONOPT $(DBGFLAGS) \
 	    experiments/opcode_playlist/playlist.cpp -o gov2_playlist $(LDFLAGS)
+
+# Research-only horizontal posting-list survey (portable scalar wave search).
+.PHONY: gov2-posting-xor
+gov2-posting-xor:
+	$(CXX) $(CXXFLAGS) $(DBGFLAGS) experiments/horizontal/posting_xor.cpp -o gov2_posting_xor $(LDFLAGS)

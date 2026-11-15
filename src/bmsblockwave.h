@@ -6,14 +6,12 @@
     \ingroup bvserial
     \internal
 
-    Implements bm::set_sblock_bienc_wave1024 (90). A superblock contains
-    16,384 waves of 1,024 bits. Removing unoccupied waves produces a compact
-    position domain for gap correction and BIC encoding. The map can describe
-    occupied waves or their complement; this polarity concerns the wave map,
-    not the values of the source bits. Explicit endpoint bounds are optional.
-
-    Cost records and position-mapping helpers are also used by the adaptive
-    wave codec, bm::set_sblock_bienc_wave_adaptive (97).
+    Implements opcode 108 (bm::set_sblock_bienc_wave_runs). Empty waves
+    are removed before global gap correction. Six widths from 128 through
+    4,096 bits compete using BIC or gamma wave maps and BIC or repeated
+    run-length pairs for corrected positions. All fields share one accumulator.
+    The prefix is opcode, 3-bit width, reserved-zero extension bit, then the
+    4-bit layout. Current readers reject a nonzero extension bit.
 */
 
 #include "bmbuffer.h"
@@ -22,7 +20,109 @@
 namespace bm
 {
 
-/** \brief Internal encoded-record bit accounting shared by wave codecs.
+/** \brief Write alternating wave-map runs using Elias gamma.
+    \ingroup bvserial
+    \internal
+    \tparam BitOut Shared accumulator or exact bit counter.
+    \tparam Map Container of strictly increasing unsigned wave indexes.
+    \param out Shared bit accumulator or dry counter.
+    \param map Nonempty sorted selected-wave indexes.
+    \param domain Number of waves, greater than map size.
+*/
+template<class BitOut, class Map>
+void sblock_wave_gamma_map(BitOut& out, const Map& map, unsigned domain)
+{
+    out.put_bits(map[0] == 0, 1);
+    unsigned position = 0;
+    unsigned i = 0;
+    while (i < map.size())
+    {
+        if (map[i] > position)
+        {
+            out.gamma(map[i] - position);
+        }
+        const unsigned first = map[i++];
+        position = first + 1;
+        while (i < map.size() && map[i] == position)
+        {
+            ++i;
+            ++position;
+        }
+        out.gamma(position - first);
+    }
+    if (position < domain)
+    {
+        out.gamma(domain - position);
+    }
+}
+
+/** \brief Write corrected-position run pairs and consecutive repeat counts.
+    \ingroup bvserial
+    \internal
+    \tparam BitOut Shared accumulator or exact bit counter.
+    \tparam Values Container of corrected unsigned positions.
+    \param out Shared bit accumulator or dry counter.
+    \param values Nonempty strictly increasing corrected positions.
+    \note Stores first position, group count plus one, repeated pairs and final run.
+*/
+template<class BitOut, class Values>
+void sblock_wave_pairs(BitOut& out, const Values& values)
+{
+    out.gamma(values[0] + 1);
+    // The first pass counts groups; the second writes their triples.
+    for (unsigned pass = 0, groups = 0; pass < 2; ++pass)
+    {
+        unsigned ones = 1;
+        unsigned prior_ones = 0;
+        unsigned prior_gap = 0;
+        unsigned repeat = 0;
+        auto flush = [&]()
+        {
+            if (repeat)
+            {
+                if (pass)
+                {
+                    out.gamma(prior_ones);
+                    out.gamma(prior_gap);
+                    out.gamma(repeat);
+                }
+                else
+                {
+                    ++groups;
+                }
+            }
+        };
+        for (unsigned i = 1; i < values.size(); ++i)
+        {
+            unsigned gap = values[i] - values[i - 1] - 1;
+            if (!gap)
+            {
+                ++ones;
+                continue;
+            }
+            if (ones != prior_ones || gap != prior_gap)
+            {
+                flush();
+                prior_ones = ones;
+                prior_gap = gap;
+                repeat = 0;
+            }
+            ++repeat;
+            ones = 1;
+        }
+        flush();
+        if (!pass)
+        {
+            out.gamma(groups + 1);
+        }
+        else
+        {
+            out.gamma(ones);
+        }
+    }
+}
+
+/** \brief Internal encoded-record bit accounting for opcode 108.
     \ingroup bvserial
     \internal
 */
@@ -30,24 +130,21 @@ struct sblock_wave_cost
 {
     bm::id64_t bytes = 0;   ///< Complete encoded record size in bytes.
     bm::id64_t header = 0;  ///< Metadata bits, including opcode and explicit bounds.
-    bm::id64_t map = 0;     ///< BIC wave-map payload bits.
-    bm::id64_t bic = 0;     ///< BIC corrected-position payload bits.
+    bm::id64_t map = 0;     ///< Encoded wave-map payload bits.
+    bm::id64_t bic = 0;     ///< Encoded corrected-position payload bits.
     bm::id64_t padding = 0; ///< Terminal alignment bits.
 
     /// Return whether the component bits sum to the complete record size.
     bool reconciles() const;
 };
 
-/** \brief Internal eligibility and layout costs for one wave-compacted record.
+/** \brief Internal eligibility result for one wave-compacted record.
     \ingroup bvserial
     \internal
 */
 struct sblock_wave_record
 {
     bool eligible = false; ///< At least one wave is unoccupied.
-    unsigned best = 0;     ///< Index of the smallest complete encoded layout.
-    bm::sblock_wave_cost costs[4]; ///< Occupied/derived, occupied/explicit,
-                                  ///< empty/derived, empty/explicit layouts.
 };
 
 /** \brief Remove unoccupied waves from sorted superblock positions.
@@ -77,89 +174,6 @@ void sblock_wave_compact(const unsigned* original, unsigned n, unsigned width,
 template<class OccupiedVect>
 unsigned sblock_wave_restore_position(unsigned packed, unsigned width,
                                      const OccupiedVect& occupied);
-
-/** \brief Internal allocator-aware fixed 1,024-bit wave codec and workspace.
-    \ingroup bvserial
-    \internal
-    \tparam Alloc Application bvector allocator (BV::allocator_type).
-        Serializers and decoders pass their application allocator explicitly.
-    \note Encoding retains map and position capacity across preparations.
-        Production decoding uses the overload accepting reusable map scratch.
-*/
-template<class Alloc = bm::standard_allocator>
-struct sblock_wave1024_model
-{
-    enum
-    {
-        wave_size = 1024,  ///< Number of bits in each fixed wave.
-        wave_count = 16384 ///< Number of waves in one superblock.
-    };
-    bm::heap_vector<unsigned, Alloc, true> occupied; ///< Occupied wave indexes.
-    bm::heap_vector<unsigned, Alloc, true> empty;    ///< Unoccupied wave indexes.
-    bm::heap_vector<unsigned, Alloc, true> values;   ///< Gap-corrected compacted positions.
-    unsigned correction = 0; ///< Uniform gap reduction per preceding position.
-    unsigned upper = 0;      ///< Inclusive upper bound in the corrected domain.
-
-    /** \brief Reset all model state while retaining allocated scratch capacity.
-        \note Called by prepare() before every encoding trial. The caller's
-            layout record is reset separately by prepare().
-    */
-    void init() BMNOEXCEPT;
-
-    /** \brief Build wave maps and corrected positions for encoding trials.
-        \param original Strictly increasing superblock-relative positions.
-        \param n Number of positions; at least two, at most 65,535 for this codec.
-        \param r Receives reset layout costs and eligibility status.
-        \return True if at least one wave is unoccupied and compaction is eligible.
-    */
-    bool prepare(const unsigned* original, unsigned n, bm::sblock_wave_record& r);
-
-    /** \brief Encode one wave-map and endpoint-layout combination.
-        \tparam BitOut Bit accumulator supporting gamma, BIC and fixed-width fields.
-        \tparam Position Callable returning the current total bit position.
-        \param out Destination accumulator, shared across all payload fields.
-        \param position Counts bits from the record start, including its opcode.
-        \param sb Absolute superblock index.
-        \param mode Layout 0 through 3: bit 1 selects the empty-wave map;
-            bit 0 selects explicit corrected-position endpoints.
-        \param cost Receives header, map and position payload bit counts.
-            The caller supplies final byte size and padding after flushing out.
-        \note Requires a successful prepare(). The caller writes the opcode
-            and owns the accumulator's final flush.
-    */
-    template<class BitOut, class Position>
-    void encode(BitOut& out, Position position, unsigned sb, unsigned mode,
-                bm::sblock_wave_cost& cost) const;
-
-    /** \brief Decode using local allocator-aware wave-map scratch.
-        \tparam BitIn Bit input reader.
-        \param in Source positioned after the opcode.
-        \param output Destination with capacity for at least 65,535 positions.
-        \param sb Receives the absolute superblock index.
-        \return Number of restored superblock-relative positions.
-        \note This convenience overload allocates scratch per call. Repeated
-            decoding should use the overload with reusable map containers.
-    */
-    template<class BitIn>
-    static unsigned decode(BitIn& in, unsigned* output, unsigned& sb);
-
-    /** \brief Decode using reusable wave maps.
-        \tparam BitIn Bit input reader.
-        \tparam MapVect Allocator-aware unsigned vector.
-        \param in Source positioned after the opcode.
-        \param output Destination with capacity for at least 65,535 positions.
-        \param sb Receives the absolute superblock index.
-        \param map Exclusive encoded-map scratch, capacity retained.
-        \param occupied Exclusive occupied-wave scratch, capacity retained.
-        \return Number of restored superblock-relative positions.
-        \note Malformed payloads are rejected by bm::serialization_require().
-    */
-    template<class BitIn, class MapVect>
-    static unsigned decode(BitIn& in, unsigned* output, unsigned& sb,
-                           MapVect& map, MapVect& occupied);
-};
-
-// ----------------------------------------------------------------------
 
 inline
 bool sblock_wave_cost::reconciles() const
@@ -196,246 +210,6 @@ unsigned sblock_wave_restore_position(unsigned packed, unsigned width,
     BM_ASSERT(width && packed / width < occupied.size());
     return occupied[packed / width] * width + packed % width;
 }
-
-template<class Alloc>
-inline
-void sblock_wave1024_model<Alloc>::init() BMNOEXCEPT
-{
-    occupied.clear();
-    empty.clear();
-    values.clear();
-    correction = 0;
-    upper = 0;
-}
-
-template<class Alloc>
-inline
-bool sblock_wave1024_model<Alloc>::prepare(const unsigned* original, unsigned n,
-                                          bm::sblock_wave_record& r)
-{
-    init();
-    r = bm::sblock_wave_record();
-    values.resize(n);
-    BM_ASSERT(n >= 2);
-    occupied.reserve(bm::sblock_wave1024_model<Alloc>::wave_count);
-    empty.reserve(bm::sblock_wave1024_model<Alloc>::wave_count);
-    for (unsigned i = 0; i < n; ++i)
-    {
-        unsigned wave = original[i] / bm::sblock_wave1024_model<Alloc>::wave_size;
-        if (occupied.empty() || occupied.back() != wave)
-        {
-            occupied.push_back(wave);
-        }
-    } // for i
-    bm::sblock_wave_compact(original, n,
-        bm::sblock_wave1024_model<Alloc>::wave_size, occupied, values);
-    if (occupied.size() == bm::sblock_wave1024_model<Alloc>::wave_count)
-    {
-        return false;
-    }
-    for (unsigned wave = 0, j = 0; wave < bm::sblock_wave1024_model<Alloc>::wave_count; ++wave)
-    {
-        if (j < occupied.size() && occupied[j] == wave)
-        {
-            ++j;
-        }
-        else
-        {
-            empty.push_back(wave);
-        }
-    } // for wave
-    r.eligible = true;
-    correction = values[1] - values[0] - 1;
-    for (unsigned i = 2; i < n; ++i)
-    {
-        if (values[i] - values[i - 1] - 1 < correction)
-        {
-            correction = values[i] - values[i - 1] - 1;
-        }
-    } // for i
-    upper = unsigned(occupied.size()) * bm::sblock_wave1024_model<Alloc>::wave_size -
-            1 - (n - 1) * correction;
-    for (unsigned i = 0; i < n; ++i)
-    {
-        values[i] -= i * correction;
-    } // for i
-    BM_ASSERT(values.back() <= upper);
-    return true;
-}
-
-template<class Alloc>
-template<class BitOut, class Position>
-inline
-void sblock_wave1024_model<Alloc>::encode(BitOut& out, Position position,
-                                        unsigned sb, unsigned mode,
-                                        bm::sblock_wave_cost& cost) const
-{
-    const unsigned n = unsigned(values.size());
-    const auto& map_values = (mode & 2) ? empty : occupied;
-    out.put_bits(mode, 2); // polarity and explicit-boundary flag
-    unsigned sb_mode = sb < 8 ? 0 : sb <= 255 ? 1 : sb <= 65535 ? 2 : 3;
-    out.put_bits(sb_mode, 2);
-    switch (sb_mode)
-    {
-    case 0:
-        out.gamma(sb + 1);
-        break;
-    case 1:
-        out.put_bits(sb, 8);
-        break;
-    case 2:
-        out.put_16_no(sb);
-        break;
-    default:
-        out.put_32_no(sb);
-        break;
-    } // switch sb_mode
-    out.gamma(n);
-    out.gamma(unsigned(map_values.size()));
-    out.gamma(correction + 1);
-    cost.header = position(); // includes placeholder opcode
-    out.bic_encode_u32_cm(map_values.data(), unsigned(map_values.size()), 0,
-                         bm::sblock_wave1024_model<Alloc>::wave_count - 1);
-    cost.map = position() - cost.header;
-    if (mode & 1)
-    {
-        const bm::id64_t before = position();
-        out.gamma(values.front() + 1);
-        out.gamma(upper - values.back() + 1);
-        cost.header += position() - before;
-    }
-    const bm::id64_t before = position();
-    if (mode & 1)
-    {
-        if (n > 2)
-        {
-            out.bic_encode_u32_cm(values.data() + 1, n - 2,
-                                 values.front() + 1, values.back() - 1);
-        }
-    }
-    else
-    {
-        out.bic_encode_u32_cm(values.data(), n, 0, upper);
-    }
-    cost.bic = position() - before;
-}
-
-template<class Alloc>
-template<class BitIn>
-inline
-unsigned sblock_wave1024_model<Alloc>::decode(BitIn& in, unsigned* output,
-                                            unsigned& sb)
-{
-    bm::heap_vector<unsigned, Alloc, true> map;
-    bm::heap_vector<unsigned, Alloc, true> occupied;
-    return bm::sblock_wave1024_model<Alloc>::decode(in, output, sb, map, occupied);
-}
-
-template<class Alloc>
-template<class BitIn, class MapVect>
-inline
-unsigned sblock_wave1024_model<Alloc>::decode(BitIn& in, unsigned* output,
-                                            unsigned& sb, MapVect& map,
-                                            MapVect& occupied)
-{
-    map.clear();
-    occupied.clear();
-    const unsigned mode = in.get_bits(2);
-    const unsigned sb_mode = in.get_bits(2);
-    switch (sb_mode)
-    {
-    case 0:
-        sb = in.gamma() - 1;
-        break;
-    case 1:
-        sb = in.get_bits(8);
-        break;
-    case 2:
-        sb = in.get_16_no();
-        break;
-    default:
-        sb = in.get_32_no();
-        break;
-    } // switch sb_mode
-    const unsigned n = in.gamma();
-    const unsigned count = in.gamma();
-    const unsigned correction_code = in.gamma();
-    bm::serialization_require(n >= 2 && n <= 65535 && count >= 1 &&
-        count < bm::sblock_wave1024_model<Alloc>::wave_count && correction_code >= 1);
-    const unsigned d = correction_code - 1;
-    map.resize(count);
-    in.bic_decode_u32_cm(map.data(), count, 0, bm::sblock_wave1024_model<Alloc>::wave_count - 1);
-    for (unsigned i = 0; i < count; ++i)
-    {
-        bm::serialization_require(map[i] < bm::sblock_wave1024_model<Alloc>::wave_count &&
-                                  (!i || map[i] > map[i - 1]));
-    } // for i
-    if (mode & 2)
-    {
-        occupied.reserve(bm::sblock_wave1024_model<Alloc>::wave_count - count);
-        for (unsigned wave = 0, j = 0; wave < bm::sblock_wave1024_model<Alloc>::wave_count; ++wave)
-        {
-            if (j < count && map[j] == wave)
-            {
-                ++j;
-            }
-            else
-            {
-                occupied.push_back(wave);
-            }
-        } // for wave
-    }
-    else
-    {
-        occupied.swap(map);
-    }
-    const unsigned k = unsigned(occupied.size());
-    const bm::id64_t packed_limit = bm::id64_t(k) * bm::sblock_wave1024_model<Alloc>::wave_size;
-    const bm::id64_t correction_total = bm::id64_t(n - 1) * d;
-    bm::serialization_require(k && n <= packed_limit && correction_total < packed_limit);
-    const unsigned upper = unsigned(packed_limit - 1 - correction_total);
-    if (mode & 1)
-    {
-        const unsigned first_code = in.gamma();
-        const unsigned last_code = in.gamma();
-        bm::serialization_require(first_code && last_code && first_code <= upper + 1 &&
-                                  last_code <= upper + 1);
-        output[0] = first_code - 1;
-        output[n - 1] = upper - (last_code - 1);
-        bm::serialization_require(output[0] < output[n - 1] &&
-                                  output[n - 1] - output[0] >= n - 1);
-        if (n > 2)
-        {
-            in.bic_decode_u32_cm(output + 1, n - 2,
-                                 output[0] + 1, output[n - 1] - 1);
-        }
-    }
-    else
-    {
-        in.bic_decode_u32_cm(output, n, 0, upper);
-    }
-    unsigned previous = 0;
-    unsigned prior_corrected = 0;
-    for (unsigned i = 0; i < n; ++i)
-    {
-        bm::serialization_require(output[i] <= upper &&
-                                  (!i || output[i] > prior_corrected));
-        prior_corrected = output[i];
-        const bm::id64_t packed = bm::id64_t(output[i]) + bm::id64_t(i) * d;
-        bm::serialization_require(packed < packed_limit);
-        const unsigned original = bm::sblock_wave_restore_position(
-            unsigned(packed), bm::sblock_wave1024_model<Alloc>::wave_size, occupied);
-        bm::serialization_require(!i || original > previous);
-        output[i] = original;
-        previous = original;
-    } // for i
-    return n;
-}
-
-
-// ----------------------------------------------------------------------
-// Adaptive-width wave codec: bm::set_sblock_bienc_wave_adaptive (97).
-// ----------------------------------------------------------------------
 
 /** \brief Internal bit sink for exact wave-codec size trials without output.
     \ingroup bvserial
@@ -504,20 +278,25 @@ struct sblock_wave_adaptive_model
     /** Build a corrected position domain at the configured width.
         \param original Same source list supplied to the preceding build().
         \param n Number of source positions, from two through 65,535.
-        \param r Receives reset layout costs and eligibility.
-        \return True when at least one wave is unoccupied.
+        \param r Receives eligibility, reset before each preparation.
+        \param allow_full Prepare the complete map when no waves are empty.
+        \return True when preparation succeeds under the requested map policy.
         \note Requires build() for the current source and a supported width.
     */
-    bool prepare(const unsigned* original, unsigned n, bm::sblock_wave_record& r);
+    bool prepare(const unsigned* original, unsigned n, bm::sblock_wave_record& r, bool allow_full = false);
     /** Encode the common wave payload after the adaptive width selector.
         \tparam BitOut Bit accumulator supporting gamma, BIC and fixed-width fields.
         \tparam Position Callable reporting current total record bit position.
         \param out Destination bit accumulator, shared across all payload fields.
         \param position Counts bits from the record start, including its opcode.
         \param sb Absolute superblock index.
-        \param mode Layout 0 through 3: bit 1 selects the empty-wave map;
-            bit 0 selects explicit corrected-position endpoints.
+        \param mode Layout flags 0 through 15: bit 1 selects the empty-wave map;
+            bit 0 selects explicit corrected-position endpoints; bits 2 and 3
+            select gamma maps and repeated run pairs.
         \param cost Receives header, map and position payload bit counts.
+        \note Mode bit 2 selects gamma map runs, bit 3 selects repeated
+            (ones length, zero gap, repeat count) triples. Bit 3 requires bit 0
+            clear. The final ones run is stored separately.
         \note Requires successful prepare(). The caller writes the opcode and
             3-bit width selector, flushes out, and fills final bytes and padding.
     */
@@ -557,11 +336,11 @@ struct sblock_wave_adaptive_model
 struct sblock_wave_adaptive_choice
 {
     unsigned width = 0;    ///< Wave width code: wave size equals 128 shifted by width.
-    unsigned mode = 0;     ///< Wave-map polarity and endpoint layout, 0 through 3.
+    unsigned mode = 0;     ///< Layout flags, including gamma map and paired runs for opcode 108.
     bm::id64_t bytes = 0;  ///< Complete record size, including opcode and padding.
 };
 
-/** \brief Find a strictly smaller adaptive record across six widths and four layouts.
+/** \brief Select adaptive wave records from shared per-width component costs.
     \ingroup bvserial
     \internal
     \tparam Alloc Application bvector allocator.
@@ -651,7 +430,7 @@ void sblock_wave_adaptive_model<Alloc>::build(const unsigned* original, unsigned
 template<class Alloc>
 inline
 bool sblock_wave_adaptive_model<Alloc>::prepare(const unsigned* original,
-                                               unsigned n, bm::sblock_wave_record& r)
+                                               unsigned n, bm::sblock_wave_record& r, bool allow_full)
 {
     init_trial();
     r = bm::sblock_wave_record();
@@ -673,7 +452,7 @@ bool sblock_wave_adaptive_model<Alloc>::prepare(const unsigned* original,
         }
     } // for w
     bm::sblock_wave_compact(original, n, wave_size, occupied, values);
-    if (occupied.size() == wave_count)
+    if (occupied.size() == wave_count && !allow_full)
     {
         return false;
     }
@@ -716,7 +495,8 @@ void sblock_wave_adaptive_model<Alloc>::encode(BitOut& out, Position position,
 {
     const unsigned n = unsigned(values.size());
     const auto& map_values = (mode & 2) ? empty : occupied;
-    out.put_bits(mode, 2); // polarity and explicit-boundary flag
+    out.put_bits(0, 1); // Opcode 108 extension escape, reserved until defined.
+    out.put_bits(mode, 4); // map/payload selectors follow layout bits
     unsigned sb_mode = sb < 8 ? 0 : sb <= 255 ? 1 : sb <= 65535 ? 2 : 3;
     out.put_bits(sb_mode, 2);
     switch (sb_mode)
@@ -738,8 +518,15 @@ void sblock_wave_adaptive_model<Alloc>::encode(BitOut& out, Position position,
     out.gamma(unsigned(map_values.size()));
     out.gamma(correction + 1);
     cost.header = position(); // includes placeholder opcode
-    out.bic_encode_u32_cm(map_values.data(), unsigned(map_values.size()), 0,
-                         wave_count - 1);
+    if (mode & 4)
+    {
+        bm::sblock_wave_gamma_map(out, map_values, wave_count);
+    }
+    else
+    {
+        out.bic_encode_u32_cm(map_values.data(), unsigned(map_values.size()), 0,
+                             wave_count - 1);
+    }
     cost.map = position() - cost.header;
     if (mode & 1)
     {
@@ -749,7 +536,11 @@ void sblock_wave_adaptive_model<Alloc>::encode(BitOut& out, Position position,
         cost.header += position() - before;
     }
     const bm::id64_t before = position();
-    if (mode & 1)
+    if (mode & 8)
+    {
+        bm::sblock_wave_pairs(out, values);
+    }
+    else if (mode & 1)
     {
         if (n > 2)
         {
@@ -786,9 +577,12 @@ unsigned sblock_wave_adaptive_model<Alloc>::decode(BitIn& in, unsigned* output,
     occupied.clear();
     const unsigned width_code = in.get_bits(3);
     bm::serialization_require(width_code < 6);
+    // Reject undefined extension layouts.
+    bm::serialization_require(in.get_bits(1) == 0);
     const unsigned wave_size = 128u << width_code;
     const unsigned wave_count = (1u << 24) / wave_size;
-    const unsigned mode = in.get_bits(2);
+    const unsigned mode = in.get_bits(4);
+    bm::serialization_require(!(mode & 8) || !(mode & 1));
     const unsigned sb_mode = in.get_bits(2);
     switch (sb_mode)
     {
@@ -812,7 +606,32 @@ unsigned sblock_wave_adaptive_model<Alloc>::decode(BitIn& in, unsigned* output,
         count < wave_count && correction_code >= 1);
     const unsigned d = correction_code - 1;
     map.resize(count);
-    in.bic_decode_u32_cm(map.data(), count, 0, wave_count - 1);
+    if (mode & 4)
+    {
+        unsigned bit = in.get_bits(1);
+        unsigned position = 0;
+        unsigned used = 0;
+        while (position < wave_count)
+        {
+            const unsigned run = in.gamma();
+            bm::serialization_require(run && run <= wave_count - position);
+            if (bit)
+            {
+                bm::serialization_require(run <= count - used);
+                for (unsigned j = 0; j < run; ++j)
+                {
+                    map[used++] = position + j;
+                }
+            }
+            position += run;
+            bit ^= 1;
+        }
+        bm::serialization_require(used == count);
+    }
+    else
+    {
+        in.bic_decode_u32_cm(map.data(), count, 0, wave_count - 1);
+    }
     for (unsigned i = 0; i < count; ++i)
     {
         bm::serialization_require(map[i] < wave_count &&
@@ -842,7 +661,40 @@ unsigned sblock_wave_adaptive_model<Alloc>::decode(BitIn& in, unsigned* output,
     const bm::id64_t correction_total = bm::id64_t(n - 1) * d;
     bm::serialization_require(k && n <= packed_limit && correction_total < packed_limit);
     const unsigned upper = unsigned(packed_limit - 1 - correction_total);
-    if (mode & 1)
+    if (mode & 8)
+    {
+        const unsigned first = in.gamma();
+        const unsigned group_code = in.gamma();
+        bm::serialization_require(first && first <= upper + 1 &&
+                                  group_code && group_code <= n);
+        unsigned position = first - 1;
+        unsigned used = 0;
+        auto append = [&](unsigned ones)
+        {
+            bm::serialization_require(ones && ones <= n - used &&
+                                      position <= upper && ones - 1 <= upper - position);
+            for (unsigned j = 0; j < ones; ++j)
+            {
+                output[used++] = position++;
+            }
+        };
+        for (unsigned group = 1; group < group_code; ++group)
+        {
+            const unsigned ones = in.gamma();
+            const unsigned gap = in.gamma();
+            const unsigned repeat = in.gamma();
+            bm::serialization_require(ones && gap && repeat && repeat <= n - used);
+            for (unsigned j = 0; j < repeat; ++j)
+            {
+                append(ones);
+                bm::serialization_require(gap <= upper && position <= upper - gap);
+                position += gap;
+            }
+        }
+        append(in.gamma());
+        bm::serialization_require(used == n);
+    }
+    else if (mode & 1)
     {
         const unsigned first_code = in.gamma();
         const unsigned last_code = in.gamma();
@@ -899,7 +751,7 @@ bm::sblock_wave_adaptive_choice sblock_wave_adaptive_select(
         {
             continue;
         }
-        // Count each map and payload once, then combine the four layouts.
+        // Count BIC components once for both formats and their endpoint layouts.
         bm::id64_t maps[2];
         bm::id64_t payload[2];
         bm::id64_t bounds[2] = {0, 0};
@@ -924,10 +776,29 @@ bm::sblock_wave_adaptive_choice sblock_wave_adaptive_select(
                                model.values.front() + 1, model.values.back() - 1);
         }
         payload[1] = c.bits;
-        for (unsigned mode = 0; mode < 4; ++mode)
+        bm::id64_t gamma_maps[2] = {0, 0};
+        bm::id64_t pairs = 0;
         {
+            for (unsigned polarity = 0; polarity < 2; ++polarity)
+            {
+                const auto& map = polarity ? model.empty : model.occupied;
+                bm::sblock_wave_bit_counter counter;
+                bm::sblock_wave_gamma_map(counter, map, model.wave_count);
+                gamma_maps[polarity] = counter.bits;
+            }
+            bm::sblock_wave_bit_counter counter;
+            bm::sblock_wave_pairs(counter, model.values);
+            pairs = counter.bits;
+        }
+        const unsigned layouts = 16;
+        for (unsigned mode = 0; mode < layouts; ++mode)
+        {
+            if ((mode & 8) && (mode & 1))
+            {
+                continue;
+            }
             bm::sblock_wave_bit_counter h;
-            h.put_bits(0, 3 + 4); // width, polarity/bounds and superblock-index modes
+            h.put_bits(0, 10); // width, extension, layout and index modes
             unsigned sm = sb < 8 ? 0 : sb <= 255 ? 1 : sb <= 65535 ? 2 : 3;
             if (!sm)
             {
@@ -940,7 +811,11 @@ bm::sblock_wave_adaptive_choice sblock_wave_adaptive_select(
             h.gamma(n);
             h.gamma(unsigned((mode & 2) ? model.empty.size() : model.occupied.size()));
             h.gamma(model.correction + 1);
-            bm::id64_t bits = h.bits + maps[mode >> 1] + bounds[mode & 1] + payload[mode & 1];
+            const unsigned polarity = (mode >> 1) & 1;
+            const bm::id64_t map_bits = (mode & 4) ? gamma_maps[polarity] : maps[polarity];
+            const bm::id64_t value_bits = (mode & 8) ? pairs :
+                bounds[mode & 1] + payload[mode & 1];
+            bm::id64_t bits = h.bits + map_bits + value_bits;
             bm::id64_t bytes = 1 + ((bits + 31) / 32) * 4;
             if (bytes < best.bytes)
             {

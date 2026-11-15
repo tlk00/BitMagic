@@ -62,6 +62,8 @@ struct serialization_opcode_profile
         std::uint64_t ids = 0;   ///< Original set bits covered by these records.
     };
     entry opcode[256]; ///< Measurements indexed by opcode byte.
+    std::uint64_t arithmetic_modes[4][2] = {}; ///< Final original/legacy-XOR/shared-reference/shared-gather counts, nibble/byte.
+    std::uint64_t arithmetic_0runs_modes[4][2] = {}; ///< Opcode 107 mode counts in the same four contexts.
     std::uint64_t blobs = 0; ///< Number of profiled BLOBs.
     std::uint64_t bytes = 0; ///< Total profiled BLOB bytes.
     std::uint64_t header_bytes = 0; ///< Headers preceding opcode records.
@@ -145,6 +147,11 @@ public:
         \note Required for reference-XOR BLOBs when collecting ID metrics.
     */
     void set_ref_vectors(const typename bm::serializer<BV>::bv_ref_vector_type* refs);
+    /** Supply the global target row for cardinality reconstruction of a delta gather.
+        @param id Target ID associated with the profiled plane.
+    */
+    void set_gather_target_id(typename BV::size_type id) { reader_.set_gather_target_id(id); }
+
     /** Enable or disable exact original-ID cardinalities.
         \param enabled True adds a full reconstruction pass for each BLOB.
     */
@@ -185,6 +192,14 @@ void serialization_opcode_profile::add(const bm::serialization_opcode_profile& r
         opcode[i].bytes += r.opcode[i].bytes;
         opcode[i].ids += r.opcode[i].ids;
     } // for i
+    for (unsigned context = 0; context < 4; ++context)
+    {
+        for (unsigned mode = 0; mode < 2; ++mode)
+        {
+            arithmetic_modes[context][mode] += r.arithmetic_modes[context][mode];
+            arithmetic_0runs_modes[context][mode] += r.arithmetic_0runs_modes[context][mode];
+        } // for mode
+    } // for context
     blobs += r.blobs;
     bytes += r.bytes;
     header_bytes += r.header_bytes;
@@ -423,6 +438,7 @@ void serialization_opcode_collector<BV>::add_blob(
         profile.ids += blob_ids;
     }
     size_t record_index = 0;
+    bool legacy_xor = false;
     marker = header_bytes;
     marker_index = 0;
     while (marker < size)
@@ -432,7 +448,54 @@ void serialization_opcode_collector<BV>::add_blob(
         {
             next = size;
         }
-        auto& entry = profile.opcode[data[marker]];
+        const unsigned op = data[marker];
+        auto mode_after_runs = [](bm::bit_in<bm::decoder>& bits)
+        {
+            unsigned kind = bits.get_bits(8), word = 0;
+            bm::serialization_require(kind <= 1);
+            while (word < bm::set_block_size)
+            {
+                const unsigned length = bits.get_bits(16);
+                bm::serialization_require(length && length <= bm::set_block_size - word);
+                word += length;
+                kind ^= 1;
+            } // while word
+            return bits.get_bits(19) >> 18;
+        };
+        if (op == bm::set_block_arithmetic || op == bm::set_block_bit_0runs_arithmetic)
+        {
+            bm::decoder header(data + marker + 1);
+            bm::bit_in<bm::decoder> bits(header);
+            const unsigned context = legacy_xor ? 1 : 0;
+            if (op == bm::set_block_arithmetic)
+                ++profile.arithmetic_modes[context][bits.get_bits(19) >> 18];
+            else
+                ++profile.arithmetic_0runs_modes[context][mode_after_runs(bits)];
+        }
+        else if (op == bm::set_block_xor_ref_shared || op == bm::set_block_xor_parallel_gather)
+        {
+            bm::decoder header(data + marker + 1);
+            if (op == bm::set_block_xor_parallel_gather)
+            {
+                header.get_8(); // Explicit polarity/coordinate flags precede H64.
+            }
+            header.get_h64();
+            const unsigned residual = header.get_8();
+            if (residual == bm::set_block_arithmetic ||
+                residual == bm::set_block_bit_0runs_arithmetic)
+            {
+                bm::bit_in<bm::decoder> bits(header);
+                const unsigned context = op == bm::set_block_xor_ref_shared ? 2 : 3;
+                if (residual == bm::set_block_arithmetic)
+                    ++profile.arithmetic_modes[context][bits.get_bits(19) >> 18];
+                else
+                    ++profile.arithmetic_0runs_modes[context][mode_after_runs(bits)];
+            }
+        }
+        legacy_xor = (op >= bm::set_block_xor_ref8 && op <= bm::set_block_xor_chain) ||
+                     (op >= bm::set_block_xor_ref8_um && op <= bm::set_block_xor_ref32_um) ||
+                     op == bm::set_block_xor_ref8_h64;
+        auto& entry = profile.opcode[op];
         if (collect_ids_)
         {
             entry.ids += record_ids_[record_index++];

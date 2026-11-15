@@ -223,6 +223,8 @@ For more information please visit:  http://bitmagic.io
 # ifndef BMFORCEINLINE
 #  define BMFORCEINLINE __forceinline
 # endif
+#elif defined(__clang__) || defined(__GNUC__)
+# define BMFORCEINLINE inline __attribute__((always_inline))
 #else
 # define BMFORCEINLINE inline
 #endif

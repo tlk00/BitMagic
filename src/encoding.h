@@ -79,7 +79,16 @@ public:
     unsigned char* get_pos() const BMNOEXCEPT;
     void set_pos(unsigned char* buf_pos) BMNOEXCEPT;
     void reset() BMNOEXCEPT;
+    /// Retain unused bits at the current output boundary.
+    /// @param bits Padding count in [0, 31].
+    void retain_padding(unsigned bits) { padding_end_ = buf_; padding_ = bits; }
+    /// Invalidate the prior bit-writer boundary when a new bit stream begins.
+    void clear_padding() { padding_end_ = nullptr; }
+    /// @return Unused bits at the current residual boundary, or zero otherwise.
+    unsigned retained_padding() const { return padding_end_ == buf_ ? padding_ : 0; }
 private:
+    const unsigned char* padding_end_ = nullptr; ///< Last bit-writer boundary.
+    unsigned padding_ = 0; ///< Unused bits in its last word.
     unsigned char*  buf_;
     unsigned char*  start_;
     size_t          size_;
@@ -210,6 +219,29 @@ public:
 };
 
 
+/// Retain no padding for other encoder types.
+/// @param bits Padding count, unused for unrelated encoder types.
+/// @param enc Borrowed output encoder.
+template<class Encoder>
+void retained_padding_note(Encoder& enc, unsigned bits)
+{
+    (void)enc;
+    (void)bits;
+}
+/// Record the bit-writer boundary.
+/// @param enc Borrowed output encoder.
+/// @param bits Unused bits in the final word.
+inline
+void retained_padding_note(bm::encoder& enc, unsigned bits) { enc.retain_padding(bits); }
+/// Begin a fresh bit stream.
+/// @param enc Unrelated borrowed output encoder.
+template<class Encoder>
+void retained_padding_clear(Encoder& enc) { (void)enc; }
+/// Clear the prior bit-stream boundary.
+/// @param enc Borrowed output encoder.
+inline
+void retained_padding_clear(bm::encoder& enc) { enc.clear_padding(); }
+
 /** 
     Byte based writer for un-aligned bit streaming 
 
@@ -222,7 +254,7 @@ class bit_out
 public:
     bit_out(TEncoder& dest)
         : dest_(dest), used_bits_(0), accum_(0)
-    {}
+    { bm::retained_padding_clear(dest_); }
 
     ~bit_out() { flush(); }
     
@@ -314,6 +346,7 @@ private:
     void flush_accum() BMNOEXCEPT
     {
         dest_.put_32(accum_);
+        bm::retained_padding_note(dest_, 32 - used_bits_);
         used_bits_ = accum_ = 0;
     }
 private:
@@ -788,7 +821,9 @@ void encoder::move_from(encoder& enc) BMNOEXCEPT
 {
     BM_ASSERT(&enc != this);
     auto sz = enc.size();
+    const unsigned padding = enc.retained_padding();
     this->memcpy(enc.start_, sz);
+    retain_padding(padding);
     enc.reset();
 }
 
