@@ -1551,6 +1551,27 @@ class SupervisorTests(unittest.TestCase):
             self.assertTrue(self.agent.stress_stop_file.exists())
             self.assertTrue(self.agent.update_waiting())
 
+    def test_git_stderr_is_preserved_without_corrupting_remote_tip(self):
+        """Warnings on stderr cannot hide a valid tip; failures retain diagnostics."""
+        fake_bin = self.root / 'bin'
+        fake_bin.mkdir()
+        git = fake_bin / 'git'
+        tip = 'a' * 40
+        git.write_text('#!/bin/sh\nprintf "%s\\n" "developer tool warning" >&2\n'
+                       'printf "%s\\t%s\\n" "' + tip + '" "refs/heads/master"\n')
+        git.chmod(0o755)
+        self.agent.commit = 'b' * 40
+        self.agent.next_remote_poll = 0
+        with patch.dict(os.environ, {'PATH': str(fake_bin) + os.pathsep + os.environ['PATH']}):
+            self.agent.poll_remote()
+            self.assertEqual(self.agent.pending_tip, tip)
+            self.assertIn('developer tool warning', (self.agent.home / 'agent.log').read_text())
+            git.write_text('#!/bin/sh\nprintf "%s\\n" "remote unavailable" >&2\nexit 12\n')
+            with self.assertRaises(ta.CommandFailure) as failure:
+                self.agent.git('ls-remote', 'origin')
+            self.assertIn('remote unavailable', str(failure.exception))
+            self.assertIn('exit 12', str(failure.exception))
+
     def test_cleanup_preserves_unowned_and_active(self):
         """Retention removes only expired marked runs, not active or unowned paths."""
         import datetime

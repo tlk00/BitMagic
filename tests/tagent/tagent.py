@@ -788,12 +788,13 @@ class Agent:
             reason = signal.Signals(-status).name if status < 0 else 'exit ' + str(status)
             raise CommandFailure('{} | {} | log {}'.format(proc.args, reason, log))
 
-    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=(), test_allocator=False):
+    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=(), test_allocator=False, separate_stderr=False):
         """Run argv in an owned group; return stdout or raise with log diagnostics.
 
         log optionally redirects combined output; cwd defaults to the checkout.
         timeout bounds operational commands. Every exit cleans the process group.
         test_allocator enables the detected jemalloc only for test subprocesses.
+        separate_stderr keeps captured stdout parseable and reports stderr diagnostics.
         """
         output = None
         proc = None
@@ -812,7 +813,7 @@ class Agent:
                 if test_allocator:
                     env = self.test_environment(env)
                 proc = subprocess.Popen(argv, cwd=cwd or self.repo, stdout=output,
-                                        stderr=subprocess.STDOUT, text=True,
+                                        stderr=subprocess.PIPE if separate_stderr and not log else subprocess.STDOUT, text=True,
                                         start_new_session=True, env=env)
                 proc.tagent_log = log
                 self.children.add(proc)
@@ -823,7 +824,7 @@ class Agent:
             next_job_message = started
             while True:
                 try:
-                    result, _ = proc.communicate(timeout=min(10, timeout) if timeout else 10)
+                    result, diagnostics = proc.communicate(timeout=min(10, timeout) if timeout else 10)
                     break
                 except subprocess.TimeoutExpired:
                     self.resource_check()
@@ -896,11 +897,13 @@ class Agent:
                                 line.startswith(('PASS   ', 'FAIL   ')) for line in lines)
                         if workers > 0:
                             self.sound('work', workers=workers)
+            if diagnostics and separate_stderr and proc.returncode == 0:
+                self.say('COMMAND STDERR | {} | {}'.format(shlex.join(map(str, argv)), diagnostics.strip()))
             if proc.returncode in allowed_exit_codes:
                 return str(proc.returncode)
             if proc.returncode:
                 detail = (self.stress_failure_details(log) if log and log.name in ('runner.log', 'perf.log') and (log.parent / 'first-failure.txt').exists()
-                          else str(log) if log else (result or '')[-2000:])
+                          else str(log) if log else ((result or '') + (diagnostics or ''))[-2000:])
                 reason = signal.Signals(-proc.returncode).name if proc.returncode < 0 else 'exit ' + str(proc.returncode)
                 raise CommandFailure('{} | {} | variant {} | {}'.format(shlex.join(map(str, argv)), reason, log.parent.name if log else 'operational', detail))
             return result or ''
@@ -925,6 +928,8 @@ class Agent:
                 proc.wait()
                 if proc.stdout:
                     proc.stdout.close()
+                if proc.stderr:
+                    proc.stderr.close()
                 with self.mutex:
                     self.children.discard(proc)
                     self.perf_workers.discard(proc)
@@ -982,7 +987,7 @@ class Agent:
 
     def git(self, *args):
         """Run a bounded noninteractive Git command and return stripped stdout."""
-        return self.command(['git', *args], timeout=120).strip()
+        return self.command(['git', *args], timeout=120, separate_stderr=True).strip()
 
     def test_environment(self, env):
         """Return a copied test environment, preserving existing preload libraries."""
