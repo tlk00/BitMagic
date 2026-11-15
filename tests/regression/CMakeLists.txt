@@ -1,6 +1,9 @@
 # Standalone focused regressions. Keep assertions active in Release builds too.
 foreach(regression debug_allocator_test serial_compression_levels
+        serial_0runs_arithmetic serial_arithmetic
+        serial_sblock_hierarchical serial_sblock_hierarchical_routes
         serial_sblock_hierarchical_full serial_sblock_hierarchical_reuse
+        serial_sblock_wave_shared_score serial_xor_candidates xor_admission
         serial_gap_normalization serial_opcode_registry serial_released_compat)
     add_executable(bm_${regression} ${regression}.cpp ${BM_HEADERS})
     target_link_libraries(bm_${regression} PRIVATE bm_test_common)

@@ -138,30 +138,27 @@ static void wave_records()
     BV expected;
     for (unsigned k = 0; k < ids.size(); ++k)
     { ids[k] = 17 + k * 1031; expected.set(ids[k]); }
-    for (unsigned width : {0u, 128u, 256u, 512u, 1024u, 2048u, 4096u})
-    for (unsigned mode = 0; mode < 4; ++mode)
+    for (unsigned width : {128u, 256u, 512u, 1024u, 2048u, 4096u})
+    for (unsigned mode = 0; mode < 16; ++mode)
     {
+        if ((mode & 8) && (mode & 1))
+        {
+            continue;
+        }
         Bytes bytes(65536); bm::encoder enc(bytes.data(), bytes.size());
         enc.put_8(bm::BM_HM_NO_BO | bm::BM_HM_NO_GAPL | bm::BM_HM_SPARSE);
-        enc.put_8(width ? bm::set_sblock_bienc_wave_adaptive : bm::set_sblock_bienc_wave1024);
+        enc.put_8(bm::set_sblock_bienc_wave_runs);
         bm::sblock_wave_record record; bm::sblock_wave_cost cost;
         { bm::bit_out<bm::encoder> out(enc);
           auto position = [&]() { return bm::id64_t(enc.size()) * 8 + out.pending_bits(); };
-          if (width)
-          {
-              bm::sblock_wave_adaptive_model<> model;
-              model.build(ids.data(), unsigned(ids.size()));
-              model.wave_size = width; model.wave_count = (1u << 24) / width;
-              assert(model.prepare(ids.data(), unsigned(ids.size()), record));
-              unsigned code = 0; while ((128u << code) != width) ++code;
-              out.put_bits(code, 3); model.encode(out, position, 0, mode, cost);
-          }
-          else
-          {
-              bm::sblock_wave1024_model<> model;
-              assert(model.prepare(ids.data(), unsigned(ids.size()), record));
-              model.encode(out, position, 0, mode, cost);
-          }
+
+          bm::sblock_wave_adaptive_model<> model;
+          model.build(ids.data(), unsigned(ids.size()));
+          model.wave_size = width; model.wave_count = (1u << 24) / width;
+          assert(model.prepare(ids.data(), unsigned(ids.size()), record));
+          unsigned code = 0; while ((128u << code) != width) ++code;
+          out.put_bits(code, 3); model.encode(out, position, 0, mode, cost);
+
         }
         enc.put_8(bm::set_block_end); bytes.resize(enc.size()); check(bytes, expected);
     }

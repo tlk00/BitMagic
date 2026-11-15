@@ -1,5 +1,5 @@
   /*
-Copyright(c) 2002-2018 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2002-2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmaggregator.h>
 #include <bmutil.h>
 #include <bmserial.h>
+#include <bmserial_profile.h>
 #include <bmvmin.h>
 #include <bmbmatrix.h>
 #include <bmintervals.h>
@@ -19201,6 +19202,191 @@ static void BuildBVectorXorMixedFixture(bvect& target, bvect& reference)
     target.optimize(); reference.optimize();
 }
 
+/** Profile one serialized XOR fixture and print its wire opcode counts.
+    @param bytes Completed bit-vector blob.
+    @return Reconciled record counts and byte totals. Index-only traversal
+            does not require reconstructed reference vectors.
+*/
+static bm::serialization_opcode_profile ReportXorFixtureOpcodes(
+    const bm::serializer<bvect>::buffer& bytes)
+{
+    bm::serialization_opcode_collector<bvect> collector;
+    bm::serialization_opcode_profile report;
+    collector.add_blob(bytes.data(), bytes.size(), report);
+    assert(report.reconciles());
+    cout << "  XOR fixture opcodes";
+    for (unsigned op = 0; op < 256; ++op)
+    {
+        if (report.opcode[op].count)
+        {
+            cout << " " << op << ":" << report.opcode[op].count;
+        }
+    } // for op
+    cout << endl;
+    return report;
+}
+
+/** Exercise masked and unmasked reference widths across both row-ID boundaries. */
+static void TestXorReferenceWidths()
+{
+    using Writer = bm::serializer<bvect>;
+    for (bool masked : {false, true})
+    {
+        bvect source, reference;
+        if (masked)
+        {
+            for (unsigned i = 0; i < 500; i += 8)
+            {
+                source.set_range(i, i + 1);
+                reference.set(i + 1);
+            } // for i
+            source.optimize();
+            reference.optimize();
+        }
+        else
+        {
+            for (unsigned i = 4; i < bm::gap_max_bits; i += 4)
+            {
+                reference.set(i);
+                source.set(i - 1);
+                source.set(i - 2);
+            } // for i
+        }
+        const unsigned masked_codes[] = {bm::set_block_xor_ref8, bm::set_block_xor_ref16,
+                                         bm::set_block_xor_ref16, bm::set_block_xor_ref32};
+        const unsigned unmasked_codes[] = {bm::set_block_xor_ref8_um, bm::set_block_xor_ref16_um,
+                                           bm::set_block_xor_ref16_um, bm::set_block_xor_ref32_um};
+        const unsigned rows[] = {255, 256, 65535, 65536};
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            Writer::bv_ref_vector_type refs;
+            refs.add(&source, 1);
+            refs.add(&reference, rows[i]);
+            Writer writer;
+            Writer::xor_sim_model_type model;
+            writer.set_compression_level(6);
+            writer.set_ref_vectors(&refs);
+            writer.compute_sim_model(model, refs, bm::xor_sim_params());
+            writer.set_sim_model(&model);
+            writer.set_curr_ref_idx(0);
+            Writer::buffer bytes;
+            writer.serialize(source, bytes);
+            cout << "XOR width row=" << rows[i] << " masked=" << masked << endl;
+            const auto report = ReportXorFixtureOpcodes(bytes);
+            const unsigned opcode = masked ? masked_codes[i] : unmasked_codes[i];
+            assert(report.opcode[opcode].count == 1);
+            bvect restored;
+            assert(bm::deserialize(restored, bytes.data(), nullptr, &refs) == bytes.size());
+            assert(restored == source);
+        } // for i
+    } // for masked
+}
+
+/** Decode legacy XOR metadata followed by a separate residual in two
+    superblocks. Verify index construction and gather across skipped records. */
+static void TestLegacyXorIndexGather()
+{
+    const unsigned target_row = 10;
+    const unsigned distant = bm::set_sub_total_bits;
+    for (unsigned opcode : {bm::set_block_xor_gap_ref8, bm::set_block_xor_gap_ref16,
+                            bm::set_block_xor_gap_ref32, bm::set_block_xor_ref_delta})
+    {
+        const bool delta = opcode == bm::set_block_xor_ref_delta;
+        const unsigned row = opcode == bm::set_block_xor_gap_ref32 ? 65536u :
+                             opcode == bm::set_block_xor_gap_ref16 ? 256u : 255u;
+        bm::serializer<bvect>::buffer bytes;
+        bytes.resize(128);
+        bm::encoder enc(bytes.data(), bytes.size());
+        enc.put_8(bm::BM_HM_NO_BO | bm::BM_HM_NO_GAPL | bm::BM_HM_HXOR);
+        bvect reference, expected;
+        for (unsigned base : {0u, distant})
+        {
+            if (base)
+            {
+                enc.put_8(bm::set_block_8zero);
+                enc.put_8(255);
+            }
+            reference.set(base + 7);
+            reference.set(base + 11);
+            reference.set(base + 2049);
+            enc.put_8(static_cast<unsigned char>(opcode));
+            if (delta)
+            {
+                enc.put_h64(1); // only the first 1024-bit wave
+                bm::bit_out<bm::encoder> bits(enc);
+                bits.gamma(row - target_row);
+                bits.put_bit(base != 0);
+            }
+            else if (opcode == bm::set_block_xor_gap_ref32)
+            {
+                enc.put_32(row);
+            }
+            else if (opcode == bm::set_block_xor_gap_ref16)
+            {
+                enc.put_16(static_cast<unsigned short>(row));
+            }
+            else
+            {
+                enc.put_8(static_cast<unsigned char>(row));
+            }
+            enc.put_8(bm::set_block_bit_1bit);
+            enc.put_16(11); // cancels reference bit 11
+            if (delta && base)
+            {
+                expected.set_range(base, base + 1023);
+                expected.clear_bit(base + 7);
+            }
+            else
+            {
+                expected.set(base + 7);
+            }
+            if (!delta)
+            {
+                expected.set(base + 2049);
+            }
+        } // for base
+        enc.put_8(bm::set_block_end);
+        bytes.resize(enc.size());
+        reference.optimize();
+        const auto report = ReportXorFixtureOpcodes(bytes);
+        assert(report.opcode[opcode].count == 2);
+        assert(report.opcode[bm::set_block_bit_1bit].count == 2);
+
+        bm::bv_ref_vector<bvect> refs;
+        refs.add(&reference, row);
+        bm::deserializer<bvect, bm::decoder> reader;
+        reader.set_ref_vectors(&refs);
+        reader.set_gather_target_id(target_row);
+        bvect restored;
+        assert(reader.deserialize(restored, bytes.data()) == bytes.size());
+        assert(restored == expected);
+        bvect merged { 11, distant + 3000 }, wanted_union(merged);
+        wanted_union |= expected;
+        assert(reader.deserialize(merged, bytes.data()) == bytes.size());
+        assert(merged == wanted_union);
+
+        bm::deserialization_index<bvect> index;
+        reader.set_deserialization_index_construct(&index);
+        bvect dry;
+        assert(reader.deserialize(dry, bytes.data()) == bytes.size());
+        assert(dry.none() && index.size() == report.records);
+        reader.unset_deserialization_index();
+        reader.set_deserialization_index_use(&index);
+        for (unsigned base : {0u, distant})
+        {
+            bvect mask { base + 7, base + 11, base + 99, base + 2049 };
+            bvect digest, gathered, wanted(expected);
+            mask.build_block_digest(digest);
+            reader.set_block_digest_vector_use(&digest);
+            assert(reader.deserialize(gathered, bytes.data()) == bytes.size());
+            gathered &= mask;
+            wanted &= mask;
+            assert(gathered == wanted);
+            reader.unset_block_digest_vector();
+        } // for base
+    } // for opcode
+}
+
 void BVectorXorMixedSerializationTest()
 {
     typedef bm::serializer<bvect> serializer_type;
@@ -19220,11 +19406,14 @@ void BVectorXorMixedSerializationTest()
         ser.set_bookmarks(bookmarks, 4);
         serializer_type::buffer ram;
         ser.serialize(target, ram);
-        const auto* stats = ser.get_compression_stat();
-        assert(stats[bm::set_block_bit]);
-        assert(stats[bm::set_block_ref_eq] == 1); // dense equality only
+        const auto report = ReportXorFixtureOpcodes(ram);
+        assert(report.opcode[bm::set_block_bit].count == 1);
+        assert(report.opcode[bm::set_block_ref_eq].count == 1);
         if (level <= 6)
-            assert(stats[bm::set_block_xor_ref32] == (level == 6 ? 2u : 0u));
+        {
+            assert(report.opcode[bm::set_block_xor_ref8_um].count ==
+                   (level == 6 ? 2u : 0u));
+        }
         std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
         bm::streams_encoder out(stream);
         assert(ser.serialize(target, out) && out.finish());
@@ -19772,22 +19961,31 @@ static void TestReservedSuperblockOpcode()
     } // for index_only
 }
 
-// General serialization contracts across presets. Codec-pinned assertions in
-// SerializationCompressionLevelsTest remain at their original levels.
+/** Verify RAM, stream, operation and indexed gather decoding across presets.
+    @param source Vector to serialize, registered in refs when supplied.
+    @param refs Optional borrowed collection used for reference XOR.
+    @param level7_opcode Expected wire opcode at level 7, or zero for no check.
+*/
 static void CheckCompressionLevelMatrix(
     const bvect& source,
-    const bm::serializer<bvect>::bv_ref_vector_type* refs = nullptr)
+    const bm::serializer<bvect>::bv_ref_vector_type* refs = nullptr,
+    unsigned level7_opcode = 0)
 {
     using Serializer = bm::serializer<bvect>;
     static unsigned fixture = 0;
     ++fixture;
     Serializer writer;
     Serializer::xor_sim_model_type model;
-    if (refs) {
+    bvect::size_type target_id = Serializer::bv_ref_vector_type::not_found();
+    if (refs)
+    {
         writer.set_ref_vectors(refs);
         writer.compute_sim_model(model, *refs, bm::xor_sim_params());
         writer.set_sim_model(&model);
-        writer.set_curr_ref_idx(unsigned(refs->find_bv(&source)));
+        const auto index = refs->find_bv(&source);
+        assert(index != refs->not_found());
+        writer.set_curr_ref_idx(index);
+        target_id = refs->get_row_idx(index);
     }
     bvect mask;
     bvect::size_type first = 0, last = 0;
@@ -19825,21 +20023,40 @@ static void CheckCompressionLevelMatrix(
         assert(output.str() == std::string(
             reinterpret_cast<const char*>(bytes.data()), bytes.size()));
         bm::serialization_opcode_collector<bvect> collector;
-        collector.set_ref_vectors(refs); collector.set_collect_ids();
+        collector.set_ref_vectors(refs);
+        collector.set_gather_target_id(target_id);
+        collector.set_collect_ids();
         bm::serialization_opcode_profile profile;
         collector.add_blob(bytes.data(), bytes.size(), profile);
         assert(profile.reconciles() && profile.cardinalities_reconcile());
         assert(profile.ids == count);
+        if (level == 7 && level7_opcode)
+        {
+            cout << "  opcode " << level7_opcode << " records="
+                 << profile.opcode[level7_opcode].count << endl;
+            assert(profile.opcode[level7_opcode].count == 1);
+        }
         bvect restored;
         bm::deserializer<bvect, bm::decoder> reader;
         reader.set_ref_vectors(refs);
+        reader.set_gather_target_id(target_id);
         check_consumed(reader.deserialize(restored, bytes.data()));
         // Deserialization merges into the destination and does not shrink its size.
         assert(restored == source);
         bvect merged { 3, 65537 }, expected_union(merged);
         expected_union |= source;
         bm::operation_deserializer<bvect> operation;
-        operation.set_ref_vectors(refs);
+        // Operation OR resolves relative row IDs from its destination vector.
+        Serializer::bv_ref_vector_type decode_refs;
+        if (refs)
+        {
+            for (bvect::size_type i = 0; i < refs->size(); ++i)
+            {
+                const auto row = refs->get_row_idx(i);
+                decode_refs.add(row == target_id ? &merged : refs->get_bv(i), row);
+            } // for i
+            operation.set_ref_vectors(&decode_refs);
+        }
         operation.deserialize(merged, bytes.data(), bm::set_OR);
         assert(merged == expected_union);
 
@@ -19854,6 +20071,7 @@ static void CheckCompressionLevelMatrix(
         bm::streams_decoder channel(input);
         bm::streams_deserializer<bvect> stream_reader;
         stream_reader.set_ref_vectors(refs);
+        stream_reader.set_gather_target_id(target_id);
         stream_reader.set_deserialization_index_construct(&stream_index);
         assert(stream_reader.deserialize(dry, channel) && dry.none());
         // A legacy memory index can omit the final END marker described above.
@@ -20603,7 +20821,7 @@ void SerializationCompressionLevelsTest()
 
             bm::serializer<bvect>::buffer buf;
             bms.serialize(bv1, buf);
-        CheckCompressionLevelMatrix(bv1, &bv_ref);
+            CheckCompressionLevelMatrix(bv1, &bv_ref, bm::set_block_xor_ref_shared);
 
             const bvect::size_type* cstat = bms.get_compression_stat();
             assert(cstat[bm::set_block_xor_ref32] == 0);
@@ -20715,8 +20933,8 @@ void SerializationCompressionLevelsTest()
         bms.serialize(bv1, buf);
         CheckCompressionLevelMatrix(bv1, &bv_ref);
 
-        const bvect::size_type* cstat = bms.get_compression_stat();
-        assert(cstat[bm::set_block_xor_ref32] == 1);
+        const auto report = ReportXorFixtureOpcodes(buf);
+        assert(report.opcode[bm::set_block_xor_ref8_um].count == 1);
 
         bvect bv3;
         bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
@@ -20795,10 +21013,8 @@ void SerializationCompressionLevelsTest()
         bms.serialize(bv1, buf);
         CheckCompressionLevelMatrix(bv1, &bv_ref);
 
-        const bvect::size_type* cstat = bms.get_compression_stat();
-        assert(cstat[bm::set_block_xor_ref32] == 1);
-
-        //assert(cstat[bm::set_block_xor_gap_ref32] == 1);
+        const auto report = ReportXorFixtureOpcodes(buf);
+        assert(report.opcode[bm::set_block_xor_ref16].count == 1);
 
         bvect bv3;
         bm::deserialize(bv3, buf.buf(), 0, &bv_ref);
@@ -56320,6 +56536,8 @@ return 0;
         serial_transform_test::TestAdaptiveDeltaFlags();
         serial_transform_test::TestWaveCompaction();
         serial_transform_test::TestPeriodicBoundary();
+        TestXorReferenceWidths();
+        TestLegacyXorIndexGather();
         TestTwoPositionSuperblocks();
         TestReservedSuperblockOpcode();
         serial_transform_test::TestSuperblockEndIndexGather();

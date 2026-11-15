@@ -17,8 +17,9 @@ static void explicit_options(Serializer& s, unsigned level)
     if (level >= 8) {
         s.set_gap_xor_options(true);
         s.set_sblock_adaptive_options(true);
-        s.set_sblock_wave_adaptive_options(true);
+        s.set_sblock_wave_options(true);
         s.set_sblock_large_options(true);
+        s.set_sblock_wave_experiment(level == 10 ? 1 : 4);
     }
     if (level >= 9) {
         s.set_block_selection_step2_options();
@@ -51,6 +52,10 @@ int main()
         for (unsigned level=6; level<=10; ++level) {
             Serializer preset, manual;
             preset.set_compression_level(level); explicit_options(manual,level);
+            assert(preset.get_arithmetic_coding() == (level >= 7));
+            // Preserve the native explicit-policy comparison. Opcode 106 has
+            // separate preset/override and wire coverage in serial_arithmetic.
+            preset.set_arithmetic_coding(false);
             auto bytes=encode(preset,bv); same(bytes,encode(manual,bv));
             if (level>6) assert(bytes.size()<=previous);
             previous=bytes.size();
@@ -58,6 +63,7 @@ int main()
             preset.set_block_selection_bwt_min_gain(234);
             preset.set_sblock_large_inverse_limit(300000);
             preset.set_compression_level(level);
+            preset.set_arithmetic_coding(false);
             same(bytes,encode(preset,bv));
             preset.set_compression_level(11);
             assert(preset.get_compression_level()==level);

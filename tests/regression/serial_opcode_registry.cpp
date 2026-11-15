@@ -3,6 +3,7 @@
 #include "bmserial.h"
 #include <cassert>
 #include <iostream>
+#include <stdexcept>
 
 constexpr unsigned char released_opcodes[] = {
     bm::set_block_end, bm::set_block_1zero, bm::set_block_1one,
@@ -39,14 +40,42 @@ constexpr bool released_assignments_unchanged()
 static_assert(sizeof(released_opcodes) == 70 && released_assignments_unchanged(),
               "Released opcode IDs 0..69 must remain unchanged");
 static_assert(bm::serialization_new_opcode_numbers_valid(), "Invalid new opcode registry");
+/** Verify frozen post-markers fail instead of entering a retained decoder. */
+static void RejectFrozenPostMarkers()
+{
+    struct Reader : bm::deseriaizer_base<bm::decoder, unsigned>
+    {
+        using bm::deseriaizer_base<bm::decoder, unsigned>::read_bwt_block;
+    };
+    for (unsigned post : {73u, 75u})
+    {
+        const unsigned char bytes[] = {1, 0, bm::set_block_1zero,
+                                       static_cast<unsigned char>(post)};
+        bm::decoder input(bytes);
+        Reader reader;
+        bool rejected = false;
+        try
+        {
+            reader.read_bwt_block(input, nullptr);
+        }
+        catch (const std::exception&)
+        {
+            rejected = true;
+        }
+        assert(rejected);
+    } // for post
+}
+
 int main()
 {
+    RejectFrozenPostMarkers();
     bool used[128] = {};
     for (unsigned code : released_opcodes) used[code] = true;
     for (unsigned code : bm::serialization_new_opcodes) { assert(!used[code]); used[code] = true; }
-    for (unsigned code : {70u,71u,82u,83u,86u,87u,88u,89u,91u,93u,95u}) assert(!used[code]);
-    for (unsigned code = 99; code < 128; ++code) assert(!used[code]);
+    for (unsigned code : {70u,71u,73u,75u,82u,83u,86u,87u,88u,89u,91u,93u,95u}) assert(!used[code]);
+    for (unsigned code = 104; code < 128; ++code)
+        if (code != 106 && code != 107 && code != 108 && code != 109) assert(!used[code]);
     unsigned vacant = 0; for (bool occupied : used) vacant += !occupied;
-    assert(vacant == 40);
-    std::cout << "Opcode registry: 70 released IDs unchanged, 18 retained IDs unique, 40 vacant PASS\n";
+    assert(vacant + 70 + sizeof(bm::serialization_new_opcodes) == 128);
+    std::cout << "Opcode registry: 70 released IDs unchanged, " << sizeof(bm::serialization_new_opcodes) << " retained IDs unique, " << vacant << " vacant PASS\n";
 }
