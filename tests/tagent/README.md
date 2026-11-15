@@ -628,6 +628,11 @@ preflight checksum work is shown as preparation. Reference inputs are read only.
 ### Fatal workload failures
 
 A failed build or test ends this TAgent invocation with a nonzero exit status.
+For storage and build-log observations, transient `ENODATA` is retried up to
+three times with short backoff; failures log the operation, path, errno and
+source location. Warning counters roll back partial reads before retrying.
+Other I/O errors and exhausted retries remain fatal; build processes and tests
+are not restarted automatically by this retry mechanism.
 The first workload error is retained while other jobs are terminated. A pending
 repository update does not override an observed failure. Diagnostics include the
 command, variant, termination signal or exit status, and log location.

@@ -9,6 +9,7 @@ import array
 import concurrent.futures
 import datetime
 import depot
+import errno
 import fcntl
 import fireman
 import hashlib
@@ -32,6 +33,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 import soundtrack
 import urllib.request
 import wave
@@ -200,19 +202,24 @@ class WarningCounter:
         Summary lines and incomplete lines are ignored unless final=True, which
         includes the last unterminated line. ANSI colors are stripped.
         """
-        with path.open('rb') as stream:
-            stream.seek(self.offsets.get(path, 0))
-            while True:
-                chunk = stream.read(65536)
-                if not chunk:
-                    break
-                lines = (self.partial.get(path, b'') + chunk).split(b'\n')
-                self.partial[path] = lines.pop()
-                for line in lines:
-                    self.count_line(line)
-            self.offsets[path] = stream.tell()
-            if final and self.partial.get(path):
-                self.count_line(self.partial.pop(path))
+        saved = (self.count, self.errors, self.offsets.copy(), self.partial.copy())
+        try:
+            with path.open('rb') as stream:
+                stream.seek(self.offsets.get(path, 0))
+                while True:
+                    chunk = stream.read(65536)
+                    if not chunk:
+                        break
+                    lines = (self.partial.get(path, b'') + chunk).split(b'\n')
+                    self.partial[path] = lines.pop()
+                    for line in lines:
+                        self.count_line(line)
+                self.offsets[path] = stream.tell()
+                if final and self.partial.get(path):
+                    self.count_line(self.partial.pop(path))
+        except OSError:
+            self.count, self.errors, self.offsets, self.partial = saved
+            raise
         return self.count
 
 
@@ -611,11 +618,31 @@ class Agent:
         return 'pid={} ppid={} pgid={} sid={} tty={}'.format(
             os.getpid(), os.getppid(), os.getpgrp(), os.getsid(0), tty)
 
+    def io_operation(self, operation, path, action):
+        """Retry read-only ENODATA briefly and preserve operation and failure location."""
+        for attempt in range(1, 5):
+            try:
+                return action()
+            except OSError as error:
+                frames = traceback.extract_tb(error.__traceback__)
+                location = '{}:{} in {}'.format(frames[-1].filename, frames[-1].lineno, frames[-1].name) if frames else 'unknown'
+                detail = ('operation={} path={} errno={} ({}) error_path={} location={} attempt={}/4: {}'.format(
+                    operation, path, error.errno, errno.errorcode.get(error.errno, 'UNKNOWN'),
+                    error.filename or 'unavailable', location, attempt, error))
+                if error.errno != errno.ENODATA or attempt == 4 or self.stopping.is_set():
+                    raise OSError(error.errno, detail, str(path)) from error
+                try:
+                    self.say('IO RETRY | ' + detail)
+                except OSError:
+                    print('IO RETRY | ' + detail, file=sys.stderr, flush=True)
+                if self.stopping.wait(.25 * (2 ** (attempt - 1))):
+                    raise OSError(error.errno, detail + ' | interrupted', str(path)) from error
+
     def resource_check(self):
         """Raise Failure if configured storage reserve is unavailable."""
-        if shutil.disk_usage(self.home).free < self.args.min_free_gb * 1024**3:
+        if self.io_operation('disk usage', self.home, lambda: shutil.disk_usage(self.home)).free < self.args.min_free_gb * 1024**3:
             raise Failure('Free disk below configured reserve: ' + str(self.home))
-        if shutil.disk_usage(self.repo).free < self.args.min_free_gb * 1024**3:
+        if self.io_operation('disk usage', self.repo, lambda: shutil.disk_usage(self.repo)).free < self.args.min_free_gb * 1024**3:
             raise Failure('Free disk below configured reserve: ' + str(self.repo))
 
     def signal_group(self, proc, sig):
@@ -859,7 +886,11 @@ class Agent:
         except (CommandFailure, OSError) as error:
             if log:
                 if not isinstance(error, CommandFailure):
-                    error = CommandFailure('{} | variant {} | log {} | {}'.format(argv, log.parent.name, log, error))
+                    frames = traceback.extract_tb(error.__traceback__)
+                    location = '{}:{} in {}'.format(frames[-1].filename, frames[-1].lineno, frames[-1].name) if frames else 'unknown'
+                    error = CommandFailure('{} | variant {} | log {} | errno {} ({}) | error path {} | location {} | {}'.format(
+                        argv, log.parent.name, log, error.errno, errno.errorcode.get(error.errno, 'UNKNOWN'),
+                        error.filename or 'unavailable', location, error))
                 with self.mutex:
                     if not hasattr(self, 'first_workload_failure'):
                         self.first_workload_failure = error
@@ -1639,9 +1670,9 @@ class Agent:
         with self.build_lock:
             for path in self.build_logs or [log]:
                 if path.exists():
-                    self.build_warnings.observe(path)
+                    self.io_operation('read build diagnostics', path, lambda: self.build_warnings.observe(path))
                     if path.name == 'build-samples.log':
-                        self.sample_warnings.observe(path)
+                        self.io_operation('read sample diagnostics', path, lambda: self.sample_warnings.observe(path))
             count = self.build_warnings.count
             now = time.monotonic()
             if now >= self.next_build_report:
@@ -2600,9 +2631,9 @@ class Agent:
             finally:
                 with self.build_lock:
                     if build_log.exists():
-                        self.build_warnings.observe(build_log, final=True)
+                        self.io_operation('read final build diagnostics', build_log, lambda: self.build_warnings.observe(build_log, final=True))
                         if family == 'samples':
-                            self.sample_warnings.observe(build_log, final=True)
+                            self.io_operation('read final sample diagnostics', build_log, lambda: self.sample_warnings.observe(build_log, final=True))
 
         failures = []
         interrupted_build = False
@@ -2616,7 +2647,7 @@ class Agent:
                     failures.append(error)
         for path in self.build_logs:
             if path.exists():
-                self.build_warnings.observe(path, final=True)
+                self.io_operation('read final build diagnostics', path, lambda: self.build_warnings.observe(path, final=True))
         if interrupted_build and not failures:
             self.say('Build interrupted for remote update; fetching before restart')
             return 'updated'

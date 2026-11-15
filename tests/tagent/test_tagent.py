@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Focused supervisor checks using temporary checkouts and synthetic test jobs."""
 import importlib.util
+import errno
 import hashlib
 import io
 import os
@@ -40,6 +41,78 @@ class SupervisorTests(unittest.TestCase):
         """Stop synthetic processes and remove temporary evidence."""
         self.agent.stop_children()
         self.temp.cleanup()
+
+    def test_enodata_retries_with_operation_and_path(self):
+        """Transient ENODATA retries safely and records the exact operation and path."""
+        path = self.root / 'build.log'
+        attempts = []
+        def operation():
+            attempts.append(1)
+            if len(attempts) < 3:
+                raise OSError(errno.ENODATA, 'No data available', str(path))
+            return 'ok'
+        with patch.object(self.agent.stopping, 'wait', return_value=False):
+            self.assertEqual(self.agent.io_operation('read build diagnostics', path, operation), 'ok')
+        self.assertEqual(len(attempts), 3)
+        log = (self.agent.home / 'agent.log').read_text()
+        self.assertIn('operation=read build diagnostics', log)
+        self.assertIn('path=' + str(path), log)
+        self.assertIn('errno={} (ENODATA)'.format(errno.ENODATA), log)
+        self.assertIn('location=', log)
+
+    def test_io_retry_exhaustion_and_other_errors(self):
+        """Repeated ENODATA reports its origin; unrelated errors are not retried."""
+        path = self.root / 'build.log'
+        with patch.object(self.agent.stopping, 'wait', return_value=False):
+            for code, expected in ((errno.ENODATA, 4), (errno.EACCES, 1)):
+                action = unittest.mock.Mock(side_effect=OSError(code, 'failure', str(path)))
+                with self.assertRaises(OSError) as caught:
+                    self.agent.io_operation('read build diagnostics', path, action)
+                self.assertEqual(action.call_count, expected)
+                self.assertIn('operation=read build diagnostics', str(caught.exception))
+                self.assertIn(str(path), str(caught.exception))
+
+    def test_resource_check_retries_transient_disk_usage_failure(self):
+        """A transient ENODATA in the storage probe identifies the affected path."""
+        usage = unittest.mock.Mock(free=10**12)
+        with patch.object(ta.shutil, 'disk_usage', side_effect=[
+                OSError(errno.ENODATA, 'No data available'), usage, usage]) as disk, \
+             patch.object(self.agent.stopping, 'wait', return_value=False):
+            self.agent.resource_check()
+        self.assertEqual(disk.call_count, 3)
+        log = (self.agent.home / 'agent.log').read_text()
+        self.assertIn('operation=disk usage path=' + str(self.agent.home), log)
+
+    def test_warning_counter_rolls_back_after_partial_read_failure(self):
+        """Retrying a partial read does not double-count warning lines."""
+        path = self.root / 'build.log'
+        path.write_bytes(b'file.cpp:1: warning: first\nfile.cpp:2: warning: second\n')
+        counter = ta.WarningCounter()
+        original = Path.open
+        class FailingStream:
+            def __init__(self, stream):
+                self.stream = stream
+                self.reads = 0
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                self.stream.close()
+            def seek(self, *args):
+                return self.stream.seek(*args)
+            def tell(self):
+                return self.stream.tell()
+            def read(self, size):
+                self.reads += 1
+                if self.reads == 2:
+                    raise OSError(errno.ENODATA, 'No data available')
+                return self.stream.read(27)
+        def open_file(file, *args, **kwargs):
+            return FailingStream(original(file, *args, **kwargs))
+        with patch.object(Path, 'open', open_file):
+            with self.assertRaises(OSError):
+                counter.observe(path)
+        self.assertEqual((counter.count, counter.errors, counter.offsets, counter.partial), (0, 0, {}, {}))
+        self.assertEqual(counter.observe(path), 2)
 
     def test_build_status_label(self):
         """Show actual build variants through wrappers and retain future suffixes."""
