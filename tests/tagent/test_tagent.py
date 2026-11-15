@@ -5,6 +5,7 @@ import errno
 import hashlib
 import io
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -255,6 +256,9 @@ class SupervisorTests(unittest.TestCase):
             if family == 'stress':
                 (directory / 'run_all_pl.sh').write_text(
                     '#!/bin/bash\nset -eu\ncd "$(dirname "$0")"\n"$2" -ll\n"$2" -s\n')
+            else:
+                (directory / 'run_all_pl.sh').write_text(
+                    '#!/bin/bash\nset -eu\nshift\n"$1"\n')
 
         inv = self.root / 'utils' / 'inv_list'
         inv.mkdir(parents=True)
@@ -438,7 +442,7 @@ class SupervisorTests(unittest.TestCase):
         calls = []
         original = self.agent.command
         def command(argv, *args, **kwargs):
-            if '--order-file' in argv:
+            if '--order-file' in argv and len(args) and args[0] and args[0].name == 'runner.log':
                 calls.append((Path(argv[1]).parent.name, list(argv)))
             return original(argv, *args, **kwargs)
         with patch.object(self.agent, 'command', side_effect=command):
@@ -919,7 +923,7 @@ class SupervisorTests(unittest.TestCase):
             return original(argv, *args, **kwargs)
         with patch.object(self.agent, 'command', side_effect=command):
             self.assertTrue(self.agent.cycle())
-        stress = [(argv, log) for argv, log in calls if '--order-file' in argv]
+        stress = [(argv, log) for argv, log in calls if log and log.name == 'runner.log']
         self.assertTrue(stress)
         fast_stress = [log.parent.name for _, log in stress if 'normal' not in log.parts]
         self.assertEqual(fast_stress, ['stress_release', 'stress_release_neon'])
@@ -928,7 +932,7 @@ class SupervisorTests(unittest.TestCase):
             debug = '_debug' in log.parent.name
             self.assertEqual('--fast' in argv, not normal or debug)
             self.assertNotIn('--pedantic', argv)
-        perf_runs = [(argv, log) for argv, log in calls if Path(argv[0]).name.startswith('perf_release')]
+        perf_runs = [(argv, log) for argv, log in calls if log and log.name == 'perf.log' and '_release' in log.parent.name]
         self.assertTrue(perf_runs)
         fast_perf = {log.parent.name for _, log in perf_runs if 'normal' not in log.parts}
         self.assertEqual(fast_perf, {'perf_release', 'perf_release_neon'})
@@ -945,6 +949,9 @@ class SupervisorTests(unittest.TestCase):
         self.agent.arm = False
         self.agent.flags = {'sse2', 'sse4_2', 'avx2'}
         self.agent.jobs = 2
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
         manifest = {'builds': {'perf': ['perf_debug', 'perf_release', 'perf_release_sse2',
                     'perf_release_sse42', 'perf_release_avx2', 'perf_release_avx512',
                     'perf_release_64', 'perf_debug_avx2']}}
@@ -952,12 +959,68 @@ class SupervisorTests(unittest.TestCase):
              patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
             self.assertTrue(self.agent.test_perf_stage(self.root, manifest))
         calls = command.call_args_list
-        names = {Path(call.args[0][0]).name for call in calls}
+        names = {Path(call.args[0][call.args[0].index('--binary') + 1]).name for call in calls}
         self.assertEqual(names, {'perf_release', 'perf_release_sse2', 'perf_release_sse42',
                                  'perf_release_avx2', 'perf_release_64'})
-        self.assertTrue(all(call.args[0][1:] == ['--fast'] for call in calls))
+        self.assertTrue(all('--fast' in call.args[0] for call in calls))
         self.assertTrue(all(call.kwargs['test_allocator'] for call in calls))
         self.assertEqual(set(self.agent.perf_completed), names)
+
+    def test_grouped_perf_budget_and_progress(self):
+        """Group jobs across concurrent variants fit the global budget and progress aggregates."""
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
+        self.agent.jobs = 8
+        names = ['perf_release', 'perf_release_sse2', 'perf_release_sse42']
+        with patch.object(self.agent, 'supported', return_value=True), \
+             patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_perf_stage(self.root, {'builds': {'perf': names}}))
+        jobs = [int(c.args[0][c.args[0].index('--jobs') + 1]) for c in command.call_args_list]
+        self.assertEqual(sorted(jobs), [2, 3, 3])
+        self.assertEqual(sum(jobs), self.agent.jobs)
+        group_dir = self.root / 'perf_release/perf-groups/run.fixture'
+        group_dir.mkdir(parents=True)
+        (group_dir / 'a.log').write_text('header\nfirst; 1 sec\nTOTAL; 1 sec\n')
+        (group_dir / 'b.log').write_text('second; 2 ms\npartial; 3 sec')
+        self.assertEqual(ta.perf_log_progress(self.root / 'perf_release/perf.log')[0], 2)
+
+    def test_perf_runner_stops_siblings_and_records_first_failure(self):
+        """One failed perf group cancels siblings and retains the precise group log."""
+        directory = self.root / 'perf-runner'
+        directory.mkdir()
+        runner = directory / 'run_all_pl.sh'
+        shutil.copy2(Path(__file__).resolve().parents[1] / 'perf/run_all_pl.sh', runner)
+        binary = directory / 'binary'
+        binary.write_text('#!/bin/bash\nif [ "$1" = --list-groups ]; then printf "a-fail\\nb-slow\\n"; exit; fi\n'
+                          'if [ "$2" = a-fail ]; then sleep 1; exit 17; fi\nsleep 30\n')
+        binary.chmod(0o755)
+        started = time.monotonic()
+        result = subprocess.run(['bash', str(runner), '--binary', './binary', '--jobs', '2', '--fail-fast'],
+                                cwd=directory, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertIn('a-fail exit 17 log ', (directory / 'first-failure.txt').read_text())
+
+    def test_group_failure_reaches_agent_with_variant_and_log(self):
+        """A perf group failure terminates the stage and includes its diagnostic log."""
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        shutil.copy2(Path(__file__).resolve().parents[1] / 'perf/run_all_pl.sh', perf_dir / 'run_all_pl.sh')
+        binary = perf_dir / 'perf_release'
+        binary.write_text('#!/bin/bash\nif [ "$1" = --list-groups ]; then printf "a-fail\\nb-slow\\n"; exit; fi\n'
+                          'if [ "$2" = a-fail ]; then echo "injected error"; sleep 1; exit 17; fi\nsleep 30\n')
+        binary.chmod(0o755)
+        self.agent.jobs = 2
+        with patch.object(self.agent, 'sound'), patch.object(self.agent, 'supported', return_value=True):
+            with self.assertRaises(ta.CommandFailure) as caught:
+                self.agent.test_perf_stage(self.root, {'builds': {'perf': ['perf_release']}})
+        message = str(caught.exception)
+        self.assertIn('Perf variant: perf_release', message)
+        self.assertIn('a-fail exit 17', message)
+        self.assertIn('a-fail.log', message)
+        self.assertIn('injected error', message)
 
     def test_fast_variants_by_platform(self):
         """Fast selects baseline and supported SIMD, never debug or AVX-512."""
@@ -987,12 +1050,12 @@ class SupervisorTests(unittest.TestCase):
             return original(argv, *args, **kwargs)
         with patch.object(self.agent, 'command', side_effect=command):
             self.assertTrue(self.agent.cycle())
-        debug = [argv for argv in calls if '_debug' in Path(argv[0]).name]
-        release = [argv for argv in calls if '_release' in Path(argv[0]).name]
+        debug = [argv for argv in calls if '_debug' in Path(argv[argv.index('--binary') + 1]).name]
+        release = [argv for argv in calls if '_release' in Path(argv[argv.index('--binary') + 1]).name]
         self.assertEqual(len(debug), 2)
         self.assertEqual(len(release), 2)
-        self.assertTrue(all(argv[1:] == ['--fast'] for argv in debug))
-        self.assertTrue(all(len(argv) == 1 for argv in release))
+        self.assertTrue(all('--fast' in argv for argv in debug))
+        self.assertTrue(all('--fast' not in argv for argv in release))
 
     def test_stress_variants_share_history_path_across_cycles(self):
         """Every isolated stress run receives the same persistent history path."""
@@ -1000,7 +1063,7 @@ class SupervisorTests(unittest.TestCase):
         calls = []
         original = self.agent.command
         def command(argv, *args, **kwargs):
-            if '--order-file' in argv:
+            if '--order-file' in argv and len(args) and args[0] and args[0].name == 'runner.log':
                 calls.append(argv[argv.index('--order-file') + 1])
             return original(argv, *args, **kwargs)
         with patch.object(self.agent, 'command', side_effect=command):
@@ -1665,6 +1728,9 @@ class SupervisorTests(unittest.TestCase):
     def test_perf_targets_only_learn_from_successful_processes(self):
         """An update-interrupted or failed process cannot overwrite its target."""
         self.agent.args.no_sound = True
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
         manifest = {'builds': {'perf': ['perf_release']}}
         run = self.root / 'case'
         run.mkdir()

@@ -489,6 +489,16 @@ Every produced, supported perf debug binary runs with `--fast`, including in
 normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
 `--fast` option is supplied.
 
+Perf variants use `tests/perf/run_all_pl.sh` to run independent benchmark groups
+in parallel. TAgent shares its CPU budget across concurrently running variants;
+each receives a fixed share for its group workers, with the total never exceeding
+the budget. Each variant has independent group logs under `perf-groups` and a
+separate learned scheduling history in `perf-group-order`; fast runs do not
+update timing history. Progress totals aggregate completed timed records across
+the group logs. A failed group stops sibling jobs and reports its variant,
+group and diagnostic log. Perf timings during concurrent testing are not
+intended as isolated performance measurements.
+
 In normal and pedantic stress cycles, the supported `stress_release_sse42`
 variant runs first when present. Fast cycles retain their scalar and fastest
 SIMD selection; the normal-cycle GCC release remains last and uses fast mode.

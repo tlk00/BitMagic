@@ -54,6 +54,15 @@ def perf_estimated_percent(count, target=PERF_ESTIMATED_TESTS):
 
 def perf_log_progress(path):
     """Count complete timed records, ignoring headers, blank and partial lines."""
+    group_root = path.parent / 'perf-groups'
+    if group_root.is_dir():
+        count, last = 0, None
+        for group_log in sorted(group_root.glob('run.*/*.log')):
+            part, item = perf_log_progress(group_log)
+            count += part
+            if item:
+                last = item
+        return count, last
     pattern = re.compile(r';\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s+(?:ms|sec|min)\s*$')
     count, last = 0, None
     with path.open('r', errors='replace') as stream:
@@ -80,10 +89,11 @@ def build_status_label(argv, log):
     Return an empty label when no executable build configuration is available.
     """
     names = []
-    if '--bin' in argv:
-        position = argv.index('--bin') + 1
-        if position < len(argv):
-            names.append(Path(str(argv[position])).name)
+    for option in ('--bin', '--binary'):
+        if option in argv:
+            position = argv.index(option) + 1
+            if position < len(argv):
+                names.append(Path(str(argv[position])).name)
     names.extend((Path(str(argv[0])).name, log.parent.name))
     display = {'sse42': 'SSE4.2', 'sse41': 'SSE4.1', '64': '64-bit'}
     for name in names:
@@ -766,13 +776,13 @@ class Agent:
             raise failure
         for child in processes:
             child_log = getattr(child, 'tagent_log', None)
-            if child_log and child_log.name == 'runner.log' and (child_log.parent / 'first-failure.txt').exists():
+            if child_log and child_log.name in ('runner.log', 'perf.log') and (child_log.parent / 'first-failure.txt').exists():
                 raise CommandFailure(self.stress_failure_details(child_log))
             status = child.poll()
             if child_log and status and not (status == 75 and child_log.name == 'runner.log'):
                 raise CommandFailure('{} | exit {} | observed before update cancellation | current log {}'.format(child.args, status, child_log))
         status = proc.poll()
-        if log and log.name == 'runner.log' and (log.parent / 'first-failure.txt').exists():
+        if log and log.name in ('runner.log', 'perf.log') and (log.parent / 'first-failure.txt').exists():
             raise CommandFailure(self.stress_failure_details(log))
         if status and not (status == 75 and log and log.name == 'runner.log'):
             reason = signal.Signals(-status).name if status < 0 else 'exit ' + str(status)
@@ -822,7 +832,7 @@ class Agent:
                             stream.seek(max(0, log.stat().st_size - 16384))
                             tail = stream.read().decode(errors='replace')
                         if (log.parent / 'first-failure.txt').exists() or any(line.startswith('FAIL   ') for line in tail.splitlines()):
-                            raise CommandFailure('Stress group failed\n' + self.stress_failure_details(log))
+                            raise CommandFailure(('Perf' if log.name == 'perf.log' else 'Stress') + ' group failed\n' + self.stress_failure_details(log))
                     if timeout and time.monotonic() - started >= timeout:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
                     if self.stopping.is_set():
@@ -869,6 +879,17 @@ class Agent:
                         if log.name == 'perf.log':
                             self.report_perf_progress()
                         workers = len(self.perf_workers)
+                        if log.name == 'perf.log':
+                            with self.mutex:
+                                active_perf_logs = list(self.perf_logs.values())
+                            workers = 0
+                            for perf_log in active_perf_logs:
+                                try:
+                                    lines = perf_log.read_text(errors='replace').splitlines()
+                                    workers += max(0, sum(line.startswith('START ') for line in lines) -
+                                                   sum(line.startswith(('PASS  ', 'FAIL   ')) for line in lines))
+                                except OSError:
+                                    continue
                         if log.name == 'runner.log':
                             lines = log.read_text(errors='replace').splitlines()
                             workers = sum(line.startswith('START  ') for line in lines) - sum(
@@ -878,7 +899,7 @@ class Agent:
             if proc.returncode in allowed_exit_codes:
                 return str(proc.returncode)
             if proc.returncode:
-                detail = (self.stress_failure_details(log) if log and log.name == 'runner.log'
+                detail = (self.stress_failure_details(log) if log and log.name in ('runner.log', 'perf.log') and (log.parent / 'first-failure.txt').exists()
                           else str(log) if log else (result or '')[-2000:])
                 reason = signal.Signals(-proc.returncode).name if proc.returncode < 0 else 'exit ' + str(proc.returncode)
                 raise CommandFailure('{} | {} | variant {} | {}'.format(shlex.join(map(str, argv)), reason, log.parent.name if log else 'operational', detail))
@@ -917,11 +938,22 @@ class Agent:
         log is the stress runner log. Missing or incomplete details preserve the
         runner path so diagnostics never hide the original process failure.
         """
-        details = ['Stress variant: ' + log.parent.name, 'Runner log: ' + str(log)]
+        details = [('Perf' if log.name == 'perf.log' else 'Stress') + ' variant: ' + log.parent.name,
+                   'Runner log: ' + str(log)]
         try:
             record = log.parent / 'first-failure.txt'
             if record.exists():
-                details.append('First failure: ' + record.read_text(errors='replace').strip())
+                first_failure = record.read_text(errors='replace').strip()
+                details.append('First failure: ' + first_failure)
+                if log.name == 'perf.log' and ' log ' in first_failure:
+                    failed_log = Path(first_failure.split(' log ', 1)[1])
+                    details.append('Diagnostic log: ' + str(failed_log))
+                    try:
+                        with failed_log.open('rb') as stream:
+                            stream.seek(max(0, failed_log.stat().st_size - 8192))
+                            details.extend('  ' + line for line in stream.read().decode(errors='replace').splitlines()[-12:])
+                    except OSError as error:
+                        details.append('Cannot read diagnostic log: ' + str(error))
             lines = log.read_text(errors='replace').splitlines()
             for index, line in enumerate(lines):
                 if not line.startswith('FAIL   '):
@@ -2428,7 +2460,13 @@ class Agent:
         self.start_test_sound('perf')
         names = ([name for name in manifest['builds']['perf'] if '_release' in name]
                  if self.args.fast else manifest['builds']['perf'])
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as pool:
+        eligible = [name for name in names if not (self.args.no_debug and '_debug' in name) and self.supported(name)]
+        parallel_variants = min(self.jobs, max(1, len(eligible)))
+        jobs_per_variant = max(1, self.jobs // parallel_variants)
+        extra_jobs = self.jobs % parallel_variants
+        self.say('PERF SCHEDULE | {} concurrent variants | {}-{} group workers each | budget {}'.format(
+            parallel_variants, jobs_per_variant, jobs_per_variant + bool(extra_jobs), self.jobs))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_variants) as pool:
             futures = []
             future_names = {}
             with self.mutex:
@@ -2445,10 +2483,18 @@ class Agent:
                     continue
                 work = run / name
                 work.mkdir()
-                perf_command = [str(self.repo / 'tests/perf' / name)]
+                runner = work / 'run_all_pl.sh'
+                shutil.copy2(self.repo / 'tests/perf/run_all_pl.sh', runner)
+                order_dir = self.home / 'perf-group-order'
+                order_dir.mkdir(parents=True, exist_ok=True)
+                variant_jobs = jobs_per_variant + (eligible.index(name) < extra_jobs)
+                perf_command = ['bash', str(runner), '--binary', str(self.repo / 'tests/perf' / name),
+                                '--jobs', str(variant_jobs), '--fail-fast',
+                                '--log-dir', str(work / 'perf-groups'), '--order-file',
+                                str(order_dir / (name + '--' + self.perf_target_mode(name) + '.tsv'))]
                 if self.args.fast or '_debug' in name:
                     perf_command.append('--fast')
-                future = pool.submit(self.command, perf_command, work / 'perf.log', work, test_allocator=True)
+                future = pool.submit(self.command, perf_command, work / 'perf.log', work, fail_fast=True, test_allocator=True)
                 futures.append(future)
                 future_names[future] = (name, work / 'perf.log')
             for future in concurrent.futures.as_completed(futures):

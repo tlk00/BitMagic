@@ -20,7 +20,7 @@ Each group has its own process, working directory, and timing log.
   -b PATH, --binary PATH  Binary path, relative to this directory or absolute
   -l DIR, --log-dir DIR  Log root (default logs/parallel)
   --fast                Pass --fast to each group; do not update timing weights
-  --fail-fast           Stop launching groups after a failure; drain active jobs
+  --fail-fast           Stop all running groups after the first failure
   --order-file FILE     Normal-mode timing history (default logs/parallel/order.tsv)
   -h, --help            Show this help
 
@@ -189,10 +189,16 @@ STOP_LAUNCHING=0
 
 stop_workers()
 {
+    local pid
     for pid in "${PIDS[@]}"; do
         [ -z "$pid" ] || kill -TERM "$pid" 2>/dev/null || true
     done
+    sleep 0.2
+    for pid in "${PIDS[@]}"; do
+        [ -z "$pid" ] || kill -KILL "$pid" 2>/dev/null || true
+    done
 }
+rm -f first-failure.txt first-failure.txt.tmp || exit 1
 trap 'stop_workers; exit 130' INT
 trap 'stop_workers; exit 143' TERM
 trap 'stop_workers; exit 129' HUP
@@ -232,8 +238,15 @@ reap_finished()
             else
                 STATUSES[$index]="fail:$status"
                 FAILURES=$((FAILURES + 1))
-                echo "FAIL  ${NAMES[$index]} (exit $status, ${seconds}s): $RUN_DIR/${NAMES[$index]}.log"
-                [ "$FAIL_FAST" -eq 0 ] || STOP_LAUNCHING=1
+                echo "FAIL   ${NAMES[$index]} (exit $status, ${seconds}s): $RUN_DIR/${NAMES[$index]}.log"
+                if [ "$FAIL_FAST" -ne 0 ]; then
+                    if [ ! -e first-failure.txt ]; then
+                        printf '%s exit %s log %s\n' "${NAMES[$index]}" "$status" "$RUN_DIR/${NAMES[$index]}.log" > first-failure.txt.tmp
+                        mv first-failure.txt.tmp first-failure.txt
+                    fi
+                    STOP_LAUNCHING=1
+                    stop_workers
+                fi
             fi
             PIDS[$index]=""
             RUNNING=$((RUNNING - 1))
