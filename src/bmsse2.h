@@ -1365,45 +1365,33 @@ bm::id_t sse2_bit_block_calc_count_change(const __m128i* BMRESTRICT block,
    return unsigned(count);
 }
 
-#ifdef __GNUG__
-// necessary measure to silence false warning from GCC about negative pointer arithmetics
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#endif
-
 /*!
-SSE4.2 check for one to two (variable len) 128 bit SSE lines for gap search results (8 elements)
-\internal
+    Find a lower bound in the final window of a GAP binary search.
+    @param pbuf Sorted GAP endpoints, with at least size readable elements.
+    @param pos Bit position to locate.
+    @param size Number of endpoints in the window (1 to 16).
+    @return Index of the first endpoint >= pos, or size if none matches.
+    @ingroup SSE2
+    @internal
 */
 inline
 unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
                        const bm::gap_word_t pos, unsigned size)
 {
-    BM_ASSERT(size <= 16);
-    BM_ASSERT(size);
-
+    BM_ASSERT(size && size <= 16);
     const unsigned unroll_factor = 8;
-    if (size < 4) // for very short vector use conventional scan
+    if (size < unroll_factor)
     {
-        if      (pbuf[0] >= pos) { size = 0; }
-        else if (pbuf[1] >= pos) { size = 1; }
-        else                     { size = 2; BM_ASSERT(pbuf[2] >= pos); }
-        return size;
+        unsigned i = 0;
+        while (i < size && pbuf[i] < pos)
+        {
+            ++i;
+        } // while i
+        return i;
     }
 
-    __m128i m1, mz, maskF, maskFL;
-
-    mz = _mm_setzero_si128();
-    m1 = _mm_loadu_si128((__m128i*)(pbuf)); // load first 8 elements
-
-    maskF = _mm_cmpeq_epi32(mz, mz); // set all FF
-    maskFL = _mm_slli_si128(maskF, 4 * 2); // byle shift to make [0000 FFFF] 
-    int shiftL = (64 - (unroll_factor - size) * 16);
-    maskFL = _mm_slli_epi64(maskFL, shiftL); // additional bit shift to  [0000 00FF]
-
-    m1 = _mm_andnot_si128(maskFL, m1); // m1 = (~mask) & m1
-    m1 = _mm_or_si128(m1, maskFL);
-
+    const __m128i mz = _mm_setzero_si128();
+    __m128i m1 = _mm_loadu_si128((const __m128i*)pbuf);
     __m128i mp = _mm_set1_epi16(pos);  // broadcast pos into all elements of a SIMD vector
     __m128i  mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // unsigned m1 >= mp
     int mi = _mm_movemask_epi8(mge_mask);  // collect flag bits
@@ -1412,15 +1400,15 @@ unsigned sse2_gap_find(const bm::gap_word_t* BMRESTRICT pbuf,
         int bsr_i= bm::bit_scan_fwd(mi) >> 1;
         return bsr_i;   // address of first one element (target)
     }
-    if (size == 8)
+    if (size == unroll_factor)
+    {
         return size;
+    }
 
-    // inspect the next lane with possible step back (to avoid over-read the block boundaries)
-    //   GCC gives a false warning for "- unroll_factor" here
-    const bm::gap_word_t* BMRESTRICT pbuf2 = pbuf + size - unroll_factor;
-    BM_ASSERT(pbuf2 > pbuf); // assert in place to make sure GCC warning is indeed false
+    // The final eight endpoints can overlap the first eight.
+    const bm::gap_word_t* pbuf2 = pbuf + (size - unroll_factor);
 
-    m1 = _mm_loadu_si128((__m128i*)(pbuf2)); // load next elements (with possible overlap)
+    m1 = _mm_loadu_si128((const __m128i*)pbuf2);
     mge_mask = _mm_cmpeq_epi16(_mm_subs_epu16(mp, m1), mz); // m1 >= mp
     mi = _mm_movemask_epi8(mge_mask);
     if (mi)
@@ -1507,11 +1495,6 @@ unsigned sse2_gap_test(const unsigned short* BMRESTRICT buf, unsigned pos)
 }
 
 
-
-
-#ifdef __GNUG__
-#pragma GCC diagnostic pop
-#endif
 
 
 #define VECT_XOR_ARR_2_MASK(dst, src, src_end, mask)\
