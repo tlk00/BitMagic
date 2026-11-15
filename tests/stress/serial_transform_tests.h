@@ -138,64 +138,10 @@ static void TestAdaptiveDeltaFlags()
     }
 }
 
-static void CheckBWTWaves()
-{
-    const unsigned n = bm::bwt_wave_bits;
-    bm::byte_buffer<bm::bvector<>::allocator_type> matrix(bm::bwt_matrix_bytes);
-    std::vector<bm::word_t> source(bm::set_block_size), output(bm::set_block_size);
-    std::mt19937 random(seed + n);
-    for (unsigned pattern = 0; pattern < 10; ++pattern)
-    {
-        case_length = n;
-        case_pattern = pattern;
-        for (unsigned i = 0; i < bm::set_block_size; ++i)
-        {
-            source[i] = pattern == 0 ? 0u : pattern == 1 ? ~0u :
-                pattern == 2 ? 0x55555555u : pattern == 3 ? 0x00010001u :
-                pattern == 4 ? (i % 32 == 0 ? 1u : 0u) :
-                pattern == 5 ? (i % 32 == 0 ? ~1u : ~0u) :
-                pattern == 6 ? (i % 32 < 15 ? 0u : ~0u) : random();
-        } // for i
-        const auto original = source;
-        std::vector<unsigned> rows(n);
-        for (unsigned i = 0; i < n; ++i)
-        {
-            rows[i] = i;
-        } // for i
-        // Sort actual cyclic bit sequences independently of the production
-        // byte matrix and merge sort. Periodic ties must retain the same primary.
-        const auto bit = [&](unsigned i) { return (source[i/32] >> (i%32)) & 1u; };
-        std::sort(rows.begin(), rows.end(), [&](unsigned a, unsigned b)
-        {
-            for (unsigned i = 0; i < n; ++i)
-            {
-                const unsigned x = bit((a+i)%n), y = bit((b+i)%n);
-                if (x != y) return x < y;
-            } // for i
-            return a < b;
-        });
-        unsigned short primary[bm::block_waves], unpacked[bm::block_waves];
-        bm::bwt_transform_block(source.data(), output.data(), matrix.data(), primary);
-        TRANSFORM_CHECK(source == original);
-        for (unsigned row = 0; row < n; ++row)
-        {
-            TRANSFORM_CHECK(((output[row/32] >> (row%32)) & 1u) == bit((rows[row]+n-1)%n));
-        } // for row
-        TRANSFORM_CHECK(primary[0] == unsigned(std::find(rows.begin(), rows.end(), 0u) - rows.begin()));
-        unsigned char packed[bm::bwt_index_bytes];
-        bm::bwt_pack_indexes(primary, packed);
-        bm::bwt_unpack_indexes(packed, unpacked);
-        TRANSFORM_CHECK(!::memcmp(primary, unpacked, sizeof(primary)));
-        bm::bwt_inverse_block(output.data(), unpacked);
-        TRANSFORM_CHECK(output == original);
-    } // for pattern
-}
-
 static void TestBWTTransforms()
 {
     family = "BWTTransforms"; case_pattern = case_split = case_length = case_step = case_width = 0;
     std::cout << "TestBWTTransforms seed=" << seed << std::endl;
-    CheckBWTWaves();
     bm::bwt_full_workspace<> ws, other;
     // A rotation-matrix oracle for every 8-bit string, including equal rows.
     for (unsigned bits = 0; bits < 256; ++bits)
@@ -589,10 +535,14 @@ static void TestNewOpcodeORMerge()
     BV wave_source;
     for (unsigned i = 0; i < ids.size(); ++i)
     { ids[i] = 17 + i * 1031; wave_source.set(ids[i]); } // for i
-    for (unsigned width : {0u, 128u, 1024u, 4096u})
-    for (unsigned mode = 0; mode < 4; ++mode)
+    for (unsigned width : {128u, 256u, 512u, 1024u, 2048u, 4096u})
+    for (unsigned mode = 0; mode < 16; ++mode)
     {
-        const unsigned opcode = width ? bm::set_sblock_bienc_wave_adaptive : bm::set_sblock_bienc_wave1024;
+        if ((mode & 8) && (mode & 1))
+        {
+            continue;
+        }
+        const unsigned opcode = bm::set_sblock_bienc_wave_runs;
         bm::encoder enc(bytes.data(), bytes.size());
         enc.put_8(bm::BM_HM_NO_BO | bm::BM_HM_NO_GAPL | bm::BM_HM_SPARSE);
         enc.put_8(static_cast<unsigned char>(opcode));
@@ -600,22 +550,15 @@ static void TestNewOpcodeORMerge()
         {
             bm::bit_out<bm::encoder> out(enc);
             auto position = [&]() { return bm::id64_t(enc.size()) * 8 + out.pending_bits(); };
-            if (width)
-            {
-                bm::sblock_wave_adaptive_model<> model;
-                model.build(ids.data(), unsigned(ids.size()));
-                model.wave_size = width; model.wave_count = bm::set_sub_total_bits / width;
-                TRANSFORM_CHECK(model.prepare(ids.data(), unsigned(ids.size()), record));
-                unsigned code = 0;
-                while ((128u << code) != width) { ++code; } // while code
-                out.put_bits(code, 3); model.encode(out, position, 0, mode, cost);
-            }
-            else
-            {
-                bm::sblock_wave1024_model<> model;
-                TRANSFORM_CHECK(model.prepare(ids.data(), unsigned(ids.size()), record));
-                model.encode(out, position, 0, mode, cost);
-            }
+
+            bm::sblock_wave_adaptive_model<> model;
+            model.build(ids.data(), unsigned(ids.size()));
+            model.wave_size = width; model.wave_count = bm::set_sub_total_bits / width;
+            TRANSFORM_CHECK(model.prepare(ids.data(), unsigned(ids.size()), record));
+            unsigned code = 0;
+            while ((128u << code) != width) { ++code; } // while code
+            out.put_bits(code, 3); model.encode(out, position, 0, mode, cost);
+
         }
         enc.put_8(bm::set_block_end);
         CheckOpcodeORMerge(std::vector<unsigned char>(bytes.data(), bytes.data()+enc.size()), wave_source, opcode, true);
@@ -896,7 +839,6 @@ static void TestWaveCompaction()
     family = "WaveCompaction"; case_pattern = case_split = case_length = case_step = case_width = 0;
     std::cout << "TestWaveCompaction seed=" << seed << std::endl;
     bm::sblock_wave_adaptive_model<> adaptive;
-    bm::sblock_wave1024_model<> fixed;
     std::mt19937 rng(seed);
     for (unsigned width = 128; width <= 4096; width *= 2)
     for (unsigned pattern = 0; pattern < 12; ++pattern)
@@ -943,21 +885,13 @@ static void TestWaveCompaction()
             TRANSFORM_CHECK(bm::sblock_wave_restore_position(packed[i], width, occupied) == original[i]);
             if (i) TRANSFORM_CHECK(adaptive.values[i] > adaptive.values[i-1]);
         }
-        if (width == 1024) {
-            bm::sblock_wave_record fixed_record;
-            TRANSFORM_CHECK(fixed.prepare(original.data(), unsigned(original.size()), fixed_record));
-            TRANSFORM_CHECK(fixed.occupied.equal(adaptive.occupied) && fixed.empty.equal(adaptive.empty));
-            TRANSFORM_CHECK(fixed.values.equal(adaptive.values) && fixed.correction == adaptive.correction && fixed.upper == adaptive.upper);
-        }
+
         std::vector<unsigned> all(adaptive.wave_count);
         for (unsigned i = 0; i < adaptive.wave_count; ++i) all[i] = i*width;
         adaptive.build(all.data(), unsigned(all.size()));
         TRANSFORM_CHECK(!adaptive.prepare(all.data(), unsigned(all.size()), record));
         TRANSFORM_CHECK(!record.eligible);
-        if (width == 1024) {
-            bm::sblock_wave_record fixed_record;
-            TRANSFORM_CHECK(!fixed.prepare(all.data(), unsigned(all.size()), fixed_record));
-        }
+
     }
 }
 
@@ -973,9 +907,12 @@ static void TestPeriodicBoundary()
     TRANSFORM_CHECK(std::count(block.begin(), block.end(), bm::word_t(0)) == bm::set_block_size);
     unsigned char bytes[64] = {};
     bm::encoder enc(bytes, sizeof(bytes));
-    bm::periodic_write_formula(enc, candidate, false);
+    bm::periodic_candidate_slots<bm::bvector<>::allocator_type> groups;
+    groups.reserve(1);
+    groups.push_back(candidate);
+    bm::periodic_write_groups(enc, groups, false);
     bm::decoder dec(bytes);
-    bm::periodic_read_formula(dec, block.data());
+    bm::periodic_read_groups(dec, block.data());
     TRANSFORM_CHECK(std::count(block.begin(), block.end(), ~bm::word_t(0)) == bm::set_block_size);
 }
 static void TestSuperblockEndIndexGather()
@@ -984,7 +921,7 @@ static void TestSuperblockEndIndexGather()
     std::cout << "TestSuperblockEndIndexGather" << std::endl;
     using BV = bm::bvector<>;
     using Index = bm::deserialization_index<BV>;
-    const unsigned codes[] = {68, 90, 92, 97, 98};
+    const unsigned codes[] = {68, 108, 92, 108, 98};
     const BV::size_type groups[] = {0, 2, bm::id_max / bm::set_sub_total_bits};
     for (unsigned kind = 0; kind < 5; ++kind)
     for (bool bookmarks : {false, true})
@@ -1019,8 +956,7 @@ static void TestSuperblockEndIndexGather()
         writer.set_compression_level(kind ? 10 : 6);
         if (kind < 4) writer.set_sblock_large_options(false);
         if (kind == 1 || kind == 2) {
-            writer.set_sblock_wave_adaptive_options(false);
-            writer.set_sblock_wave1024_options(kind == 1);
+            writer.set_sblock_wave_options(kind == 1);
             writer.set_sblock_adaptive_options(kind == 2);
         }
         writer.set_bookmarks(bookmarks, 4);
@@ -1457,12 +1393,12 @@ static void TestSparseVectorOpcodeIndexGather(bool xor_refs = false)
                 bm::serializer<BV>::buffer plain;
                 ordinary.serialize(*source.get_bmatrix().get_row(p), plain);
                 TRANSFORM_CHECK(row->serialized_size() <= plain.size());
-                for (unsigned code : {56u, 68u, 90u, 92u, 97u, 98u})
+                for (unsigned code : {56u, 68u, 92u, 98u, 108u})
                     TRANSFORM_CHECK(profile.opcode[code].count == 0);
             }
             else if (p == 3)
-                TRANSFORM_CHECK(profile.opcode[68].count + profile.opcode[90].count +
-                                profile.opcode[92].count + profile.opcode[97].count == 2);
+                TRANSFORM_CHECK(profile.opcode[68].count + profile.opcode[92].count +
+                                profile.opcode[108].count == 2);
         }
         bm::sparse_vector_deserialization_index_serializer<BV> index_writer;
         bm::sparse_vector_deserialization_index_serializer<BV>::buffer index_bytes;
