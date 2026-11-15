@@ -28,7 +28,7 @@ try:
         d=a.out/ds;d.mkdir()
         cmd=[str(a.bin.resolve()),'-t','-s','-level','6','-u32in',str(source),'-bvout','/dev/null',
             '-block-select-step2','-periodic-step1-interleaved','4','-bwt-min-gain','16','-gap-xor',
-            '-sblock-gap-tolerance','100','-sblock-adaptive','-sblock-wave-adaptive',
+            '-sblock-gap-tolerance','100','-sblock-adaptive','-sblock-wave',
             '-block-endpoint-select','-bwt-shared','-threads',str(a.threads),'-batch-vectors','512',
             '-progress-vectors',str(a.progress),'-opcode-survey',str(d/'opcodes.csv')]
         print(f'Survey Gov2.{ds}: {source}',flush=True)

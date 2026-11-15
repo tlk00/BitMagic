@@ -166,3 +166,113 @@ Sorted saved 12 bytes (16 pre-competition); unsorted saved none. The prefix
 covered 80.586% of IDs but only 0.274%/0.328% of full final opcode-68 records.
 The unsorted prefix offered no positive global corrections. Its lack of gains
 therefore did not characterize the sparse tail, as the playlist run confirms.
+
+## V3 distributed unsorted 20K split-bounds trial, 2026-11-13
+
+Run: /Volumes/USB_1TB/BitMagic-experiments/gov2-op68-split-20261113-094058.
+All 20,000 baseline vectors round-tripped. Only emitted opcode 68 records were
+trialled (39,065 records, 39,662,373 bytes). Two or four equal address-space
+parts use independent local endpoints and BIC interiors without min correction.
+Each hypothetical record includes one opcode, one two/four selector bit,
+gamma(superblock index+1), occupancy bits and per-occupied-part gamma counts,
+first positions and reverse last-position bounds. A single accumulator flushes
+once. Both candidates, including losers, round-tripped with exact consumption.
+
+Selective halves saved 14,048 bytes; quarters saved 25,296 bytes; their joint
+selector saved 32,788 bytes (0.0339% of the 96,676,902-byte sampled collection,
+0.0827% of opcode 68 bytes). Halves were strictly better on 520 winning records,
+quarters on 521, with 26 winning ties. Forced splitting grew opcode 68 bytes by
+237,488 / 455,092 bytes. Only 4 bytes of joint saving came from records up to
+512 bytes. Records above 8 KiB supplied 27,920 bytes (85.2%) of savings.
+
+The complete single-worker survey took 200.671 seconds. Split trials and their
+validation took 0.776 seconds in aggregate; this is not an isolated production
+encoding benchmark. No production format was changed.
+
+The split survey and runner were retired after review of these small gains.
+The USB reports and per-record measurements are retained.
+
+[Run report](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-split-20261113-094058/report.tsv) ·
+[Record-size breakdown](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-split-20261113-094058/by_record_size.tsv)
+
+## Deferred byte/nibble BWT for opcode-68 lists
+
+User proposal (2026-11-13): explore byte-symbol and nibble-symbol BWT on
+opcode-68 data as a precursor to BIC. First specify the input representation
+(bitmap symbols or serialized gap/ID symbols), reversible mapping back to an
+ordered BIC input, primary-index metadata and full-record fallback. This is a
+future experiment; no byte/nibble BWT trial has been implemented here.
+
+## V3 emitted-opcode-68 gap survey, 2026-11-13
+
+Run: /Volumes/USB_1TB/BitMagic-experiments/gov2-op68-gaps-20261113-100011.
+Replayed exactly the preceding split trial's 20,000 unsorted ordinals.
+Baseline collection bytes (96,676,902), opcode-68 records (39,065), bytes
+(39,662,373) and IDs (26,332,679) reconcile with that trial.
+
+The survey collects original adjacent-gap log2 histograms, actual global
+correction, corrected interior CM-BIC bit lengths and log2 binomial counts
+conditional on corrected endpoints. The binomial value assumes uniformly
+chosen interior positions; it is a statistical benchmark, not a pointwise
+lower bound for structured lists. Summed BIC payload is 313,952,509 bits,
+versus 332,131,298.8 uniform-position bits (BIC 5.47% smaller).
+
+Hypothetical records charge one opcode, two selector bits, gamma superblock
+index/count and gamma first/reverse-last endpoints, with one terminal flush.
+Rice tries k=0..23 on gap-minus-one, charges a five-bit k field, encodes
+interior gaps and infers the final gap from the explicit last endpoint.
+Equal-count halves imply both counts from total count and store local
+endpoints in original coordinates; no local correction is used.
+
+| Candidate | Winning records | Selective savings | Forced growth |
+|---|---:|---:|---:|
+| Rice | 69 | 4,484 B | 2,950,740 B |
+| Equal-count BIC halves | 34 | 240 B | 407,068 B |
+| Joint selection | — | 4,712 B | — |
+
+Joint saving is 0.00487% of the sampled collection. Only 0.441% of original
+adjacent gaps equal one (115,878 / 26,293,614). Positive global corrections
+occur in 21,362 records, concentrated in smaller records. No record above
+8 KiB has a positive global correction. This agrees with earlier byte-heavy
+playlist findings. Equal-count halves substantially underperform the prior
+equal-address halves/quarters (32,788 B joint saving).
+
+All baseline vectors round-tripped. Every halves candidate, including losers,
+decoded with exact record consumption and ID equality. Rice is a dry bit
+score and has no experimental writer/decoder. Elapsed survey time was
+198.672 seconds, including baseline serialization, profiling and validation.
+
+[Run report](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-gaps-20261113-100011/report.tsv) ·
+[Record-size breakdown](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-gaps-20261113-100011/by_record_size.tsv) ·
+[Gap histogram](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-gaps-20261113-100011/gap_histogram.tsv)
+
+The gap statistics survey, Rice scoring and equal-count halves source and
+runner were retired after review. USB reports and raw measurements are retained.
+
+## Byte and nibble bitmap BWT to BIC (retired, 2026-11-13)
+
+The distributed 20K Gov2.unsorted sample covered 39,065 emitted opcode-68
+records (39,662,373 bytes) in a 96,676,902-byte stream. Both widths used the
+trimmed, min-delta-corrected bitmap. Each untransformed control paid the same
+framing and primary-index cost as its transformed counterpart. The controls
+saved 816 bytes versus production. Allowing either BWT raised savings to
+876 bytes, an incremental 60 bytes across eight records. All inverses
+reconstructed the original IDs. Sizes were dry scores of complete records.
+
+The hypothesis was that reordering bitmap symbols by context would cluster
+set-bit positions enough for BIC to encode them more cheaply. With production
+fallback, byte BWT alone saved 48 bytes and nibble BWT alone saved 52 bytes.
+Their wins overlapped. Once the matched controls were available, symbol
+reordering contributed only 0.000062% of the sampled stream size. This gain
+was too small to justify transform selection and inverse BWT in opcode 68.
+The trial covered bitmap symbols on Gov2.unsorted. BWT over a sequence of
+encoded gaps or IDs remains a separate, untested proposal.
+
+Forward/inverse time was 2.90/106.01 seconds for bytes and 2.84/166.00 seconds
+for nibbles. The run took 282.10 seconds. The standalone survey and runner
+were retired. The forward and inverse sparse-symbol transforms are archived
+under a disabled preprocessor section at the end of src/bmbwt.h.
+
+[Report](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-symbol-bwt-20261113-105149/report.tsv) ·
+[Record-size breakdown](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-symbol-bwt-20261113-105149/by_size.tsv) ·
+[Per-record measurements](/Volumes/USB_1TB/BitMagic-experiments/gov2-op68-symbol-bwt-20261113-105149/trials.tsv)

@@ -19,11 +19,15 @@ DIAGNOSTICS=0
 BLOCK_ENDPOINT_SELECT=0
 BWT_SHARED=0
 SBLOCK_WAVE_ENCODE=0
-SBLOCK_WAVE_ADAPTIVE=0
+WAVE_MODE=
+WAVE_SCORE_OUT=
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 usage() {
     cat <<'HELP'
 Usage: bash experiments/opcode_profile/run_gov2_opcode_profile.sh --out DIR [options]
+  --wave-score-out FILE  optional exact scores TSV, requires --wave-mode both
+  --wave-leaf-out FILE   exact tree-leaf regret TSV, requires --wave-mode both
+  --wave-mode 108|both|109|gate16|tree  override the level's wave selector
   --level N            use the library preset (0..10), without codec flags
   --bwt-min-gain N     override BWT threshold for preset 9/10
   --datasets both|sorted|unsorted (default sorted)
@@ -40,8 +44,7 @@ Usage: bash experiments/opcode_profile/run_gov2_opcode_profile.sh --out DIR [opt
   --sblock-correction-select compare corrected/uncorrected opcode-68 records
   --block-endpoint-select emit the smaller existing opcode-65 endpoint layout
   --bwt-shared            original-polarity shared BWT for 72/96 selection
-  --sblock-wave-adaptive emit experimental adaptive-width opcode 97 using dry scores
-  --sblock-wave         emit opcode 90 when it beats ordinary/adaptive superblock
+  --sblock-wave         enable opcode 108 with complete-size superblock fallback
 Output must be a fresh directory on mounted /Volumes/USB_1TB.
 One stream with current adaptive superblocks and an opcode-size profile.
 Grouped flags and complete-record selection against ordinary BIC.
@@ -60,8 +63,10 @@ while (( $# )); do
         --diagnostics) DIAGNOSTICS=1; shift;;
         --block-endpoint-select) BLOCK_ENDPOINT_SELECT=1; shift;;
         --bwt-shared) BWT_SHARED=1; shift;;
-        --sblock-wave-adaptive) SBLOCK_WAVE_ADAPTIVE=1; SBLOCK_WAVE_ENCODE=1; shift;;
         --sblock-wave) SBLOCK_WAVE_ENCODE=1; shift;;
+        --wave-mode) (( $# >= 2 )) || exit 2; WAVE_MODE=$2; shift 2;;
+        --wave-score-out) (( $# >= 2 )) || exit 2; WAVE_SCORE_OUT=$2; shift 2;;
+        --wave-leaf-out) (( $# >= 2 )) || exit 2; WAVE_LEAF_OUT=$2; shift 2;;
         --out|--bin|--input-dir|--datasets|--threads|--max-vectors|--progress|--sblock-large-inverse-limit|--level|--bwt-min-gain)
             (( $# >= 2 )) || { echo "Missing value for $1" >&2; exit 2; }
             case "$1" in
@@ -90,6 +95,12 @@ if [[ -n $BWT_GAIN ]]; then
     [[ $LEVEL =~ ^(9|10)$ && $BWT_GAIN =~ ^[0-9]+$ && ${#BWT_GAIN} -le 5 ]] && (( BWT_GAIN <= 65535 )) || {
         echo '--bwt-min-gain requires level 9/10 and gain 0..65535' >&2; exit 2;
     }
+fi
+if [[ -n $WAVE_SCORE_OUT && ( $WAVE_MODE != both || ${#sets[@]} != 1 ) ]]; then
+    echo "--wave-score-out requires --wave-mode both and one dataset" >&2; exit 2
+fi
+if [[ -n ${WAVE_LEAF_OUT:-} && ( $WAVE_MODE != both || ${#sets[@]} != 1 ) ]]; then
+    echo "--wave-leaf-out requires --wave-mode both and one dataset" >&2; exit 2
 fi
 for dataset in "${sets[@]}"; do
     [[ -s $INPUT_DIR/gov2.$dataset ]] || { echo "Missing $INPUT_DIR/gov2.$dataset" >&2; exit 2; }
@@ -149,8 +160,10 @@ for dataset in "${sets[@]}"; do
         if (( BLOCK_ENDPOINT_SELECT )); then compress+=(-block-endpoint-select); fi
         if (( DIAGNOSTICS )); then compress+=(-compression-diagnostics); fi
         if (( BWT_SHARED )); then compress+=(-bwt-shared); fi
+        if [[ -n $WAVE_SCORE_OUT ]]; then compress+=(-wave-score-out "$WAVE_SCORE_OUT"); fi
+        if [[ -n ${WAVE_LEAF_OUT:-} ]]; then compress+=(-wave-leaf-out "$WAVE_LEAF_OUT"); fi
+        case "$WAVE_MODE" in '') ;; 108) compress+=(-wave-flat-only);; both) compress+=(-wave-both);; 109) compress+=(-wave-hier-only);; gate16) compress+=(-wave-gate16);; tree) compress+=(-wave-tree);; *) exit 2;; esac
         if (( SBLOCK_WAVE_ENCODE )); then compress+=(-sblock-wave); fi
-        if (( SBLOCK_WAVE_ADAPTIVE )); then compress+=(-sblock-wave-adaptive); fi
         read_args=(-t -s -bvin "$dir/candidate.bv" -bv-index-in "$dir/candidate.idx"
             -threads "$THREADS" -batch-vectors 512 -progress-vectors "$PROGRESS")
         verify=(-verify -u32in "$input" "${read_args[@]}")

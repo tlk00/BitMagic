@@ -77,6 +77,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmdbg.h"
 #include "bmtimer.h"
 #include "inv_list_serial_config.h"
+#include "inv_list_wave_scores.h"
 #include "bmundef.h" /* clear the pre-proc defines from BM */
 
 using namespace std;
@@ -95,14 +96,20 @@ void show_help()
         << "-bv-index-out FILE          -- write BLOB offsets during threaded compression" << std::endl
         << "-bv-index-in FILE           -- use BLOB offsets for threaded verify/decode" << std::endl
         << "-block-select-step2         -- also try independent step 2 on whole-block BWT" << std::endl
-        << "-sblock-wave-adaptive       -- select adaptive wave widths using exact dry costs" << std::endl
+        << "-wave-score-out FILE        -- exact 108/109 search costs TSV (requires -wave-both)" << std::endl
+        << "-wave-leaf-out FILE         -- exact tree-leaf regret TSV (requires -wave-both)" << std::endl
+        << "-wave-tree                  -- experimental L8 shallow 108/109 selector" << std::endl
+        << "-wave-flat-only             -- explicitly select opcode 108 wave search" << std::endl
+        << "-wave-gate16                -- skip 108 scoring for <=16 occupied blocks" << std::endl
+        << "-wave-both                  -- compare experimental opcode 109 with 108" << std::endl
+        << "-wave-hier-only             -- use 109 as the sole wave superblock format" << std::endl
+        << "-sblock-wave                -- enable opcode-108 adaptive wave compaction" << std::endl
         << "-bwt-shared                 -- share one original-polarity BWT across 72/96 selection" << std::endl
         << "-gap-xor                    -- experiment: GAP cleanup plus XOR residual" << std::endl
         << "-gap-route-stats            -- measure sparse-superblock and direct GAP record routes" << std::endl
         << "-sblock-len-stats           -- histogram BIC superblock lengths during indexed decode" << std::endl
         << "-opcode-survey FILE         -- verified per-vector opcode CSV; use -bvout /dev/null" << std::endl
         << "-profile-opcodes             -- measure emitted top-level opcode and payload bytes" << std::endl
-        << "-sblock-wave                -- emit fixed 1024-bit wave superblocks when smaller" << std::endl
         << "-sblock-large-inverse-limit N -- maximum zero positions trialed (default 196607)" << std::endl
         << "-sblock-large               -- optional positive/inverse superblocks with exact fallback" << std::endl
         << "-sblock-correction-select   -- compare both opcode-68 global correction choices" << std::endl
@@ -236,8 +243,25 @@ bool sblock_large = false;
 unsigned sblock_large_inverse_limit = 196607;
 std::string opcode_survey_file;
 bool bwt_shared = false;
-bool sblock_wave1024_encode = false;
-bool sblock_wave_adaptive = false;
+bool sblock_wave = false;
+unsigned wave_experiment = 0;
+bool wave_experiment_specified = false;
+std::string wave_score_file;
+inv_wave_score_report wave_score_report;
+std::string wave_leaf_file;
+inv_wave_leaf_report wave_leaf_report;
+
+/** Forward a wave-score observation to both requested reports.
+    @param context Unused; report sinks live for the duration of the process.
+    @param data Borrowed observation valid for the duration of this call.
+*/
+static void observe_wave_reports(void* context,
+                                 const bm::sblock_wave_score_observation& data)
+{
+    (void)context;
+    inv_wave_score_report::observe(&wave_score_report, data);
+    inv_wave_leaf_report::observe(&wave_leaf_report, data);
+}
 bool gap_route_stats = false;
 bool sblock_len_stats = false;
 bool sblock_adaptive_search = false;
@@ -355,8 +379,24 @@ int parse_args(int argc, char *argv[])
             opcode_survey_file=argv[i]; profile_opcodes=true; continue;
         }
         if (arg == "-profile-opcodes") { profile_opcodes = true; continue; }
-        if (arg == "-sblock-wave-adaptive") { sblock_wave_adaptive=true;sblock_wave1024_encode=true;continue; }
-        if (arg == "-sblock-wave") { sblock_wave1024_encode = true; continue; }
+        if (arg == "-wave-score-out")
+        {
+            if (++i == argc) throw std::runtime_error("-wave-score-out requires a TSV path");
+            wave_score_file = argv[i];
+            continue;
+        }
+        if (arg == "-wave-leaf-out")
+        {
+            if (++i == argc) throw std::runtime_error("-wave-leaf-out requires a TSV path");
+            wave_leaf_file = argv[i];
+            continue;
+        }
+        if (arg == "-wave-both") { wave_experiment=1; wave_experiment_specified=true; continue; }
+        if (arg == "-wave-tree") { wave_experiment=4; wave_experiment_specified=true; continue; }
+        if (arg == "-wave-flat-only") { wave_experiment=0; wave_experiment_specified=true; continue; }
+        if (arg == "-wave-gate16") { wave_experiment=3; wave_experiment_specified=true; continue; }
+        if (arg == "-wave-hier-only") { wave_experiment=2; wave_experiment_specified=true; continue; }
+        if (arg == "-sblock-wave") { sblock_wave = true; continue; }
         if (arg == "-sblock-large-inverse-limit") {
             if(++i==argc)throw std::runtime_error(arg+" requires an integer");
             auto n=std::stoul(argv[i]);
@@ -832,8 +872,23 @@ static inv_list_serial_options inv_serializer_options()
     options.block_endpoints = block_endpoint_select;
     options.sblock_correction = sblock_correction_select;
     options.sblock_large = sblock_large;
-    options.wave_fixed = sblock_wave1024_encode;
-    options.wave_adaptive = sblock_wave_adaptive;
+    if (!wave_score_file.empty() && !wave_leaf_file.empty())
+    {
+        options.wave_observer = &observe_wave_reports;
+    }
+    else if (!wave_leaf_file.empty())
+    {
+        options.wave_observer = &inv_wave_leaf_report::observe;
+        options.wave_context = &wave_leaf_report;
+    }
+    else if (!wave_score_file.empty())
+    {
+        options.wave_observer = &inv_wave_score_report::observe;
+        options.wave_context = &wave_score_report;
+    }
+    options.wave_experiment = wave_experiment;
+    options.wave_experiment_specified = wave_experiment_specified;
+    options.wave = sblock_wave;
     options.bwt_shared = bwt_shared;
     return options;
 }
@@ -1200,6 +1255,20 @@ int main(int argc, char *argv[])
         if (ret != 0)
             return ret;
         
+        if (!wave_score_file.empty() && wave_score_file == wave_leaf_file)
+            throw std::runtime_error("Wave reports require distinct output paths");
+        if (!wave_score_file.empty())
+        {
+            if (wave_experiment != 1 || is_verify || is_decode || bv_out_file.empty())
+                throw std::runtime_error("-wave-score-out requires -wave-both BV compression");
+            wave_score_report.open(wave_score_file);
+        }
+        if (!wave_leaf_file.empty())
+        {
+            if (wave_experiment != 1 || is_verify || is_decode || bv_out_file.empty())
+                throw std::runtime_error("-wave-leaf-out requires -wave-both BV compression");
+            wave_leaf_report.open(wave_leaf_file);
+        }
         const unsigned analysis_modes = unsigned(rs_bench) + unsigned(rs_cluster_plan) + unsigned(pair_search) + unsigned(pair_index) + unsigned(ref_eval) +
                                         unsigned(xor_build) + unsigned(xor_verify);
         if ((roundtrip_levels_specified && !roundtrip_verify) || roundtrip_start_level > roundtrip_end_level)
@@ -1266,7 +1335,7 @@ int main(int argc, char *argv[])
                             c_level != 6 || bv_out_file.empty() ||
                             u32_in_file.empty() || is_verify || is_decode))
             throw std::runtime_error("Shared BWT requires threaded level-6 -block-select-step2 BV compression");
-        if (sblock_wave1024_encode && (!compression_threads || !block_selection_step2 ||
+        if (sblock_wave && (!compression_threads || !block_selection_step2 ||
                                    c_level != 6 || bv_out_file.empty() ||
                                    u32_in_file.empty() || is_verify || is_decode))
             throw std::runtime_error("-sblock-wave requires threaded level-6 BV compression");
@@ -1408,6 +1477,8 @@ int main(int argc, char *argv[])
         }
 
                 
+        wave_score_report.finish();
+        wave_leaf_report.finish();
         if (is_timing)  // print all collected timings
         {
             std::cout << std::endl << "Timings (ms):" << std::endl;

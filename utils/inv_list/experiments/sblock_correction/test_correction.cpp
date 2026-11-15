@@ -38,7 +38,7 @@ int main() {
             bm::serializer<BV> a,b;
             a.set_compression_level(6);b.set_compression_level(6);
             a.set_sblock_adaptive_options(rivals);b.set_sblock_adaptive_options(rivals);
-            a.set_sblock_wave_adaptive_options(rivals);b.set_sblock_wave_adaptive_options(rivals);
+            a.set_sblock_wave_options(rivals);b.set_sblock_wave_options(rivals);
             b.set_sblock_correction_selection(true);
             bm::serializer<BV>::buffer ab,bb;
             a.serialize(bv,ab);b.serialize(bv,bb);assert(bb.size()<=ab.size());

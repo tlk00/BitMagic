@@ -44,7 +44,7 @@ int main()
     assert(profile.id_list_bytes == sizeof(ids) && profile.reconciles());
     assert(profile.cardinalities_reconcile() && profile.ids == 2*v.count());
     // Multi-block ones, holes, sparse superblocks, explicit size and bookmarks.
-    for (unsigned mode = 0; mode < 5; ++mode) {
+    for (unsigned mode = 0; mode < 4; ++mode) {
         BV mixed;
         mixed.set_range(65536, 4*65536-1);
         mixed.set(2*65536+17, false);
@@ -53,9 +53,8 @@ int main()
         mixed.optimize();
         writer.set_bookmarks(true, 4);
         writer.set_sblock_adaptive_options(mode == 1);
-        writer.set_sblock_wave1024_options(mode == 2);
-        writer.set_sblock_wave_adaptive_options(mode == 3);
-        writer.set_gap_xor_options(mode == 4);
+        writer.set_sblock_wave_options(mode == 2);
+        writer.set_gap_xor_options(mode == 3);
         writer.serialize(mixed, blob);
         bm::serialization_opcode_profile p;
         collector.add_blob(blob.data(),blob.size(),p);

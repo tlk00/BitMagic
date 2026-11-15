@@ -56,6 +56,15 @@ with tempfile.TemporaryDirectory(prefix='bm-cli-cleanup-') as directory:
     assert 'Compression' in run(binary, ['--help'])
     for option in ['-unknown-option', '-level', '-bvout', '-u32in', '-threads']:
         run(binary, [option], False)
+    scores, leaves = root / 'scores.tsv', root / 'leaves.tsv'
+    wave_args = ['-s', '-level', 10, '-threads', 2, '-u32in', raw,
+                 '-bvout', root / 'wave.bv', '-wave-both']
+    run(binary, wave_args + ['-wave-score-out', scores, '-wave-leaf-out', leaves])
+    score_rows = scores.read_text().splitlines()[1:]
+    leaf_rows = [line.split('\t') for line in leaves.read_text().splitlines()[1:]]
+    assert score_rows and len(score_rows) % 7 == 0
+    assert sum(int(row[2]) for row in leaf_rows) == len(score_rows) // 7
+    run(binary, wave_args + ['-wave-score-out', scores, '-wave-leaf-out', scores], False)
     # Retired experiment switches must fail before touching an output file.
     retired = ['-bwt', '-bwt-full', '-bwt-diag', '-bwt-sample',
                '-periodic', '-periodic-order', '-periodic-budget',
@@ -93,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix='bm-cli-cleanup-') as directory:
     # Retained diagnostics/comparison policies still use the old explicit setup.
     for number, extra in enumerate([
             [], ['-gap-xor'], ['-gap-route-stats'], ['-sblock-adaptive'],
-            ['-sblock-adaptive', '-gap-xor', '-sblock-wave-adaptive',
+            ['-sblock-adaptive', '-gap-xor', '-sblock-wave',
              '-sblock-large', '-block-endpoint-select', '-bwt-shared'],
             ['-sblock-correction-select']]):
         output = root / f'policy-{number}.bv'

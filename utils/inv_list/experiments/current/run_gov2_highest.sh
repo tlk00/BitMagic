@@ -13,10 +13,10 @@ while (( $# )); do
             (( $# >= 2 )) || exit 2
             case "$1" in --out) OUT=$2;; --reference) REFERENCE=$2;; esac
             shift 2;;
-        --bin|--input-dir|--datasets|--threads|--max-vectors|--progress|--sblock-large-inverse-limit|--bwt-min-gain)
+        --wave-score-out|--wave-leaf-out|--wave-mode|--bin|--input-dir|--datasets|--threads|--max-vectors|--progress|--sblock-large-inverse-limit|--bwt-min-gain)
             (( $# >= 2 )) || exit 2;opts+=("$1" "$2");shift 2;;
         --diagnostics|--keep-streams) opts+=("$1");shift;;
-        --help|-h) echo 'Usage: run_gov2_highest.sh --out FRESH_USB_DIR [--level N (default 10)] [--bwt-min-gain N] [--reference VERIFIED_RUN_ROOT] [--datasets both|sorted|unsorted] [--threads N] [--max-vectors N] [--progress N] [--bin FILE] [--input-dir DIR] [--diagnostics] [--keep-streams]';exit 0;;
+        --help|-h) echo 'Usage: run_gov2_highest.sh --out FRESH_USB_DIR [--level N (default 10)] [--wave-mode 108|both|109|gate16|tree] [--wave-score-out FILE] [--wave-leaf-out FILE] [--bwt-min-gain N] [--reference VERIFIED_RUN_ROOT] [--datasets both|sorted|unsorted] [--threads N] [--max-vectors N] [--progress N] [--bin FILE] [--input-dir DIR] [--diagnostics] [--keep-streams]';exit 0;;
         *) echo "Unknown argument: $1" >&2;exit 2;;
     esac
 done

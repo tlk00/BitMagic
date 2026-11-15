@@ -426,7 +426,8 @@ def generate(args, binary, frozen, matrix, info, dataset, level, key, entries):
                    completed_utc=datetime.now(timezone.utc).isoformat(), **matrix['provenance'])
         artifacts = {stream_path.name: stream_hash, index_path.name: digest(profile / 'candidate.idx')}
         artifacts.update({str((report_path / path.name).relative_to(args.out)): digest(path)
-                          for path in profile.iterdir() if path.name not in ('candidate.bv', 'candidate.idx')})
+                          for path in profile.iterdir() if not path.name.startswith('._')
+                          and path.name not in ('candidate.bv', 'candidate.idx')})
         row['artifacts'] = artifacts
         os.rename(profile / 'candidate.bv', stream_path)
         os.rename(profile / 'candidate.idx', index_path)
