@@ -2430,7 +2430,7 @@ class Agent:
                     '--bin', str(self.repo / 'utils/inv_list' / name),
                     '--reference', str(self.inv_reference), '--out', str(output),
                     '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb),
-                    '--read-memory-mib', str(read_budget), '--start-level', '7' if self.args.fast else '1',
+                    '--read-memory-mib', str(read_budget), '--start-level', '7' if self.args.fast else '1' if self.args.pedantic else '6',
                     '--golden-level', '6', '--hash', '--hash-cache-dir', str(self.home / 'inv-hash-cache')]
             if self.args.inv_read_mmap:
                 argv.append('--read-mmap')
@@ -2447,7 +2447,7 @@ class Agent:
             self.inv_progress_time = 0
             with self.audio_mutex:
                 self.audio_phase_generation += 1
-            self.inv_active = (output, name, 8 if self.args.fast else 20 if self.args.pedantic else 10)
+            self.inv_active = (output, name, 8 if self.args.fast else 20 if self.args.pedantic else 5)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
             except CommandFailure as error:

@@ -739,7 +739,7 @@ For example, on WIN1:
 Fast inv_list validation uses canonical-block SHA-256 verification, starting
 at level 7 for both datasets (8 cases). Level 6 is validated against raw IDs
 when its hash cache is created. Caches persist under LOG_DIR/inv-hash-cache
-and are reused across cycles and variants. Normal validates sorted only at levels 1–10 (10 cases per build). Pedantic
+and are reused across cycles and variants. Normal validates sorted only at levels 6–10 (5 cases per build). Pedantic
 validates both datasets at levels 1–10 (20 cases per build). Both use the same
 hash cache and level 6 as the golden reference. Normal uses in-memory round trips.
 Pedantic adds reference audits and saved-stream verification. Progress reports show the corresponding selected case total.

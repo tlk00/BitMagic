@@ -656,7 +656,11 @@ class SupervisorTests(unittest.TestCase):
             self.agent.args.inv_read_mmap = mmap
             self.agent.args.inv_read_memory_mib = budget
             run = self.root / ('fast' if fast else 'normal')
-            with patch.object(self.agent, 'command', return_value='') as command, \
+            active = []
+            def record_command(*args, **kwargs):
+                active.append(self.agent.inv_active)
+                return ''
+            with patch.object(self.agent, 'command', side_effect=record_command) as command, \
                  patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
                 self.assertTrue(self.agent.test_inv_stage(run, manifest))
             argv = command.call_args.args[0]
@@ -667,7 +671,8 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual('--dataset' in argv, not fast)
             if not fast:
                 self.assertEqual(argv[argv.index('--dataset') + 1], 'sorted')
-            self.assertEqual(argv[argv.index('--start-level') + 1], '7' if fast else '1')
+            self.assertEqual(argv[argv.index('--start-level') + 1], '7' if fast else '6')
+            self.assertEqual(active[0][2], 8 if fast else 5)
             self.assertIn('--hash', argv)
             self.assertEqual(argv[argv.index('--hash-cache-dir') + 1], str(self.agent.home / 'inv-hash-cache'))
             self.assertEqual(argv[argv.index('--golden-level') + 1], '6')
@@ -761,7 +766,7 @@ class SupervisorTests(unittest.TestCase):
         output = self.root / 'results'
         output.mkdir()
         (output / 'summary.tsv').write_text('dataset\tlevel\tphase\tstatus\nGov2.sorted\t6\tverify\tpassed\n')
-        for total in (8, 10, 20):
+        for total in (8, 5, 20):
             self.agent.inv_progress_time = 0
             with patch.object(self.agent, 'say') as say, patch.object(self.agent, 'sound') as sound:
                 self.agent.report_inv_progress(output, 'bminv_release', total)
