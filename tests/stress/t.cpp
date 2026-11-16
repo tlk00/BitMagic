@@ -19075,6 +19075,83 @@ void SparseVectorFileSerializationTest()
     cout << "Sparse-vector file and stringstream serialization OK" << endl;
 }
 
+/** Exercise standalone XOR serialization with each selected level and search policy.
+    @param writer Serializer configured before each callback.
+    @param refs Borrowed reference rows, with the target at index zero.
+    @param check Callback receiving the level, preset and gather flags, and borrowed model.
+    The similarity model lives through the callback. Candidate selection must be
+    configured before building it, while gather and mask settings govern encoding.
+*/
+template<class Check>
+static void ForEachXorSearchCase(bm::serializer<bvect>& writer,
+                                 const bm::bv_ref_vector<bvect>& refs, Check check)
+{
+    writer.set_ref_vectors(&refs);
+    for (unsigned level = 0; level <= bm::set_compression_max; ++level)
+    {
+        if (!is_pedantic && level != 0 && level != 6 && level < 8)
+        {
+            continue;
+        }
+        bm::xor_sim_params params;
+        auto run = [&](bool preset, bool candidates = false, bool h64 = false,
+                       bool gather = false, bool deltas = false, bool runner_up = false)
+        {
+            writer.set_compression_level(level);
+            if (!preset)
+            {
+                writer.set_xor_candidate_trials(candidates);
+                writer.set_xor_ref8_h64(h64);
+                writer.set_xor_gather(gather, deltas);
+                writer.set_xor_gather_runner_up(runner_up);
+            }
+            bm::serializer<bvect>::xor_sim_model_type model;
+            assert(writer.compute_sim_model(model, refs, params));
+            assert(model.four_candidates == (preset ? level >= 7 : candidates));
+            writer.set_sim_model(&model);
+            writer.set_curr_ref_idx(0);
+            cout << "XOR search level=" << level;
+            if (preset)
+            {
+                cout << " preset";
+            }
+            else
+            {
+                cout << " candidates=" << candidates << " H64=" << h64
+                     << " gather=" << gather << " deltas=" << deltas
+                     << " runner_up=" << runner_up << " depth=" << params.max_lookup_depth;
+            }
+            cout << endl;
+            check(level, preset, preset ? level >= 8 : gather, model);
+            writer.set_sim_model(nullptr);
+        };
+        run(true);
+        if (is_pedantic)
+        {
+            for (bool candidates : {false, true})
+            {
+                for (bool h64 : {false, true})
+                {
+                    run(false, candidates, h64);
+                    for (bool deltas : {false, true})
+                    {
+                        for (bool runner_up : {false, true})
+                        {
+                            run(false, candidates, h64, true, deltas, runner_up);
+                        } // for runner_up
+                    } // for deltas
+                } // for h64
+            } // for candidates
+            if (refs.size() > 2)
+            {
+                // Compare a one-row scan with the otherwise identical full scan.
+                params.max_lookup_depth = 1;
+                run(false, true);
+            }
+        }
+    } // for level
+}
+
 // Keep XOR prediction examples within one 64K-bit block. The reference is
 // already available to the decoder; byte counts include the complete target
 // BLOB (including XOR metadata), but not the separately stored reference.
@@ -19095,31 +19172,23 @@ static void CheckBVectorXorSerializationSize(bool irregular)
 
     serializer_type::bv_ref_vector_type refs;
     refs.add(&target, 0); refs.add(&reference, 1);
-    serializer_type::xor_sim_model_type model;
     serializer_type xor_ser;
-    xor_ser.set_ref_vectors(&refs);
-    xor_ser.compute_sim_model(model, refs, bm::xor_sim_params());
-    xor_ser.set_sim_model(&model);
-    xor_ser.set_curr_ref_idx(0);
-    // Require a real speculative XOR product, not reference equality or a
-    // manually injected match. Both fixtures reduce 500 source bits to 20.
-    assert(model.bv_blocks.count() == 1 && model.bv_blocks.test(0));
-    const auto match = model.matr.get(0, 0);
-    assert(match.match == bm::e_xor_match_BC);
-    assert(match.chain_size == 1 && match.ref_idx[0] == 1);
-    assert(match.xor_d64[0] == ~0ull);
     bvect difference = target;
     difference ^= reference;
     assert(difference.count() == 20);
-
-    for (unsigned level : {0u, 6u, 8u, 9u, 10u})
+    ForEachXorSearchCase(xor_ser, refs, [&](unsigned level, bool preset, bool, const auto& model)
     {
+        assert(model.bv_blocks.count() == 1 && model.bv_blocks.test(0));
+        const auto match = model.matr.get(0, 0);
+        assert(match.match == bm::e_xor_match_BC);
+        assert(match.chain_size == 1 && match.ref_idx[0] == 1);
+        assert(match.xor_d64[0] == ~0ull);
         size_t sizes[2] = {0, 0};
         for (unsigned use_xor = 0; use_xor < 2; ++use_xor)
         {
             serializer_type plain_ser;
             serializer_type& ser = use_xor ? xor_ser : plain_ser;
-            ser.set_compression_level(level);
+            plain_ser.set_compression_level(level);
             std::ostringstream stream(std::ios::binary | std::ios::out);
             bm::streams_encoder out(stream);
             assert(ser.serialize(target, out));
@@ -19157,11 +19226,19 @@ static void CheckBVectorXorSerializationSize(bool irregular)
              << " plain=" << sizes[0] << " XOR=" << sizes[1]
              << " delta=" << delta << " bytes" << endl;
         // Losing candidates (including metadata) must retain the plain block.
-        if (level == 0 || !irregular)
-            assert(sizes[1] == sizes[0]);
-        else
-            assert(sizes[1] < sizes[0]);
-    }
+        assert(sizes[1] <= sizes[0]);
+        if (preset && (level == 0 || level >= 6))
+        {
+            if (level == 0 || !irregular)
+            {
+                assert(sizes[1] == sizes[0]);
+            }
+            else
+            {
+                assert(sizes[1] < sizes[0]);
+            }
+        }
+    });
 }
 
 void BVectorXorExpansionTest()
@@ -19400,56 +19477,81 @@ void BVectorXorMixedSerializationTest()
     BuildBVectorXorMixedFixture(target, reference);
     serializer_type::bv_ref_vector_type refs;
     refs.add(&target, 0); refs.add(&reference, 1);
-    serializer_type::xor_sim_model_type model;
-    serializer_type ser;
-    ser.set_ref_vectors(&refs);
-    ser.compute_sim_model(model, refs, bm::xor_sim_params());
-    ser.set_sim_model(&model); ser.set_curr_ref_idx(0);
-    for (unsigned level : {0u, 6u, 8u, 9u, 10u})
-    for (bool bookmarks : {false, true})
+    bvect second_ref;
+    if (is_pedantic)
     {
-        ser.set_compression_level(level);
-        ser.set_bookmarks(bookmarks, 4);
-        serializer_type::buffer ram;
-        ser.serialize(target, ram);
-        const auto report = ReportXorFixtureOpcodes(ram);
-        assert(report.opcode[bm::set_block_bit].count == 1);
-        assert(report.opcode[bm::set_block_ref_eq].count == 1);
-        if (level <= 6)
+        // Each reference predicts alternating waves of an additional dense block.
+        std::mt19937 random(231);
+        for (unsigned i = 0; i < bm::gap_max_bits; ++i)
         {
-            assert(report.opcode[bm::set_block_xor_ref8_um].count ==
-                   (level == 6 ? 2u : 0u));
-        }
-        std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
-        bm::streams_encoder out(stream);
-        assert(ser.serialize(target, out) && out.finish());
-        const std::string bytes = stream.str();
-        assert(bytes.size() == ram.size());
-        assert(!memcmp(bytes.data(), ram.data(), ram.size()));
-        bvect restored;
-        bm::deserializer<bvect, bm::decoder> ram_reader;
-        ram_reader.set_ref_vectors(&refs);
-        ram_reader.set_gather_target_id(0);
-        assert(ram_reader.deserialize(restored, ram.data()) == ram.size());
-        assert(restored == target);
-        bm::streams_deserializer<bvect> reader;
-        reader.set_ref_vectors(&refs);
-        reader.set_gather_target_id(0);
-        stream.seekg(0);
-        bm::streams_decoder in(stream);
-        restored.clear();
-        assert(reader.deserialize(restored, in));
-        assert(restored == target);
-        // Start/end inside different representations across a bookmark.
-        reader.set_range(65536u + 10, 8u * 65536u + 100);
-        stream.clear(); stream.seekg(0);
-        bm::streams_decoder range_in(stream);
-        restored.clear();
-        assert(reader.deserialize(restored, range_in));
-        restored.keep_range(65536u + 10, 8u * 65536u + 100);
-        bvect expected = target;
-        expected.keep_range(65536u + 10, 8u * 65536u + 100);
-        assert(restored == expected);
+            const unsigned pos = 7 * bm::gap_max_bits + i;
+            const bool a = bool(random() & 1u);
+            const bool b = bool(random() & 1u);
+            reference.set(pos, a);
+            second_ref.set(pos, b);
+            target.set(pos, ((i / 1024) % 2 ? a : b) ^ (random() % 256 == 0));
+        } // for i
+        refs.add(&second_ref, 2);
+    }
+    bool saw_legacy_gather = false;
+    bool saw_shared_gather = false;
+    serializer_type ser;
+    ForEachXorSearchCase(ser, refs, [&](unsigned level, bool preset, bool gather, const auto&)
+    {
+        for (bool bookmarks : {false, true})
+        {
+            ser.set_bookmarks(bookmarks, 4);
+            serializer_type::buffer ram;
+            ser.serialize(target, ram);
+            const auto report = ReportXorFixtureOpcodes(ram);
+            const auto legacy = report.opcode[bm::set_block_xor_gather].count;
+            const auto shared = report.opcode[bm::set_block_xor_parallel_gather].count;
+            assert(gather || !(legacy || shared));
+            saw_legacy_gather |= !preset && legacy;
+            saw_shared_gather |= !preset && shared;
+            const auto raw_blocks = report.opcode[bm::set_block_bit].count;
+            assert(raw_blocks == 1 || (is_pedantic && raw_blocks == 2));
+            assert(report.opcode[bm::set_block_ref_eq].count == 1);
+            if (preset && (level == 0 || level == 6))
+            {
+                assert(report.opcode[bm::set_block_xor_ref8_um].count ==
+                       (level == 6 ? 2u : 0u));
+            }
+            std::stringstream stream(std::ios::binary | std::ios::in | std::ios::out);
+            bm::streams_encoder out(stream);
+            assert(ser.serialize(target, out) && out.finish());
+            const std::string bytes = stream.str();
+            assert(bytes.size() == ram.size());
+            assert(!memcmp(bytes.data(), ram.data(), ram.size()));
+            bvect restored;
+            bm::deserializer<bvect, bm::decoder> ram_reader;
+            ram_reader.set_ref_vectors(&refs);
+            ram_reader.set_gather_target_id(0);
+            assert(ram_reader.deserialize(restored, ram.data()) == ram.size());
+            assert(restored == target);
+            bm::streams_deserializer<bvect> reader;
+            reader.set_ref_vectors(&refs);
+            reader.set_gather_target_id(0);
+            stream.seekg(0);
+            bm::streams_decoder in(stream);
+            restored.clear();
+            assert(reader.deserialize(restored, in));
+            assert(restored == target);
+            // Start/end inside different representations across a bookmark.
+            reader.set_range(65536u + 10, 8u * 65536u + 100);
+            stream.clear(); stream.seekg(0);
+            bm::streams_decoder range_in(stream);
+            restored.clear();
+            assert(reader.deserialize(restored, range_in));
+            restored.keep_range(65536u + 10, 8u * 65536u + 100);
+            bvect expected = target;
+            expected.keep_range(65536u + 10, 8u * 65536u + 100);
+            assert(restored == expected);
+        } // for bookmarks
+    });
+    if (is_pedantic)
+    {
+        assert(saw_legacy_gather && saw_shared_gather);
     }
     cout << "Mixed XOR/BIC/raw block serialization OK" << endl;
 }
