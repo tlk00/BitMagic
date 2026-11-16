@@ -19141,7 +19141,13 @@ static void CheckBVectorXorSerializationSize(bool irregular)
             assert(ram_size == blob.size());
             assert(!memcmp(ram.data(), blob.data(), ram_size));
             bvect restored;
-            bm::deserialize(restored, ram.data(), 0, use_xor ? &refs : nullptr);
+            bm::deserializer<bvect, bm::decoder> reader;
+            if (use_xor)
+            {
+                reader.set_ref_vectors(&refs);
+                reader.set_gather_target_id(0);
+            }
+            assert(reader.deserialize(restored, ram.data()) == ram_size);
             assert(restored == target);
         }
         const long long delta = static_cast<long long>(sizes[1]) -
@@ -19421,10 +19427,14 @@ void BVectorXorMixedSerializationTest()
         assert(bytes.size() == ram.size());
         assert(!memcmp(bytes.data(), ram.data(), ram.size()));
         bvect restored;
-        bm::deserialize(restored, ram.data(), 0, &refs);
+        bm::deserializer<bvect, bm::decoder> ram_reader;
+        ram_reader.set_ref_vectors(&refs);
+        ram_reader.set_gather_target_id(0);
+        assert(ram_reader.deserialize(restored, ram.data()) == ram.size());
         assert(restored == target);
         bm::streams_deserializer<bvect> reader;
         reader.set_ref_vectors(&refs);
+        reader.set_gather_target_id(0);
         stream.seekg(0);
         bm::streams_decoder in(stream);
         restored.clear();

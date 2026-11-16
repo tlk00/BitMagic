@@ -214,9 +214,44 @@ bm::serialization_opcode_profile Profile(const unsigned char* bytes, size_t size
     return total;
 }
 
+/** Test writer that can exclude arithmetic coding from BWT opcode fixtures.
+    @tparam SV Sparse vector type used by the fixture.
+*/
+template<class SV>
+struct FixtureWriter : Codecs<SV>::writer
+{
+    /** Disable arithmetic coding on every component after selecting the preset. */
+    void disable_arithmetic_coding();
+};
+
+template<class SV>
+void FixtureWriter<SV>::disable_arithmetic_coding()
+{
+    if constexpr (std::is_same<typename SV::value_type, float>::value)
+    {
+        this->signSerializer_.set_arithmetic_coding(false);
+        this->exponentSerializer_.get_bv_serializer().set_arithmetic_coding(false);
+        this->mantissaSerializer_.get_bv_serializer().set_arithmetic_coding(false);
+    }
+    else
+    {
+        this->get_bv_serializer().set_arithmetic_coding(false);
+    }
+}
+
+/** Verify RAM and stream serialization of a borrowed sparse vector.
+    @tparam SV Sparse vector type under test.
+    @param source Vector to round trip.
+    @param level Compression preset to exercise.
+    @param xor_refs Enable internal XOR references.
+    @param gather Exercise indexed and masked reads.
+    @param profile Collect opcode counts from the serialized planes.
+    @param disable_arithmetic Exclude arithmetic candidates after applying the preset.
+    @return Collected opcode profile, or an empty profile when profiling is disabled.
+*/
 template<class SV>
 bm::serialization_opcode_profile CheckOne(const SV& source, unsigned level,
-    bool xor_refs, bool gather, bool profile = false)
+    bool xor_refs, bool gather, bool profile = false, bool disable_arithmetic = false)
 {
     using C = Codecs<SV>;
     using BV = typename SV::bvector_type;
@@ -231,12 +266,16 @@ bm::serialization_opcode_profile CheckOne(const SV& source, unsigned level,
                   << sizeof(typename SV::value_type)*8 << "-bit ";
     std::cout << "level=" << level << " XOR=" << xor_refs
               << " size=" << source.size() << std::endl;
-    typename C::writer writer;
+    FixtureWriter<SV> writer;
     writer.set_compression_level(level);
     assert(writer.get_compression_level() == level);
     writer.set_compression_level(bm::set_compression_max+1);
     assert(writer.get_compression_level() == level);
     writer.set_xor_ref(xor_refs);
+    if (disable_arithmetic)
+    {
+        writer.disable_arithmetic_coding();
+    }
     typename C::layout ram;
     writer.serialize(source, ram);
     if (profile) std::cout << "  RAM serialized" << std::endl;
@@ -376,7 +415,7 @@ template<class BV> std::vector<unsigned> OpcodeValues()
 template<class SV> void CheckOpcodeSource(SV& source)
 {
     Sync(source); source.optimize();
-    const auto profile = CheckOne(source, 10, false, true, true);
+    const auto profile = CheckOne(source, 10, false, true, true, /* disable_arithmetic */ true);
     std::cout << "  transformed planes: BWT=" << profile.opcode[72].count
               << " GAP-XOR=" << profile.opcode[94].count
               << " BWT-GAP-XOR=" << profile.opcode[96].count << std::endl;

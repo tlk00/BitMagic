@@ -1167,6 +1167,7 @@ static void TestTransformedBlockIndexGather()
         case_split = unsigned(bookmarks);
         bm::serializer<BV> writer;
         writer.set_compression_level(10);
+        writer.set_arithmetic_coding(false);
         writer.set_sblock_large_options(false);
         writer.set_bookmarks(bookmarks, 4);
         bm::serializer<BV>::buffer bytes;
