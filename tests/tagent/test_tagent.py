@@ -990,6 +990,56 @@ class SupervisorTests(unittest.TestCase):
         (group_dir / 'b.log').write_text('second; 2 ms\npartial; 3 sec')
         self.assertEqual(ta.perf_log_progress(self.root / 'perf_release/perf.log')[0], 2)
 
+    def test_perf_cache_scratch_cleanup_on_success_and_failure(self):
+        """Scratch resides in the chosen cache and is removed even on failure."""
+        perf_dir = self.root / 'tests/perf'
+        perf_dir.mkdir(parents=True)
+        (perf_dir / 'run_all_pl.sh').write_text('#!/bin/bash\n')
+        cache = self.root / 'cache'
+        cache.mkdir()
+        scratch_paths = []
+        def execute(argv, *args, **kwargs):
+            scratch = Path(argv[argv.index('--work-dir') + 1])
+            scratch_paths.append(scratch)
+            self.assertTrue(scratch.is_dir())
+            (scratch / 'temporary').write_text('fixture')
+            if len(scratch_paths) == 2:
+                raise ta.CommandFailure('fixture failure')
+            return ''
+        names = ['perf_release', 'perf_release_sse2']
+        with patch.object(self.agent, 'perf_work_root', return_value=cache), \
+             patch.object(self.agent, 'supported', return_value=True), \
+             patch.object(self.agent, 'command', side_effect=execute), \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            with self.assertRaises(ta.CommandFailure):
+                self.agent.test_perf_stage(self.root, {'builds': {'perf': names}})
+        self.assertEqual(len(scratch_paths), 2)
+        self.assertTrue(all(not path.exists() for path in scratch_paths))
+
+    def test_perf_work_root_rejects_insufficient_space(self):
+        """An unusable cache falls back without creating a work directory."""
+        cache = self.root / 'cache'
+        cache.mkdir()
+        with patch.object(ta.shutil, 'disk_usage', return_value=unittest.mock.Mock(free=0)):
+            self.assertIsNone(self.agent.perf_work_root(cache))
+        self.assertFalse((cache / 'perf-work').exists())
+
+    def test_perf_runner_separates_group_work_from_logs(self):
+        """The runner executes a group in scratch while keeping its log on the log root."""
+        runner = self.root / 'run_all_pl.sh'
+        shutil.copy2(Path(__file__).resolve().parents[1] / 'perf/run_all_pl.sh', runner)
+        binary = self.root / 'binary'
+        binary.write_text('#!/bin/bash\nif [ "$1" = --list-groups ]; then echo fixture; exit; fi\npwd; touch data\n')
+        binary.chmod(0o755)
+        logs, work = self.root / 'logs', self.root / 'work'
+        result = subprocess.run(['bash', str(runner), '--binary', str(binary), '--fast',
+                                 '--log-dir', str(logs), '--work-dir', str(work)],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((work / 'fixture/data').exists())
+        group_log = next(logs.glob('run.*/fixture.log'))
+        self.assertIn(str(work / 'fixture'), group_log.read_text())
+
     def test_perf_sequential_failure_and_worker_limit(self):
         """A failed variant prevents later launches; perf workers fit both limits."""
         perf_dir = self.root / 'tests/perf'

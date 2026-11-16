@@ -495,6 +495,11 @@ groups (default 0 uses the full `--jobs` CPU budget). The launcher
 setting `PERF_JOBS` supplies the default and the command line overrides it. This
 limit can reduce overlapping memory peaks but does not guarantee that groups fit
 in RAM; use a smaller value if memory pressure or swap rises.
+On Linux, when `/mnt/c/TAgent-cache` is available, writable and has the
+configured `--min-free-gb` reserve, perf group working files use its `perf-work`
+subdirectory; logs remain in the configured log directory. Otherwise group files
+use the log directory. TAgent removes each scratch directory after the variant
+finishes or is interrupted; a forced termination can leave abandoned directories.
 The memory monitor reports pressure but does not throttle running groups.
 During perf, each memory sample also records the RSS of observed group processes,
 their variant and group names in `resources.jsonl`. Memory warning snapshots

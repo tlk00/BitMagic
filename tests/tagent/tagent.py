@@ -2463,6 +2463,28 @@ class Agent:
             self.say('INV PASS | {} | {}'.format(name, output / 'summary.tsv'))
         return True
 
+    def perf_work_root(self, cache_root=None):
+        """Choose a writable WSL perf cache, or return None for the log directory."""
+        if cache_root is None:
+            if platform.system() != 'Linux':
+                return None
+            cache_root = Path('/mnt/c/TAgent-cache')
+        try:
+            if not cache_root.is_dir():
+                return None
+            if shutil.disk_usage(cache_root).free < self.args.min_free_gb * 1024**3:
+                self.say('PERF WORK | insufficient space on {} | using log directory'.format(cache_root))
+                return None
+            root = cache_root / 'perf-work'
+            root.mkdir(exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix='probe-', dir=root):
+                pass
+            self.say('PERF WORK | using {}'.format(root))
+            return root
+        except OSError as error:
+            self.say('PERF WORK | cache unavailable: {} | using log directory'.format(error))
+            return None
+
     def test_perf_stage(self, run, manifest):
         """Execute performance variants for this cycle."""
         self.memory_phase = 'perf'
@@ -2471,6 +2493,9 @@ class Agent:
                  if self.args.fast else manifest['builds']['perf'])
         eligible = [name for name in names if not (self.args.no_debug and '_debug' in name) and self.supported(name)]
         variant_jobs = min(self.jobs, self.args.perf_jobs) if self.args.perf_jobs else self.jobs
+        work_root = self.perf_work_root()
+        if work_root is None:
+            self.say('PERF WORK | using log directory for group files')
         self.say('PERF SCHEDULE | {} variants sequentially | up to {} group workers | CPU budget {}'.format(
             len(eligible), variant_jobs, self.jobs))
         with self.mutex:
@@ -2498,7 +2523,21 @@ class Agent:
             if self.args.fast or '_debug' in name:
                 perf_command.append('--fast')
             self.say('PERF START | {} | up to {} group workers'.format(name, variant_jobs))
-            result = self.command(perf_command, work / 'perf.log', work, fail_fast=True, test_allocator=True)
+            scratch = None
+            if work_root is not None:
+                try:
+                    scratch = tempfile.TemporaryDirectory(prefix=name + '-', dir=work_root)
+                    perf_command.extend(['--work-dir', scratch.name])
+                except OSError as error:
+                    self.say('PERF WORK | cannot create scratch directory: {} | using log directory'.format(error))
+            try:
+                result = self.command(perf_command, work / 'perf.log', work, fail_fast=True, test_allocator=True)
+            finally:
+                if scratch is not None:
+                    try:
+                        scratch.cleanup()
+                    except OSError as error:
+                        self.say('PERF WORK | cleanup failed for {}: {}'.format(scratch.name, error))
             with self.mutex:
                 self.perf_pending.discard(name)
                 if result != 'skipped-update':

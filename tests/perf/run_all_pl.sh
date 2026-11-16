@@ -19,6 +19,7 @@ Each group has its own process, working directory, and timing log.
   --build NAME          Binary in this directory, e.g. perf_release_neon
   -b PATH, --binary PATH  Binary path, relative to this directory or absolute
   -l DIR, --log-dir DIR  Log root (default logs/parallel)
+  --work-dir DIR        Group working-directory root (default: inside log root)
   --fast                Pass --fast to each group; do not update timing weights
   --fail-fast           Stop all running groups after the first failure
   --order-file FILE     Normal-mode timing history (default logs/parallel/order.tsv)
@@ -34,6 +35,7 @@ EOF
 JOBS=2
 RUN_NAME=""
 LOG_DIR="logs/parallel"
+WORK_DIR=""
 ORDER_FILE=""
 FAST=0
 FAIL_FAST=0
@@ -54,6 +56,11 @@ while [ "$#" -gt 0 ]; do
         -l|--log-dir)
             [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
             LOG_DIR="$2"
+            shift 2
+            ;;
+        --work-dir)
+            [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
+            WORK_DIR="$2"
             shift 2
             ;;
         --order-file)
@@ -124,6 +131,12 @@ done
 mkdir -p "$LOG_DIR" || exit 1
 LOG_DIR="$(cd "$LOG_DIR" && pwd)" || exit 1
 RUN_DIR="$(mktemp -d "$LOG_DIR/run.XXXXXX")" || exit 1
+if [ -n "$WORK_DIR" ]; then
+    mkdir -p "$WORK_DIR" || exit 1
+    WORK_DIR="$(cd "$WORK_DIR" && pwd)" || exit 1
+else
+    WORK_DIR="$RUN_DIR"
+fi
 [ -n "$ORDER_FILE" ] || ORDER_FILE="$LOG_DIR/order.tsv"
 case "$ORDER_FILE" in
     /*) ;;
@@ -207,7 +220,7 @@ trap 'stop_workers; exit 129' HUP
 
 launch_group()
 {
-    local name="$1" index=${#PIDS[@]} work_dir="$RUN_DIR/$1"
+    local name="$1" index=${#PIDS[@]} work_dir="$WORK_DIR/$1"
     mkdir -p "$work_dir" || exit 1
     echo "START $name -> $RUN_DIR/$name.log"
     if [ "$FAST" -eq 1 ]; then
