@@ -491,10 +491,13 @@ normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
 
 Perf variants run one at a time using `tests/perf/run_all_pl.sh` to run their
 independent benchmark groups in parallel. `--perf-jobs` limits concurrent perf
-groups (default 0 uses the full `--jobs` CPU budget). The launcher
-setting `PERF_JOBS` supplies the default and the command line overrides it. This
+groups (default 0 uses the full `--jobs` CPU budget). The launcher setting
+`PERF_JOBS` supplies the default and the command line overrides it. This
 limit can reduce overlapping memory peaks but does not guarantee that groups fit
 in RAM; use a smaller value if memory pressure or swap rises.
+TAgent currently runs only `mmap-global-1` from the mmap groups; it skips
+`mmap-global-rest` and `mmap-tail` in all modes to reduce memory and disk load.
+Standalone perf runner defaults still include all groups.
 On Linux, when `/mnt/c/TAgent-cache` is available, writable and has the
 configured `--min-free-gb` reserve, perf group working files use its `perf-work`
 subdirectory; logs remain in the configured log directory. Otherwise group files

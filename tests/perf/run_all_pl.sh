@@ -22,6 +22,7 @@ Each group has its own process, working directory, and timing log.
   --work-dir DIR        Group working-directory root (default: inside log root)
   --fast                Pass --fast to each group; do not update timing weights
   --fail-fast           Stop all running groups after the first failure
+  --exclude-group NAME  Skip a named group (repeatable)
   --order-file FILE     Normal-mode timing history (default logs/parallel/order.tsv)
   -h, --help            Show this help
 
@@ -40,6 +41,7 @@ ORDER_FILE=""
 FAST=0
 FAIL_FAST=0
 SELECTED=()
+EXCLUDED=()
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -71,6 +73,11 @@ while [ "$#" -gt 0 ]; do
         --fast)
             FAST=1
             shift
+            ;;
+        --exclude-group)
+            [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
+            EXCLUDED[${#EXCLUDED[@]}]="$2"
+            shift 2
             ;;
         --fail-fast)
             FAIL_FAST=1
@@ -110,7 +117,17 @@ while IFS= read -r group; do
 done <<< "$GROUP_LIST"
 
 if [ "${#SELECTED[@]}" -eq 0 ]; then
-    SELECTED=("${ALL_GROUPS[@]}")
+    for group in "${ALL_GROUPS[@]}"; do
+        skip=0
+        for excluded in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
+            [ "$group" != "$excluded" ] || skip=1
+        done
+        if [ "$skip" -eq 0 ]; then
+            SELECTED[${#SELECTED[@]}]="$group"
+        else
+            echo "SKIP $group (excluded)"
+        fi
+    done
 fi
 for group in "${SELECTED[@]}"; do
     valid=0
@@ -118,7 +135,11 @@ for group in "${SELECTED[@]}"; do
         [ "$group" != "$known" ] || valid=1
     done
     [ "$valid" -eq 1 ] || { echo "Unknown perf group: $group" >&2; exit 2; }
+    for excluded in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
+        [ "$group" != "$excluded" ] || { echo "Group both selected and excluded: $group" >&2; exit 2; }
+    done
 done
+[ "${#SELECTED[@]}" -gt 0 ] || { echo "No perf groups selected" >&2; exit 2; }
 for ((i=0; i<${#SELECTED[@]}; ++i)); do
     for ((j=i+1; j<${#SELECTED[@]}; ++j)); do
         [ "${SELECTED[$i]}" != "${SELECTED[$j]}" ] || {

@@ -968,6 +968,9 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(names, {'perf_release', 'perf_release_sse2', 'perf_release_sse42',
                                  'perf_release_avx2', 'perf_release_64'})
         self.assertTrue(all('--fast' in call.args[0] for call in calls))
+        self.assertTrue(all(call.args[0].count('--exclude-group') == 2 and
+                            'mmap-global-rest' in call.args[0] and 'mmap-tail' in call.args[0]
+                            for call in calls))
         self.assertTrue(all(call.kwargs['test_allocator'] for call in calls))
         self.assertEqual(set(self.agent.perf_completed), names)
 
@@ -984,6 +987,7 @@ class SupervisorTests(unittest.TestCase):
             self.assertTrue(self.agent.test_perf_stage(self.root, {'builds': {'perf': names}}))
         jobs = [int(c.args[0][c.args[0].index('--jobs') + 1]) for c in command.call_args_list]
         self.assertEqual(jobs, [8, 8, 8])
+        self.assertTrue(all(c.args[0].count('--exclude-group') == 2 for c in command.call_args_list))
         group_dir = self.root / 'perf_release/perf-groups/run.fixture'
         group_dir.mkdir(parents=True)
         (group_dir / 'a.log').write_text('header\nfirst; 1 sec\nTOTAL; 1 sec\n')
@@ -1039,6 +1043,28 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue((work / 'fixture/data').exists())
         group_log = next(logs.glob('run.*/fixture.log'))
         self.assertIn(str(work / 'fixture'), group_log.read_text())
+
+    def test_perf_runner_excludes_only_requested_groups(self):
+        """TAgent exclusions keep one mmap group and retain other discovered groups."""
+        runner = self.root / 'run_all_pl.sh'
+        shutil.copy2(Path(__file__).resolve().parents[1] / 'perf/run_all_pl.sh', runner)
+        binary = self.root / 'binary'
+        binary.write_text('#!/bin/bash\nif [ "$1" = --list-groups ]; then '
+                          'printf "mmap-global-1\\nmmap-global-rest\\nmmap-tail\\nnew-group\\n"; fi\n')
+        binary.chmod(0o755)
+        for name, excluded, expected in (('default', [], 4), ('tagent',
+                ['--exclude-group', 'mmap-global-rest', '--exclude-group', 'mmap-tail'], 2)):
+            logs = self.root / name
+            result = subprocess.run(['bash', str(runner), '--binary', str(binary), '--fast',
+                                     '--log-dir', str(logs), *excluded],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            group_logs = {p.stem for p in logs.glob('run.*/*.log')}
+            self.assertEqual(len(group_logs), expected)
+            self.assertIn('mmap-global-1', group_logs)
+            self.assertIn('new-group', group_logs)
+            if excluded:
+                self.assertTrue(group_logs.isdisjoint({'mmap-global-rest', 'mmap-tail'}))
 
     def test_perf_sequential_failure_and_worker_limit(self):
         """A failed variant prevents later launches; perf workers fit both limits."""

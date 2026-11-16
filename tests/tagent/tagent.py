@@ -2518,11 +2518,12 @@ class Agent:
             order_dir.mkdir(parents=True, exist_ok=True)
             perf_command = ['bash', str(runner), '--binary', str(self.repo / 'tests/perf' / name),
                             '--jobs', str(variant_jobs), '--fail-fast',
+                            '--exclude-group', 'mmap-global-rest', '--exclude-group', 'mmap-tail',
                             '--log-dir', str(work / 'perf-groups'), '--order-file',
                             str(order_dir / (name + '--' + self.perf_target_mode(name) + '.tsv'))]
             if self.args.fast or '_debug' in name:
                 perf_command.append('--fast')
-            self.say('PERF START | {} | up to {} group workers'.format(name, variant_jobs))
+            self.say('PERF START | {} | up to {} group workers | mmap: global-1 only'.format(name, variant_jobs))
             scratch = None
             if work_root is not None:
                 try:
