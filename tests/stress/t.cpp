@@ -22815,7 +22815,8 @@ void TestSparseVectorSerialization2()
         CheckSparseVectorStringStream(sv1i);
         {
             const bvect::size_type* cstat = sv_serializer.get_bv_serializer().get_compression_stat();
-            assert(cstat[bm::set_block_xor_ref32]>=1);
+            // The residual uses an unmasked reference to a plane with an 8-bit row ID.
+            assert(cstat[bm::set_block_xor_ref8_um] >= 1);
         }
 
         buf = sv_lay1.buf();
