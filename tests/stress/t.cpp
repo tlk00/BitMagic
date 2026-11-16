@@ -19859,6 +19859,539 @@ void Check_Large_AllOnes_BVector_Serialization()
 
 #include "serial_transform_tests.h"
 
+/** Test opcode 110 (bm::set_block_gap_arithmetic) directly at shared bit phases.
+    Exercises empty/nonempty arithmetic streams, magnitude boundaries, independent
+    exception layers and corrections; expected bits are constructed independently.
+*/
+static void TestGapArithmeticFrames()
+{
+    using BV = bm::bvector<>;
+    BV scratch;
+    auto& blocks = scratch.get_blocks_manager();
+    auto* output = blocks.make_bit_block(0);
+    auto* expected = blocks.make_bit_block(1);
+    auto* flags = blocks.make_bit_block(2);
+    bm::gap_arithmetic_decoder_workspace<BV::allocator_type> workspace, dry_workspace;
+    std::vector<unsigned char> inner_bytes(32768), outer_bytes(32768), wire(32776), shared_bytes(32776);
+    std::vector<bm::gap_word_t> recalc(65536), positions(65536);
+    const bm::gap_word_t clear_positions[] = {3, 37, 1021, 65530};
+    const bm::gap_word_t set_positions[] = {0, 19, 1023, 65534};
+    const bm::gap_word_t xor_positions[] = {2, 5, 900, 65535};
+    bm::gap_arithmetic_bits inner, outer;
+    inner.data = inner_bytes.data();
+    outer.data = outer_bytes.data();
+    {
+        bm::encoder enc(inner_bytes.data(), inner_bytes.size());
+        bm::bit_out<bm::encoder> bits(enc);
+        bits.encode_array(clear_positions, recalc.data(), flags, positions.data(), 4, false, false);
+        bits.encode_array(set_positions, recalc.data(), flags, positions.data(), 4, true, true);
+        inner.count = unsigned(enc.size() * 8) + bits.pending_bits();
+    }
+    {
+        bm::encoder enc(outer_bytes.data(), outer_bytes.size());
+        bm::bit_out<bm::encoder> bits(enc);
+        const bm::gap_word_t corrected[] = {2, 3, 896, 65529};
+        bits.gamma(4);
+        bits.gamma(3);
+        bits.bic_encode_u16(corrected, 4, 0, 65529);
+        outer.count = unsigned(enc.size() * 8) + bits.pending_bits();
+    }
+    unsigned cases = 0;
+    for (unsigned shape = 0; shape < 5; ++shape)
+    {
+        for (unsigned start = 0; start < 2; ++start)
+        {
+            const unsigned runs = shape == 0 ? 1u : shape == 1 ? 2u : shape == 2 ? 4u : shape == 3 ? 37u : 4096u;
+            std::vector<bm::gap_word_t> gap(runs + 1);
+            gap[0] = bm::gap_word_t((runs << 3) | start);
+            unsigned sum = 0;
+            for (unsigned i = 1; i < runs; ++i)
+            {
+                sum += shape == 1 ? 65535u : shape == 3 ? 17u : 1u + ((i * 7) % 9);
+                gap[i] = bm::gap_word_t(sum - 1);
+            } // for i
+            gap[runs] = 65535;
+            bm::gap_word_t c0 = 0, c1 = 0;
+            if (runs >= 4)
+            {
+                bm::gap_calc_mins(gap.data(), c0, c1);
+                if (c0)
+                {
+                    --c0;
+                }
+                if (c1)
+                {
+                    --c1;
+                }
+            }
+            for (unsigned exceptions = 0; exceptions < 4; ++exceptions)
+            {
+                bm::gap_convert_to_bitset(expected, gap.data());
+                if (exceptions & 1u)
+                {
+                    for (unsigned pos : clear_positions)
+                    {
+                        bm::clear_bit(expected, pos);
+                    } // for pos
+                    for (unsigned pos : set_positions)
+                    {
+                        bm::set_bit(expected, pos);
+                    } // for pos
+                }
+                if (exceptions & 2u)
+                {
+                    for (unsigned pos : xor_positions)
+                    {
+                        expected[pos >> 5] ^= bm::word_t(1) << (pos & 31);
+                    } // for pos
+                }
+                for (unsigned reduced = 0; reduced < 2; ++reduced)
+                {
+                    bm::encoder writer(wire.data(), wire.size());
+                    writer.put_8(bm::set_block_gap_arithmetic);
+                    const unsigned body = bm::gap_arithmetic_encoder::encode(writer, gap.data(),
+                        reduced ? c0 : 0, reduced ? c1 : 0,
+                        (exceptions & 1u) ? inner : bm::gap_arithmetic_bits(),
+                        (exceptions & 2u) ? outer : bm::gap_arithmetic_bits());
+                    assert(writer.size() == 1 + 4 * ((18 + body + 31) / 32));
+                    bm::decoder reader(wire.data() + 1);
+                    bm::gap_arithmetic_decoder::decode(reader, output, workspace, flags);
+                    assert(reader.get_pos() == wire.data() + writer.size());
+                    assert(std::equal(output, output + bm::set_block_size, expected));
+                    for (unsigned dry = 0; dry < 2; ++dry)
+                    {
+                        bm::bounded_decoder truncated;
+                        truncated.bind(wire.data() + 1, writer.size() - 2);
+                        bool rejected = false;
+                        try
+                        {
+                            bm::gap_arithmetic_decoder::decode(truncated, dry ? nullptr : output,
+                                dry ? dry_workspace : workspace, flags);
+                        }
+                        catch (...)
+                        {
+                            rejected = true;
+                        }
+                        assert(rejected);
+                    } // for dry
+                    unsigned frame_word;
+                    ::memcpy(&frame_word, wire.data() + 1, sizeof(frame_word));
+                    for (unsigned extent : {0u, 28u, (1u << 18) - 1})
+                    {
+                        const unsigned invalid_word = (frame_word & ~((1u << 18) - 1)) | extent;
+                        ::memcpy(wire.data() + 1, &invalid_word, sizeof(invalid_word));
+                        for (unsigned dry = 0; dry < 2; ++dry)
+                        {
+                            bm::bounded_decoder invalid;
+                            invalid.bind(wire.data() + 1, writer.size() - 1);
+                            bool rejected = false;
+                            try
+                            {
+                                bm::gap_arithmetic_decoder::decode(invalid, dry ? nullptr : output,
+                                    dry ? dry_workspace : workspace, flags);
+                            }
+                            catch (...)
+                            {
+                                rejected = true;
+                            }
+                            assert(rejected);
+                        } // for dry
+                    } // for extent
+                    ::memcpy(wire.data() + 1, &frame_word, sizeof(frame_word));
+                    for (unsigned phase = 0; phase < 32; ++phase)
+                    {
+                        {
+                            bm::encoder shared_writer(shared_bytes.data(), shared_bytes.size());
+                            bm::bit_out<bm::encoder> bits(shared_writer);
+                            if (phase)
+                            {
+                                bits.put_bits(0x7A59u, phase);
+                            }
+                            bm::decoder source(wire.data() + 1);
+                            bm::bit_in<bm::decoder> input(source);
+                            for (unsigned left = 18 + body; left;)
+                            {
+                                const unsigned count = left < 31 ? left : 31;
+                                bits.put_bits(input.get_bits(count), count);
+                                left -= count;
+                            } // for left
+                            bits.put_bits(0x5A39u, 16);
+                        }
+                        for (unsigned dry = 0; dry < 2; ++dry)
+                        {
+                            bm::decoder source(shared_bytes.data());
+                            bm::bit_in<bm::decoder> bits(source);
+                            if (phase)
+                            {
+                                bits.get_bits(phase);
+                            }
+                            bm::gap_arithmetic_decoder::decode(source, dry ? nullptr : output,
+                                dry ? dry_workspace : workspace, flags, &bits);
+                            assert(bits.get_bits(16) == 0x5A39u);
+                            if (!dry)
+                            {
+                                assert(std::equal(output, output + bm::set_block_size, expected));
+                            }
+                        } // for dry
+                    } // for phase
+                    // Reject the reserved flag and unsupported representation bits.
+                    for (unsigned flag_bit : {1u, 2u, 7u})
+                    {
+                        const unsigned pos = 18 + flag_bit;
+                        unsigned word;
+                        ::memcpy(&word, wire.data() + 1 + (pos / 32) * 4, sizeof(word));
+                        word ^= 1u << (pos % 32);
+                        ::memcpy(wire.data() + 1 + (pos / 32) * 4, &word, sizeof(word));
+                        bool rejected = false;
+                        try
+                        {
+                            bm::decoder invalid(wire.data() + 1);
+                            bm::gap_arithmetic_decoder::decode(invalid, output, workspace, flags);
+                        }
+                        catch (...)
+                        {
+                            rejected = true;
+                        }
+                        assert(rejected);
+                        word ^= 1u << (pos % 32);
+                        ::memcpy(wire.data() + 1 + (pos / 32) * 4, &word, sizeof(word));
+                    } // for flag_bit
+                    ++cases;
+                } // for reduced
+            } // for exceptions
+        } // for start
+    } // for shape
+    assert(dry_workspace.gap.empty() && dry_workspace.widths.empty() && dry_workspace.positions.empty());
+    for (unsigned level = 0; level <= 10; ++level)
+    {
+        if (level >= 7 && level <= 10)
+        {
+            const unsigned gate = level >= 9 ? 234u : 606u;
+            const unsigned gain = level == 7 ? 24u : 1u;
+            assert(bm::gap_arithmetic_policy::accepts(level, gate, 100 + gain, 100));
+            assert(!bm::gap_arithmetic_policy::accepts(level, gate - 1, 100 + gain, 100));
+            assert(!bm::gap_arithmetic_policy::accepts(level, gate, 99 + gain, 100));
+            assert(!bm::gap_arithmetic_policy::accepts(level, gate, 100, 100));
+        }
+        else
+        {
+            assert(!bm::gap_arithmetic_policy::accepts(level, 8192, 1000, 1));
+        }
+    } // for level
+    cout << "TestGapArithmeticFrames OK cases=" << cases << " shared_phases=32" << endl;
+}
+
+/** Deterministic nonperiodic GAP source spanning multiple blocks/superblocks.
+    @param source Destination vector, cleared before construction.
+    Used unchanged at all levels to prove actual opcode selection and exclusion.
+*/
+static void MakeGapArithmeticSource(bm::bvector<>& source)
+{
+    source.clear();
+    const unsigned blocks[] = {0, 3, 257, 515};
+    const unsigned shapes[] = {16, 17, 31, 16};
+    for (unsigned index = 0; index < 4; ++index)
+    {
+        const unsigned shape = shapes[index];
+        std::mt19937 random(7171 + shape);
+        const bm::bvector<>::size_type base = bm::bvector<>::size_type(blocks[index]) * 65536;
+        for (unsigned pos = 0, run = 0; pos < 65536; ++run)
+        {
+            unsigned length = 1 + random() % (8 * (shape - 3));
+            length = (std::min)(length, 65536u - pos);
+            if (run & 1u)
+            {
+                source.set_range(base + pos, base + pos + length - 1);
+            }
+            pos += length;
+        } // for run
+    } // for index
+}
+
+/** Test actual L7/L8/L9/L10 selection, OR merges, iterator skips, range and indexed gather.
+    No performance measurements; the dedicated selector returns before timing output.
+*/
+static void TestGapArithmeticSerialization()
+{
+    using BV = bm::bvector<>;
+    using Index = bm::deserialization_index<BV>;
+    BV source;
+    MakeGapArithmeticSource(source);
+    for (unsigned level : {6u, 7u, 8u, 9u, 10u})
+    {
+        for (bool optimize : {false, true})
+        {
+            BV input(source);
+            if (optimize)
+            {
+                input.optimize();
+            }
+            bm::serializer<BV> writer;
+            writer.set_compression_level(level);
+            writer.set_bookmarks(true, 4);
+            bm::serializer<BV>::buffer bytes;
+            writer.serialize(input, bytes);
+            bm::serialization_opcode_collector<BV> collector;
+            bm::serialization_opcode_profile profile;
+            collector.set_collect_ids();
+            collector.add_blob(bytes.data(), bytes.size(), profile);
+            assert(profile.reconciles() && profile.cardinalities_reconcile());
+            assert(profile.ids == input.count());
+            const std::string blob(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+            std::stringstream stream(blob + "TAIL");
+            bm::streams_decoder channel(stream);
+            bm::streams_deserializer<BV> streaming;
+            BV streamed;
+            assert(streaming.deserialize(streamed, channel));
+            assert(streamed == input && size_t(stream.tellg()) == bytes.size() && stream.get() == 'T');
+            if (level >= 7 && level <= 10)
+            {
+                assert(profile.opcode[bm::set_block_gap_arithmetic].count >= 1);
+            }
+            else
+            {
+                assert(!profile.opcode[bm::set_block_gap_arithmetic].count);
+            }
+            for (unsigned target = 0; target < 4; ++target)
+            {
+                BV actual, expected(input);
+                if (target == 1)
+                {
+                    actual.set(2).set(777777);
+                }
+                else if (target == 2)
+                {
+                    actual.set_range(0, 65535);
+                }
+                else if (target == 3)
+                {
+                    actual.set_range(4, 32);
+                    actual.optimize();
+                }
+                expected |= actual;
+                bm::deserializer<BV, bm::decoder> reader;
+                assert(reader.deserialize(actual, bytes.data()) == bytes.size());
+                assert(actual == expected);
+                BV operated;
+                if (target == 2)
+                {
+                    operated.set_range(0, 65535);
+                }
+                else if (target == 1)
+                {
+                    operated.set(2).set(777777);
+                }
+                else if (target == 3)
+                {
+                    operated.set_range(4, 32);
+                    operated.optimize();
+                }
+                bm::operation_deserializer<BV> operation;
+                operation.deserialize(operated, bytes.data(), bm::set_OR);
+                assert(operated == expected);
+            } // for target
+            for (bm::set_operation op : {bm::set_AND, bm::set_XOR, bm::set_SUB})
+            {
+                BV actual;
+                actual.set_range(15, 20000);
+                actual.set_range(257u * 65536u, 257u * 65536u + 50000);
+                BV expected(actual);
+                if (op == bm::set_AND)
+                {
+                    expected &= input;
+                }
+                else if (op == bm::set_XOR)
+                {
+                    expected ^= input;
+                }
+                else
+                {
+                    expected -= input;
+                }
+                bm::operation_deserializer<BV> operation;
+                operation.deserialize(actual, bytes.data(), op);
+                assert(actual == expected);
+            } // for op
+            Index index;
+            BV dry;
+            bm::deserializer<BV, bm::decoder> index_reader;
+            index_reader.set_deserialization_index_construct(&index);
+            assert(index_reader.deserialize(dry, bytes.data()) == bytes.size());
+            assert(dry.none());
+            for (unsigned block : {0u, 3u, 256u, 257u, 515u})
+            {
+                const BV::size_type first = BV::size_type(block) * 65536;
+                BV wanted;
+                wanted.copy_range(input, first, first + 65535);
+                BV actual, digest;
+                digest.set(block);
+                bm::deserializer<BV, bm::decoder> gather;
+                gather.set_deserialization_index_use(&index);
+                gather.set_block_digest_vector_use(&digest);
+                assert(gather.deserialize(actual, bytes.data()) == bytes.size());
+                actual.keep_range(first, first + 65535);
+                assert(actual == wanted);
+                BV ranged;
+                bm::operation_deserializer<BV> operation;
+                operation.deserialize_range(ranged, bytes.data(), first + 7, first + 65000);
+                wanted.keep_range(first + 7, first + 65000);
+                assert(ranged == wanted);
+            } // for block
+            cout << "TestGapArithmeticSerialization level=" << level << " optimized=" << optimize
+                 << " opcode110=" << profile.opcode[bm::set_block_gap_arithmetic].count << " OK" << endl;
+        } // for optimize
+    } // for level
+}
+
+/** Test opcode 110 as a shared residual inside existing opcodes 102/103.
+    Both blocks follow shared reference coordinates; indexed gather skips the
+    first residual and restores the second in a different superblock.
+*/
+static void TestGapArithmeticSharedXor()
+{
+    using BV = bm::bvector<>;
+    const unsigned target = 10, row = 20;
+    const bm::gap_word_t gap[] = {32, 10, 20, 40, 65535};
+    std::vector<unsigned char> packet(32776);
+    bm::encoder packet_writer(packet.data(), packet.size());
+    packet_writer.put_8(bm::set_block_gap_arithmetic);
+    const unsigned body = bm::gap_arithmetic_encoder::encode(packet_writer, gap, 0, 0,
+        bm::gap_arithmetic_bits(), bm::gap_arithmetic_bits());
+    for (unsigned opcode : {bm::set_block_xor_parallel_gather, bm::set_block_xor_ref_shared})
+    {
+        std::vector<unsigned char> blob(65536);
+        bm::encoder enc(blob.data(), blob.size());
+        enc.put_8(bm::BM_HM_NO_BO | bm::BM_HM_NO_GAPL | bm::BM_HM_HXOR);
+        BV reference, expected;
+        for (unsigned block : {0u, 256u})
+        {
+            const BV::size_type base = BV::size_type(block) * 65536;
+            if (block)
+            {
+                enc.put_8(bm::set_block_8zero);
+                enc.put_8(255);
+            }
+            reference.set(base + 7).set(base + 11).set(base + 2049);
+            expected.set_range(base + 11, base + 20);
+            expected.set_range(base + 41, base + 65535);
+            expected.flip(base + 7);
+            expected.flip(base + 11);
+            expected.flip(base + 2049);
+            enc.put_8(static_cast<unsigned char>(opcode));
+            if (opcode == bm::set_block_xor_parallel_gather)
+            {
+                enc.put_8(3); // Relative rows with explicit polarity for each selected wave.
+                for (unsigned bit = 2048; bit < 3072; ++bit)
+                {
+                    expected.flip(base + bit);
+                } // for bit
+            }
+            enc.put_h64(5); // Same-position waves zero and two.
+            enc.put_8(bm::set_block_gap_arithmetic);
+            {
+                bm::bit_out<bm::encoder> bits(enc);
+                bm::decoder source(packet.data() + 1);
+                bm::bit_in<bm::decoder> input(source);
+                for (unsigned left = 18 + body; left;)
+                {
+                    const unsigned count = left < 31 ? left : 31;
+                    bits.put_bits(input.get_bits(count), count);
+                    left -= count;
+                } // for left
+                bits.gamma(row - target);
+                bits.flush_if_full();
+                bits.put_bit(0);
+                if (opcode == bm::set_block_xor_parallel_gather)
+                {
+                    bits.gamma(row - target);
+                    bits.flush_if_full();
+                    bits.put_bit(1);
+                }
+            }
+        } // for block
+        enc.put_8(bm::set_block_end);
+        bm::bv_ref_vector<BV> refs;
+        refs.add(&reference, row);
+        bm::deserializer<BV, bm::decoder> reader;
+        reader.set_ref_vectors(&refs);
+        reader.set_gather_target_id(target);
+        BV actual;
+        assert(reader.deserialize(actual, blob.data()) == enc.size());
+        assert(actual == expected);
+        bm::deserialization_index<BV> index;
+        reader.set_deserialization_index_construct(&index);
+        BV dry;
+        assert(reader.deserialize(dry, blob.data()) == enc.size() && dry.none());
+        reader.set_deserialization_index_construct(nullptr);
+        reader.set_deserialization_index_use(&index);
+        BV digest;
+        digest.set(256);
+        reader.set_block_digest_vector_use(&digest);
+        actual.clear();
+        assert(reader.deserialize(actual, blob.data()) == enc.size());
+        expected.keep_range(BV::size_type(256) * 65536, BV::size_type(257) * 65536 - 1);
+        assert(actual == expected);
+    } // for opcode
+    cout << "TestGapArithmeticSharedXor OK" << endl;
+}
+
+/** Check application-allocator propagation and retained scratch reset for opcode 110. */
+static void TestGapArithmeticAllocator()
+{
+    using namespace serialization_allocator_test;
+    const size_t initial_live = tracking_block_allocator::live;
+    {
+        bm::gap_arithmetic_encoder_workspace<Alloc> producer;
+        const size_t cold = tracking_block_allocator::allocations;
+        producer.init();
+        assert(tracking_block_allocator::allocations > cold);
+        const auto* base = producer.base.data();
+        const auto* positions = producer.positions.data();
+        const auto* trial = producer.trial.data();
+        const auto* best = producer.best.data();
+        producer.inner.count = 123;
+        producer.outer.count = 321;
+        producer.correction0 = 17;
+        producer.correction1 = 23;
+        const size_t warm = tracking_block_allocator::allocations;
+        producer.init();
+        assert(tracking_block_allocator::allocations == warm);
+        assert(base == producer.base.data() && positions == producer.positions.data());
+        assert(trial == producer.trial.data() && best == producer.best.data());
+        assert(!producer.inner.count && !producer.outer.count &&
+               !producer.correction0 && !producer.correction1);
+        bm::gap_arithmetic_decoder_workspace<Alloc> consumer;
+        consumer.init(37);
+        consumer.positions.resize(65536);
+        const size_t decoded_warm = tracking_block_allocator::allocations;
+        consumer.init(1);
+        consumer.init(37);
+        assert(tracking_block_allocator::allocations == decoded_warm);
+        bm::bvector<> plain;
+        MakeGapArithmeticSource(plain);
+        BV input;
+        for (auto en = plain.first(); en.valid(); ++en)
+        {
+            input.set(*en);
+        } // for en
+        Serializer writer;
+        writer.set_compression_level(9);
+        Serializer::buffer bytes;
+        writer.serialize(input, bytes);
+        bm::serialization_opcode_collector<BV> collector;
+        bm::serialization_opcode_profile profile;
+        collector.add_blob(bytes.data(), bytes.size(), profile);
+        assert(profile.opcode[bm::set_block_gap_arithmetic].count);
+        BV restored;
+        bm::deserializer<BV, bm::decoder> reader;
+        assert(reader.deserialize(restored, bytes.data()) == bytes.size());
+        assert(restored == input);
+    }
+    assert(tracking_block_allocator::live == initial_live);
+    cout << "TestGapArithmeticAllocator OK" << endl;
+}
+
+
 /** Exercise endpoint-only BIC superblocks through index, gather and range
     decoding. The current writer normally groups at least five positions. */
 static void TestTwoPositionSuperblocks()
@@ -50465,6 +50998,7 @@ void show_help()
         << "-bvb1a..d             - independent bit-vector basic part 1 groups" << endl
         << "-bvb1d0..2            - smaller mutation/block groups" << endl
         << "-bvser (-bvset)       - bit-vector serialization " << endl
+        << "-gap110               - focused GAP arithmetic correctness (no timing output)" << endl
         << "-bvops (-bvo, -bvl)   - bit-vector logical operations" << endl
         << "-bvl0a..b,-bvl1a..d   - split logical-operation stress groups" << endl
         << "-bvl0b0..2            - independent random-operation stress batches" << endl
@@ -50523,6 +51057,7 @@ bool         is_bvb1 = false;
 bool         is_bvb1_part[4] = {};
 bool         is_bvb1d_part[3] = {};
 bool         is_bvser = false;
+bool         is_gap110 = false; ///< Focused opcode-110 correctness checks, without timing output.
 bool         is_bvops = false;
 bool         is_bvops0 = false;
 bool         is_bvops1 = false;
@@ -50732,6 +51267,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_allsvser = true;
+            continue;
+        }
+        if (arg == "-gap110")
+        {
+            is_all = false;
+            is_gap110 = true;
             continue;
         }
         if (arg == "-bvser" || arg == "-bvset")
@@ -56093,6 +56634,15 @@ int main(int argc, char *argv[])
     if (ret != 0)
         return ret;
     }
+    if (is_gap110)
+    {
+        TestGapArithmeticFrames();
+        TestGapArithmeticSerialization();
+        TestGapArithmeticSharedXor();
+        TestGapArithmeticAllocator();
+        CheckAllocLeaks(false);
+        return 0;
+    }
     if (is_fast)
     {
         cout << "Fast mode: reduced stress repetitions; fixture sizes unchanged; SELECT sweeps sampled." << endl;
@@ -56528,6 +57078,10 @@ return 0;
     // when both serialization selectors are supplied.
     if (is_all || is_bvser || is_bvbasic || is_ser)
     {
+        TestGapArithmeticFrames();
+        TestGapArithmeticSerialization();
+        TestGapArithmeticSharedXor();
+        TestGapArithmeticAllocator();
         serial_transform_test::TestZeroSparseCutoff();
         serial_transform_test::TestBWTTransforms();
         serial_transform_test::TestBWTUnpackedDecoding();
