@@ -9,7 +9,7 @@ class FiremanTests(unittest.TestCase):
         clock = fireman.Schedule()
         clock.baseline = baseline
         clock.deadline = 0
-        with patch.object(clock, 'cpu', return_value=current), patch.object(fireman.time, 'monotonic', return_value=100), patch.object(fireman.random, 'uniform', return_value=900):
+        with patch.object(clock, 'cpu', return_value=current), patch.object(fireman.time, 'monotonic', return_value=100), patch.object(fireman.random, 'uniform', return_value=900), patch.object(fireman.random, 'choice', side_effect=lambda choices: choices[0]):
             message = clock.due(memory)
             self.assertIsNone(clock.due(memory))
             return message
@@ -30,6 +30,20 @@ class FiremanTests(unittest.TestCase):
         self.assertIn('fire is steady', message)
         message = self.report(None, None, {})
         self.assertNotIn('Coal', message)
+
+    def test_stoker_variants_preserve_critical_memory_warning(self):
+        """High-load remarks remain accompanied by a critical coal warning."""
+        for phrase in fireman.HIGH_LOAD_REPORTS:
+            clock = fireman.Schedule()
+            clock.baseline = (100, 10)
+            clock.deadline = 0
+            with patch.object(clock, 'cpu', return_value=(200, 15)), \
+                 patch.object(fireman.time, 'monotonic', return_value=100), \
+                 patch.object(fireman.random, 'uniform', return_value=900), \
+                 patch.object(fireman.random, 'choice', return_value=phrase):
+                message = clock.due({'total': 100, 'available': 10})
+            self.assertIn(phrase, message)
+            self.assertIn('critically low', message)
 
 
 if __name__ == '__main__':

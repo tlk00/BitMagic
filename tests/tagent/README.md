@@ -809,6 +809,8 @@ During active tests Sam reports to Engineer Joe at random intervals of 15–30
 minutes. On Linux, the average host CPU utilization between reports determines
 whether the fire is easy, steady, or working hard on a grade. Available RAM at
 or below 50% adds a coal warning; at or below 15% it adds an urgent warning.
+During high CPU load Sam rotates remarks about the stoker, its reverse and his
+crowbar; these are fictional railway colour, not hardware fault diagnostics.
 A lower cgroup memory limit is accounted for. The imagery describes resource
 conditions; it does not claim to measure actual steam or coal. If CPU or memory
 metrics are unavailable (including on macOS), the corresponding statement is

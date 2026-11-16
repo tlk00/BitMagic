@@ -4,6 +4,15 @@ import threading
 import time
 from pathlib import Path
 
+HIGH_LOAD_REPORTS = (
+    'We are pulling hard up this grade! I am feeding the fire, but this engine wants every pound of steam we can give her!',
+    'Pulling hard, Joe! If the stoker jams on this grade, reverse first, then the crowbar. In that order, damn it!',
+    'Joe, that damn stoker tried to jam again. I put it in reverse and kept the crowbar in reserve. For now!',
+    'The fire is roaring and the stoker is working overtime. If it starts swearing at me, I am putting it in reverse!',
+    'Hard work up this grade! The stoker gets the first chance, reverse gets the second, and the bloody crowbar gets the last word!',
+    'Steam is up and the stoker is earning its wages. I have a crowbar handy, just in case the coal has other ideas. Over!',
+)
+
 
 class Schedule:
     """Share one 15–30 minute clock and CPU baseline across test workers."""
@@ -12,6 +21,7 @@ class Schedule:
         self.lock = threading.Lock()
         self.deadline = float('inf')
         self.baseline = None
+        self.last_high_report = None
 
     @staticmethod
     def cpu():
@@ -51,7 +61,9 @@ class Schedule:
             if usage is None:
                 line = 'The fire is steady. Keeping watch on the boiler.'
             elif usage >= .8:
-                line = 'We are pulling hard up this grade! I am feeding the fire, but this engine wants every pound of steam we can give her!'
+                candidates = [item for item in HIGH_LOAD_REPORTS if item != self.last_high_report]
+                line = random.choice(candidates)
+                self.last_high_report = line
             elif usage >= .4:
                 line = 'The engine is working steadily. The fire and steam are holding.'
             else:
