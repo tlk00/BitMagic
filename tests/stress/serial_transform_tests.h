@@ -1411,6 +1411,8 @@ static void TestSparseVectorOpcodeIndexGather(bool xor_refs = false)
         bm::sparse_vector_serializer<SV> writer;
         writer.set_xor_ref(xor_refs); // Explicit policy, independent of BMXORCOMP.
         writer.get_bv_serializer().set_compression_level(10);
+        // Keep opcode 96 (bm::set_block_bwt_unpacked) observable on plane 2.
+        writer.get_bv_serializer().set_arithmetic_coding(false);
         if (!xor_refs) writer.get_bv_serializer().set_sblock_large_options(false);
         writer.set_bookmarks(bookmarks, 4);
         bm::sparse_vector_serial_layout<SV> layout;
@@ -1431,6 +1433,7 @@ static void TestSparseVectorOpcodeIndexGather(bool xor_refs = false)
         for (unsigned pi = 0; pi < (xor_refs ? 5u : 4u); ++pi)
         {
             const unsigned p = pi == 4 ? 31 : pi;
+            collector.set_gather_target_id(p);
             const size_t offset = index.plane_offset(p);
             const auto* row = index.get_row(p);
             TRANSFORM_CHECK(offset && row && row->serialized_size());
@@ -1461,9 +1464,10 @@ static void TestSparseVectorOpcodeIndexGather(bool xor_refs = false)
             }
             if (xor_refs) {
                 // References disable group routing. Compare the same plane
-                // with the full level-10 block policy and no references.
+                // with the fixture's level-10 block policy and no references.
                 bm::serializer<BV> ordinary;
                 ordinary.set_compression_level(10);
+                ordinary.set_arithmetic_coding(false);
                 ordinary.set_sparse_cutoff(0);
                 ordinary.set_sblock_large_options(false);
                 ordinary.set_bookmarks(bookmarks, 4);
