@@ -3027,6 +3027,10 @@ class Agent:
                 self.say('STARTUP | repository current; preparing inv_list reference')
                 self.discover_inv_reference()
                 reference_prepared = True
+                self.say('STARTUP | reference prepared; checking repository before build')
+                if self.fetch(failed) != self.commit:
+                    self.say('STARTUP | updates arrived during reference preparation; applying before build')
+                    continue
             key = {'commit': self.commit, 'pedantic': self.args.pedantic, 'avx512': self.args.avx512}
             if self.inv_reference is not None:
                 key['inv_reference'] = str(self.inv_reference)

@@ -1607,7 +1607,116 @@ class SupervisorTests(unittest.TestCase):
              patch.object(self.agent, 'discover_inv_reference', side_effect=lambda: events.append('reference')), \
              patch.object(self.agent, 'cycle', side_effect=lambda: events.append('cycle') or True):
             self.assertEqual(self.agent.run(), 0)
-        self.assertEqual(events, ['validate', 'fetch', 'reference', 'cycle'])
+        self.assertEqual(events, ['validate', 'fetch', 'reference', 'fetch', 'cycle'])
+
+    def test_update_during_reference_preparation_applied_before_build(self):
+        """An update after caching is merged before building without copying again."""
+        self.agent.args.once = True
+        old, new = 'a' * 40, 'b' * 40
+        head = [old]
+        events = []
+        def git(*args):
+            if args == ('rev-parse', 'HEAD'):
+                return head[0]
+            if args[:2] == ('status', '--porcelain'):
+                return ''
+            if args[:2] == ('diff', '--name-only'):
+                return ''
+            if args[:2] == ('merge', '--ff-only'):
+                head[0] = args[2]
+                events.append('merge')
+                return ''
+            raise AssertionError(args)
+        with patch.object(self.agent, 'validate'), \
+             patch.object(self.agent, 'fetch', side_effect=[old, new, new]), \
+             patch.object(self.agent, 'git', side_effect=git), \
+             patch.object(self.agent, 'discover_inv_reference', side_effect=lambda: events.append('reference')), \
+             patch.object(self.agent, 'cycle', side_effect=lambda: events.append('cycle ' + self.agent.commit) or True):
+            self.assertEqual(self.agent.run(), 0)
+        self.assertEqual(events, ['reference', 'merge', 'cycle ' + new])
+
+    def test_tagent_update_during_reference_preparation_restarts_before_build(self):
+        """TAgent updates after caching restart the launcher before any build."""
+        self.agent.lock_file = (self.root / 'lock').open('a')
+        old, new = 'a' * 40, 'b' * 40
+        def git(*args):
+            if args == ('rev-parse', 'HEAD'):
+                return old
+            if args[:2] == ('status', '--porcelain'):
+                return ''
+            if args[:2] == ('diff', '--name-only'):
+                return 'tests/tagent/tagent.py'
+            if args[:2] == ('merge', '--ff-only'):
+                return ''
+            raise AssertionError(args)
+        with patch.object(self.agent, 'validate'), \
+             patch.object(self.agent, 'fetch', side_effect=[old, new, new]), \
+             patch.object(self.agent, 'git', side_effect=git), \
+             patch.object(self.agent, 'discover_inv_reference') as discover, \
+             patch.object(self.agent, 'cycle') as cycle, \
+             patch.object(ta.os, 'execv', side_effect=RuntimeError('restart sentinel')):
+            with self.assertRaisesRegex(RuntimeError, 'restart sentinel'):
+                self.agent.run()
+        discover.assert_called_once()
+        cycle.assert_not_called()
+
+    def test_post_reference_fetch_failure_does_not_build(self):
+        """A failed check after a long reference copy cannot start a stale build."""
+        old = 'a' * 40
+        with patch.object(self.agent, 'validate'), \
+             patch.object(self.agent, 'fetch', side_effect=[old, ta.Failure('offline')]), \
+             patch.object(self.agent, 'git', return_value=old), \
+             patch.object(self.agent, 'discover_inv_reference') as discover, \
+             patch.object(self.agent, 'cycle') as cycle:
+            with self.assertRaisesRegex(ta.Failure, 'offline'):
+                self.agent.run()
+        discover.assert_called_once()
+        cycle.assert_not_called()
+
+    def test_post_reference_agent_update_executes_real_launcher(self):
+        """A real exec replaces the process through the launcher and preserves options."""
+        repo = self.root / 'repo'
+        launcher_dir = repo / 'tests/tagent'
+        launcher_dir.mkdir(parents=True)
+        shutil.copy2(Path(__file__).with_name('run_tagent.sh'), launcher_dir / 'run_tagent.sh')
+        fake_python = self.root / 'python-probe'
+        result = self.root / 'launcher-result'
+        fake_python.write_text('#!/bin/bash\nexec "$TAGENT_RESTART_PYTHON" "$@"\n')
+        fake_python.chmod(0o755)
+        (launcher_dir / 'tagent.py').write_text(
+            'import os, sys\nfrom pathlib import Path\n'
+            'Path(os.environ["TAGENT_RESTART_RESULT"]).write_text("\\n".join([str(os.getpid()), *sys.argv]))\n')
+        initial_pid = self.root / 'initial-pid'
+        script = self.root / 'exercise_restart.py'
+        script.write_text('import os, sys\n'
+            'from pathlib import Path\n'
+            'sys.path.insert(0, ' + repr(str(Path(__file__).parent.resolve())) + ')\n'
+            'import tagent\n'
+            'sys.argv = ["tagent", "--no-sound", "--once", "--min-free-gb", "0.001", "--log-dir", ' + repr(str(self.root / 'child-state')) + ']\n'
+            'a = tagent.Agent(tagent.arguments())\n'
+            'a.repo = Path(' + repr(str(repo)) + ')\n'
+            'a.lock_file = open(' + repr(str(self.root / 'child-lock')) + ', "w")\n'
+            'a.validate = lambda: None\n'
+            'a.discover_inv_reference = lambda: None\n'
+            'tips = iter(["a" * 40, "b" * 40, "b" * 40])\n'
+            'a.fetch = lambda *_: next(tips)\n'
+            'def git(*args):\n'
+            '    if args == ("rev-parse", "HEAD"): return "a" * 40\n'
+            '    if args[:2] == ("diff", "--name-only"): return "tests/tagent/tagent.py"\n'
+            '    return ""\n'
+            'a.git = git\n'
+            'Path(' + repr(str(initial_pid)) + ').write_text(str(os.getpid()))\n'
+            'a.run()\n')
+        env = dict(os.environ, PYTHON=str(fake_python), TAGENT_RESTART_PYTHON=sys.executable,
+                   TAGENT_RESTART_RESULT=str(result))
+        completed = subprocess.run([sys.executable, str(script)], env=env, text=True,
+                                   capture_output=True, timeout=30)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        lines = result.read_text().splitlines()
+        self.assertEqual(lines[0], initial_pid.read_text())
+        self.assertEqual(lines[1], str(launcher_dir / 'tagent.py'))
+        self.assertIn('--once', lines)
+        self.assertIn('--resume-cycle', lines)
 
     def test_check_validates_reference_without_fetch(self):
         """Local check keeps checking reference while remaining offline."""

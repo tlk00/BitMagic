@@ -611,6 +611,9 @@ On normal startup, after basic checkout and environment checks, TAgent fetches
 and applies repository updates before discovering or copying reference data.
 If TAgent itself changed, it restarts before reference preparation. `--check`
 continues to validate locally without fetching.
+After reference preparation, TAgent fetches again before building so commits
+arriving during a long copy are applied first. An updated TAgent restarts its
+launcher; the prepared cache can then be reused.
 
 On Linux, an existing `/mnt/c/TAgent-cache` is used automatically for a local
 reference copy. Select another existing writable directory with `--inv-cache-dir
