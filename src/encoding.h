@@ -406,6 +406,10 @@ public:
     /// read 1 bit
     unsigned get_bit() BMDECNOEXCEPT(TDecoder);
 
+    /// Return already fetched bits not yet consumed; does not advance the source.
+    unsigned pending_bits() const BMNOEXCEPT
+        { return 32u - used_bits_; }
+
     /// Binary Interpolative array decode
     void bic_decode_u16(bm::gap_word_t* arr, unsigned sz,
                         bm::gap_word_t lo, bm::gap_word_t hi) BMDECNOEXCEPT(TDecoder)

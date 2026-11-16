@@ -361,6 +361,7 @@ inline const char* serialization_opcode_name(unsigned code)
     case bm::set_block_bwt_unpacked: return "set_block_bwt_unpacked";
     case bm::set_block_arithmetic: return "set_block_arithmetic";
     case bm::set_block_bit_0runs_arithmetic: return "set_block_bit_0runs_arithmetic";
+    case bm::set_block_gap_arithmetic: return "set_block_gap_arithmetic";
     case bm::set_block_bwt_full_post: return "set_block_bwt_full_post";
     case bm::set_block_periodic_groups: return "set_block_periodic_groups";
     case bm::set_block_bwt_periodic_post: return "set_block_bwt_periodic_post";
@@ -382,7 +383,8 @@ inline const char* serialization_opcode_name(unsigned code)
 inline const char* serialization_opcode_group(unsigned code)
 {
     if (code & 128u) return "zero/full runs";
-    if (code == bm::set_block_arithmetic || code == bm::set_block_bit_0runs_arithmetic) return "arithmetic";
+    if (code == bm::set_block_arithmetic || code == bm::set_block_bit_0runs_arithmetic ||
+        code == bm::set_block_gap_arithmetic) return "arithmetic";
     if (code == bm::set_block_gap_xor_framed) return "GAP-XOR";
     if (code == bm::set_block_bwt ||
         code == bm::set_block_bwt_unpacked)

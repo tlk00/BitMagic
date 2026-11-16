@@ -54,6 +54,7 @@ For more information please visit:  http://bitmagic.io
 #include "bmxor.h"
 #include "bmbwt.h"
 #include "bmarithmetic.h"
+#include "bmgaparithmetic.h"
 #include "bmblockselection.h"
 #include "bmperiodic.h"
 #include "bmgaproute.h"
@@ -202,6 +203,9 @@ public:
     }
 
     /** Enable opcode 107 (bm::set_block_bit_0runs_arithmetic) for 0runs winners at levels 7 and higher.
+        Opcode 110 (bm::set_block_gap_arithmetic) competes at L7 through L10.
+        L7 requires 606 GAP words and 24 bytes saved. L8/L9/L10 require 606/234/234
+        GAP words and a strictly smaller complete record.
         The level-7 and level-8 presets select pooled nibbles.
         Opcode 106 (bm::set_block_arithmetic) competes at levels 8 and higher,
         with a raw-block fallback at 7.
@@ -704,6 +708,27 @@ protected:
         size_type stats[256]; ///< Incumbent compression counters.
     };
 
+    /** Compare opcode 110 with the completed native/arithmetic incumbent.
+        @param blk Original or residual block, before GAP cleanup.
+        @param enc Writable record channel.
+        @param begin Incumbent opcode position, borrowed until replacement.
+        @param before Compression counters before this record.
+        @param shared_meta_bits Following shared metadata extent, or ~0u.
+        @param alternate Optional alternate layout, with its own gain cutoff.
+        Levels 7 through 9 compare complete records including all overhead.
+    */
+    void try_gap_arithmetic(const bm::word_t* blk, bm::encoder& enc,
+        unsigned char* begin, const size_type* before, unsigned shared_meta_bits,
+        residual_layout* alternate);
+
+    /** Parse the incumbent's frozen GAP base and borrowed exception bit views.
+        @param data Borrowed complete record; remains valid until trial encoding finishes.
+        @param size Complete record byte count.
+        @return True for supported 61/62/94 records, false for other incumbents.
+        Populates retained gap_arithmetic_workspace_; changes no source bytes.
+    */
+    bool parse_gap_arithmetic(const unsigned char* data, size_t size);
+
     /** Retain a candidate if it improves the alternate layout.
         @param layout Optional borrowed alternate winner.
         @param data Borrowed record bytes.
@@ -1057,6 +1082,7 @@ private:
     bm::heap_vector<unsigned char, allocator_type, true> arithmetic_candidate_; ///< Retained trial bytes.
     bm::heap_vector<bm::word_t, allocator_type, true> arithmetic_words_; ///< Retained copied-word workspace for opcode 107.
     bm::heap_vector<bm::gap_word_t, allocator_type, true> arithmetic_runs_; ///< Retained run lengths for opcode 107.
+    bm::gap_arithmetic_encoder_workspace<allocator_type> gap_arithmetic_workspace_; ///< Retained opcode-110 trials.
     void (*arithmetic_trial_observer_)(void*, const arithmetic_trial_observation&) = nullptr; ///< Optional completed-trial callback.
     void* arithmetic_trial_context_ = nullptr; ///< Borrowed callback state.
     bool gap_route_diagnostics_ = false;
@@ -1263,7 +1289,7 @@ protected:
     */
     void read_arithmetic_block(decoder_type& decoder, bm::word_t* blk)
         { bm::arithmetic_block_decoder::decode(decoder, blk); }
-    /** Dispatch framed BIT payloads (72, 96, 106, 107).
+    /** Dispatch framed BIT payloads (72, 96, 106, 107, 110).
         @param decoder Borrowed byte channel positioned after the opcode.
         @param type One of the supported BIT payload opcodes.
         @param blk Exclusive output, or null for traversal.
@@ -1295,6 +1321,7 @@ protected:
     bm::heap_vector<unsigned, Alloc, true> wave_occupied_; ///< Reusable expanded occupied waves.
     bm::heap_vector<unsigned, Alloc, true> wave_full_; ///< Opcode-109 FULL-block positions.
     bm::heap_vector<unsigned, Alloc, true> arithmetic_word_positions_; ///< Copied-word scatter positions for opcode 107.
+    bm::gap_arithmetic_decoder_workspace<Alloc> gap_arithmetic_workspace_; ///< Opcode-110 allocator-owned scratch.
     bm::gap_word_t*   id_array_ = 0; ///< ptr to idx array for temp decode use
     unsigned*         sb_id_array_=0; ///< ptr to super-block idx array (temp)
     bool large_sb_inverse_=false;
@@ -3466,7 +3493,8 @@ const unsigned char set_block_arithmetic = 106; //!< Opcode 106 (bm::set_block_a
 const unsigned char set_block_bit_0runs_arithmetic = 107; //!< Opcode 107 (bm::set_block_bit_0runs_arithmetic): copied 0runs words with bounded virtual-zero arithmetic.
 const unsigned char set_sblock_bienc_wave_runs = 108; //!< Opcode 108 (bm::set_sblock_bienc_wave_runs): experimental adaptive BIC/gamma map and paired-run payload; zero extension bit after width.
 const unsigned char set_sblock_bienc_wave_hierarchical = 109; //!< Opcode 109 (bm::set_sblock_bienc_wave_hierarchical): two-level wave maps, optional FULL-block map and up to eight run/gap dictionary entries.
-// 110..127 VACANT: unassigned.
+const unsigned char set_block_gap_arithmetic = 110; //!< Opcode 110 (bm::set_block_gap_arithmetic): two-context magnitude GAP base with unchanged BIC exceptions.
+// 111..127 VACANT: unassigned.
 // 128..255 are packed zero-run framing, NOT available for ordinary opcodes.
 // Retired experimental streams require their original decoder. In particular,
 // earlier experiments using 90 or 97 require their original decoder.
@@ -3481,7 +3509,7 @@ constexpr unsigned char serialization_new_opcodes[] = {
     set_block_periodic_interleaved_fixed, set_block_bwt_interleaved_fixed,
     set_sblock_bienc_adaptive,
     set_block_gap_xor_framed, set_block_bwt_unpacked, bm::set_block_arithmetic, bm::set_block_bit_0runs_arithmetic,
-    set_sblock_bienc_wave_runs, set_sblock_bienc_wave_hierarchical, set_sblock_bienc_large, bm::set_block_xor_ref8_h64, bm::set_block_xor_gather, bm::set_block_xor_ref_delta, bm::set_block_xor_parallel_gather, bm::set_block_xor_ref_shared
+    set_sblock_bienc_wave_runs, set_sblock_bienc_wave_hierarchical, set_sblock_bienc_large, bm::set_block_xor_ref8_h64, bm::set_block_xor_gather, bm::set_block_xor_ref_delta, bm::set_block_xor_parallel_gather, bm::set_block_xor_ref_shared, bm::set_block_gap_arithmetic
 };
 constexpr bool serialization_new_opcode_numbers_valid()
 {
@@ -3766,6 +3794,9 @@ void deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_transform_block(
         break;
     case bm::set_block_bit_0runs_arithmetic:
         bm::arithmetic_0runs_decoder::decode(decoder, blk, arithmetic_word_positions_);
+        break;
+    case bm::set_block_gap_arithmetic:
+        bm::gap_arithmetic_decoder::decode(decoder, blk, gap_arithmetic_workspace_, tb_wflags_);
         break;
     case bm::set_block_bwt_unpacked:
         read_bwt_unpacked_block(decoder, blk);
@@ -6972,11 +7003,17 @@ unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
     if (!arithmetic_enabled_ || compression_level_ < 7 || BM_IS_GAP(blk))
     {
         const auto begin = enc.get_pos();
+        size_type before[256];
+        if (arithmetic_enabled_ && bm::gap_arithmetic_policy::gate(compression_level_))
+        {
+            ::memcpy(before, compression_stat_, sizeof(before));
+        }
         const auto type = encode_native_block(blk, sub_stat, nb, enc, try_gap);
         if (!type)
         {
             score_residual_layout(alternate, begin, size_t(enc.get_pos() - begin),
                                   enc.retained_padding(), compression_stat_);
+            try_gap_arithmetic(blk, enc, begin, before, shared_meta_bits, alternate);
         }
         return type;
     }
@@ -7100,13 +7137,12 @@ unsigned char serializer<BV>::encode_selected_block(const bm::word_t* blk,
             }
         } // for mode
     }
-    // At level 7 full-block arithmetic is only the permitted raw fallback.
-    if (compression_level_ == 7 &&
-        (!allow_raw_fallback || *begin != bm::set_block_bit))
+    // Level 7 limits opcode 106 to raw fallback, independently of opcode 110.
+    if (compression_level_ != 7 || (allow_raw_fallback && *begin == bm::set_block_bit))
     {
-        return 0;
+        try_block_arithmetic(blk, nb, enc, begin, best_size, before, shared_meta_bits, alternate);
     }
-    try_block_arithmetic(blk, nb, enc, begin, best_size, before, shared_meta_bits, alternate);
+    try_gap_arithmetic(blk, enc, begin, before, shared_meta_bits, alternate);
     return 0;
 }
 
@@ -7244,6 +7280,11 @@ void deserializer<BV, DEC>::joint_residual(unsigned op, DEC& dec, bm::bit_in<DEC
 {
     // Decode the residual first so the same bit reader can continue into the
     // reference coordinates. A null destination consumes without storing it.
+    if (op == bm::set_block_gap_arithmetic)
+    {
+        bm::gap_arithmetic_decoder::decode(dec, dst, this->gap_arithmetic_workspace_, this->tb_wflags_, &bits);
+        return;
+    }
     if (op == bm::set_block_arithmetic)
     {
         bm::arithmetic_block_decoder::decode(dec, dst, &bits);
@@ -7375,12 +7416,13 @@ bool serializer<BV>::xor_residual_bits(const unsigned char* residual, size_t siz
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         break;
     default:
         return false;
     } // switch op
     count = unsigned(size - 1) * 8;
-    if ((op >= bm::set_block_gap_bienc_v3 && op <= bm::set_block_gap_egamma_v3) || op == bm::set_block_bwt_unpacked || op == bm::set_block_arithmetic || op == bm::set_block_bit_0runs_arithmetic)
+    if ((op >= bm::set_block_gap_bienc_v3 && op <= bm::set_block_gap_egamma_v3) || op == bm::set_block_bwt_unpacked || op == bm::set_block_arithmetic || op == bm::set_block_bit_0runs_arithmetic || op == bm::set_block_gap_arithmetic)
     {
         count -= padding;
     }
@@ -9661,6 +9703,222 @@ void decode_min_max(BIN& bin, bm::gap_word_t gap_head, unsigned head_v3,
 
 
 
+/** Freeze the completed BIC winner's decomposition for opcode 110 trials. */
+template<class BV>
+bool serializer<BV>::parse_gap_arithmetic(const unsigned char* data, size_t size)
+{
+    auto& ws = gap_arithmetic_workspace_;
+    bm::decoder source(data);
+    unsigned code = source.get_8();
+    const bool outer = code == bm::set_block_gap_xor_framed;
+    if (outer)
+    {
+        code = source.get_8();
+    }
+    auto* gap = ws.base.data();
+    if (code == bm::set_block_bit_1bit)
+    {
+        bm::gap_set_all(gap, bm::gap_max_bits, 0);
+        bm::gap_add_value(gap, source.get_16());
+    }
+    else
+    {
+        if (code != bm::set_block_gap_bienc_v3 && code != bm::set_block_gap_bienc_v3s &&
+            code != bm::set_block_gap_egamma_v3)
+        {
+            return false;
+        }
+        const auto origin = source.get_pos();
+        bm::bit_in<bm::decoder> bits(source);
+        auto position = [&]()
+        {
+            return unsigned(source.get_pos() - origin) * 8 - bits.pending_bits();
+        };
+        if (code == bm::set_block_gap_egamma_v3)
+        {
+            const unsigned runs = bits.gamma() + 1;
+            bm::serialization_require(runs && runs < 8192);
+            const unsigned start = bits.get_bit(), gamma = bits.get_bit();
+            gap[0] = bm::gap_word_t((runs << 3) | start);
+            unsigned previous = 0;
+            for (unsigned i = 1; i < runs; ++i)
+            {
+                const unsigned value = gamma ? bits.gamma8() : bits.get_16_no();
+                previous = gamma && i > 1 ? previous + value : value;
+                gap[i] = bm::gap_word_t(previous);
+            } // for i
+            gap[runs] = 65535;
+        }
+        else
+        {
+            const unsigned control = code == bm::set_block_gap_bienc_v3 ? bits.get_bits(8) : 0;
+            const bm::gap_word_t head = bm::gap_word_t(bits.delta16s());
+            const unsigned runs = head >> 3;
+            bm::serialization_require(runs && runs < 8192);
+            gap[0] = head & bm::gap_word_t(~6u);
+            gap[runs] = 65535;
+            if (code == bm::set_block_gap_bienc_v3s)
+            {
+                bm::serialization_require(runs >= 3);
+                const unsigned first = (head & bm::h2f_min_v_8bit) ? bits.gamma8() : bits.get_16_no();
+                const unsigned tail = (head & bm::h2f_max_v_8bit) ? bits.gamma8() : bits.get_16_no();
+                gap[1] = bm::gap_word_t(first);
+                gap[runs - 1] = bm::gap_word_t(65535 - tail);
+                bits.bic_decode_u16(gap + 2, runs - 3, bm::gap_word_t(first), gap[runs - 1]);
+            }
+            else
+            {
+                if ((control & bm::h3f_exceptions) && runs < bm::gap_len_cut_off_v3)
+                {
+                    for (unsigned i = 1; i < runs; ++i)
+                    {
+                        const unsigned delta = bits.delta16s();
+                        gap[i] = bm::gap_word_t(delta + (i > 1 ? gap[i - 1] : 0));
+                    } // for i
+                }
+                else
+                {
+                    bm::serialization_require(runs >= 3);
+                    bm::gap_word_t first = 0, maximum = 0, c0 = 0, c1 = 0;
+                    bm::decode_min_max(bits, head, control, first, maximum);
+                    bm::decode_mins(bits, control, c0, c1);
+                    gap[1] = first;
+                    gap[runs - 1] = bm::gap_word_t(maximum + 1);
+                    bits.bic_decode_u16(gap + 2, runs - 3, bm::gap_word_t(first + 1), maximum);
+                    ws.correction0 = c0;
+                    ws.correction1 = c1;
+                    bm::gap_restore_mins(gap, c0, c1);
+                }
+                if (control & bm::h3f_exceptions)
+                {
+                    ws.inner.data = origin;
+                    ws.inner.offset = position();
+                    for (unsigned chain = 0; chain < 2; ++chain)
+                    {
+                        unsigned n = 0;
+                        const unsigned header = bits.decode_array(ws.positions.data(), tb_wflags_, &n);
+                        if (header & bm::h3f_ex_arr_ex_EOC)
+                        {
+                            break;
+                        }
+                        bm::serialization_require(!chain);
+                    } // for chain
+                    ws.inner.count = position() - ws.inner.offset;
+                }
+            }
+        }
+#ifdef BM_DBG_SERIAL
+        if (code == bm::set_block_gap_bienc_v3)
+        {
+            source.seek(3); // Existing opcode-61 diagnostic footer, outside its bit frame.
+        }
+#endif
+    }
+    if (outer)
+    {
+        ws.outer.data = source.get_pos();
+        bm::bit_in<bm::decoder> bits(source);
+        const unsigned n = bits.gamma(), minimum = bits.gamma();
+        bm::serialization_require(n && n <= 4095 && minimum && minimum <= 65536);
+        const unsigned correction = minimum - 1;
+        bm::serialization_require(bm::id64_t(n - 1) * correction <= 65535);
+        bits.bic_decode_u16(ws.positions.data(), n, 0,
+                           bm::gap_word_t(65535 - (n - 1) * correction));
+        ws.outer.count = unsigned(source.get_pos() - ws.outer.data) * 8 - bits.pending_bits();
+    }
+    bm::serialization_require(source.get_pos() == data + size);
+    return true;
+}
+
+/** Select only after preserving the completed incumbent and its BIC exceptions. */
+template<class BV>
+void serializer<BV>::try_gap_arithmetic(const bm::word_t* blk, bm::encoder& enc,
+    unsigned char* begin, const size_type* before, unsigned shared_meta_bits,
+    residual_layout* alternate)
+{
+    const unsigned gate = bm::gap_arithmetic_policy::gate(compression_level_);
+    if (!arithmetic_enabled_ || !gate ||
+        (*begin != bm::set_block_gap_bienc_v3 && *begin != bm::set_block_gap_bienc_v3s &&
+         *begin != bm::set_block_gap_xor_framed))
+    {
+        return;
+    }
+    unsigned original_words = BM_IS_GAP(blk) ? bm::gap_length(BMGAP_PTR(blk)) : 0;
+    if (BM_IS_GAP(blk) && original_words < gate)
+    {
+        return;
+    }
+    auto& ws = gap_arithmetic_workspace_;
+    ws.init();
+    if (!BM_IS_GAP(blk))
+    {
+        if (!bm::bit_to_gap(ws.base.data(), blk, 8192) || bm::gap_length(ws.base.data()) < gate)
+        {
+            return;
+        }
+        original_words = bm::gap_length(ws.base.data());
+    }
+    const size_t original_size = size_t(enc.get_pos() - begin);
+    if (!parse_gap_arithmetic(begin, original_size))
+    {
+        return;
+    }
+    if (!ws.correction0 && !ws.correction1 && (ws.base[0] >> 3) >= 4)
+    {
+        bm::gap_word_t c0 = 0, c1 = 0;
+        bm::gap_calc_mins(ws.base.data(), c0, c1);
+        ws.correction0 = c0 ? c0 - 1u : 0;
+        ws.correction1 = c1 ? c1 - 1u : 0;
+    }
+    const size_t original_score = arithmetic_record_size(begin, original_size,
+                                    enc.retained_padding(), shared_meta_bits);
+    const size_t alternate_score = alternate ? alternate->best_size : 0;
+    size_t best_score = original_score, best_size = 0;
+    unsigned best_padding = 0;
+    size_type stats[256];
+    ::memcpy(stats, before, sizeof(stats));
+    ++stats[bm::set_block_gap_arithmetic];
+    for (unsigned reduced = 0; reduced < 2; ++reduced)
+    {
+        if (reduced && !(ws.correction0 || ws.correction1))
+        {
+            continue;
+        }
+        bm::encoder candidate(ws.trial.data(), ws.trial.size());
+        candidate.put_8(bm::set_block_gap_arithmetic);
+        bm::gap_arithmetic_encoder::encode(candidate, ws.base.data(),
+            reduced ? ws.correction0 : 0, reduced ? ws.correction1 : 0, ws.inner, ws.outer);
+        const size_t score = arithmetic_record_size(ws.trial.data(), candidate.size(),
+                                                   candidate.retained_padding(), shared_meta_bits);
+        if (score < best_score && bm::gap_arithmetic_policy::accepts(
+                compression_level_, original_words, original_score, score))
+        {
+            best_score = score;
+            best_size = candidate.size();
+            best_padding = candidate.retained_padding();
+            ::memcpy(ws.best.data(), ws.trial.data(), best_size);
+        }
+        if (alternate)
+        {
+            const size_t score_alt = arithmetic_record_size(ws.trial.data(), candidate.size(),
+                candidate.retained_padding(), alternate->metadata_bits);
+            if (bm::gap_arithmetic_policy::accepts(
+                    compression_level_, original_words, alternate_score, score_alt))
+            {
+                score_residual_layout(alternate, ws.trial.data(), candidate.size(),
+                                      candidate.retained_padding(), stats);
+            }
+        }
+    } // for reduced
+    if (best_size)
+    {
+        enc.set_pos(begin);
+        enc.memcpy(ws.best.data(), best_size);
+        enc.retain_padding(best_padding);
+        ::memcpy(compression_stat_, stats, sizeof(stats));
+    }
+}
+
 template<typename DEC, typename BLOCK_IDX, class Alloc>
 void
 deseriaizer_base<DEC, BLOCK_IDX, Alloc>::read_gap_block(decoder_type&   decoder,
@@ -11164,6 +11422,7 @@ dec_last_size = dec_size;
             case bm::set_block_bwt_unpacked:
             case bm::set_block_arithmetic:
             case bm::set_block_bit_0runs_arithmetic:
+            case bm::set_block_gap_arithmetic:
                 this->read_transform_block(dec, btype, nullptr);
                 break;
             case bm::set_block_bit_digest0:
@@ -11447,6 +11706,7 @@ dec_last_size = dec_size;
         case bm::set_block_bwt_unpacked:
         case bm::set_block_arithmetic:
         case bm::set_block_bit_0runs_arithmetic:
+        case bm::set_block_gap_arithmetic:
         {
             if (btype == bm::set_block_bwt_unpacked && !blk &&
                 !skip_payload && !x_ref_d64_)
@@ -11962,6 +12222,7 @@ bool deserializer<BV, DEC>::is_single_block_payload_marker(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         return true;
     default:
         return false;
@@ -12402,6 +12663,7 @@ void serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::next()
         case bm::set_block_bwt_unpacked:
         case bm::set_block_arithmetic:
         case bm::set_block_bit_0runs_arithmetic:
+        case bm::set_block_gap_arithmetic:
             state_ = e_bit_block;
             break;
         case set_block_gap:
@@ -12611,6 +12873,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_ASSIGN(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, dst_block);
         break;
     case set_block_bit:
@@ -12718,6 +12981,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_OR(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         bm::bit_block_or(dst_block, tmp_block);
         break;
@@ -12807,6 +13071,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_AND(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, dst_block ? tmp_block : 0);
         if (dst_block) bm::bit_block_and(dst_block, tmp_block);
         break;
@@ -12933,6 +13198,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_XOR(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         bm::bit_block_xor(dst_block, tmp_block);
         break;
@@ -13050,6 +13316,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_SUB(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         bm::bit_block_sub(dst_block, tmp_block);
         break;
@@ -13164,6 +13431,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
@@ -13264,6 +13532,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_A(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, 0);
         break;
     case set_block_bit:
@@ -13354,6 +13623,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_AND(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
@@ -13450,6 +13720,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_OR(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
@@ -13562,6 +13833,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_XOR(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
@@ -13675,6 +13947,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_AB(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
@@ -13788,6 +14061,7 @@ serial_stream_iterator<DEC, BLOCK_IDX, Alloc>::get_bit_block_COUNT_SUB_BA(
     case bm::set_block_bwt_unpacked:
     case bm::set_block_arithmetic:
     case bm::set_block_bit_0runs_arithmetic:
+    case bm::set_block_gap_arithmetic:
         this->read_transform_block(decoder_, block_type_, tmp_block);
         goto count_tmp;
     case set_block_bit:
@@ -14634,7 +14908,8 @@ iterator_deserializer<BV, SerialIterator>::deserialize(
                 (sit.get_block_type() == bm::set_block_bwt ||
                  sit.get_block_type() == bm::set_block_bwt_unpacked ||
                  sit.get_block_type() == bm::set_block_arithmetic ||
-                 sit.get_block_type() == bm::set_block_bit_0runs_arithmetic))
+                 sit.get_block_type() == bm::set_block_bit_0runs_arithmetic ||
+                 sit.get_block_type() == bm::set_block_gap_arithmetic))
             {
                 // Consume and validate without deoptimizing FULL or running BWT.
                 sit.get_bit_block(nullptr, temp_block, bm::set_ASSIGN);

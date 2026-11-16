@@ -239,6 +239,196 @@ private:
     unsigned virtual_count_ = 0; ///< Synthesized zero lookahead bits.
 };
 
+/** @internal Adaptive arithmetic symbol producer for a borrowed bit accumulator.
+    @ingroup bvserial
+*/
+template<class BitOut>
+class arithmetic_symbol_encoder
+{
+public:
+    /// Start a fresh interval at the current position of the borrowed output.
+    explicit arithmetic_symbol_encoder(BitOut& output) : bits(output) { bits.flush_if_full(); }
+    /// Encode one in-range symbol using the supplied initialized model, then update it.
+    template<class Model> void put(Model& model, unsigned symbol);
+    /// Terminate once and return the number of emitted payload bits including termination.
+    unsigned finish();
+private:
+    /// Emit the resolved bit followed by all deferred underflow complements.
+    void emit(unsigned bit);
+    BitOut& bits; ///< Borrowed enclosing accumulator.
+    unsigned low = 0; ///< Inclusive lower endpoint.
+    unsigned high = ~0u; ///< Inclusive upper endpoint.
+    unsigned pending = 0; ///< Deferred underflow bits.
+    unsigned count = 0; ///< Emitted bits in this interval stream.
+};
+
+template<class BitOut>
+void arithmetic_symbol_encoder<BitOut>::emit(unsigned bit)
+{
+    bits.put_bit(bit);
+    ++count;
+    while (pending)
+    {
+        bits.put_bit(bit ^ 1u);
+        ++count;
+        --pending;
+    } // while pending
+}
+
+template<class BitOut>
+unsigned arithmetic_symbol_encoder<BitOut>::finish()
+{
+    ++pending;
+    emit(low < 0x40000000u ? 0 : 1);
+    return count;
+}
+
+template<class BitOut>
+template<class Model>
+void arithmetic_symbol_encoder<BitOut>::put(Model& model, unsigned symbol)
+{
+    const unsigned left = model.prefix(symbol);
+    const unsigned right = left + model.frequency(symbol);
+    const bm::id64_t range = bm::id64_t(high) - low + 1;
+    const unsigned base = low;
+    const unsigned total = model.total();
+    // Subdivide the inclusive interval using cumulative frequencies.
+    // The 64-bit range represents the initial width of 2^32 exactly.
+    high = base + unsigned(range * right / total - 1);
+    low = base + unsigned(range * left / total);
+    BM_ASSERT(low <= high);
+    for (;;)
+    {
+        const unsigned difference = low ^ high;
+        if (!(difference & 0x80000000u))
+        {
+            // Collapse the common MSB prefix into one output chunk.
+            // Cap at 31 to keep all shifts and bit_out counts defined.
+            const unsigned shift = difference ?
+                31 - bm::bit_scan_reverse32(difference) : 31;
+            const unsigned prefix = bm::arithmetic_reverse_chunk(
+                low >> (32 - shift), shift);
+            if (pending)
+            {
+                // Underflow complements follow the first resolved bit,
+                // before the remaining common prefix bits.
+                emit(prefix & 1u);
+                if (shift > 1)
+                {
+                    bits.put_bits(prefix >> 1, shift - 1);
+                    count += shift - 1;
+                }
+            }
+            else
+            {
+                bits.put_bits(prefix, shift);
+                count += shift;
+            }
+            // put_bits may retain a full word; emit/guard put_bit
+            // calls require space. Flush that word without padding.
+            bits.flush_if_full();
+            low <<= shift;
+            high = (high << shift) | (~0u >> (32 - shift));
+            continue;
+        }
+        else if ((low >= 0x40000000u) && (high < 0xC0000000u))
+        {
+            // E3 underflow: the interval straddles the midpoint but
+            // fits in the middle half. Defer output and expand it.
+            ++pending;
+            low -= 0x40000000u;
+            high -= 0x40000000u;
+        }
+        else
+        {
+            break;
+        }
+        low <<= 1;
+        high = (high << 1) | 1u;
+    } // for renormalization
+    model.update(symbol);
+}
+
+/** @internal Adaptive arithmetic symbol consumer over a bounded payload reader.
+    @ingroup bvserial
+*/
+template<class Reader>
+class arithmetic_symbol_decoder
+{
+public:
+    /// Seed a fresh code register from the borrowed physical or virtual reader.
+    explicit arithmetic_symbol_decoder(Reader& reader);
+    /// Decode and return one symbol, advancing the interval and supplied model.
+    template<class Model> unsigned get(Model& model);
+private:
+    Reader& input; ///< Borrowed payload reader with caller-selected lookahead.
+    unsigned low = 0; ///< Inclusive lower endpoint.
+    unsigned high = ~0u; ///< Inclusive upper endpoint.
+    unsigned code = 0; ///< Current code register.
+};
+
+template<class Reader>
+arithmetic_symbol_decoder<Reader>::arithmetic_symbol_decoder(Reader& reader) : input(reader)
+{
+    for (unsigned i = 0; i < 32; ++i)
+    {
+        code = (code << 1) | input.get();
+    } // for i
+}
+
+template<class Reader>
+template<class Model>
+unsigned arithmetic_symbol_decoder<Reader>::get(Model& model)
+{
+    bm::serialization_require((code >= low) && (code <= high));
+    const bm::id64_t range = bm::id64_t(high) - low + 1;
+    const unsigned total = model.total();
+    // Map the code point back to a cumulative-frequency position. The
+    // +1/-1 adjustments invert the encoder's inclusive interval rounding.
+    const unsigned value = unsigned(((bm::id64_t(code) - low + 1) * total - 1) / range);
+    // The validated code interval and bounded 64-bit numerator imply
+    // value < total. Keep input validation on the interval above.
+    BM_ASSERT(value < total);
+    unsigned left;
+    const unsigned symbol = model.find(value, left);
+    const unsigned right = left + model.frequency(symbol);
+    const unsigned base = low;
+    high = base + unsigned(range * right / total - 1);
+    low = base + unsigned(range * left / total);
+    for (;;)
+    {
+        const unsigned difference = low ^ high;
+        if (!(difference & 0x80000000u))
+        {
+            // Collapse consecutive E1/E2 steps. Shifting unsigned values
+            // discards the common prefix, including all E2 corrections.
+            // Cap at 31 for defined shifts and bit_in's chunk interface.
+            const unsigned shift = difference ?
+                31 - bm::bit_scan_reverse32(difference) : 31;
+            low <<= shift;
+            high = (high << shift) | (~0u >> (32 - shift));
+            code = (code << shift) | input.get_msb(shift);
+            continue;
+        }
+        else if ((low >= 0x40000000u) && (high < 0xC0000000u))
+        {
+            // Mirror E3 underflow in both the interval and code register.
+            low -= 0x40000000u;
+            high -= 0x40000000u;
+            code -= 0x40000000u;
+        }
+        else
+        {
+            break;
+        }
+        low <<= 1;
+        high = (high << 1) | 1u;
+        code = (code << 1) | input.get();
+    } // for renormalization
+    model.update(symbol);
+    return symbol;
+}
+
 /** Internal arithmetic consumer supporting reconstruction and traversal-only use.
     @ingroup bvserial
 */
@@ -495,20 +685,7 @@ unsigned arithmetic_words_encoder::encode_impl(Encoder& enc,
         bits.put_bits(0, 19);
         bm::arithmetic_model<Bytes ? 256 : 16> model;
         model.init();
-        unsigned low = 0, high = ~0u, pending = 0;
-        auto emit = [&](unsigned bit)
-        {
-            bits.put_bit(bit);
-            ++count;
-            // Middle-half steps deferred these bits. Once the leading bit is
-            // resolved, each deferred bit has its complement.
-            while (pending)
-            {
-                bits.put_bit(bit ^ 1u);
-                ++count;
-                --pending;
-            } // while pending
-        };
+        bm::arithmetic_symbol_encoder<decltype(bits)> coder(bits);
         constexpr unsigned width = Bytes ? 8 : 4;
         const unsigned symbols = word_count * 32 / width;
         const unsigned mask = (1u << width) - 1;
@@ -518,70 +695,10 @@ unsigned arithmetic_words_encoder::encode_impl(Encoder& enc,
         {
             const unsigned pos = i * width;
             const unsigned symbol = (block[pos >> 5] >> (pos & 31)) & mask;
-            const unsigned left = model.prefix(symbol);
-            const unsigned right = left + model.frequency(symbol);
-            const bm::id64_t range = bm::id64_t(high) - low + 1;
-            const unsigned base = low;
-            const unsigned total = model.total();
-            // Subdivide the inclusive interval using cumulative frequencies.
-            // The 64-bit range represents the initial width of 2^32 exactly.
-            high = base + unsigned(range * right / total - 1);
-            low = base + unsigned(range * left / total);
-            BM_ASSERT(low <= high);
-            for (;;)
-            {
-                const unsigned difference = low ^ high;
-                if (!(difference & 0x80000000u))
-                {
-                    // Collapse the common MSB prefix into one output chunk.
-                    // Cap at 31 to keep all shifts and bit_out counts defined.
-                    const unsigned shift = difference ?
-                        31 - bm::bit_scan_reverse32(difference) : 31;
-                    const unsigned prefix = bm::arithmetic_reverse_chunk(
-                        low >> (32 - shift), shift);
-                    if (pending)
-                    {
-                        // Underflow complements follow the first resolved bit,
-                        // before the remaining common prefix bits.
-                        emit(prefix & 1u);
-                        if (shift > 1)
-                        {
-                            bits.put_bits(prefix >> 1, shift - 1);
-                            count += shift - 1;
-                        }
-                    }
-                    else
-                    {
-                        bits.put_bits(prefix, shift);
-                        count += shift;
-                    }
-                    // put_bits may retain a full word; emit/guard put_bit
-                    // calls require space. Flush that word without padding.
-                    bits.flush_if_full();
-                    low <<= shift;
-                    high = (high << shift) | (~0u >> (32 - shift));
-                    continue;
-                }
-                else if ((low >= 0x40000000u) && (high < 0xC0000000u))
-                {
-                    // E3 underflow: the interval straddles the midpoint but
-                    // fits in the middle half. Defer output and expand it.
-                    ++pending;
-                    low -= 0x40000000u;
-                    high -= 0x40000000u;
-                }
-                else
-                {
-                    break;
-                }
-                low <<= 1;
-                high = (high << 1) | 1u;
-            } // for renormalization
-            model.update(symbol);
+            coder.put(model, symbol);
         } // for i
         // Select a terminating interval prefix and resolve all deferred bits.
-        ++pending;
-        emit(low < 0x40000000u ? 0 : 1);
+        count = coder.finish();
         // Whole-block records store decoder lookahead; copied-word records
         // omit it and let the virtual reader supply zeros at their boundary.
         for (unsigned i = 0; physical_guard && (i < 32); ++i)
@@ -646,63 +763,13 @@ void arithmetic_block_decoder::decode_impl(bm::bit_in<Decoder>& bits, unsigned c
     bm::arithmetic_bit_reader<bm::bit_in<Decoder> > input(bits, count);
     bm::arithmetic_model<Bytes ? 256 : 16, true> model;
     model.init();
-    unsigned low = 0, high = ~0u, code = 0;
-    // Seed the arithmetic code register in wire order, within the payload bound.
-    for (unsigned i = 0; i < 32; ++i)
-    {
-        code = (code << 1) | input.get();
-    } // for i
+    bm::arithmetic_symbol_decoder<decltype(input)> coder(input);
     bm::bit_block_set(block, 0);
     constexpr unsigned width = Bytes ? 8 : 4;
     // Decode the known number of symbols; there is no end-of-stream symbol.
     for (unsigned i = 0; i < 65536 / width; ++i)
     {
-        bm::serialization_require((code >= low) && (code <= high));
-        const bm::id64_t range = bm::id64_t(high) - low + 1;
-        const unsigned total = model.total();
-        // Map the code point back to a cumulative-frequency position. The
-        // +1/-1 adjustments invert the encoder's inclusive interval rounding.
-        const unsigned value = unsigned(((bm::id64_t(code) - low + 1) * total - 1) / range);
-        // The validated code interval and bounded 64-bit numerator imply
-        // value < total. Keep input validation on the interval above.
-        BM_ASSERT(value < total);
-        unsigned left;
-        const unsigned symbol = model.find(value, left);
-        const unsigned right = left + model.frequency(symbol);
-        const unsigned base = low;
-        high = base + unsigned(range * right / total - 1);
-        low = base + unsigned(range * left / total);
-        for (;;)
-        {
-            const unsigned difference = low ^ high;
-            if (!(difference & 0x80000000u))
-            {
-                // Collapse consecutive E1/E2 steps. Shifting unsigned values
-                // discards the common prefix, including all E2 corrections.
-                // Cap at 31 for defined shifts and bit_in's chunk interface.
-                const unsigned shift = difference ?
-                    31 - bm::bit_scan_reverse32(difference) : 31;
-                low <<= shift;
-                high = (high << shift) | (~0u >> (32 - shift));
-                code = (code << shift) | input.get_msb(shift);
-                continue;
-            }
-            else if ((low >= 0x40000000u) && (high < 0xC0000000u))
-            {
-                // Mirror E3 underflow in both the interval and code register.
-                low -= 0x40000000u;
-                high -= 0x40000000u;
-                code -= 0x40000000u;
-            }
-            else
-            {
-                break;
-            }
-            low <<= 1;
-            high = (high << 1) | 1u;
-            code = (code << 1) | input.get();
-        } // for renormalization
-        model.update(symbol);
+        const unsigned symbol = coder.get(model);
         const unsigned pos = i * width;
         block[pos >> 5] |= bm::word_t(symbol) << (pos & 31);
     } // for i
@@ -783,62 +850,12 @@ void arithmetic_0runs_decoder::decode_impl(bm::bit_in<Decoder>& bits, unsigned c
     bm::arithmetic_virtual_reader<bm::bit_in<Decoder> > input(bits, count);
     bm::arithmetic_model<Bytes ? 256 : 16, true> model;
     model.init();
-    unsigned low = 0, high = ~0u, code = 0;
-    // Short payloads may end during initialization; virtual zeros extend the
-    // code register without consuming any following shared metadata.
-    for (unsigned i = 0; i < 32; ++i)
-    {
-        code = (code << 1) | input.get();
-    } // for i
+    bm::arithmetic_symbol_decoder<decltype(input)> coder(input);
     constexpr unsigned width = Bytes ? 8 : 4;
     // Run lengths determine the exact symbol count, including an empty stream.
     for (unsigned i = 0; i < copied * 32 / width; ++i)
     {
-        bm::serialization_require((code >= low) && (code <= high));
-        const bm::id64_t range = bm::id64_t(high) - low + 1;
-        const unsigned total = model.total();
-        const unsigned value = unsigned(((bm::id64_t(code) - low + 1) * total - 1) / range);
-        // The validated code interval and bounded 64-bit numerator imply
-        // value < total. Keep input validation on the interval above.
-        BM_ASSERT(value < total);
-        unsigned left;
-        const unsigned symbol = model.find(value, left);
-        const unsigned right = left + model.frequency(symbol);
-        const unsigned base = low;
-        high = base + unsigned(range * right / total - 1);
-        low = base + unsigned(range * left / total);
-        for (;;)
-        {
-            const unsigned difference = low ^ high;
-            if (!(difference & 0x80000000u))
-            {
-                // Collapse consecutive E1/E2 steps. Shifting unsigned values
-                // discards the common prefix, including all E2 corrections.
-                // Cap at 31 for defined shifts and bit_in's chunk interface.
-                const unsigned shift = difference ?
-                    31 - bm::bit_scan_reverse32(difference) : 31;
-                low <<= shift;
-                high = (high << shift) | (~0u >> (32 - shift));
-                code = (code << shift) | input.get_msb(shift);
-                continue;
-            }
-            else if ((low >= 0x40000000u) && (high < 0xC0000000u))
-            {
-                // Same E3 correction as the full-block decoder; only the input
-                // boundary and output placement differ for copied words.
-                low -= 0x40000000u;
-                high -= 0x40000000u;
-                code -= 0x40000000u;
-            }
-            else
-            {
-                break;
-            }
-            low <<= 1;
-            high = (high << 1) | 1u;
-            code = (code << 1) | input.get();
-        } // for renormalization
-        model.update(symbol);
+        const unsigned symbol = coder.get(model);
         const unsigned pos = i * width;
         // Symbols are contiguous in the coded stream, but their destination
         // words follow the literal positions recovered from the run map.
