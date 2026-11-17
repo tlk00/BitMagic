@@ -1060,10 +1060,15 @@ class Agent:
             valid, detail = inv_reference.inspect_reference(candidate, full=self.args.pedantic,
                                                              required_levels=required_levels,
                                                              required_datasets=required_datasets)
-            self.say('INV REFERENCE | {} | {}'.format(candidate, detail))
+            for line in detail.splitlines():
+                self.say('INV REFERENCE | {} | {}'.format(candidate, line))
             if valid:
                 matches.append(candidate.resolve())
         if len(matches) != 1:
+            if not candidates:
+                self.say('INV REFERENCE | no gov2-reference-* directories found in ' + str(self.home))
+            elif len(matches) > 1:
+                self.say('INV REFERENCE | multiple valid references: ' + ', '.join(map(str, matches)))
             raise Failure('Expected exactly one complete inv_list reference; use --path-to-invref or --suppress inv_list')
         if self.jobs > 256:
             raise Failure('inv_list runner supports at most 256 workers; set --jobs 256 or lower')

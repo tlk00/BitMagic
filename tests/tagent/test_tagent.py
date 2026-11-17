@@ -632,6 +632,30 @@ class SupervisorTests(unittest.TestCase):
         self.assertFalse(ta.inv_reference.inspect_reference(candidate, full=True)[0])
         (candidate / 'matrix.json').write_text('{}')
         self.assertTrue(ta.inv_reference.inspect_reference(candidate, full=True)[0])
+        index = candidate / 'gov2.sorted.level-06.idx'
+        index.write_bytes(b'bad')
+        missing = candidate / 'gov2.sorted.level-07.idx'
+        missing.unlink()
+        valid, detail = ta.inv_reference.inspect_reference(candidate, required_levels=(6, 7),
+                                                           required_datasets=('sorted',))
+        self.assertFalse(valid)
+        for expected in ('2 reference problem(s)', 'size mismatch', str(index),
+                         'actual 3 bytes', 'expected 1 bytes', 'Gov2.sorted level 6',
+                         'index_bytes', str(candidate / 'references.tsv'),
+                         'missing file', str(missing), 'Gov2.sorted level 7'):
+            self.assertIn(expected, detail)
+        self.agent.args.path_to_invref = candidate
+        self.agent.args.suppress.discard('inv_list')
+        with patch.object(self.agent, 'say') as say, self.assertRaises(ta.Failure):
+            self.agent.discover_inv_reference()
+        reported = '\n'.join(call.args[0] for call in say.call_args_list)
+        self.assertIn('actual 3 bytes', reported)
+        self.assertIn('expected 1 bytes', reported)
+        self.assertIn(str(index), reported)
+        self.agent.args.path_to_invref = None
+        self.agent.args.suppress.add('inv_list')
+        index.write_bytes(b'x')
+        missing.write_bytes(b'x')
         (candidate / 'gov2.sorted.level-01.bv').unlink()
         self.assertTrue(ta.inv_reference.inspect_reference(candidate, required_levels=(6,))[0])
         self.assertTrue(ta.inv_reference.inspect_reference(candidate, required_levels=range(6, 11))[0])
