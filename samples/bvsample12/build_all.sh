@@ -31,21 +31,21 @@ build()
     shift
     echo "Building $output"
     make "$@" rebuild
-    mv -f ./sample12 "./$output"
+    mv -f ./bvsample12 "./$output"
 }
 
 
 if [ "$platform" = arm ]; then
-    build sample12_neon BMOPTFLAGS=-DBMNEONOPT
+    build bvsample12_neon BMOPTFLAGS=-DBMNEONOPT
 else
-    build sample12_sse2 BMOPTFLAGS=-DBMSSE2OPT
-    build sample12_sse42 BMOPTFLAGS=-DBMSSE42OPT
-    build sample12_avx2 BMOPTFLAGS=-DBMAVX2OPT
+    build bvsample12_sse2 BMOPTFLAGS=-DBMSSE2OPT
+    build bvsample12_sse42 BMOPTFLAGS=-DBMSSE42OPT
+    build bvsample12_avx2 BMOPTFLAGS=-DBMAVX2OPT
     if [ "$avx512" -eq 1 ]; then
-        build sample12_avx512 BMOPTFLAGS=-DBMAVX512OPT
+        build bvsample12_avx512 BMOPTFLAGS=-DBMAVX512OPT
     fi
 fi
 # Build the scalar executable last for callers that use its ordinary name.
-echo "Building sample12_release"
+echo "Building bvsample12_release"
 make rebuild
-cp -f ./sample12 ./sample12_release
+cp -f ./bvsample12 ./bvsample12_release

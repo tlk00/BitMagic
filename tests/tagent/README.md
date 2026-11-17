@@ -454,7 +454,13 @@ safe boundary. In-flight logs are retained. Checks during active work occur at
 subprocess heartbeats; Git/network recovery rules still apply.
 
 TAgent also recompiles the sample programs selected by `samples/Makefile` during
-the build phase. `xsample04b` is excluded. Samples are built but not executed.
+the build phase. `xsample04b` is excluded. After compilation, TAgent obtains the
+expanded target list from that Makefile and runs every non-`xsample*` example,
+with at most the configured number of workers. Each example runs in its own
+`samples/<target>/` cycle directory; `sample.log` and all files it creates there
+are retained with the cycle logs. A nonzero exit or signal stops the other jobs
+and the entire test cycle. No sample timeout is imposed. On an express-to-normal
+upgrade the samples are not repeated because the builds are reused.
 The shared CPU budget reserves up to three workers for perf, stress and inv_list builds and
 uses the remaining workers for parallel sample compilation (at least one when
 samples run). Output is saved in `build-samples.log`; sample warnings are included

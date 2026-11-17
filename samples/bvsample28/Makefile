@@ -8,7 +8,7 @@ CXXSOURCES=$(wildcard *.cpp)
 BASICINCS=src
 CSOURCES=
 
-DESTINATION = sample28
+DESTINATION = bvsample28
 DESTTYPE =
 DESTINATIONDIR=samples/bvsample28
 

@@ -112,9 +112,13 @@ SAMPLES = \
     rscsample07
 
 .DEFAULT_GOAL := all
-.PHONY: all clean rebuild $(SAMPLES)
+.PHONY: all clean rebuild tagent-list $(SAMPLES)
 
 all: $(SAMPLES)
+
+# Expose the same expanded target list used by the build to TAgent.
+tagent-list:
+	@printf '%s\n' $(SAMPLES)
 
 $(SAMPLES):
 	$(MAKE) -C $@ all

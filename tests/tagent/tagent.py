@@ -793,13 +793,14 @@ class Agent:
             reason = signal.Signals(-status).name if status < 0 else 'exit ' + str(status)
             raise CommandFailure('{} | {} | log {}'.format(proc.args, reason, log))
 
-    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=(), test_allocator=False, separate_stderr=False):
+    def command(self, argv, log=None, cwd=None, timeout=None, fail_fast=False, allowed_exit_codes=(), test_allocator=False, separate_stderr=False, temp_dir=None):
         """Run argv in an owned group; return stdout or raise with log diagnostics.
 
         log optionally redirects combined output; cwd defaults to the checkout.
         timeout bounds operational commands. Every exit cleans the process group.
         test_allocator enables the detected jemalloc only for test subprocesses.
         separate_stderr keeps captured stdout parseable and reports stderr diagnostics.
+        temp_dir overrides the shared temporary directory for isolated workloads.
         """
         output = None
         proc = None
@@ -809,10 +810,11 @@ class Agent:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
                 if log and self.pending_tip and (log.name == 'perf.log' or
-                        (self.args.restart_on_update and log.name in ('runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
+                        (self.args.restart_on_update and log.name in ('sample.log', 'runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
-                env = dict(os.environ, TMPDIR=str(self.temp_dir), TMP=str(self.temp_dir), TEMP=str(self.temp_dir),
+                scratch = temp_dir or self.temp_dir
+                env = dict(os.environ, TMPDIR=str(scratch), TMP=str(scratch), TEMP=str(scratch),
                            GIT_TERMINAL_PROMPT='0',
                            GIT_SSH_COMMAND='ssh -oBatchMode=yes -oConnectTimeout=20')
                 if test_allocator:
@@ -852,7 +854,7 @@ class Agent:
                                 return 'skipped-update'
                     else:
                         now = time.monotonic()
-                        is_test = log and log.name in ('perf.log', 'runner.log', 'inv-runner.log')
+                        is_test = log and log.name in ('sample.log', 'perf.log', 'runner.log', 'inv-runner.log')
                         if not is_test or self.test_started_at is None or now >= next_job_message:
                             if log:
                                 mode = 'Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'
@@ -871,6 +873,11 @@ class Agent:
                     if log and log.name == 'inv-runner.log':
                         if self.inv_active:
                             self.report_inv_progress(*self.inv_active)
+                        self.poll_remote()
+                        if self.args.restart_on_update and self.pending_tip:
+                            self.check_update_failure(proc, log)
+                            return 'skipped-update'
+                    if log and log.name == 'sample.log':
                         self.poll_remote()
                         if self.args.restart_on_update and self.pending_tip:
                             self.check_update_failure(proc, log)
@@ -2009,6 +2016,11 @@ class Agent:
                                                         length_scale=1.18 if event == 'inv-progress' else 1.0)
                 if duration is None:
                     return False
+            elif event == 'samples-announcement':
+                self.say('DISPATCH: ' + workers)
+                duration = self.synthesize_announcement(path, workers, self.dispatcher_voice, 50, background='train')
+                if duration is None:
+                    return False
             elif event == 'stress-transition':
                 message = workers
                 self.say('CONDUCTOR: ' + message)
@@ -2365,6 +2377,8 @@ class Agent:
     def station_visit(self, stage, final=False):
         """Announce a completed stage; limit long station visits to once per 30 minutes."""
         messages = {
+            'samples': ('Arriving at Samples Station. The sample checks are complete.',
+                        'Samples Station reports all example programs have passed.'),
             'inv_list': ('Arriving at Validation Junction. Reference checks are complete.',
                          'Pulling into Validation Junction. Reference validation is complete.'),
             'perf': ('Arriving at Performance Terminal. Speed trials are complete.',
@@ -2415,6 +2429,51 @@ class Agent:
             self.next_varyag_at = now + random.uniform(10800, 18000)
             self.say('STEAMPUNK SOUND | archival Varyag recording')
             self.sound('varyag')
+
+    def test_samples_stage(self, run, manifest):
+        """Run Makefile-selected examples in isolated directories under the CPU budget."""
+        self.memory_phase = 'samples'
+        if self.depot:
+            self.depot.set_mode('train-normal' if not self.args.fast and not self.args.pedantic else 'train')
+        sample_dir = self.repo / 'samples'
+        output = self.command(['make', '-s', '--no-print-directory', '-C', str(sample_dir), 'tagent-list'],
+                              separate_stderr=True)
+        names = output.split()
+        if not names or len(names) != len(set(names)) or any(not re.fullmatch(r'[A-Za-z0-9_-]+', name) for name in names):
+            raise CommandFailure('Invalid or empty samples target list from ' + str(sample_dir / 'Makefile'))
+        names = [name for name in names if not name.startswith('xsample')]
+        if not names:
+            raise CommandFailure('No non-xsample targets in ' + str(sample_dir / 'Makefile'))
+        self.say('SAMPLES START | {} examples | up to {} workers'.format(len(names), self.jobs))
+        self.sound('samples-announcement', workers='Dispatch to BitMagic. The train is proceeding to BitMagic Samples Station. The sample validation crews are ready.')
+
+        def run_sample(name):
+            """Run one named sample and retain its output and working files."""
+            work = run / 'samples' / name
+            work.mkdir(parents=True, exist_ok=True)
+            binary = (sample_dir / name / name).resolve()
+            log = work / 'sample.log'
+            self.say('SAMPLE START | {} | {}'.format(name, log))
+            result = self.command([str(binary)], log, cwd=work, temp_dir=work)
+            if result != 'skipped-update':
+                self.say('SAMPLE PASS | {} | {}'.format(name, log))
+            return result
+
+        failures = []
+        updated = False
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(self.jobs, len(names))) as pool:
+            futures = [pool.submit(run_sample, name) for name in names]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    updated |= future.result() == 'skipped-update'
+                except Failure as error:
+                    failures.append(error)
+        if failures:
+            raise getattr(self, 'first_workload_failure', failures[0])
+        if updated or self.update_waiting():
+            return 'updated'
+        self.say('SAMPLES COMPLETE | {} examples passed'.format(len(names)))
+        return True
 
     def test_inv_stage(self, run, manifest):
         """Validate reference collections with supported inv_list binaries in sequence."""
@@ -2779,7 +2838,7 @@ class Agent:
             return 'updated'
         self.sound('compilation-depot-end', workers='Dispatch to BitMagic. Compilation Depot reports all builds complete. The freight is cleared to begin testing.')
         # Test execution order is configured here; each stage owns its scheduling.
-        stages = (('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
+        stages = (('samples', self.test_samples_stage), ('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
                   ('stress', self.test_stress_stage))
         requested_fast = self.args.fast
         try:
@@ -2816,7 +2875,7 @@ class Agent:
                 normal_run.mkdir()
                 previous_stage = None
                 for stage, execute in stages:
-                    if stage in self.args.suppress:
+                    if stage == 'samples' or stage in self.args.suppress:
                         continue
                     if previous_stage:
                         self.sound('train-stop')

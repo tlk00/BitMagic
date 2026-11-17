@@ -160,14 +160,14 @@ From this directory:
 
 ```sh
 make
-./sample27 --verify
+./bvsample27 --verify
 ```
 
 Or compile directly:
 
 ```sh
-c++ -std=c++17 -O2 -I../../src sample27.cpp -o sample27
-./sample27 --verify
+c++ -std=c++17 -O2 -I../../src sample27.cpp -o bvsample27
+./bvsample27 --verify
 ```
 
 From the repository root:
@@ -209,8 +209,8 @@ compares against the actual generated vectors rather than fixed expected bytes.
 ## 64-bit addresses
 
 ```sh
-c++ -std=c++17 -O2 -DBM64ADDR -I../../src sample27.cpp -o sample27_64
-./sample27_64 --verify
+c++ -std=c++17 -O2 -DBM64ADDR -I../../src sample27.cpp -o bvsample27_64
+./bvsample27_64 --verify
 ```
 
 The source pattern starts at `2^40` in this build, and the random subset retains

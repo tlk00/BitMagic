@@ -32,7 +32,7 @@ BASICINCS=src
 
 CSOURCES= 
 
-DESTINATION = sample7
+DESTINATION = bvsample07
 
 DESTTYPE = 
 DESTINATIONDIR=samples/bvsample07

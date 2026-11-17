@@ -269,7 +269,11 @@ class SupervisorTests(unittest.TestCase):
 
         samples = self.root / 'samples'
         samples.mkdir()
-        (samples / 'Makefile').write_text('all:\n\t@true\n')
+        (samples / 'Makefile').write_text('all:\n\t@true\ntagent-list:\n\t@echo example\n')
+        (samples / 'example').mkdir()
+        example = samples / 'example' / 'example'
+        example.write_text('#!/bin/sh\necho sample-output\ntouch sample-file\n')
+        example.chmod(0o755)
 
     def test_stress_failure_operator_report(self):
         """Expose the failed group, its assertion, and quoted copy paths."""
@@ -375,6 +379,72 @@ class SupervisorTests(unittest.TestCase):
         run = next(self.agent.home.glob('*abc123'))
         self.assertIn('sample warning', (run / 'build-samples.log').read_text())
         self.assertFalse(list(run.glob('perf_*/perf.log')))
+
+    def test_samples_discovery_isolation_and_xsample_exclusion(self):
+        """New Makefile targets run in their own retained working directories."""
+        self.fixture()
+        samples = self.root / 'samples'
+        (samples / 'Makefile').write_text('all:\n\t@true\ntagent-list:\n\t@printf "%s\\n" example newexample xsample01\n')
+        new = samples / 'newexample' / 'newexample'
+        new.parent.mkdir()
+        new.write_text('#!/bin/sh\necho second\ntouch output-file\ntouch "$TMPDIR/temp-file"\n')
+        new.chmod(0o755)
+        run = self.root / 'run'
+        run.mkdir()
+        with patch.object(self.agent, 'sound') as sound:
+            self.assertTrue(self.agent.test_samples_stage(run, {}))
+        self.assertTrue((run / 'samples/example/sample-file').exists())
+        self.assertTrue((run / 'samples/newexample/output-file').exists())
+        self.assertTrue((run / 'samples/newexample/temp-file').exists())
+        self.assertIn('second', (run / 'samples/newexample/sample.log').read_text())
+        self.assertFalse((run / 'samples/xsample01').exists())
+        self.assertEqual(sound.call_args.args[0], 'samples-announcement')
+
+    def test_samples_signal_stops_cycle_with_exact_log_even_with_update(self):
+        """A crashing example is a failure even when a remote update is pending."""
+        self.fixture()
+        self.agent.args.restart_on_update = False
+        bad = self.root / 'samples/example/example'
+        bad.write_text('#!/bin/sh\necho crashed\nkill -TERM $$\n')
+        self.agent.pending_tip = 'd' * 40
+        run = self.root / 'run'
+        run.mkdir()
+        with self.assertRaises(ta.CommandFailure) as error:
+            self.agent.test_samples_stage(run, {})
+        self.assertIn('SIGTERM', str(error.exception))
+        self.assertIn('samples/example/sample.log', str(error.exception))
+        self.assertIn('crashed', (run / 'samples/example/sample.log').read_text())
+
+    def test_samples_nonzero_stops_parallel_sibling(self):
+        """The first nonzero exit terminates other samples and retains the failing log."""
+        self.fixture()
+        samples = self.root / 'samples'
+        (samples / 'Makefile').write_text('all:\n\t@true\ntagent-list:\n\t@printf "%s\\n" slow example\n')
+        slow = samples / 'slow/slow'
+        slow.parent.mkdir()
+        slow.write_text('#!/bin/sh\necho running\nsleep 30\ntouch should-not-exist\n')
+        slow.chmod(0o755)
+        bad = samples / 'example/example'
+        bad.write_text('#!/bin/sh\nsleep 1\necho failure details\nexit 7\n')
+        run = self.root / 'run'
+        run.mkdir()
+        with self.assertRaises(ta.CommandFailure) as error:
+            self.agent.test_samples_stage(run, {})
+        self.assertIn('exit 7', str(error.exception))
+        self.assertIn('samples/example/sample.log', str(error.exception))
+        self.assertIn('failure details', (run / 'samples/example/sample.log').read_text())
+        self.assertTrue((run / 'samples/slow/sample.log').exists())
+        self.assertFalse((run / 'samples/slow/should-not-exist').exists())
+
+    def test_samples_pending_update_prevents_launch_when_restart_requested(self):
+        """A pending forced restart skips sample processes and requests an update."""
+        self.fixture()
+        self.agent.args.restart_on_update = True
+        self.agent.pending_tip = 'd' * 40
+        run = self.root / 'run'
+        run.mkdir()
+        self.assertEqual(self.agent.test_samples_stage(run, {}), 'updated')
+        self.assertFalse((run / 'samples/example/sample-file').exists())
 
     def test_remote_checked_before_perf_after_build(self):
         """A new tip at the build boundary prevents any perf task from starting."""
@@ -1369,6 +1439,9 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual([mode for mode, _ in observed], [True, True, False, False])
         self.assertEqual([name for _, name in observed[2:]], ['normal', 'normal'])
         self.assertTrue(self.agent.args.fast)
+        run = next(self.agent.home.glob('*abc123'))
+        self.assertTrue((run / 'samples/example/sample.log').exists())
+        self.assertFalse((run / 'normal/samples').exists())
         events = [call.args[0] for call in sound.call_args_list]
         start = events.index('upgrade-dispatch')
         self.assertEqual(events[start:start + 4],
@@ -1385,7 +1458,7 @@ class SupervisorTests(unittest.TestCase):
             return True
         with patch.object(self.agent, 'test_perf_stage', side_effect=stage), \
              patch.object(self.agent, 'test_stress_stage', side_effect=stage), \
-             patch.object(self.agent, 'update_waiting', side_effect=[False, True]), \
+             patch.object(self.agent, 'update_waiting', side_effect=[False, False, True]), \
              patch.object(self.agent, 'sound') as sound:
             self.assertEqual(self.agent.cycle(), 'updated')
         self.assertEqual(observed, [True, True])
@@ -1761,7 +1834,7 @@ class SupervisorTests(unittest.TestCase):
     def test_update_stops_at_perf_boundary(self):
         """An update waits for the current perf variant, then skips remaining work."""
         self.fixture()
-        with patch.object(self.agent, 'update_waiting', side_effect=[False, True]):
+        with patch.object(self.agent, 'update_waiting', side_effect=[False, False, True]):
             self.assertEqual(self.agent.cycle(), 'updated')
         run = next(self.agent.home.glob('*abc123'))
         self.assertTrue((run / 'perf_debug/perf.log').exists())

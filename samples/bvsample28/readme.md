@@ -246,7 +246,7 @@ From this directory:
 
 ```sh
 make
-./sample28
+./bvsample28
 ```
 
 Or build the `bvsample28` target with the repository CMake configuration.
