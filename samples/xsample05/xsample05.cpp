@@ -52,6 +52,7 @@ using namespace std;
 #include "bm.h"
 #include "bmalgo.h"
 #include "bmserial.h"
+#include "bmserial_profile.h"
 #include "bmrandom.h"
 #include "bmstrsparsevec.h"
 #include "bmsparsevec_algo.h"
@@ -73,8 +74,18 @@ void show_help()
         << "-idict  file-name            -- input set file to parse" << std::endl
         << "-svout  spase vector output  -- sparse vector name to save" << std::endl
         << "-svin   sparse vector input  -- sparse vector file name to load " << std::endl
+        << "-verify-sv FILE              -- compare -svin with a prepared input vector" << std::endl
         << "-remap                       -- re-mapping of string characters " << std::endl
         << "-xor                         -- use XOR compression filtering" << std::endl
+        << "-xor-gather-runner-up         -- enable XOR and one pooled-score trial on eligible gather records" << std::endl
+        << "-xor-gather-absolute          -- gather with absolute source plane IDs" << std::endl
+        << "-xor-gather                   -- depth-16 parallel gather with polarity trials" << std::endl
+        << "-xor-h64                      -- enable compact masks for single 8-bit XOR references" << std::endl
+        << "-xor-candidates4              -- experimental four-recipe XOR selection" << std::endl
+        << "-arithmetic / -no-arithmetic  -- override L7+ arithmetic selection, including 0runs" << std::endl
+        << "-level N                     -- serialization compression level 0..10" << std::endl
+        << "-arithmetic-mode MODE         -- nibble, byte or all; applies after preset" << std::endl
+        << "-profile-opcodes              -- report serialized plane opcodes" << std::endl
         << "-diag                        -- run diagnostics"                  << std::endl
         << "-bench                       -- run benchmarks"                   << std::endl
         << "-timing                      -- collect timings"                  << std::endl
@@ -84,14 +95,24 @@ void show_help()
 
 // Arguments
 //
+std::string arithmetic_mode_override; ///< Preset alphabets unless explicitly selected.
+int arithmetic_override = -1; ///< Preset default unless explicitly overridden.
 std::string  sv_out_name;
 std::string  sv_in_name;
+std::string  verify_sv_name;
 std::string  i_name;
 bool         is_diag = false;
 bool         is_timing = false;
 bool         is_bench = false;
 bool         is_remap = false;
 bool         is_xor = false;
+int          compression_level = -1;
+bool         profile_opcodes = false;
+bool         gather_deltas = true;
+bool         gather_runner_up = false;
+bool         xor_gather = false;
+bool         xor_h64 = false;
+bool         xor_candidates4 = false;
 
 // Parse command line arguments
 static
@@ -133,6 +154,13 @@ int parse_args(int argc, char *argv[])
             }
             continue;
         }
+        if (arg == "-verify-sv")
+        {
+            if (++i >= argc)
+                throw runtime_error("-verify-sv requires a file name");
+            verify_sv_name = argv[i];
+            continue;
+        }
 
         if (arg == "-idict" || arg == "--idict" )
         {
@@ -148,6 +176,65 @@ int parse_args(int argc, char *argv[])
             continue;
         }
 
+        if (arg == "-arithmetic" || arg == "-no-arithmetic")
+        {
+            arithmetic_override = arg == "-arithmetic";
+            continue;
+        }
+        if (arg == "-arithmetic-mode")
+        {
+            if (++i >= argc)
+            {
+                throw runtime_error("-arithmetic-mode requires nibble, byte or all");
+            }
+            arithmetic_mode_override = argv[i];
+            if (arithmetic_mode_override != "nibble" && arithmetic_mode_override != "byte" &&
+                arithmetic_mode_override != "all")
+            {
+                throw runtime_error("-arithmetic-mode requires nibble, byte or all");
+            }
+            continue;
+        }
+        if (arg == "-level" || arg == "--level")
+        {
+            if (++i >= argc)
+                throw runtime_error("-level requires a value from 0 to 10");
+            std::string value = argv[i];
+            if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+                throw runtime_error("Invalid compression level");
+            unsigned long level = std::stoul(value);
+            if (level > 10)
+                throw runtime_error("Compression level must be from 0 to 10");
+            compression_level = int(level);
+            continue;
+        }
+        if (arg == "-xor-gather-runner-up")
+        {
+            gather_runner_up = is_xor = true;
+            continue;
+        }
+        if (arg == "-xor-gather" || arg == "-xor-gather-absolute")
+        {
+            gather_deltas = arg == "-xor-gather";
+            xor_gather = xor_candidates4 = xor_h64 = is_xor = true;
+            continue;
+        }
+        if (arg == "-xor-h64")
+        {
+            xor_h64 = is_xor = true;
+            continue;
+        }
+        if (arg == "-xor-candidates4")
+        {
+            xor_candidates4 = true;
+            is_xor = true;
+            continue;
+        }
+        if (arg == "-profile-opcodes" || arg == "--profile-opcodes")
+        {
+            profile_opcodes = true;
+            continue;
+        }
         if (arg == "-remap" || arg == "--remap" || arg == "-r" || arg == "--r")
         {
             is_remap = true;
@@ -186,6 +273,7 @@ int parse_args(int argc, char *argv[])
 // Global types
 //
 typedef bm::str_sparse_vector<char, bm::bvector<>, 64>  str_sparse_vect;
+
 typedef vector<string>  string_vector;
 
 
@@ -348,7 +436,10 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
             for (const string& term : bench_vec_not_found)
             {
                 auto p = std::lower_bound(str_vec.begin(), str_vec.end(), term);
-                (void) p;
+                if (p != str_vec.end() && *p == term)
+                {
+                    throw runtime_error("Error. lower_bound empty search returned value!");
+                }
             } // for
         }
     }
@@ -463,6 +554,90 @@ void run_benchmark(const str_sparse_vect& str_sv, const string_vector& str_vec)
 }
 
 
+/** Serialize, round-trip, write and optionally profile a string sparse vector.
+    @param str_sv Source vector, borrowed for the duration of this call.
+    Uses the parsed command-line settings and reports measurements to stdout.
+*/
+static
+void save_sparse_vector(const str_sparse_vect& str_sv)
+{
+    if (sv_out_name.empty() || str_sv.empty())
+        return;
+
+    bm::sparse_vector_serial_layout<str_sparse_vect> layout;
+    bm::sparse_vector_serializer<str_sparse_vect> serializer;
+    serializer.set_xor_ref(is_xor);
+    if (compression_level >= 0)
+        serializer.set_compression_level(unsigned(compression_level));
+    if (arithmetic_override >= 0)
+        serializer.get_bv_serializer().set_arithmetic_coding(bool(arithmetic_override));
+    if (!arithmetic_mode_override.empty())
+    {
+        const auto mode = arithmetic_mode_override == "nibble" ?
+            bm::arithmetic_coding_mode::nibble : arithmetic_mode_override == "byte" ?
+            bm::arithmetic_coding_mode::byte : bm::arithmetic_coding_mode::all;
+        serializer.get_bv_serializer().set_arithmetic_coding_mode(mode);
+    }
+    if (xor_gather)
+        serializer.get_bv_serializer().set_xor_gather(true, gather_deltas);
+    if (gather_runner_up)
+        serializer.get_bv_serializer().set_xor_gather_runner_up(true);
+    if (xor_h64)
+        serializer.get_bv_serializer().set_xor_ref8_h64(true);
+    if (xor_candidates4)
+        serializer.get_bv_serializer().set_xor_candidate_trials(true);
+    auto start = std::chrono::steady_clock::now();
+    serializer.serialize(str_sv, layout);
+    auto serialized = std::chrono::steady_clock::now();
+    str_sparse_vect str_sv_control;
+    if (bm::sparse_vector_deserialize(str_sv_control, layout.data()) != 0)
+        throw runtime_error("Sparse vector deserialization failed");
+    auto deserialized = std::chrono::steady_clock::now();
+    if (!str_sv.equal(str_sv_control))
+        throw runtime_error("Serialization control failed");
+    std::ofstream fout(sv_out_name.c_str(), std::ios::binary);
+    fout.write(reinterpret_cast<const char*>(layout.data()),
+               std::streamsize(layout.size()));
+    fout.close();
+    if (!fout)
+        throw runtime_error("Cannot write sparse vector output");
+    cout << "Serialization measurement bytes=" << layout.size()
+         << " serialize_ms=" << std::chrono::duration<double, std::milli>(serialized-start).count()
+         << " deserialize_ms=" << std::chrono::duration<double, std::milli>(deserialized-serialized).count()
+         << endl;
+    if (xor_candidates4 || (is_xor && compression_level >= 7))
+    {
+        const auto& stats = serializer.get_bv_serializer().get_xor_trial_statistics();
+        cout << "XOR trials blocks=" << stats.blocks
+             << " alternatives=" << stats.alternatives
+             << " changed=" << stats.changed
+             << " saved_bytes=" << stats.saved_bytes << endl;
+    }
+    if (profile_opcodes)
+    {
+        bm::sparse_vector_deserializer<str_sparse_vect>::deserialization_index_type index;
+        bm::sparse_vector_deserializer<str_sparse_vect> reader;
+        reader.construct_deserialization_index(index, layout.data());
+        bm::serialization_opcode_collector<str_sparse_vect::bvector_type> collector;
+        bm::serialization_opcode_profile profile;
+        for (unsigned p = 0; p < index.rows(); ++p)
+        {
+            const auto* row = index.get_row(p);
+            if (!row || !row->serialized_size())
+                continue;
+            size_t offset = index.plane_offset(p);
+            size_t length = row->serialized_size();
+            if (!offset || offset > layout.size() || length > layout.size()-offset)
+                throw runtime_error("Invalid serialized plane bounds");
+            collector.add_blob(layout.data()+offset, length, profile);
+        } // for p
+        if (!profile.reconciles())
+            throw runtime_error("Opcode profile does not reconcile");
+        bm::print_serialization_opcode_profile(cout, profile);
+        cout << "Opcode profile scope=bit_planes composite_bytes=" << layout.size() << endl;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 3)
@@ -480,6 +655,30 @@ int main(int argc, char *argv[])
         if (ret != 0)
         {
             return ret;
+        }
+        if (!verify_sv_name.empty())
+        {
+            if (sv_in_name.empty() || !sv_out_name.empty() || !i_name.empty())
+                throw runtime_error("-verify-sv requires -svin and no other input or output");
+            str_sparse_vect expected;
+            if (file_load_svector(expected, verify_sv_name) != 0 ||
+                file_load_svector(str_sv, sv_in_name) != 0)
+                throw runtime_error("Cannot load validation vector");
+            if (!str_sv.equal(expected))
+            {
+                if (str_sv.size() != expected.size())
+                    throw runtime_error("Sparse vector reference size differs from input");
+                for (str_sparse_vect::size_type i = 0; i < str_sv.size(); ++i)
+                {
+                    string actual, original;
+                    str_sv.get(i, actual);
+                    expected.get(i, original);
+                    if (actual != original)
+                        throw runtime_error("Sparse vector reference differs from input");
+                } // for i
+            }
+            cout << "Sparse vector reference verified size=" << str_sv.size() << endl;
+            return 0;
         }
         if (!i_name.empty())
         {
@@ -522,7 +721,8 @@ int main(int argc, char *argv[])
         {
             {
                 bm::chrono_taker tt1(cout, "8. Load sparse vector", 1, &timing_map);
-                file_load_svector(str_sv, sv_in_name);
+                if (file_load_svector(str_sv, sv_in_name) != 0)
+                    throw runtime_error("Cannot load sparse vector input");
             }
             if (str_sv.empty())
             {
@@ -540,24 +740,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        // save SV vector to file
-        if (!sv_out_name.empty() && !str_sv.empty())
-        {
-            bm::chrono_taker tt1(cout, "7. Save sparse vector", 1, &timing_map);
-            file_save_svector(str_sv, sv_out_name, 0, is_xor);
+        save_sparse_vector(str_sv);
 
-            str_sparse_vect    str_sv_control;
-            file_load_svector(str_sv_control, sv_out_name);
-            bool eq = str_sv.equal(str_sv_control);
-            if (!eq)
-            {
-                cerr << "Serialization control failed" << endl;
-                assert(0); exit(1);
-            }
-        }
-        
-
-        
         if (is_diag)
         {
             if (!str_sv.empty())

@@ -85,3 +85,133 @@ Performance:
 See also:
 
 ./run_all_bench.sh
+
+4. Compare serialization levels
+
+Build xsample05 and prepare two serialized inputs from the same dictionary,
+one without remapping and one with -remap. Then run:
+
+python3 run_level_matrix.py --program ./xsample05_neon \
+  --plain /path/to/plain.sv --remap /path/to/remapped.sv \
+  --output /path/to/new-results-directory --repeats 3
+
+The program path may select a scalar or SIMD build. The results directory must
+not already exist. The matrix covers levels 6 through 10, with and without XOR,
+for both inputs. Each run checks a memory deserialization against its source.
+The CSV records serialized bytes and in-memory serialization/deserialization
+milliseconds; file I/O and validation are outside these timings. The first
+repetition of each combination also reports top-level bit-plane opcode counts
+and bytes, excluding the sparse-vector container and digest. Individual logs
+and one serialized output per combination are retained in the results directory.
+
+5. Experimental four-candidate reference-XOR selection
+
+-xor-candidates4 enables XOR and compares the incumbent recipe with up to three
+single-reference alternatives shortlisted by the existing block-gain estimate.
+Only blocks with an incumbent recipe participate; search limits, early stopping
+and estimator formulas are unchanged. The shortlist is captured before greedy
+chain refinement. Levels 7 and higher also enable shared reference metadata and polarity records. All complete record bytes count;
+ordinary encoding wins ties, followed by the incumbent. The mode is enabled by default at levels 7 and higher when XOR is enabled.
+The underlying serializer setting must be enabled before building the XOR model.
+
+python3 run_xor_candidates.py --program ./xsample05_neon \
+  --input /path/to/plain.sv --output /path/to/new-results-directory \
+  --levels 6 7 8 --repeats 3
+
+The harness alternates paired run order, checks every round trip and retains
+profiles, outputs, individual timings and a median summary. Optional --reference
+points to a previous NED matrix directory and requires baseline files to match it
+byte for byte. XOR counters report incumbent blocks, additional trials, changed
+block decisions and saved record bytes; composite metadata may change separately.
+
+7. Experimental compact wave masks
+
+-xor-h64 enables XOR and permits opcode 99 (bm::set_block_xor_ref8_h64).
+For a masked single reference with a row ID below 256, the reference prefix
+contains the opcode, row ID, an eight-bit presence mask, and the nonzero mask
+bytes in low-to-high order. One through six nonzero bytes make H64 smaller.
+Seven or eight use the existing fixed mask. The all-wave reference keeps its
+unmasked encoding. Combine -xor-h64 with -xor-candidates4 to price this prefix
+during each trial and with -profile-opcodes to count the emitted records.
+Files containing opcode 99 require a reader that supports it.
+
+8. Experimental parallel gather
+
+-xor-gather enables four-candidate XOR, H64 and parallel gather trials at depth
+16. Each target wave selects one source from the next sixteen reference rows
+using the symmetric density/run score. Missing blocks consume depth. Three
+complete records try current, sparse and dense residual polarity. Ordinary
+or vertical XOR wins ties against gather.
+
+Opcode 100 (bm::set_block_xor_gather) stores a flags byte, an H64 target mask
+and 32-bit-padded gamma coordinates. Bit 0 adds a polarity bit after each
+coordinate. Bit 1 encodes the positive difference between source and target
+global plane IDs. A record with any selected source ID at or below the target
+uses absolute IDs (source + 1). -xor-gather-absolute forces absolute IDs.
+Older absolute-ID records decode with the same meaning.
+
+The library's set_xor_gather(true, true) enables relative coordinates. When
+decoding, the destination vector identifies the target ID in the attached
+reference collection. For a separate destination, call set_gather_target_id()
+with the global target ID. Target wave positions are implicit. One ordinary
+residual block follows, and the decoder reconstructs before OR-ing target bits.
+
+Experimental opcode 106 arithmetic coding is enabled by presets 7–10. At level
+7 only pooled-nibble arithmetic competes when the final selection leaves a raw BIT block. At
+level 8 pooled-nibble arithmetic competes for originals and XOR/gather
+residuals. Levels 9–10 compare both byte and pooled-nibble models. Compare with
+-no-arithmetic; -arithmetic restores it after
+selecting the preset. Level 6 retains its original bytes. Opcode reports include
+final mode counts for originals and embedded XOR contexts.
+Experimental opcode 107 additionally tries byte and pooled-nibble arithmetic
+on the copied words of opcode 22 records at levels 9–10. Levels 7–8 try only
+pooled-nibble arithmetic on copied words, including XOR residuals. A histogram
+admission
+estimate excludes candidates unlikely to beat the complete current record.
+Its decoder uses bounded virtual zero lookahead after the physical payload.
+Example (unmapped input):
+  ./xsample05 -svin ned_plain.sv -svout L8.sv -level 8 -xor -profile-opcodes
+  ./xsample05 -svin ned_plain.sv -svout L8-off.sv -level 8 -xor -no-arithmetic
+
+Arithmetic alphabet override:
+  -arithmetic-mode nibble|byte|all
+Apply this after the level policy through the underlying bvector serializer's
+set_arithmetic_coding_mode(), using bm::arithmetic_coding_mode::nibble,
+bm::arithmetic_coding_mode::byte or bm::arithmetic_coding_mode::all.
+The presets use nibble at L7/L8 and all at L9/L10. Explicit mode overrides affect
+both raw-block and copied-word arithmetic candidates, including XOR residuals.
+
+5. Freeze and validate the compression reference matrix
+
+Build xsample05 first. Prepare one ordinary and one remapped sparse vector from
+exactly the same sorted NED names. `-svin` in the matrix consumes these prepared
+vectors; `-remap` applies when the inputs are prepared, not during a matrix case.
+For example, `run_all_compr.sh` can produce both inputs from a NED report.
+Creation first verifies that both prepared inputs contain the same strings in the
+same order.
+
+Create all levels 0–10 with reference XOR off/on for both inputs (44 cases):
+
+    ./create_references.sh --reference-dir /path/to/ned-references \
+        --bin ./xsample05_neon --plain /path/to/ned_plain.sv \
+        --remap /path/to/ned_remap.sv -j 4
+
+Validate every frozen stream with a current xsample05 executable:
+
+    ./validate_references.sh --reference-dir /path/to/ned-references \
+        --bin ./xsample05_neon -j 4
+
+`--levels 0,6,10` selects a staged subset. `-j` bounds simultaneous sample
+processes, not their internal threads. Both commands return a nonzero status if
+any case fails. The reference creator records the input and generator checksums
+in matrix.json. On restart it verifies completed cases and creates missing ones.
+It refuses a different generator or input in the same reference directory.
+Each case contains its stream, opcode profile, creation log, validation log,
+command, checksums and timing metadata. A failed or interrupted case remains
+under .partial with its logs, and published case directories are never replaced.
+A creator lock prevents two generators from publishing to the same directory.
+
+Validation compares each decoded stream with its matching prepared input vector.
+To use copies of the inputs at another path, pass `--plain` and `--remap` to the
+validation command. Their hashes must match matrix.json. Profile counts describe
+bit-plane blobs; complete stream size also includes sparse-vector framing.
