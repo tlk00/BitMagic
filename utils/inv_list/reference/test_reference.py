@@ -41,6 +41,14 @@ with tempfile.TemporaryDirectory(prefix='bm-reference-test-') as temporary:
     with (output / 'references.tsv').open() as stream:
         records = list(csv.DictReader(stream, delimiter='\t'))
     assert len(records) == 20
+    for row in records:
+        index = (output / row['stream_file']).with_suffix('.idx')
+        with index.open('rb') as stream:
+            assert stream.readline().split() == [b'BM_INV_BLOB_INDEX_V2', row['compressed_bytes'].encode(),
+                                                 row['vector_count'].encode(), row['compression_level'].encode()]
+            assert stream.read(2) == b'BM'
+        metadata = json.loads((output / 'reports' / index.stem / 'metadata.json').read_text())
+        assert metadata['index_format'] == 'BM_INV_BLOB_INDEX_V2'
     assert {row['status'] for row in records} == {'validated'}
     assert len({row['integer_count'] for row in records}) == 1
     manifests = list((output / 'reports').glob('*/metadata.json'))

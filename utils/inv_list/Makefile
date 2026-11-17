@@ -59,6 +59,11 @@ include ../../makefile.in
 # Shared serializer settings must rebuild the app even without generated dependencies.
 $(CXXOBJECTS): $(wildcard inv_list*.h) ../../src/bmbvhash.h ../../src/bmarithmetic.h
 
+# Compressed-sidecar inspection tool; no collection rewrite or benchmarks.
+.PHONY: inv-index
+inv-index:
+	$(CXX) $(CXXFLAGS) $(DBGFLAGS) reference/inv_index.cpp -o inv_index $(LDFLAGS)
+
 # Build this utility with BitMagic's native AArch64 NEON backend. Force the
 # object rebuild because changing BMOPTFLAGS alone does not update timestamps.
 .PHONY: neon

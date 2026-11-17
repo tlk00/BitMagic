@@ -153,23 +153,6 @@ def save_summary(out, rows):
     os.replace(temporary, out / 'summary.tsv')
 
 
-def validate_index(path, size, count):
-    """Check an entire generated BLOB index without assuming serialized byte identity."""
-    with path.open() as stream:
-        if stream.readline().split() != ['BM_INV_BLOB_INDEX_V1', str(size), str(count)]:
-            raise TestFailure('Rebuilt index header mismatch')
-        previous = -1
-        entries = 0
-        for line in stream:
-            offset = int(line)
-            if offset <= previous or (entries == 0 and offset != 0):
-                raise TestFailure('Rebuilt index offsets are invalid')
-            previous = offset
-            entries += 1
-    if entries != count + 1 or previous != size:
-        raise TestFailure('Rebuilt index scope mismatch')
-
-
 def ensure_hash_cache(args, baseline, source, golden, golden_index, phase):
     """Validate raw equality before first cache build; reuse only matching provenance.
 

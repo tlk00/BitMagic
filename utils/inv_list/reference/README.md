@@ -51,3 +51,31 @@ python3 reference/test_reference.py ./bminv_reference_neon
 For testing another platform binary against this immutable reference matrix,
 see [run_inv_test_pl.sh usage](README-inv-test.md). Fast mode still compares
 every raw ID; normal mode also rebuilds and tests candidates outside this tree.
+
+Compressed index storage:
+
+Every new collection and reference baseline writes `BM_INV_BLOB_INDEX_V2`
+sidecars using a BM sparse vector of unsigned 64-bit BLOB lengths at the
+collection's compression level. Only the compressed format is supported.
+Baseline publication explicitly checks the format, BLOB byte size, vector count
+and compression level. The threaded readers validate all cumulative boundaries.
+
+Build the optional native inspection tool from `utils/inv_list`:
+
+```bash
+make DEBUG=NO inv-index
+./inv_index check COLLECTION.idx COLLECTION.bv
+./inv_index dump COLLECTION.idx BLOB_BYTES
+python3 reference/test_index.py ./bminv
+```
+
+`check` validates all boundaries and decodes up to ten distributed indexed BLOBs.
+`dump` prints decimal boundaries for diagnostics; it does not create a sidecar.
+`write OUT LEVEL` accepts boundaries through stdin and writes a compressed
+sidecar, with an immediate every-offset readback check. Python research and test
+helpers share this native codec through `reference/index_io.py`, which builds a
+temporary scalar tool unless `INV_INDEX_TOOL` names an existing executable.
+
+`test_index.py` covers levels 0–10, large 64-bit lengths in a 32-bit BM build,
+indexed reads, malformed sidecars and rejection of the retired text format.
+`test_reference.py` verifies compressed indexes at every baseline level.

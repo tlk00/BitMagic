@@ -7,6 +7,8 @@ import re
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "reference"))
+from index_io import read_offsets, write_offsets
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--bin', required=True)
@@ -38,7 +40,8 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
     run(['-s', '-level', 6, '-threads', 2, '-u32in', raw,
          '-bvout', golden, '-bv-index-out', golden_index])
     golden_bytes = golden.read_bytes()
-    golden_index_text = golden_index.read_text()
+    golden_index_bytes = golden_index.read_bytes()
+    golden_offsets = read_offsets(golden_index, len(golden_bytes))
 
     for mapped in [False, True] if sys.platform != 'win32' else [False]:
         flags = ['-read-mmap'] if mapped else []
@@ -65,15 +68,13 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
         run([*common, '-verify', '-golden-bvin', short_blob, '-golden-index-in', short_index],
             'Golden collection vector count mismatch')
         # Extend the last golden BLOB: decoding must consume its exact indexed length.
-        lines = golden_index_text.splitlines()
-        header = lines[0].split()
-        header[1] = str(int(header[1]) + 1)
-        lines[0], lines[-1] = ' '.join(header), str(int(lines[-1]) + 1)
+        extended = golden_offsets.copy()
+        extended[-1] += 1
         golden.write_bytes(golden_bytes + b'\0')
-        golden_index.write_text('\n'.join(lines) + '\n')
+        write_offsets(golden_index, extended)
         run(compare, 'Golden BLOB decode or length mismatch')
         golden.write_bytes(golden_bytes)
-        golden_index.write_text(golden_index_text)
+        golden_index.write_bytes(golden_index_bytes)
         # Change an ID without changing cardinality/sortedness in first and later tasks.
         raw_offsets = []
         position = 0
@@ -81,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
             raw_offsets.append(position)
             length = int.from_bytes(raw_data[position:position + 4], sys.byteorder)
             position += 4 + length * 4
-        blob_offsets = list(map(int, index.read_text().splitlines()[1:]))
+        blob_offsets = read_offsets(index, len(encoded_data))
         for failed_vector in [0, 639]:
             changed = bytearray(raw_data)
             position = raw_offsets[failed_vector] + 4
@@ -108,38 +109,34 @@ with tempfile.TemporaryDirectory(prefix='bm-buffered-read-') as directory:
         run([*common, '-verify', '-u32in', raw], 'Truncated raw input vector')
         raw.write_bytes(raw_data)
         # One extra byte within the final indexed BLOB must fail exact consumption.
-        original_index = index.read_text()
-        lines = original_index.splitlines()
-        header = lines[0].split()
-        header[1] = str(int(header[1]) + 1)
-        lines[0], lines[-1] = ' '.join(header), str(int(lines[-1]) + 1)
-        index.write_text('\n'.join(lines) + '\n')
+        original_index = index.read_bytes()
+        extended = blob_offsets.copy()
+        extended[-1] += 1
+        write_offsets(index, extended)
         blob.write_bytes(encoded_data + b'\0')
         run([*common, '-decode'], 'Indexed BLOB decode or length mismatch')
-        index.write_text(original_index)
+        index.write_bytes(original_index)
         blob.write_bytes(encoded_data)
         # A later task must also fail with progress enabled or explicitly silenced.
-        last_begin = int(original_index.splitlines()[-2])
+        last_begin = blob_offsets[-2]
         truncated = encoded_data[:last_begin + 1]
-        lines = original_index.splitlines()
-        header = lines[0].split()
-        header[1] = str(len(truncated))
-        lines[0], lines[-1] = ' '.join(header), str(len(truncated))
-        index.write_text('\n'.join(lines) + '\n')
+        shortened = blob_offsets.copy()
+        shortened[-1] = len(truncated)
+        write_offsets(index, shortened)
         blob.write_bytes(truncated)
         for reporting in [[], ['-progress-vectors', 1], ['-progress-vectors', 1, '-silent']]:
             text = run([*common, *reporting, '-decode'], 'Decode worker failed')
             assert 'vector_index=639' in text and f'blob_begin={last_begin}' in text
             assert str(blob) in text
-        index.write_text(original_index)
+        index.write_bytes(original_index)
         blob.write_bytes(encoded_data)
         # Oversized indexed payload is rejected before loading/mapping the range.
         blob.write_bytes(b'')
         with blob.open('wb') as stream:
             stream.truncate(1024 * 1024 + 1)
-        index.write_text('BM_INV_BLOB_INDEX_V1 1048577 1\n0\n1048577\n')
+        write_offsets(index, [0, 1048577])
         run([*common, '-decode'], 'Vector exceeds read batch budget')
-        index.write_text(original_index)
+        index.write_bytes(original_index)
         blob.write_bytes(encoded_data)
     # Vectors above half the budget retain the full-budget fallback. Put small
     # vectors around them to exercise drain-before-read and slot reuse.

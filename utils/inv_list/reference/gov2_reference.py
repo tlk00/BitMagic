@@ -413,9 +413,14 @@ def generate(args, binary, frozen, matrix, info, dataset, level, key, entries):
             raise RuntimeError('Refusing to overwrite existing reference artifacts')
         stream_hash = digest(profile / 'candidate.bv')
         size = (profile / 'candidate.bv').stat().st_size
+        with (profile / 'candidate.idx').open('rb') as stream:
+            expected = [b'BM_INV_BLOB_INDEX_V2', str(size).encode(), str(count).encode(), str(level).encode()]
+            if stream.readline().split() != expected or stream.read(2) != b'BM':
+                raise RuntimeError('Baseline generation requires a compressed BM index at the collection level')
         row = dict(dataset='Gov2.' + dataset, compression_level=level, status='validated', stream_file=stream_path.name,
                    vector_count=count, integer_count=ids, input_bytes=info['bytes'], input_sha256=info['sha256'],
                    compressed_bytes=size, index_bytes=(profile / 'candidate.idx').stat().st_size,
+                   index_format='BM_INV_BLOB_INDEX_V2',
                    bits_per_id=8 * size / ids, compressed_to_input_ratio=size / info['bytes'],
                    compression_wall_seconds=timings['compress'], threaded_verify_wall_seconds=timings['verify'],
                    serial_verify_wall_seconds=timings['verify-serial'], decode_wall_seconds=timings['decode'],

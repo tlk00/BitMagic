@@ -9,6 +9,7 @@
 #include <cerrno>
 #include <cstring>
 #include "inv_list_progress.h"
+#include "inv_list_index.h"
 #include "inv_list_reports.h"
 #include "inv_list_read_buffer.h"
 #include "inv_list_worker_error.h"
@@ -363,12 +364,7 @@ static void compress_inv_dump_file_parallel(const std::string& fname,
     }
     if (!bv_index_out_file.empty())
     {
-        std::ofstream index(bv_index_out_file.c_str(), std::ios::out | std::ios::trunc);
-        if (!index) throw std::runtime_error("Cannot open BLOB index output");
-        index << "BM_INV_BLOB_INDEX_V1 " << output_bytes << ' ' << emitted << '\n';
-        for (bm::id64_t offset : blob_offsets) index << offset << '\n';
-        index.close();
-        if (!index) throw std::runtime_error("Error writing BLOB index");
+        write_inv_blob_offsets(bv_index_out_file, blob_offsets, unsigned(c_level));
     }
 
     if (opcode_collector)
@@ -383,34 +379,6 @@ static void compress_inv_dump_file_parallel(const std::string& fname,
     if (prepared!=emitted) throw std::logic_error("Prepared/emitted vector count mismatch");
     inv_report_compression_summary(cout, compression_diagnostics, prepared, emitted, peak_input_bytes, worker_seconds, head_wait_seconds, fin.tellg(), fsize, total_ints, total_min_delta, output_bytes);
 
-}
-
-// The sidecar marks BLOB boundaries, which cannot be inferred from a byte
-// offset without parsing the preceding self-delimiting BLOB.
-static std::vector<bm::id64_t> read_inv_blob_offsets(
-    const std::string& path, bm::id64_t file_bytes)
-{
-    std::ifstream input(path.c_str());
-    std::string magic;
-    bm::id64_t indexed_bytes = 0, count = 0;
-    if (!(input >> magic >> indexed_bytes >> count) ||
-        magic != "BM_INV_BLOB_INDEX_V1" || indexed_bytes != file_bytes ||
-        !count || count > 100000000)
-        throw std::runtime_error("Invalid or stale BLOB index header");
-    std::vector<bm::id64_t> offsets;
-    offsets.reserve(size_t(count + 1));
-    for (bm::id64_t i = 0; i <= count; ++i)
-    {
-        bm::id64_t offset;
-        if (!(input >> offset) || offset > file_bytes ||
-            (i && offset <= offsets.back()) || (!i && offset))
-            throw std::runtime_error("Invalid BLOB index offset");
-        offsets.push_back(offset);
-    }
-    std::string extra;
-    if (offsets.back() != file_bytes || (input >> extra))
-        throw std::runtime_error("BLOB index does not cover exact file");
-    return offsets;
 }
 
 /** @internal One indexed read task and borrowed slices, owned until worker completion. */

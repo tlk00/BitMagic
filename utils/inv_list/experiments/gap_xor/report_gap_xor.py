@@ -3,22 +3,18 @@
 import pathlib
 import re
 import sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "reference"))
+from index_io import read_offsets
 
 
 def index_count_and_size(path, count):
-    with open(path, encoding='ascii') as inp:
-        first = inp.readline().split()
-        if len(first) != 3 or first[0] != 'BM_INV_BLOB_INDEX_V1':
-            raise SystemExit(f'Bad BLOB index: {path}')
-        total = int(first[2])
-        if count == 0:
-            count = total
-        if count > total:
-            raise SystemExit(f'Reference has {total} vectors; requested {count}')
-        offsets = [int(inp.readline()) for _ in range(count + 1)]
-        if offsets[0] != 0 or offsets != sorted(offsets):
-            raise SystemExit(f'Bad offsets in {path}')
-        return offsets[-1]
+    """Return the byte end of the requested prefix of a compressed collection."""
+    offsets = read_offsets(path)
+    total = len(offsets) - 1
+    count = count or total
+    if count > total:
+        raise SystemExit(f'Reference has {total} vectors; requested {count}')
+    return offsets[count]
 
 
 def elapsed(path):
@@ -44,11 +40,8 @@ def stats(text):
 
 
 def total_in_index(path):
-    with open(path, encoding='ascii') as inp:
-        parts = inp.readline().split()
-    if len(parts) != 3 or parts[0] != 'BM_INV_BLOB_INDEX_V1':
-        raise SystemExit(f'Bad BLOB index: {path}')
-    return int(parts[2])
+    """Return the validated compressed index's vector count."""
+    return len(read_offsets(path)) - 1
 
 
 def require_full_input(log):

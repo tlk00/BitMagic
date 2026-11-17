@@ -41,9 +41,10 @@ if not size or not count or int(count[1]) == 0:
     raise SystemExit('Compression log has no completed stream summary')
 if (p / 'candidate.bv').stat().st_size != int(size[1]):
     raise SystemExit('Saved stream size differs from compression log')
-with (p / 'candidate.idx').open() as stream:
+with (p / 'candidate.idx').open('rb') as stream:
     header = stream.readline().split()
-if header != ['BM_INV_BLOB_INDEX_V1', size[1], count[1]]:
+if (len(header) != 4 or header[:3] != [b'BM_INV_BLOB_INDEX_V2', size[1].encode(), count[1].encode()] or
+        not header[3].isdigit() or not 0 <= int(header[3]) <= 10):
     raise SystemExit('Saved index header differs from compression log')
 CHECK
 LIMIT=$(awk '/^Vectors: / {print $2; exit}' "$RUN/run.txt")

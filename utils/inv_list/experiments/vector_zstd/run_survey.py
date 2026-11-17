@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
+import sys
 
 
 class Zstd:
@@ -56,18 +57,13 @@ class Zstd:
         return frame, encode_s, decode_s
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "reference"))
+from index_io import read_offsets
+
+
 def index(path):
-    """Validate the frozen collection index and return its vector boundaries."""
-    with path.open() as stream:
-        signature, size, count = stream.readline().split()
-        positions = list(map(int, stream))
-    if signature != "BM_INV_BLOB_INDEX_V1" or len(positions) != int(count)+1:
-        raise ValueError("Invalid reference index")
-    if positions[0] or positions[-1] != int(size):
-        raise ValueError("Invalid index endpoints")
-    if any(b <= a for a, b in zip(positions, positions[1:])):
-        raise ValueError("Invalid index order")
-    return positions
+    """Decode and validate all compressed reference BLOB boundaries."""
+    return read_offsets(path)
 
 
 def dataset(args, codec, name, ordinals):

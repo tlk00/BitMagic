@@ -8,6 +8,8 @@ import struct
 import sys
 import subprocess
 import tempfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "reference"))
+from index_io import read_offsets, write_offsets
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--bin', required=True, type=Path)
@@ -112,17 +114,14 @@ with tempfile.TemporaryDirectory(prefix='block-sha-fixture-') as directory:
     # Exact consumption catches a valid BLOB followed by extra indexed bytes.
     saved_blob = paths[1].read_bytes()
     index_path = paths[1].with_suffix('.idx')
-    saved_index = index_path.read_text()
-    lines = saved_index.splitlines()
-    header = lines[0].split()
-    header[1] = str(int(header[1]) + 1)
-    lines[0] = ' '.join(header)
-    lines[-1] = str(int(lines[-1]) + 1)
+    saved_index = index_path.read_bytes()
+    offsets = read_offsets(index_path, len(saved_blob))
+    offsets[-1] += 1
     paths[1].write_bytes(saved_blob + b'\0')
-    index_path.write_text('\n'.join(lines) + '\n')
+    write_offsets(index_path, offsets, 10)
     invoke('--mode', 'cached', *candidate, '--cache', caches[0], *common, fail='BLOB decode/length mismatch')
     paths[1].write_bytes(saved_blob)
-    index_path.write_text(saved_index)
+    index_path.write_bytes(saved_index)
     # A one-record cache cannot validate a full candidate collection.
     prefix_cache = root / 'prefix'
     invoke('--mode', 'cache-bv', *candidate, '--cache', prefix_cache, *common, '--max-vectors', 1)

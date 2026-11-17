@@ -25,13 +25,14 @@ def read(mode, root, limit):
         raise SystemExit('Verification ID count differs')
     if (d/'candidate.bv').stat().st_size != size:
         raise SystemExit('Stream size differs from log')
-    lines = (d/'candidate.idx').read_text().splitlines()
-    if lines[0].split() != ['BM_INV_BLOB_INDEX_V1', str(size), str(vectors)]:
-        raise SystemExit('Index header mismatch')
-    offsets = list(map(int, lines[1:]))
-    if len(offsets) != vectors + 1 or offsets[0] != 0 or offsets[-1] != size or any(
-            b <= a for a, b in zip(offsets, offsets[1:])):
-        raise SystemExit('Invalid index offsets')
+    with (d/'candidate.idx').open('rb') as stream:
+        header = stream.readline().split()
+        if (len(header) != 4 or header[:3] !=
+                [b'BM_INV_BLOB_INDEX_V2', str(size).encode(), str(vectors).encode()] or
+                not header[3].isdigit() or not 0 <= int(header[3]) <= 10 or
+                stream.read(2) != b'BM'):
+            raise SystemExit('Compressed index header mismatch')
+    # The successful indexed verification/decode checked all boundaries natively.
     timings = [float((d/f'{p}.time').read_text().split()[0])
                for p in ('compress', 'verify', 'decode')]
     return dict(vectors=vectors, ids=ids, size=size, timings=timings, log=logs['compress'])

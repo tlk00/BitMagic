@@ -27,6 +27,7 @@ https://www.apache.org/licenses/LICENSE-2.0
 #include "bmfio.h"
 #include "bmserial_profile.h"
 #include "inv_list_read_buffer.h"
+#include "inv_list_index.h"
 
 using Digest = std::array<unsigned char, 32>;
 using BV = bm::bvector<>;
@@ -170,34 +171,16 @@ static void read_exact(std::istream& stream, void* data, size_t size)
     }
 }
 
-/** Parse an existing inv_list index and validate exact coverage of path's bytes. */
+/** Decode a compressed index and validate exact coverage of its BLOB file.
+    @param path BLOB filename, borrowed for this call.
+    @param index Compressed sidecar filename, borrowed for this call.
+    @return Owned N+1 BLOB boundaries, including zero.
+    @throws std::runtime_error on invalid index or mismatched BLOB size.
+*/
 static std::vector<uint64_t> offsets(const std::string& path, const std::string& index)
 {
-    std::ifstream input(index);
-    std::string magic, extra;
-    uint64_t bytes = 0, count = 0;
-    if (!(input >> magic >> bytes >> count) || magic != "BM_INV_BLOB_INDEX_V1" ||
-        bytes != file_size(path) || !count || count > 100000000)
-    {
-        throw std::runtime_error("Invalid index header: " + index);
-    }
-    std::vector<uint64_t> result;
-    result.reserve(size_t(count + 1));
-    for (uint64_t i = 0; i <= count; ++i)
-    {
-        uint64_t position = 0;
-        if (!(input >> position) || position > bytes || (!i && position) ||
-            (i && position <= result.back()))
-        {
-            throw std::runtime_error("Invalid index offset: " + index);
-        }
-        result.push_back(position);
-    } // for i
-    if (result.back() != bytes || input >> extra)
-    {
-        throw std::runtime_error("Index coverage mismatch: " + index);
-    }
-    return result;
+    const auto decoded = read_inv_blob_offsets(index, file_size(path));
+    return std::vector<uint64_t>(decoded.begin(), decoded.end());
 }
 
 /** Decode a fresh vector from borrowed bytes and demand exact indexed consumption. */

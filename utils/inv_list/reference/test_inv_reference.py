@@ -11,6 +11,7 @@ import sys
 import tempfile
 
 from gov2_reference import digest
+from index_io import read_offsets, write_offsets
 
 HERE = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser(description=__doc__)
@@ -197,13 +198,11 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
                 golden_blob.write_bytes(bytes([255]) + saved_golden[1:])
                 expected_error = 'worker failed'
             else:
-                lines = saved_index.decode().splitlines()
-                offsets = list(map(int, lines[1:]))
+                offsets = read_offsets(selected_index, len(saved_blob))
                 removed = offsets[1] - 1
                 damaged = saved_blob[:1] + saved_blob[offsets[1]:]
                 selected.write_bytes(damaged)
-                selected_index.write_text(f'BM_INV_BLOB_INDEX_V1 {len(damaged)} {len(offsets)-1}\n0\n' +
-                                          '\n'.join(str(value-removed) for value in offsets[1:]) + '\n')
+                write_offsets(selected_index, [0] + [value - removed for value in offsets[1:]], 10)
                 expected_error = 'worker failed'
             invoke([*common, '--out', out, '--fast', '--start-level', 10, '--silent'], 1)
             phase = 'golden-verify-threaded' if failure in ('verify', 'golden-deserialize') else 'reference-verify-threaded'

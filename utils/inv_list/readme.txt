@@ -18,6 +18,16 @@ threaded verification and decoding. Older length-prefixed collections need
 to be regenerated. Retired -svin/-svout options fail explicitly; use the
 separate experiments/sparse_vector utility.
 
+New .idx files use BM_INV_BLOB_INDEX_V2: an ASCII header containing the .bv
+byte size, vector count and collection compression level, followed by a BM
+sparse_vector of unsigned 64-bit BLOB lengths. Reconstructing cumulative lengths
+produces N+1 boundaries including zero. Values can exceed 32 bits even with
+a 32-bit BM build. The index uses the same -level as the collection and is
+excluded from reported stream bits/ID. Only compressed V2 indexes are supported.
+Decoded boundaries must increase strictly and end at the exact .bv size.
+Baseline generation uses this same BM format and collection compression level.
+See reference/README.md for index inspection and focused validation commands.
+
 CURRENT GOV2 WORKFLOW
 See experiments/current/README.md for the full sorted/unsorted harness,
 USB output requirements, profiling, and focused validation commands.
