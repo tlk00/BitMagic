@@ -23,6 +23,18 @@ class SoundtrackTests(unittest.TestCase):
         self.piper_environment.start()
         self.addCleanup(self.piper_environment.stop)
 
+    def test_varyag_preview_is_mono_and_respects_volume(self):
+        """The bundled preview retains its duration and is bounded at maximum volume."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'varyag.wav'
+            duration = soundtrack.render_varyag(path, 1.0)
+            self.assertAlmostEqual(duration, 80, places=2)
+            with wave.open(str(path), 'rb') as stream:
+                self.assertEqual((stream.getnchannels(), stream.getsampwidth(), stream.getframerate()),
+                                 (1, 2, 22050))
+                samples = array.array('h', stream.readframes(stream.getnframes()))
+            self.assertLessEqual(max(abs(value) for value in samples), 32767)
+
     def test_station_announcement_waits_and_ducks_bed(self):
         """Station speech starts at eight seconds and reduces the bed by 20 percent."""
         with tempfile.TemporaryDirectory() as directory:

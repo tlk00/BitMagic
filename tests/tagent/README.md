@@ -184,6 +184,14 @@ The continuous excerpt was resampled, normalized and mixed with quiet workshop s
 the resulting `assets/depot.wav` is distributed under the same license. To
 reproduce it, convert the source to 22050 Hz, 16-bit mono WAV and run
 `python3 tests/tagent/generate_depot_ambient.py SHERMAN.wav`.
+The rare 80-second `assets/varyag-train.wav` mixes recording 01, «Гибель
+Варяга», performed by the choir of V. S. Varshavsky with O. I. Shirshov,
+from the [Nizhny Novgorod State Museum collection](https://varyag.ngiamz.ru/),
+with the train ambience described below. The museum dates the record to
+1911–1919; permission for redistribution of this digitization has not been
+confirmed. It plays only in steampunk test phases after a random 3–5 hours,
+then at random 3–5 hour intervals while the cycle continues. Preview with
+`./run_tagent.sh --sound-preview varyag`. The sound demo includes it.
 The moving-train loop combines and modifies [Стук колёс поезда](https://commons.wikimedia.org/wiki/File:%D0%A1%D1%82%D1%83%D0%BA_%D0%BA%D0%BE%D0%BB%D1%91%D1%81_%D0%BF%D0%BE%D0%B5%D0%B7%D0%B4%D0%B0.ogg)
 by Ural-66 and [Passenger Train on the run](https://freesound.org/people/ceejay/sounds/76078/)
 by ceejay, plus [Railway Line & Signal Lights](https://freesound.org/people/dbache/sounds/351425/)

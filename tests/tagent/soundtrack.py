@@ -25,6 +25,26 @@ MORSE = dict(zip('ABCDEFGHIJKLMNOPQRSTUVWXYZ', (
 MORSE[','] = '--..--'
 
 
+def render_varyag(path, volume):
+    """Scale the approved 22.05 kHz mono Varyag and train preview."""
+    asset = Path(__file__).resolve().parent / 'assets' / 'varyag-train.wav'
+    with wave.open(str(asset), 'rb') as source:
+        if (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (1, 2, 22050):
+            raise ValueError('Invalid Varyag audio format')
+        samples = array.array('h', source.readframes(source.getnframes()))
+    if sys.byteorder != 'little':
+        samples.byteswap()
+    peak = max((abs(value) for value in samples), default=0)
+    gain = min(volume / .35, 32767 / peak) if peak else 0
+    samples = array.array('h', (max(-32768, min(32767, round(value * gain))) for value in samples))
+    if sys.byteorder != 'little':
+        samples.byteswap()
+    with wave.open(str(path), 'wb') as output:
+        output.setparams((1, 2, 22050, 0, 'NONE', 'not compressed'))
+        output.writeframes(samples.tobytes())
+    return len(samples) / 22050
+
+
 def render_manchuria_station(path, volume):
     """Scale the approved station and waltz mix from its reference volume of 0.35.
 

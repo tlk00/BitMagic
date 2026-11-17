@@ -281,7 +281,7 @@ def arguments():
                 '  ./run_tagent.sh --log-dir /mnt/d/TAgent-logs --sound-volume 1.0 --force --log-retention-days 2 --poll-minutes 15 --fast\n\n'
                 'Preview events: ' + ', '.join(soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress',
                 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot',
-                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'cache-progress', 'foreman-build-reply', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
+                'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'varyag', 'station-visit', 'toronto', 'compilation-depot', 'cache-progress', 'foreman-build-reply', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear',
                 'build-warning', 'build-final-ok', 'build-final-failed')) + '\n\n'
                 'Defaults reflect launcher settings or environment variables; command-line options override them.'))
     numeric_options = [
@@ -375,7 +375,7 @@ def arguments():
                         help='comma-separated eSpeak voices for build and remote reports (default: %(default)s)')
     parser.add_argument('--sound-demo', action='store_true',
                         help='Play a complete theme demonstration and exit without Git/builds')
-    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'station-visit', 'toronto', 'compilation-depot', 'cache-progress', 'foreman-build-reply', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
+    parser.add_argument('--sound-preview', nargs='?', const='all', metavar='EVENT', choices=soundtrack.EVENTS + ('joker', 'joker-reply', 'interrupt', 'station-perf', 'station-stress', 'all', 'perf-progress', 'repo-restart', 'repo-new', 'repo-build', 'repo-unchanged', 'depot', 'train-ambient', 'train-normal-ambient', 'train-stop', 'station-manchuria', 'varyag', 'station-visit', 'toronto', 'compilation-depot', 'cache-progress', 'foreman-build-reply', 'fireman', 'inv-progress', 'dispatch', 'depart-perf', 'depart-stress', 'build-clear', 'build-warning', 'build-final-ok', 'build-final-failed'),
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
@@ -491,6 +491,7 @@ class Agent:
         self.last_sound = 0
         self.last_station_visit = -math.inf
         self.next_intermediate_station = math.inf
+        self.next_varyag_at = math.inf
         self.station_visit_lock = threading.RLock()
         self.next_train_at = math.inf
         self.audio_thread = None
@@ -866,6 +867,7 @@ class Agent:
                     if log and log.name in ('perf.log', 'runner.log', 'inv-runner.log'):
                         self.report_intermediate_station()
                         self.report_fireman()
+                        self.report_varyag()
                     if log and log.name == 'inv-runner.log':
                         if self.inv_active:
                             self.report_inv_progress(*self.inv_active)
@@ -1392,9 +1394,9 @@ class Agent:
             self.audio_pending = {key: thread for key, thread in self.audio_pending.items() if thread.is_alive()}
             if event == 'fail' and self.audio_failure_thread and self.audio_failure_thread.is_alive():
                 return
-            coalesced = ('cache-progress', 'station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work',
+            coalesced = ('cache-progress', 'station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'varyag', 'work',
                          'dispatch', 'repo-unchanged', 'build-clear', 'build-warning')
-            phase_events = ('cache-progress', 'station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'work', 'dispatch')
+            phase_events = ('cache-progress', 'station-perf', 'station-stress', 'station-intermediate', 'perf-progress', 'inv-progress', 'joker', 'fireman', 'varyag', 'work', 'dispatch')
             pending_key = (event, self.audio_phase_generation if event in phase_events else None)
             if event in coalesced and pending_key in self.audio_pending:
                 return
@@ -2053,6 +2055,8 @@ class Agent:
                 duration = soundtrack.render_train_stop(path, self.args.sound_volume)
             elif event == 'station-manchuria':
                 duration = soundtrack.render_manchuria_station(path, self.args.sound_volume)
+            elif event == 'varyag':
+                duration = soundtrack.render_varyag(path, self.args.sound_volume)
             elif event == 'train-normal-demo':
                 duration = depot.render_preview(path, self.args.sound_volume, 'train-normal', seconds=30)
             elif event in ('depot', 'train-ambient', 'train-normal-ambient'):
@@ -2398,6 +2402,19 @@ class Agent:
             self.next_intermediate_station = now + random.uniform(3000, 5400)
             self.sound('station-intermediate', workers=(
                 'Conductor to Dispatch. Arriving at {}. Testing continues on schedule.'.format(destination)))
+
+    def report_varyag(self):
+        """Play the rare archival recording only while tests are active."""
+        if (self.test_started_at is None or self.stopping.is_set() or self.args.no_sound or
+                self.args.sound_volume <= 0 or not self.audio_available or self.args.sound_theme != 'steampunk'):
+            return
+        with self.station_visit_lock:
+            now = time.monotonic()
+            if now < self.next_varyag_at or (self.audio_thread and self.audio_thread.is_alive()):
+                return
+            self.next_varyag_at = now + random.uniform(10800, 18000)
+            self.say('STEAMPUNK SOUND | archival Varyag recording')
+            self.sound('varyag')
 
     def test_inv_stage(self, run, manifest):
         """Validate reference collections with supported inv_list binaries in sequence."""
@@ -2747,6 +2764,7 @@ class Agent:
         self.say('SAMPLES BUILD COMPLETE | warnings: {}'.format(self.sample_warnings.count))
         self.finish_build(True)
         self.test_started_at = time.monotonic()
+        self.next_varyag_at = self.test_started_at + random.uniform(10800, 18000)
         self.fireman_clock.start()
         with self.station_visit_lock:
             self.next_intermediate_station = max(self.test_started_at, self.last_station_visit) + random.uniform(3000, 5400)
@@ -2929,6 +2947,7 @@ class Agent:
                 sequence.append(('foreman-build-reply', FOREMAN_BUILD_REPLIES[0]))
                 sequence.append(('train-stop', 1))
                 sequence.append(('station-manchuria', 1))
+                sequence.append(('varyag', 1))
                 sequence.append(('fireman', 'Fireman Sam to Engineer Joe. We are pulling hard up this grade! The engine needs every pound of steam we can give her!'))
                 sequence.append(('toronto', 'Conductor to Dispatch. Arriving at Long Haul Junction. Testing continues on schedule.'))
             clips = []

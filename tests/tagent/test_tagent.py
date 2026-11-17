@@ -1321,9 +1321,38 @@ class SupervisorTests(unittest.TestCase):
         self.assertIn('toronto', events)
         self.assertIn('train-stop', events)
         self.assertIn('station-manchuria', events)
+        self.assertIn('varyag', events)
         self.assertIn('depart-perf', events)
         self.assertIn('fail', events)
 
+    def test_varyag_easter_egg_is_rare_and_requires_active_tests(self):
+        """The recording is scheduled once when due and not outside testing."""
+        self.agent.args.no_sound = False
+        self.agent.audio_available = True
+        self.agent.test_started_at = 1
+        self.agent.next_varyag_at = 100
+        with patch.object(ta.time, 'monotonic', return_value=100), \
+             patch.object(ta.random, 'uniform', return_value=10800), \
+             patch.object(self.agent, 'sound') as sound:
+            self.agent.report_varyag()
+            self.agent.report_varyag()
+            sound.assert_called_once_with('varyag')
+            self.assertEqual(self.agent.next_varyag_at, 10900)
+            self.agent.test_started_at = None
+            self.agent.next_varyag_at = 0
+            self.agent.report_varyag()
+            sound.assert_called_once()
+
+    def test_varyag_preview_renders_without_audio_device(self):
+        """The individual preview produces its WAV on a headless host."""
+        self.agent.audio_available = False
+        self.agent.args.sound_preview = 'varyag'
+        self.agent.audio_dir.mkdir(parents=True, exist_ok=True)
+        self.agent.play_sound('varyag', 1)
+        path = self.agent.audio_dir / 'sound-steampunk-varyag.wav'
+        with wave.open(str(path), 'rb') as stream:
+            self.assertEqual(stream.getnchannels(), 1)
+            self.assertEqual(stream.getnframes(), 80 * 22050)
     def test_fast_cycle_upgrades_to_normal_without_rebuilding(self):
         """A clear remote check runs normal stages on the existing binaries."""
         self.fixture()
