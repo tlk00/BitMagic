@@ -207,11 +207,35 @@ any case fails. The reference creator records the input and generator checksums
 in matrix.json. On restart it verifies completed cases and creates missing ones.
 It refuses a different generator or input in the same reference directory.
 Each case contains its stream, opcode profile, creation log, validation log,
-command, checksums and timing metadata. A failed or interrupted case remains
+command, checksums and timing metadata. A failed or interrupted creation case remains
 under .partial with its logs, and published case directories are never replaced.
+Validation outputs are retained separately under --out (see below).
 A creator lock prevents two generators from publishing to the same directory.
 
 Validation compares each decoded stream with its matching prepared input vector.
 To use copies of the inputs at another path, pass `--plain` and `--remap` to the
 validation command. Their hashes must match matrix.json. Profile counts describe
 bit-plane blobs; complete stream size also includes sparse-vector framing.
+
+Portable reference validation and TAgent
+----------------------------------------
+Creation now bundles prepared inputs under inputs/plain.sv and inputs/remap.sv.
+For an existing reference, prepare a portable copy before transferring it:
+
+    python3 reference_matrix.py bundle --reference-dir /path/to/XSAMPLE05-REFERENCES \
+        --plain /path/to/ned.sv --remap /path/to/ned_remap.sv
+
+Bundling verifies SHA-256 against matrix.json and preserves the existing case
+metadata. Validation prefers bundled inputs; explicit --plain/--remap override
+them, and old absolute input paths remain a fallback for legacy references.
+
+    ./validate_references.sh --reference-dir /path/to/XSAMPLE05-REFERENCES \
+        --bin ./xsample05 --out /path/to/new-validation-results -j 4
+
+--out must be a new directory outside the reference. Validation leaves the
+reference untouched and retains every case's command.json and validation.log,
+including successful cases. progress.json records completed cases and durations.
+A case failure or interruption stops active reader process groups and prevents
+queued cases from starting. Errors name the case, exit code or signal, and log.
+The default validation matrix remains all 44 cases; --levels selects a subset.
+TAgent uses all 44 cases in every mode, once per build, before inv_list.

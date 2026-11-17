@@ -858,3 +858,25 @@ minutes should not be summed to obtain parent duration. A failure immediately
 replaces the report with a DERAILED header, phase, diagnostics and log paths.
 The final test snapshot is also saved immediately. A new voyage replaces the
 previous report; the journal is not reconstructed across launcher restarts.
+
+### XSample05 reference station
+
+After ordinary samples and before inv_list, TAgent optionally validates every
+saved xsample05 case (44: levels 0–10, plain/remapped, XOR off/on). It uses the
+fresh default `samples/xsample05/xsample05` built by the samples Makefile, with
+the configured worker budget and jemalloc when available. All modes validate the
+full matrix; the express-to-normal upgrade does not repeat this station.
+
+Copy the complete portable reference under `TAgent-logs/XSAMPLE05-REFERENCES*`,
+or set `--path-to-xsample05-ref PATH`. No automatic match means SKIPPED; multiple
+matches, an explicitly missing directory, incomplete data, checksum mismatch or
+reader failure stops the voyage. `--suppress xsample05` disables this station.
+
+The reference must contain `matrix.json`, `cases/` and matching prepared inputs
+under `inputs/plain.sv` and `inputs/remap.sv`. See the xsample05 README for bundling
+legacy references. Results live in the cycle's `xsample05/xsample05/` directory:
+`xsample05.log`, `command.json`, `results/progress.json`, and per-case command and
+validation logs. Successful logs are retained. The first failure terminates the
+reader process groups, identifies the case, signal/exit code and log, and derails
+TAgent immediately. The travel journal records the station and default reader;
+case progress is printed from the runner's structured progress file, without TTS.

@@ -308,6 +308,7 @@ def arguments():
     parser.add_argument('--startup', choices=('build', 'changed'),
                         default=os.environ.get('STARTUP', 'build'),
                         help='build on every manual start, or only when changed (default: %(default)s)')
+    parser.add_argument('--path-to-xsample05-ref', type=Path, help='optional xsample05 reference; default: discover XSAMPLE05-REFERENCES* under log directory')
     parser.add_argument('--path-to-invref', type=Path, help='Gov2 reference directory; default: discover gov2-reference-* under log directory')
     parser.add_argument('--inv-cache-dir', type=Path, default=os.environ.get('INV_CACHE_DIR') or None,
                         help='optional existing reference cache directory (default: /mnt/c/TAgent-cache on Linux if present)')
@@ -321,7 +322,7 @@ def arguments():
     reader.add_argument('--no-read-mmap', '--no-inv-read-mmap', dest='inv_read_mmap', action='store_false',
                         help='use buffered inv_list reads instead of Unix mapping windows')
     parser.set_defaults(inv_read_mmap=os.name == 'posix' and os.environ.get('INV_READ_MMAP', 'yes') != 'no')
-    parser.add_argument('--suppress', action='append', default=[], metavar='STAGES', help='skip test stages: perf, inv_list, stress; comma-separated or repeat option')
+    parser.add_argument('--suppress', action='append', default=[], metavar='STAGES', help='skip test stages: perf, inv_list, stress, xsample05; comma-separated or repeat option')
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
         'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
@@ -380,8 +381,8 @@ def arguments():
                         help='play EVENT, or all events if omitted, without Git/build validation; examples: joker, perf-progress, repo-restart, depot, train-ambient')
     args = parser.parse_args()
     args.suppress = {part.strip() for group in args.suppress for part in group.split(',') if part.strip()}
-    if args.suppress - {'perf', 'inv_list', 'stress'}:
-        parser.error('--suppress accepts perf, inv_list, stress')
+    if args.suppress - {'perf', 'inv_list', 'stress', 'xsample05'}:
+        parser.error('--suppress accepts perf, inv_list, stress, xsample05')
     if args.inv_read_memory_mib is not None and not 1 <= args.inv_read_memory_mib <= sys.maxsize // (1024 * 1024):
         parser.error('--read-memory-mib must be positive and fit host address limits')
     if args.inv_read_mmap and os.name != 'posix':
@@ -809,7 +810,7 @@ class Agent:
         temp_dir overrides the shared temporary directory for isolated workloads.
         """
         entry = None
-        if log and log.name in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log', 'perf.log', 'runner.log', 'inv-runner.log'):
+        if log and log.name in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log', 'perf.log', 'runner.log', 'inv-runner.log', 'xsample05.log'):
             name = log.stem.replace('build-', '') if log.name.startswith('build-') else log.parent.name
             entry = self.journal.start(name, self.journal_parent, log)
         output = None
@@ -820,7 +821,7 @@ class Agent:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
                 if log and self.pending_tip and (log.name == 'perf.log' or
-                        (self.args.restart_on_update and log.name in ('sample.log', 'runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
+                        (self.args.restart_on_update and log.name in ('sample.log', 'xsample05.log', 'runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
                 scratch = temp_dir or self.temp_dir
@@ -839,6 +840,7 @@ class Agent:
                     self.perf_logs[proc] = log
             started = time.monotonic()
             next_job_message = started
+            last_xsample_progress = None
             while True:
                 try:
                     result, diagnostics = proc.communicate(timeout=min(10, timeout) if timeout else 10)
@@ -864,7 +866,7 @@ class Agent:
                                 return 'skipped-update'
                     else:
                         now = time.monotonic()
-                        is_test = log and log.name in ('sample.log', 'perf.log', 'runner.log', 'inv-runner.log')
+                        is_test = log and log.name in ('sample.log', 'xsample05.log', 'perf.log', 'runner.log', 'inv-runner.log')
                         if not is_test or self.test_started_at is None or now >= next_job_message:
                             if log:
                                 mode = 'Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'
@@ -887,7 +889,17 @@ class Agent:
                         if self.args.restart_on_update and self.pending_tip:
                             self.check_update_failure(proc, log)
                             return 'skipped-update'
-                    if log and log.name == 'sample.log':
+                    if log and log.name in ('sample.log', 'xsample05.log'):
+                        if log.name == 'xsample05.log':
+                            progress = log.parent / 'results/progress.json'
+                            try:
+                                data = json.loads(progress.read_text())
+                                count = (data['passed'], data['total'])
+                                if count != last_xsample_progress:
+                                    self.say('XSAMPLE05 PROGRESS | {} of {} cases passed | {}'.format(*count, progress))
+                                    last_xsample_progress = count
+                            except (OSError, ValueError, KeyError):
+                                pass
                         self.poll_remote()
                         if self.args.restart_on_update and self.pending_tip:
                             self.check_update_failure(proc, log)
@@ -2399,7 +2411,11 @@ class Agent:
 
     def station_visit(self, stage, final=False):
         """Announce a completed stage; limit long station visits to once per 30 minutes."""
+        if stage == 'xsample05' and self.journal_parent['status'] == 'SKIPPED':
+            return
         messages = {
+            'xsample05': ('Arriving at Sparse Vector Reference Station. All reference checks passed.',
+                          'Sparse Vector Reference Station reports all saved streams verified.'),
             'samples': ('Arriving at Samples Station. The sample checks are complete.',
                         'Samples Station reports all example programs have passed.'),
             'inv_list': ('Arriving at Validation Junction. Reference checks are complete.',
@@ -2496,6 +2512,33 @@ class Agent:
         if updated or self.update_waiting():
             return 'updated'
         self.say('SAMPLES COMPLETE | {} examples passed'.format(len(names)))
+        return True
+
+    def test_xsample05_stage(self, run, manifest):
+        """Validate all frozen xsample05 cases with the freshly built default binary."""
+        explicit = self.args.path_to_xsample05_ref
+        candidates = [explicit] if explicit else sorted(self.home.glob('XSAMPLE05-REFERENCES*'))
+        if not candidates:
+            self.say('XSAMPLE05 SKIPPED | no XSAMPLE05-REFERENCES* under ' + str(self.home))
+            return 'skipped'
+        if len(candidates) != 1:
+            raise CommandFailure('Multiple xsample05 references; use --path-to-xsample05-ref: ' + ', '.join(map(str, candidates)))
+        reference = candidates[0].expanduser().resolve()
+        if not (reference / 'matrix.json').is_file() or not (reference / 'cases').is_dir():
+            raise CommandFailure('Incomplete xsample05 reference: ' + str(reference))
+        self.memory_phase = 'xsample05'
+        base = run / 'xsample05' / 'xsample05'
+        base.mkdir(parents=True)
+        argv = ['bash', str(self.repo / 'samples/xsample05/validate_references.sh'),
+                '--reference-dir', str(reference), '--bin', str(self.repo / 'samples/xsample05/xsample05'),
+                '--out', str(base / 'results'), '-j', str(self.jobs)]
+        (base / 'command.json').write_text(json.dumps(argv, indent=2)+'\n')
+        self.say('XSAMPLE05 START | 44 cases | {} workers | reference {}'.format(self.jobs, reference))
+        self.sound('samples-announcement', workers='Dispatch to BitMagic. Proceed to Sparse Vector Reference Station. The saved stream validation crews are ready.')
+        result = self.command(argv, base / 'xsample05.log', base, test_allocator=True)
+        if result == 'skipped-update' or self.update_waiting():
+            return 'updated'
+        self.say('XSAMPLE05 COMPLETE | 44 cases passed | ' + str(base / 'results/progress.json'))
         return True
 
     def test_inv_stage(self, run, manifest):
@@ -2748,7 +2791,7 @@ class Agent:
         self.journal_parent = entry
         try:
             result = execute(run, manifest)
-            self.journal.finish(entry, 'INTERRUPTED' if result == 'updated' else 'PASS')
+            self.journal.finish(entry, 'INTERRUPTED' if result == 'updated' else 'SKIPPED' if result == 'skipped' else 'PASS')
             return result
         except (Failure, OSError, ValueError) as error:
             self.journal.publish(emergency=error)
@@ -2890,7 +2933,7 @@ class Agent:
             return 'updated'
         self.sound('compilation-depot-end', workers='Dispatch to BitMagic. Compilation Depot reports all builds complete. The freight is cleared to begin testing.')
         # Test execution order is configured here; each stage owns its scheduling.
-        stages = (('samples', self.test_samples_stage), ('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
+        stages = (('samples', self.test_samples_stage), ('xsample05', self.test_xsample05_stage), ('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
                   ('stress', self.test_stress_stage))
         requested_fast = self.args.fast
         try:
@@ -2927,7 +2970,7 @@ class Agent:
                 normal_run.mkdir()
                 previous_stage = None
                 for stage, execute in stages:
-                    if stage == 'samples' or stage in self.args.suppress:
+                    if stage in ('samples', 'xsample05') or stage in self.args.suppress:
                         continue
                     if previous_stage:
                         self.sound('train-stop')
@@ -2954,7 +2997,7 @@ class Agent:
             raise
         finally:
             if self.journal_mode and not self.journal.diagnostic:
-                interrupted = self.pending_tip or any(row['parent'] is self.journal_mode and row['status'] != 'PASS'
+                interrupted = self.pending_tip or any(row['parent'] is self.journal_mode and row['status'] not in ('PASS', 'SKIPPED')
                                                        for row in self.journal.rows)
                 self.journal.finish(self.journal_mode, 'INTERRUPTED' if interrupted else 'PASS')
             self.journal.publish(force=True)

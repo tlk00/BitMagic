@@ -15,11 +15,13 @@ import tempfile
 import time
 
 
-def digest(path):
+def digest(path, cancelled=lambda: False):
     """Hash a file in bounded memory."""
     h = hashlib.sha256()
     with path.open('rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            if cancelled():
+                raise RuntimeError("Validation cancelled")
             h.update(chunk)
     return h.hexdigest()
 
@@ -41,7 +43,7 @@ def run(command, log):
     return log.read_text()
 
 
-def check_case(case, root, inputs):
+def check_case(case, root, inputs, cancelled=lambda: False):
     """Verify the published manifest and files before resume or validation."""
     name, level, remap, xor = case
     folder = root / 'cases' / name
@@ -49,7 +51,7 @@ def check_case(case, root, inputs):
     if metadata['case'] != name or metadata['level'] != level or metadata['remap'] != remap or metadata['xor'] != xor:
         raise RuntimeError(f'Case metadata mismatch: {name}')
     for filename in ('reference.sv', 'opcodes.txt', 'create.log', 'command.json', 'validation.log'):
-        if digest(folder / filename) != metadata['sha256'][filename]:
+        if digest(folder / filename, cancelled) != metadata['sha256'][filename]:
             raise RuntimeError(f'Case checksum mismatch: {name}/{filename}')
     if (folder / 'reference.sv').stat().st_size != metadata['bytes']:
         raise RuntimeError(f'Case size mismatch: {name}')
@@ -103,13 +105,32 @@ def create_case(case, args, inputs):
     return name, 'created'
 
 
+def bundle_inputs(root, inputs):
+    """Copy and verify prepared inputs under their portable names without rewriting metadata."""
+    folder = root / 'inputs'
+    folder.mkdir(exist_ok=True)
+    for key, item in inputs.items():
+        target = folder / (key + '.sv')
+        if target.exists():
+            if digest(target) != item['sha256']:
+                raise RuntimeError(f'Bundled input checksum mismatch: {target}')
+            continue
+        source = Path(item['path'])
+        temporary = target.with_suffix('.sv.tmp')
+        shutil.copyfile(source, temporary)
+        if digest(temporary) != item['sha256']:
+            raise RuntimeError(f'Input checksum mismatch: {source}')
+        temporary.replace(target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('create', 'validate'))
+    parser.add_argument('action', choices=('create', 'validate', 'bundle'))
     parser.add_argument('--reference-dir', type=Path, required=True)
-    parser.add_argument('--bin', type=Path, required=True)
-    parser.add_argument('--plain', type=Path, help='Prepared unmapped input, create only')
-    parser.add_argument('--remap', type=Path, help='Prepared remapped input, create only')
+    parser.add_argument('--bin', type=Path, help='Reader/creator executable; required except for bundle')
+    parser.add_argument('--out', type=Path, default=Path('xsample05-validation-' + time.strftime('%Y%m%d-%H%M%S')), help='New output directory for validation logs, outside reference')
+    parser.add_argument('--plain', type=Path, help='Prepared unmapped input; optional validation/bundle override')
+    parser.add_argument('--remap', type=Path, help='Prepared remapped input; optional validation/bundle override')
     parser.add_argument('--levels', default='0-10', help='0-10 or comma-separated levels')
     parser.add_argument('-j', type=int, default=1, help='Maximum simultaneous xsample05 processes')
     args = parser.parse_args()
@@ -118,9 +139,12 @@ def main():
     levels = list(range(11)) if args.levels == '0-10' else sorted(set(map(int, args.levels.split(','))))
     if not levels or any(level < 0 or level > 10 for level in levels):
         parser.error('--levels must be within 0..10')
-    args.bin = args.bin.resolve(strict=True)
-    if not args.bin.is_file() or not os.access(args.bin, os.X_OK):
-        parser.error('--bin must be executable')
+    if args.action != 'bundle':
+        if args.bin is None:
+            parser.error('--bin is required')
+        args.bin = args.bin.resolve(strict=True)
+        if not args.bin.is_file() or not os.access(args.bin, os.X_OK):
+            parser.error('--bin must be executable')
     args.reference_dir = args.reference_dir.resolve()
     lock = None
     if args.action == 'create':
@@ -149,30 +173,32 @@ def main():
                 output.write('\n')
         (args.reference_dir / 'cases').mkdir(exist_ok=True)
         (args.reference_dir / '.partial').mkdir(exist_ok=True)
+        bundle_inputs(args.reference_dir, inputs)
         task = lambda case: create_case(case, args, inputs)
     else:
         matrix = json.loads((args.reference_dir / 'matrix.json').read_text())
+        if matrix.get('schema') != 1 or set(matrix.get('inputs', {})) != {'plain', 'remap'}:
+            raise RuntimeError('Invalid reference matrix schema or inputs: ' + str(args.reference_dir / 'matrix.json'))
         inputs = matrix['inputs']
         for key, replacement in (('plain', args.plain), ('remap', args.remap)):
             if replacement:
                 inputs[key] = dict(path=str(replacement.resolve(strict=True)), sha256=inputs[key]['sha256'])
-        (args.reference_dir / '.partial').mkdir(exist_ok=True)
-        for item in inputs.values():
+        for key, item in inputs.items():
+            bundled = args.reference_dir / 'inputs' / (key + '.sv')
+            explicit = args.plain if key == 'plain' else args.remap
+            if explicit is None and bundled.is_file():
+                item['path'] = str(bundled)
+            elif not Path(item['path']).is_absolute():
+                item['path'] = str(args.reference_dir / item['path'])
             if digest(Path(item['path'])) != item['sha256']:
-                raise RuntimeError('Prepared input changed or is unavailable')
-        def task(case):
-            name = case[0]
-            check_case(case, args.reference_dir, inputs)
-            source = inputs['remap' if case[2] else 'plain']['path']
-            work = Path(tempfile.mkdtemp(prefix=name + '-', dir=args.reference_dir / '.partial'))
-            try:
-                run([str(args.bin), '-svin', str(args.reference_dir / 'cases' / name / 'reference.sv'),
-                     '-verify-sv', source], work / 'validation.log')
-            except Exception:
-                print(f'Failed validation retained at {work}', file=sys.stderr, flush=True)
-                raise
-            shutil.rmtree(work)
-            return name, 'verified'
+                raise RuntimeError(f"Prepared input checksum mismatch: {key} | {item['path']}")
+        if args.action == 'bundle':
+            bundle_inputs(args.reference_dir, inputs)
+            print('Portable inputs ready: ' + str(args.reference_dir / 'inputs'))
+            return
+        from reference_validation import validate
+        validate(args, inputs, list(cases(levels)), check_case)
+        return
     failed = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as pool:
         future_map = {pool.submit(task, case): case[0] for case in cases(levels)}
@@ -193,6 +219,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (OSError, ValueError, RuntimeError) as error:
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
         print(f'Error: {error}', file=sys.stderr)
         sys.exit(1)

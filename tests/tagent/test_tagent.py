@@ -661,6 +661,27 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(ta.inv_reference.inspect_reference(candidate, required_levels=range(6, 11))[0])
         self.assertFalse(ta.inv_reference.inspect_reference(candidate, full=True, required_levels=range(1, 11))[0])
 
+    def test_xsample05_optional_reference_and_default_reader(self):
+        """Optional references skip cleanly; discovered references use the fresh default binary."""
+        run = self.root / 'voyage'
+        run.mkdir()
+        self.assertEqual(self.agent.test_xsample05_stage(run, {}), 'skipped')
+        reference = self.agent.home / 'XSAMPLE05-REFERENCES-v1'
+        reference.mkdir()
+        with self.assertRaisesRegex(ta.CommandFailure, 'Incomplete xsample05'):
+            self.agent.test_xsample05_stage(run, {})
+        (reference / 'matrix.json').write_text('{}')
+        (reference / 'cases').mkdir()
+        with patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_xsample05_stage(run, {}))
+        argv = command.call_args.args[0]
+        self.assertEqual(argv[argv.index('--bin')+1], str(self.root / 'samples/xsample05/xsample05'))
+        self.assertEqual(argv[argv.index('-j')+1], str(self.agent.jobs))
+        self.assertNotIn('--levels', argv)
+        self.assertTrue(command.call_args.kwargs['test_allocator'])
+        self.assertTrue(str(run) in argv[argv.index('--out')+1])
+
     def test_inv_fast_selects_one_best_supported_variant(self):
         """Fast mode uses one supported release binary and the CPU budget."""
         self.agent.args.fast = True
