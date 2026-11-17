@@ -17,6 +17,8 @@ import tempfile
 import threading
 import time
 
+from cleanup_reference import cleanup_output
+
 HERE = Path(__file__).resolve().parent
 APP = HERE.parent
 REPO = APP.parents[1]
@@ -278,8 +280,12 @@ def main(argv=None):
         write_json(lock / 'owner.json', dict(pid=os.getpid(), host=platform.node()))
         execute(args, sets, levels)
     finally:
-        (lock / 'owner.json').unlink(missing_ok=True)
-        lock.rmdir()
+        try:
+            (lock / 'owner.json').unlink(missing_ok=True)
+            cleanup_output(lock)
+            lock.rmdir()
+        finally:
+            cleanup_output(args.out)
 
 
 def execute(args, sets, levels):

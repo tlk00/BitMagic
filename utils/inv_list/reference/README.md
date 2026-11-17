@@ -36,6 +36,18 @@ is rejected. A directory lock prevents overlapping writers; after a crash, inspe
 `.reference-lock/owner.json` and confirm that the owner process is gone before
 removing the stale lock directory. Completed manifests are not overwritten.
 
+On success or failure, reference generation and validation remove generated
+macOS AppleDouble (`._*`) metadata sidecars after checking their binary format.
+Empty `.partial` directories are removed; incomplete cases and failure logs are
+retained. `.tools` is permanent provenance, containing the frozen executable and
+build log needed for resume and integrity checks. Ordinary dotfiles are retained.
+Clean an existing idle reference directory with:
+
+```bash
+python3 reference/cleanup_reference.py /path/to/reference
+python3 reference/test_cleanup.py
+```
+
 The script creates a short directory `readme.md`. Inputs and executable sources
 remain unchanged by execution. The frozen executable and reference artifacts are
 retained on the output volume. Timings include profiling, validation and I/O;

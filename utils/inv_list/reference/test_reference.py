@@ -41,6 +41,8 @@ with tempfile.TemporaryDirectory(prefix='bm-reference-test-') as temporary:
     with (output / 'references.tsv').open() as stream:
         records = list(csv.DictReader(stream, delimiter='\t'))
     assert len(records) == 20
+    assert not (output / '.partial').exists()
+    assert (output / '.tools').is_dir()
     for row in records:
         index = (output / row['stream_file']).with_suffix('.idx')
         with index.open('rb') as stream:

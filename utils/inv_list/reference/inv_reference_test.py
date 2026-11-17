@@ -18,6 +18,7 @@ import threading
 import time
 
 from gov2_reference import completed, digest, identity, number, write_json
+from cleanup_reference import cleanup_output
 
 HERE = Path(__file__).resolve().parent
 FIELDS = ['dataset', 'level', 'status', 'phase', 'exit_code', 'reference_bytes',
@@ -504,6 +505,8 @@ def main():
     except BaseException as error:
         (args.out / 'FAILURE.txt').write_text(str(error) + '\n')
         raise
+    finally:
+        cleanup_output(args.out)
 
 
 def interrupted(signum, frame):
