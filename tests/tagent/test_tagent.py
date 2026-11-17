@@ -786,8 +786,11 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual('--dataset' in argv, not fast)
             if not fast:
                 self.assertEqual(argv[argv.index('--dataset') + 1], 'sorted')
-            self.assertEqual(argv[argv.index('--start-level') + 1], '7' if fast else '6')
-            self.assertEqual(active[0][2], 8 if fast else 5)
+            self.assertEqual(argv[argv.index('--start-level') + 1], '6')
+            self.assertEqual(active[0][2], 6 if fast else 5)
+            self.assertEqual('--levels' in argv, fast)
+            if fast:
+                self.assertEqual(argv[argv.index('--levels') + 1], '6,8,9')
             self.assertIn('--hash', argv)
             self.assertEqual(argv[argv.index('--hash-cache-dir') + 1], str(self.agent.home / 'inv-hash-cache'))
             self.assertEqual(argv[argv.index('--golden-level') + 1], '6')

@@ -106,6 +106,21 @@ with tempfile.TemporaryDirectory(prefix='bm-inv-reference-') as directory:
             start_level, 10, expected_cases)
         assert not list(out.glob('gov2.*.level-01'))
         assert snapshot(reference) == before
+    # Sparse fast selection validates only the requested levels, including the golden.
+    out = root / 'fast-selected-levels'
+    result = invoke([*common, '--out', out, '--fast', '--levels', '6,8,9'])
+    records = list(csv.DictReader((out / 'summary.tsv').open(), delimiter='\t'))
+    assert len(records) == 6
+    assert {int(row['level']) for row in records} == {6, 8, 9}
+    assert {row['status'] for row in records} == {'passed'}
+    metadata = json.loads((out / 'test.json').read_text())
+    assert metadata['selected_levels'] == [6, 8, 9] and metadata['case_count'] == 6
+    assert 'ALL PASS: 6 cases' in result.stdout
+    assert not list(out.glob('gov2.*.level-07'))
+    assert not list(out.glob('gov2.*.level-10'))
+    assert snapshot(reference) == before
+    for flags in (['--levels', '6,8,9'], ['--fast', '--levels', '0,6'], ['--fast', '--levels', 'bad']):
+        invoke([*common, '--out', root / 'invalid-level-selection', *flags], 2)
     out = root / 'custom-golden'
     invoke([*common, '--out', out, '--fast', '--start-level', 10, '--golden-level', 3])
     assert json.loads((out / 'test.json').read_text())['golden_level'] == 3

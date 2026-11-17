@@ -1082,7 +1082,7 @@ class Agent:
                       sorted(self.home.glob('gov2-reference-*')))
         matches = []
         for candidate in candidates:
-            required_levels = range(6, 11) if self.args.fast else range(1, 11) if self.args.pedantic else (6,)
+            required_levels = (6, 8, 9) if self.args.fast else range(1, 11) if self.args.pedantic else (6,)
             required_datasets = None if self.args.fast or self.args.pedantic else ('sorted',)
             valid, detail = inv_reference.inspect_reference(candidate, full=self.args.pedantic,
                                                              required_levels=required_levels,
@@ -2572,8 +2572,10 @@ class Agent:
                     '--bin', str(self.repo / 'utils/inv_list' / name),
                     '--reference', str(self.inv_reference), '--out', str(output),
                     '--threads', str(self.jobs), '--silent', '--reserve-gib', str(self.args.min_free_gb),
-                    '--read-memory-mib', str(read_budget), '--start-level', '7' if self.args.fast else '1' if self.args.pedantic else '6',
+                    '--read-memory-mib', str(read_budget), '--start-level', '6' if self.args.fast else '1' if self.args.pedantic else '6',
                     '--golden-level', '6', '--hash', '--hash-cache-dir', str(self.home / 'inv-hash-cache')]
+            if self.args.fast:
+                argv += ['--levels', '6,8,9']
             if self.args.inv_read_mmap:
                 argv.append('--read-mmap')
             if self.args.fast:
@@ -2589,7 +2591,7 @@ class Agent:
             self.inv_progress_time = 0
             with self.audio_mutex:
                 self.audio_phase_generation += 1
-            self.inv_active = (output, name, 8 if self.args.fast else 20 if self.args.pedantic else 5)
+            self.inv_active = (output, name, 6 if self.args.fast else 20 if self.args.pedantic else 5)
             try:
                 status = self.command(argv, base / 'inv-runner.log', base, test_allocator=True)
             except CommandFailure as error:

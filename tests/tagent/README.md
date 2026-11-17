@@ -761,8 +761,8 @@ For example, on WIN1:
 `./run_tagent.sh --fast --log-dir /mnt/d/TAgent-logs --read-memory-mib 16384 --read-mmap`.
 
 
-Fast inv_list validation uses canonical-block SHA-256 verification, starting
-at level 7 for both datasets (8 cases). Level 6 is validated against raw IDs
+Fast inv_list validation uses canonical-block SHA-256 verification, at levels
+6, 8 and 9 for both datasets (6 cases). Level 6 is validated against raw IDs
 when its hash cache is created. Caches persist under LOG_DIR/inv-hash-cache
 and are reused across cycles and variants. Normal validates sorted only at levels 6–10 (5 cases per build). Pedantic
 validates both datasets at levels 1–10 (20 cases per build). Both use the same

@@ -242,7 +242,7 @@ def execute(args, references, binary):
     hash_caches = {}
     roundtrips = {}
     for row in references:
-        if row['compression_level'] < args.start_level:
+        if row['compression_level'] not in args.selected_levels:
             continue
         dataset = row['dataset'].split('.')[-1]
         case = Path(row['stream_file']).stem
@@ -370,6 +370,7 @@ def parse():
                         help='Golden compression level validated against raw IDs first (default 6)')
     parser.add_argument('--start-level', type=int, choices=range(1, 11), default=1,
                         help='First compression level to test, inclusive through level 10 (default 1)')
+    parser.add_argument('--levels', help='explicit comma-separated levels, fast mode only; overrides --start-level')
     parser.add_argument('--read-memory-mib', type=int, default=512, help='Combined staged input budget for indexed reads in positive MiB (default 512)')
     parser.add_argument('--read-mmap', action='store_true', help='Use Unix read-only BLOB mapping windows')
     parser.add_argument('--progress', type=int, default=1000)
@@ -382,6 +383,17 @@ def main():
     args = parse()
     if args.fast and args.pedantic:
         raise TestFailure('--fast and --pedantic are separate validation modes', 2)
+    if args.levels is not None:
+        if not args.fast:
+            raise TestFailure('--levels requires --fast', 2)
+        try:
+            args.selected_levels = sorted(set(int(level) for level in args.levels.split(',')))
+        except ValueError:
+            raise TestFailure('--levels must be comma-separated integers within 1..10', 2)
+        if not args.selected_levels or any(level < 1 or level > 10 for level in args.selected_levels):
+            raise TestFailure('--levels must be within 1..10', 2)
+    else:
+        args.selected_levels = list(range(args.start_level, 11))
     args.reference = args.reference.resolve(strict=True)
     args.out = args.out.resolve()
     protect_paths(args.reference, args.out)
@@ -411,7 +423,7 @@ def main():
         raise TestFailure('Reference matrix must contain exactly both datasets at levels 1–10', 2)
     datasets = ('sorted', 'unsorted') if args.dataset == 'both' else (args.dataset,)
     table = [row for row in table if row['dataset'].split('.')[-1] in datasets and
-             (int(row['compression_level']) >= args.start_level
+             (int(row['compression_level']) in args.selected_levels
               or int(row['compression_level']) == args.golden_level)]
     # Explicit local logs are created only after path checks. No reference writes occur.
     args.out.mkdir(parents=True)
@@ -479,7 +491,7 @@ def main():
                    read_memory_mib=args.read_memory_mib, read_mmap=args.read_mmap,
                    start_level=args.start_level, golden_level=args.golden_level, hash_validation=args.hash,
                    hash_cache_dir=str(args.hash_cache_dir) if args.hash else None, end_level=10,
-                   case_count=len(datasets) * (11 - args.start_level), datasets=list(datasets),
+                   selected_levels=args.selected_levels, case_count=len(datasets) * len(args.selected_levels), datasets=list(datasets),
                    platform=platform.platform(), started_utc=datetime.now(timezone.utc).isoformat()))
         if args.hash or not args.fast:
             support = subprocess.run([str(binary), '--help'], capture_output=True, text=True, timeout=30)
@@ -496,7 +508,7 @@ def main():
             for path, checksum in snapshots.items():
                 if digest(path) != checksum:
                     raise TestFailure(f'Reference changed during testing: {path}')
-        case_count = len(datasets) * (11 - args.start_level)
+        case_count = len(datasets) * len(args.selected_levels)
         message = (f'All {case_count} collection validations passed against a raw-validated golden; reference integrity audit omitted.\n' if args.fast else
                    f'All {case_count} reference cases passed; reference checksums unchanged.\n' if args.pedantic else
                    f'All {case_count} in-memory round-trip cases passed.\n')

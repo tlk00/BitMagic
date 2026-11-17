@@ -107,3 +107,12 @@ On Unix, -read-mmap selects read-only batch windows with advisory sequential
 and WILLNEED hints when available. Windows uses the portable buffered reader.
 Mapping covers the compressed input; raw IDs still use sequential buffered I/O.
 Mapping assumes input files remain unchanged. It does not reserve physical RAM.
+
+Fast runner level selection:
+  bash run_inv_test_pl.sh --bin ./bminv --reference /path/to/reference \
+    --out /path/to/new-results --fast --hash --levels 6,8,9 --golden-level 6 -j 10
+
+--levels accepts comma-separated levels 1..10 in --fast mode and overrides
+--start-level. Only those cases are tested, plus golden preparation as needed.
+Normal and pedantic mode keep their continuous --start-level range through 10.
+TAgent uses levels 6,8,9 for both datasets in fast mode (six validation cases).
