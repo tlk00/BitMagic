@@ -842,3 +842,19 @@ with `PIPER_FIREMAN_MODEL` or `--piper-fireman-model`. Preview with
 In normal cycles, `stress_release_gcc` runs last, after the debug stress variants,
 and uses `--fast`. In pedantic cycles it retains pedantic mode and the existing
 release-before-debug ordering.
+
+### Travel journal
+
+`travel-journal.txt` beside `agent.log` is an English voyage summary maintained
+from in-memory events, without replaying logs. Its first version is published
+after reference cache preparation. The file is atomically replaced every ten
+minutes at supervisor heartbeats; every thirty minutes the regenerated table is
+also printed to the console. No TTS announcement accompanies it.
+
+The hierarchy includes compilation families and test variants grouped by Fast!,
+Norm or SloMo mode. Samples occupy one aggregate row. Durations use monotonic
+elapsed time; timestamps use local time. Parallel children overlap, so their
+minutes should not be summed to obtain parent duration. A failure immediately
+replaces the report with a DERAILED header, phase, diagnostics and log paths.
+The final test snapshot is also saved immediately. A new voyage replaces the
+previous report; the journal is not reconstructed across launcher restarts.

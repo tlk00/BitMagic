@@ -34,6 +34,7 @@ import tempfile
 import threading
 import time
 import traceback
+import travel_journal
 import soundtrack
 import urllib.request
 import wave
@@ -467,6 +468,10 @@ class Agent:
         self.args = args
         self.repo = Path(__file__).resolve().parents[2]
         self.home = Path(args.state_dir or self.repo / 'TAgent-logs').expanduser().resolve()
+        self.journal = travel_journal.TravelJournal(self.home / 'travel-journal.txt', self.say)
+        self.journal_parent = None
+        self.journal_mode = None
+        self.journal_cycle_started = False
         prepare_log_directory(self.home, args.min_free_gb)
         self.audio_dir = self.home / 'generated-audio'
         self.temp_dir = self.home / 'tmp'
@@ -655,6 +660,7 @@ class Agent:
 
     def resource_check(self):
         """Raise Failure if configured storage reserve is unavailable."""
+        self.journal.publish()
         if self.io_operation('disk usage', self.home, lambda: shutil.disk_usage(self.home)).free < self.args.min_free_gb * 1024**3:
             raise Failure('Free disk below configured reserve: ' + str(self.home))
         if self.io_operation('disk usage', self.repo, lambda: shutil.disk_usage(self.repo)).free < self.args.min_free_gb * 1024**3:
@@ -802,6 +808,10 @@ class Agent:
         separate_stderr keeps captured stdout parseable and reports stderr diagnostics.
         temp_dir overrides the shared temporary directory for isolated workloads.
         """
+        entry = None
+        if log and log.name in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log', 'perf.log', 'runner.log', 'inv-runner.log'):
+            name = log.stem.replace('build-', '') if log.name.startswith('build-') else log.parent.name
+            entry = self.journal.start(name, self.journal_parent, log)
         output = None
         proc = None
         try:
@@ -919,6 +929,8 @@ class Agent:
                           else str(log) if log else ((result or '') + (diagnostics or ''))[-2000:])
                 reason = signal.Signals(-proc.returncode).name if proc.returncode < 0 else 'exit ' + str(proc.returncode)
                 raise CommandFailure('{} | {} | variant {} | {}'.format(shlex.join(map(str, argv)), reason, log.parent.name if log else 'operational', detail))
+            if entry:
+                self.journal.finish(entry, 'INTERRUPTED' if str(proc.returncode) == '75' else 'PASS')
             return result or ''
         except (CommandFailure, OSError) as error:
             if log:
@@ -931,11 +943,14 @@ class Agent:
                 with self.mutex:
                     if not hasattr(self, 'first_workload_failure'):
                         self.first_workload_failure = error
+                self.journal.publish(emergency=error)
                 self.stopping.set()
                 self.stop_children()
                 raise self.first_workload_failure
             raise
         finally:
+            if entry and entry['end'] is None:
+                self.journal.finish(entry, 'INTERRUPTED')
             if proc:
                 self.signal_group(proc, signal.SIGKILL)
                 proc.wait()
@@ -1093,6 +1108,7 @@ class Agent:
             nonlocal next_announcement
             if self.args.check:
                 return
+            self.journal.publish()
             now = time.monotonic()
             if phase == 'ready':
                 with self.audio_mutex:
@@ -1895,6 +1911,8 @@ class Agent:
 
     def finish_build(self, success):
         """Print and announce final recognized error/warning line counts."""
+        if self.journal_parent:
+            self.journal.finish(self.journal_parent, 'PASS' if success else 'FAILED')
         with self.audio_mutex:
             self.audio_build_generation += 1
         counts = (self.build_warnings.errors, self.build_warnings.count, success)
@@ -2719,8 +2737,35 @@ class Agent:
             self.sound('stress-transition', workers=message)
         return True
 
+    def journal_stage(self, stage, execute, run, manifest):
+        """Time a test phase and its variants without parsing workload logs."""
+        mode = 'Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'
+        if self.journal_mode is None or self.journal_mode['name'] != 'Tests (' + mode + ')':
+            if self.journal_mode:
+                self.journal.finish(self.journal_mode)
+            self.journal_mode = self.journal.start('Tests (' + mode + ')')
+        entry = self.journal.start(stage, self.journal_mode)
+        self.journal_parent = entry
+        try:
+            result = execute(run, manifest)
+            self.journal.finish(entry, 'INTERRUPTED' if result == 'updated' else 'PASS')
+            return result
+        except (Failure, OSError, ValueError) as error:
+            self.journal.publish(emergency=error)
+            raise
+
     def cycle(self):
         """Build exact current commit; return False on test failure, True on success."""
+        if self.journal_cycle_started:
+            self.journal = travel_journal.TravelJournal(self.home / 'travel-journal.txt', self.say)
+            reused = self.journal.start('Reference cache (reused)')
+            self.journal.finish(reused)
+            self.journal.commit = self.commit
+            self.journal.publish(first=True)
+        self.journal.commit = self.commit
+        self.journal_mode = None
+        self.journal_cycle_started = True
+        self.journal_parent = self.journal.start('Compilation')
         if self.depot:
             self.depot.set_mode('depot')
         run = self.home / (datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '-' + self.commit[:12])
@@ -2812,6 +2857,8 @@ class Agent:
             if path.exists():
                 self.io_operation('read final build diagnostics', path, lambda: self.build_warnings.observe(path, final=True))
         if interrupted_build and not failures:
+            self.journal.finish(self.journal_parent, 'INTERRUPTED')
+            self.journal.publish(force=True)
             self.say('Build interrupted for remote update; fetching before restart')
             return 'updated'
         if failures:
@@ -2858,7 +2905,7 @@ class Agent:
                     self.sound('train-stop')
                 previous_stage = stage
                 marker.write_text(json.dumps({'commit': self.commit, 'run': str(run), 'stage': stage, 'status': 'active'}) + '\n')
-                if execute(run, manifest) == 'updated':
+                if self.journal_stage(stage, execute, run, manifest) == 'updated':
                     self.args.force = True
                     return 'updated'
                 self.station_visit(stage, final=not requested_fast and stage == enabled_stages[-1])
@@ -2886,7 +2933,7 @@ class Agent:
                         self.sound('train-stop')
                     previous_stage = stage
                     marker.write_text(json.dumps({'commit': self.commit, 'run': str(normal_run), 'stage': stage, 'mode': 'normal', 'status': 'active'}) + '\n')
-                    if execute(normal_run, manifest) == 'updated':
+                    if self.journal_stage(stage, execute, normal_run, manifest) == 'updated':
                         self.args.force = True
                         return 'updated'
                     self.station_visit(stage, final=stage == enabled_stages[-1])
@@ -2906,6 +2953,11 @@ class Agent:
                 print('Cannot save failure report: ' + str(report_error), file=sys.stderr, flush=True)
             raise
         finally:
+            if self.journal_mode and not self.journal.diagnostic:
+                interrupted = self.pending_tip or any(row['parent'] is self.journal_mode and row['status'] != 'PASS'
+                                                       for row in self.journal.rows)
+                self.journal.finish(self.journal_mode, 'INTERRUPTED' if interrupted else 'PASS')
+            self.journal.publish(force=True)
             self.args.fast = requested_fast
             if self.depot:
                 self.depot.set_mode('depot')
@@ -3108,7 +3160,11 @@ class Agent:
                     os.execv('/bin/bash', ['bash', str(self.repo / 'tests/tagent/run_tagent.sh'), *restart_args])
             if not reference_prepared:
                 self.say('STARTUP | repository current; preparing inv_list reference')
+                self.journal.commit = self.commit
+                cache_entry = self.journal.start('Reference cache preparation')
                 self.discover_inv_reference()
+                self.journal.finish(cache_entry, 'SKIPPED' if 'inv_list' in self.args.suppress else 'PASS')
+                self.journal.publish(first=True)
                 reference_prepared = True
                 self.say('STARTUP | reference prepared; checking repository before build')
                 if self.fetch(failed) != self.commit:
@@ -3174,6 +3230,7 @@ def main():
     try:
         return agent.run()
     except ReceivedSignal as error:
+        agent.journal.publish(emergency=error)
         if agent.memory_monitor:
             agent.memory_monitor.snapshot('signal')
         name = signal.Signals(error.signum).name
@@ -3187,6 +3244,7 @@ def main():
         return 130
     except (Failure, OSError, ValueError) as error:
         error = getattr(agent, 'first_workload_failure', error)
+        agent.journal.publish(emergency=error)
         print('TAgent ERROR ' + str(error) + ' | logs ' + str(agent.home), file=sys.stderr, flush=True)
         try:
             report = agent.home / 'last-test-failure.txt.tmp'

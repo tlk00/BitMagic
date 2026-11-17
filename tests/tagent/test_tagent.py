@@ -1494,6 +1494,10 @@ class SupervisorTests(unittest.TestCase):
         with self.assertRaises(ta.CommandFailure):
             self.agent.cycle()
         self.assertTrue(list(self.agent.home.glob('*abc123/perf_release/perf.log')))
+        journal = (self.agent.home / 'travel-journal.txt').read_text()
+        self.assertIn('DERAILED:', journal)
+        self.assertIn('perf_release/perf.log', journal)
+        self.assertIn('FAILED', journal)
         marker = self.agent.home / 'active-cycle.json'
         self.assertTrue(marker.exists())
         self.assertIn('perf', marker.read_text())
