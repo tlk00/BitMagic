@@ -30,10 +30,10 @@ initial targets are x86-64 Linux/WSL and Apple Silicon macOS, matching the curre
 - Build through `tests/perf/build_all.sh` and `tests/stress/build_all.sh`. Build
   failures print a brief diagnostic and log location, signal distress and exit
   nonzero immediately.
-- Default coverage runs all produced perf release and debug variants, and every
-  debug/release stress variant of `tests/stress/t.cpp`. Exclude stress64. Perf
-  debug variants always use `--fast`; `--pedantic` builds additional x86 perf
-  debug SIMD variants and enables release stress serialization sweeps.
+- Default coverage runs supported perf variants and all release stress variants.
+  Normal stress runs only generic debug and SSE4.2 debug (NEON on ARM), both
+  in `--fast`. Pedantic skips all debug execution and expands release coverage.
+  Debug binaries are still built. Exclude stress64.
 - Run perf first, with a shared worker limit; timing comparisons are not an
   acceptance criterion. Then run every stress build using the existing parallel
   runner, one build at a time. All scheduled tests must succeed. Stress variants
@@ -394,7 +394,7 @@ Perf progress estimates percentages from completed timed records (excluding the
 target of 299. Each successful perf process atomically saves its actual count in
 `LOG_DIR/perf-test-targets.cache/` for the next run of the same binary and mode.
 Filenames include both cycle mode and actual execution mode, for example
-`perf_debug_avx2--pedantic-fast.json`. Failed, interrupted, empty, and incomplete
+`perf_debug--normal-fast.json`. Failed, interrupted, empty, and incomplete
 runs do not update the cache. Missing or invalid entries fall back to 299. This
 is not an estimate of elapsed time; active runs are capped at 99%. When the count
 exceeds its target, the conductor reports a delay and the actual count.
@@ -425,9 +425,9 @@ resolved directory. Logs, test working files, saved success state and learned
 stress timing history all use this location. Existing logs/state are not moved;
 stop TAgent and copy them yourself if needed. The option survives self-restarts.
 
-Stress release variants run before all debug variants. Debug variants use the
-runner `--fast` mode, including during `--pedantic` TAgent runs; release variants
-use `--pedantic` when requested. The runner cannot combine these two modes.
+Stress release variants run before debug variants. Normal mode runs generic debug
+and SSE4.2 debug on x86 (NEON on ARM), both with `--fast`; unsupported SIMD is
+skipped. Pedantic mode skips all debug execution and runs releases with `--pedantic`.
 
 After a played Joe announcement, Dispatch may reply after a random 3–7 second
 pause, choosing from a shuffled deck of responses without repeats until the deck
@@ -499,8 +499,8 @@ queue to new messages and drains it; Ctrl-C still stops child processes promptly
 During foreground announcements the background ambience fades down to 25% of
 its normal level, then fades back up. Linux keeps its continuous audio stream.
 
-Every produced, supported perf debug binary runs with `--fast`, including in
-normal and `--pedantic` cycles. Release perf uses `--fast` only when the TAgent
+In normal cycles, every produced, supported perf debug binary runs with `--fast`.
+Pedantic cycles skip all perf debug execution. Release perf uses `--fast` only when the TAgent
 `--fast` option is supplied.
 
 Perf variants run one at a time using `tests/perf/run_all_pl.sh` to run their
@@ -607,9 +607,9 @@ On startup, legacy generated steampunk WAVs in the log root are moved to
 migration failures are reported without stopping testing.
 
 Use `--no-debug` to skip execution of debug perf and stress variants; debug
-binaries are still built and checked. Debug execution is enabled by default.
-This option can be combined with `--fast` or `--pedantic`; in pedantic mode
-release coverage is still expanded. Changing this option triggers a new cycle
+binaries are still built and checked. Debug execution is enabled by default in normal mode.
+This option can be combined with `--fast` or `--pedantic`; pedantic always skips
+debug execution and release coverage is still expanded. Changing this option triggers a new cycle
 when using `--startup changed`.
 
 ### inv_list reference validation and stage selection

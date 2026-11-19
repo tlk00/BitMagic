@@ -505,8 +505,8 @@ class SupervisorTests(unittest.TestCase):
             log = self.root / name
             self.assertEqual(self.agent.command(['/definitely/not/a/program'], log), 'skipped-update')
 
-    def test_stress_debug_runs_last_and_fast_in_pedantic_mode(self):
-        """Release variants precede fast debug variants without conflicting flags."""
+    def test_pedantic_skips_all_debug_execution(self):
+        """Pedantic builds debug binaries but executes only release perf and stress."""
         self.fixture()
         self.agent.args.pedantic = True
         calls = []
@@ -519,11 +519,11 @@ class SupervisorTests(unittest.TestCase):
             self.assertTrue(self.agent.cycle())
         names = [name for name, _ in calls]
         self.assertTrue(names)
-        self.assertEqual(names, sorted(names, key=lambda name: '_debug' in name))
-        self.assertTrue(any('_debug' in name for name in names))
-        for name, argv in calls:
-            self.assertEqual('--fast' in argv, '_debug' in name)
-            self.assertEqual('--pedantic' in argv, '_debug' not in name)
+        self.assertTrue(all('_debug' not in name for name in names))
+        self.assertTrue(all('--pedantic' in argv and '--fast' not in argv for _, argv in calls))
+        run = next(self.agent.home.glob('*abc123'))
+        self.assertFalse(list(run.glob('perf_debug*/perf.log')))
+        self.assertFalse(list(run.glob('stress_debug*/runner.log')))
 
     def test_gcc_stress_is_fast_and_last_in_normal_cycles(self):
         """GCC goes last in normal mode; pedantic keeps its previous behavior."""
@@ -552,7 +552,7 @@ class SupervisorTests(unittest.TestCase):
             else:
                 self.assertIn('--pedantic', gcc)
                 self.assertNotIn('--fast', gcc)
-                self.assertLess(names.index('stress_release_gcc'), names.index('stress_debug'))
+                self.assertFalse(any('_debug' in name for name in names))
 
     def test_sse42_release_starts_first_when_selected_and_supported(self):
         """Prioritize SSE4.2 in normal and pedantic modes, preserving fast selection."""
@@ -986,11 +986,47 @@ class SupervisorTests(unittest.TestCase):
             self.assertTrue(all(call.kwargs.get('test_allocator') is True
                                 for call in command.call_args_list))
             names = [Path(call.args[1]).parent.name for call in command.call_args_list]
-            if mode == 'fast':
+            if mode in ('fast', 'pedantic'):
                 self.assertEqual(names, ['stress_release', 'stress_release_neon'])
             else:
                 self.assertEqual(names, ['stress_release', 'stress_release_neon',
                                          'stress_debug', 'stress_debug_neon'])
+
+    def test_normal_x86_only_generic_and_sse42_debug_stress(self):
+        """Schedule only generic and SSE4.2 debug in fast mode, after releases."""
+        self.fixture()
+        self.agent.arm = False
+        names = ['stress_debug', 'stress_debug_sse2', 'stress_debug_sse42',
+                 'stress_debug_avx2', 'stress_release', 'stress_release_sse42']
+        run = self.root / 'x86-stress'
+        run.mkdir()
+        with patch.object(self.agent, 'supported', return_value=True), \
+             patch.object(self.agent, 'command', return_value='') as command, \
+             patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+            self.assertTrue(self.agent.test_stress_stage(run, {'builds': {'stress': names}}))
+        calls = [(Path(c.args[1]).parent.name, c.args[0]) for c in command.call_args_list]
+        self.assertEqual([name for name, _ in calls], ['stress_release_sse42', 'stress_release',
+                                                       'stress_debug', 'stress_debug_sse42'])
+        self.assertTrue(all('--fast' in argv and '--pedantic' not in argv
+                            for name, argv in calls if '_debug' in name))
+
+    def test_normal_debug_selection_respects_no_debug_and_cpu_support(self):
+        """Never substitute another SIMD when SSE4.2 is unavailable or debug is disabled."""
+        self.fixture()
+        self.agent.arm = False
+        manifest = {'builds': {'stress': ['stress_release', 'stress_debug',
+                                          'stress_debug_sse2', 'stress_debug_sse42', 'stress_debug_avx2']}}
+        for no_debug, unsupported, expected in ((False, True, ['stress_debug']),
+                                                 (True, False, [])):
+            self.agent.args.no_debug = no_debug
+            run = self.root / ('no-debug-' + str(no_debug))
+            run.mkdir()
+            with patch.object(self.agent, 'supported', side_effect=lambda name: not (unsupported and name.endswith('sse42'))), \
+                 patch.object(self.agent, 'command', return_value='') as command, \
+                 patch.object(self.agent, 'sound'), patch.object(self.agent, 'update_waiting', return_value=False):
+                self.assertTrue(self.agent.test_stress_stage(run, manifest))
+            names = [Path(call.args[1]).parent.name for call in command.call_args_list]
+            self.assertEqual([name for name in names if '_debug' in name], expected)
 
     def test_inv_reader_cli_validation(self):
         """Reader defaults, overrides and invalid budgets are resolved at startup."""

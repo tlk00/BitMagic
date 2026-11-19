@@ -325,7 +325,7 @@ def arguments():
     parser.add_argument('--suppress', action='append', default=[], metavar='STAGES', help='skip test stages: perf, inv_list, stress, xsample05; comma-separated or repeat option')
     parser.add_argument('--resume-cycle', action='store_true', help=argparse.SUPPRESS)
     flags = {
-        'pedantic': 'run expanded perf and release stress coverage; incompatible with --fast',
+        'pedantic': 'run expanded release perf and stress coverage, skipping debug execution; incompatible with --fast',
         'fast': 'run all supported release perf variants and scalar/AVX2 or NEON release stress in fast mode, then normal matrix; incompatible with --pedantic',
         'no-debug': 'skip debug perf and stress execution; debug builds are still compiled (default: run debug tests)',
         'avx512': 'build and test AVX-512 variants when supported',
@@ -2635,7 +2635,9 @@ class Agent:
         self.start_test_sound('perf')
         names = ([name for name in manifest['builds']['perf'] if '_release' in name]
                  if self.args.fast else manifest['builds']['perf'])
-        eligible = [name for name in names if not (self.args.no_debug and '_debug' in name) and self.supported(name)]
+        skip_debug = self.args.no_debug or self.args.pedantic
+        eligible = [name for name in names
+                    if not (skip_debug and '_debug' in name) and self.supported(name)]
         variant_jobs = min(self.jobs, self.args.perf_jobs) if self.args.perf_jobs else self.jobs
         work_root = self.perf_work_root()
         if work_root is None:
@@ -2648,7 +2650,7 @@ class Agent:
             self.perf_last_disclaimer = False
             self.perf_last_announced = False
         for name in names:
-            if self.args.no_debug and '_debug' in name:
+            if skip_debug and '_debug' in name:
                 self.say('SKIP debug perf ' + name)
                 continue
             if name not in eligible:
@@ -2706,6 +2708,7 @@ class Agent:
         stress_names = []
         names = (self.fast_test_variants('stress', manifest['builds']['stress'])
                  if self.args.fast else manifest['builds']['stress'])
+        normal_debug = {'stress_debug', 'stress_debug_neon' if self.arm else 'stress_debug_sse42'}
         def stress_mode(name):
             """Choose the actual runner mode for this variant and cycle."""
             if self.args.fast or '_debug' in name or (not self.args.pedantic and name == 'stress_release_gcc'):
@@ -2720,7 +2723,7 @@ class Agent:
                     1 if '_debug' in name else 0)
 
         for name in sorted(names, key=stress_order):
-            if self.args.no_debug and '_debug' in name:
+            if '_debug' in name and (self.args.no_debug or self.args.pedantic or name not in normal_debug):
                 self.say('SKIP debug stress ' + name)
             elif not self.supported(name):
                 self.say('SKIP unsupported ' + name)
