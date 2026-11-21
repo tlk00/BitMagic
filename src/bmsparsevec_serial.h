@@ -31,6 +31,8 @@ For more information please visit:  http://bitmagic.io
 
 #include "bmsparsevec.h"
 #include "bmserial.h"
+#include "bmfunc.h"
+#include "encoding.h"
 #include "bmbuffer.h"
 #include "bmdef.h"
 #ifndef BM_NO_STL
@@ -3260,114 +3262,208 @@ void sparse_vector_deserializer<SV>::raise_missing_remap_matrix()
 #endif
 }
 
-// -------------------------------------------------------------------------
 
-// --------------------------------------------
+// -----------------------------------------------------------------------------
 // Implementations for: sparse_vector_deserialization_index
-// --------------------------------------------
+// -----------------------------------------------------------------------------
+
 template<class BV>
-bool sparse_vector_deserialization_index<BV>::equal(const sparse_vector_deserialization_index& other) const BMNOEXCEPT
+bool sparse_vector_deserialization_index<BV>::equal(
+    const sparse_vector_deserialization_index& other) const BMNOEXCEPT
 {
-    if (rows_.size() != other.rows_.size() || !plane_offsets_.equal(other.plane_offsets_) ||
-        digest_offset_ != other.digest_offset_ || remap_offset_ != other.remap_offset_) return false;
+    if (rows_.size() != other.rows_.size() ||
+        !plane_offsets_.equal(other.plane_offsets_) ||
+        digest_offset_ != other.digest_offset_ ||
+        remap_offset_ != other.remap_offset_)
+    {
+        return false;
+    }
+
     for (size_t i = 0; i < rows_.size(); ++i)
-        if (!rows_[i].equal(other.rows_[i])) return false;
+    {
+        if (!rows_[i].equal(other.rows_[i]))
+        {
+            return false;
+        }
+    } // for i
+
     return true;
 }
+
 template<class BV>
-void sparse_vector_deserialization_index<BV>::swap(sparse_vector_deserialization_index& other) BMNOEXCEPT
+void sparse_vector_deserialization_index<BV>::swap(
+    sparse_vector_deserialization_index& other) BMNOEXCEPT
 {
-    rows_.swap(other.rows_); plane_offsets_.swap(other.plane_offsets_);
-    size_t n = digest_offset_; digest_offset_ = other.digest_offset_; other.digest_offset_ = n;
-    n = remap_offset_; remap_offset_ = other.remap_offset_; other.remap_offset_ = n;
+    rows_.swap(other.rows_);
+    plane_offsets_.swap(other.plane_offsets_);
+    bm::simple_swap(&digest_offset_, &other.digest_offset_);
+    bm::simple_swap(&remap_offset_, &other.remap_offset_);
 }
-// --------------------------------------------
+
+// -----------------------------------------------------------------------------
 // Implementations for: sparse_vector_deserialization_index_serializer
-// --------------------------------------------
+// -----------------------------------------------------------------------------
+
 template<class BV>
-size_t sparse_vector_deserialization_index_serializer<BV>::max_serialize_mem(const index_type& index) const
+size_t sparse_vector_deserialization_index_serializer<BV>::max_serialize_mem(
+    const index_type& index) const
 {
-    size_t n = compact_ ? 8 : 12;
-    n = sv_di_detail::add(n, 32);
-    for (size_t i = 0; i < index.plane_offsets_.size(); ++i) n = sv_di_detail::add(n, 8);
-    typename index_type::row_type empty;
+    // The frame is followed by four 64-bit metadata fields.
+    size_t bytes = (compact_ ? 8 : 12) + 4 * 8;
+    const size_t offsets = index.plane_offsets_.size();
+    bm::serialization_require(offsets <= (size_t(-1) - bytes) / 8);
+    bytes += offsets * 8;
+
+    const typename index_type::row_type empty;
     for (size_t i = 0; i < index.rows_.size(); ++i)
     {
-        n = sv_di_detail::add(n, 8);
-        if (!index.rows_[i].equal(empty)) n = sv_di_detail::add(n, child_.max_serialize_mem(index.rows_[i]));
-    }
-    return n;
+        const auto& row = index.rows_[i];
+        bytes = bm::sv_di_detail::add(bytes, 8);
+        if (!row.equal(empty))
+        {
+            bytes = bm::sv_di_detail::add(bytes, child_.max_serialize_mem(row));
+        }
+    } // for i
+    return bytes;
 }
+
 template<class BV>
-size_t sparse_vector_deserialization_index_serializer<BV>::serialize(const index_type& index, unsigned char* data, size_t capacity)
+size_t sparse_vector_deserialization_index_serializer<BV>::serialize(
+    const index_type& index, unsigned char* data, size_t capacity)
 {
-    sv_di_detail::require(data && capacity >= max_serialize_mem(index));
-    sv_di_detail::memory_output out{data, capacity}; return serialize_to(index, out);
+    bm::serialization_require(data && capacity >= max_serialize_mem(index));
+    bm::sv_di_detail::memory_output out{data, capacity};
+    return serialize_to(index, out);
 }
+
 template<class BV>
-size_t sparse_vector_deserialization_index_serializer<BV>::serialize(const index_type& index, buffer& data)
+size_t sparse_vector_deserialization_index_serializer<BV>::serialize(
+    const index_type& index, buffer& data)
 {
-    data.resize(max_serialize_mem(index));
-    size_t n = serialize(index, data.data(), data.size()); data.resize(n); return n;
+    data.resize(max_serialize_mem(index), false);
+    bm::sv_di_detail::memory_output out{data.data(), data.size()};
+    const size_t bytes = serialize_to(index, out);
+    data.resize(bytes);
+    return bytes;
 }
+
 template<class BV>
 template<class OUT>
-size_t sparse_vector_deserialization_index_serializer<BV>::serialize_to(const index_type& index, OUT& out)
+size_t sparse_vector_deserialization_index_serializer<BV>::serialize_to(
+    const index_type& index, OUT& out)
 {
     const size_t start = out.pos;
-    if (!sv_di_detail::begin(out, compact_, 1) ||
-        !sv_di_detail::write64(out, index.rows_.size()) ||
-        !sv_di_detail::write64(out, index.plane_offsets_.size()) ||
-        !sv_di_detail::write64(out, index.digest_offset_) ||
-        !sv_di_detail::write64(out, index.remap_offset_)) return 0;
+    if (!bm::sv_di_detail::begin(out, compact_, 1) ||
+        !bm::sv_di_detail::write64(out, index.rows_.size()) ||
+        !bm::sv_di_detail::write64(out, index.plane_offsets_.size()) ||
+        !bm::sv_di_detail::write64(out, index.digest_offset_) ||
+        !bm::sv_di_detail::write64(out, index.remap_offset_))
+    {
+        return 0;
+    }
+
     for (size_t i = 0; i < index.plane_offsets_.size(); ++i)
-        if (!sv_di_detail::write64(out, index.plane_offsets_[i])) return 0;
-    child_.set_format(deserialization_index_serializer<BV>::format_compact);
-    typename index_type::row_type empty;
+    {
+        if (!bm::sv_di_detail::write64(out, index.plane_offsets_[i]))
+        {
+            return 0;
+        }
+    } // for i
+
+    child_.set_format(bm::deserialization_index_serializer<BV>::format_compact);
+    const typename index_type::row_type empty;
     for (size_t i = 0; i < index.rows_.size(); ++i)
     {
-        size_t n = index.rows_[i].equal(empty) ? 0 : child_.serialize(index.rows_[i], scratch_);
-        if (!sv_di_detail::write64(out, n) || (n && !out.write(scratch_.data(), n))) return 0;
-    }
-    return sv_di_detail::finish(out, start, compact_);
+        const auto& row = index.rows_[i];
+        const size_t row_bytes = row.equal(empty) ? 0 : child_.serialize(row, scratch_);
+        if (!bm::sv_di_detail::write64(out, row_bytes) ||
+            (row_bytes && !out.write(scratch_.data(), row_bytes)))
+        {
+            return 0;
+        }
+    } // for i
+
+    return bm::sv_di_detail::finish(out, start, compact_);
 }
-// --------------------------------------------
+
+// -----------------------------------------------------------------------------
 // Implementations for: sparse_vector_deserialization_index_deserializer
-// --------------------------------------------
+// -----------------------------------------------------------------------------
 template<class BV>
-size_t sparse_vector_deserialization_index_deserializer<BV>::deserialize(index_type& index, const unsigned char* data, size_t size)
+size_t sparse_vector_deserialization_index_deserializer<BV>::deserialize(
+    index_type& index, const unsigned char* data, size_t size)
 {
-    sv_di_detail::require(data != 0);
-    sv_di_detail::memory_input in{data, size}; return deserialize_from(index, in);
+    bm::serialization_require(data != 0);
+    bm::sv_di_detail::memory_input in{data, size};
+    return deserialize_from(index, in);
 }
+
 template<class BV>
 template<class IN>
-size_t sparse_vector_deserialization_index_deserializer<BV>::deserialize_from(index_type& index, IN& in)
+size_t sparse_vector_deserialization_index_deserializer<BV>::deserialize_from(
+    index_type& index, IN& in)
 {
-    const size_t start = in.pos; size_t tail;
-    if (!sv_di_detail::begin_read(in, compact_, 1, tail)) return 0;
+    const size_t start = in.pos;
+    size_t tail;
+    if (!bm::sv_di_detail::begin_read(in, compact_, 1, tail))
+    {
+        return 0;
+    }
     size_t rows, offsets, digest, remap;
-    if (!sv_di_detail::read_size(in, rows) || !sv_di_detail::read_size(in, offsets) ||
-        !sv_di_detail::read_size(in, digest) || !sv_di_detail::read_size(in, remap)) return 0;
+    if (!bm::sv_di_detail::read_size(in, rows) ||
+        !bm::sv_di_detail::read_size(in, offsets) ||
+        !bm::sv_di_detail::read_size(in, digest) ||
+        !bm::sv_di_detail::read_size(in, remap))
+    {
+        return 0;
+    }
+
     // One length word per row and one word per cached offset must fit before allocation.
-    sv_di_detail::require(rows <= unsigned(-1) && offsets <= unsigned(-1) &&
-                          rows <= in.remaining / 8 && offsets <= in.remaining / 8 - rows);
-    index_type tmp; tmp.reset(unsigned(rows));
-    tmp.plane_offsets_.resize(unsigned(offsets)); tmp.digest_offset_ = digest; tmp.remap_offset_ = remap;
+    bm::serialization_require(rows <= unsigned(-1) && offsets <= unsigned(-1) &&
+                              rows <= in.remaining / 8 &&
+                              offsets <= in.remaining / 8 - rows);
+    index_type tmp;
+    tmp.reset(unsigned(rows));
+
+    tmp.plane_offsets_.resize(unsigned(offsets));
+    tmp.digest_offset_ = digest;
+    tmp.remap_offset_ = remap;
+
     for (size_t i = 0; i < offsets; ++i)
-        if (!sv_di_detail::read_size(in, tmp.plane_offsets_[i])) return 0;
-    child_.set_format(deserialization_index_deserializer<BV>::format_compact);
+    {
+        if (!bm::sv_di_detail::read_size(in, tmp.plane_offsets_[i]))
+        {
+            return 0;
+        }
+    } // for i
+
+    child_.set_format(bm::deserialization_index_deserializer<BV>::format_compact);
     for (size_t i = 0; i < rows; ++i)
     {
-        size_t n; if (!sv_di_detail::read_size(in, n)) return 0;
-        sv_di_detail::require(n <= in.remaining && (rows - i - 1) <= (in.remaining - n) / 8);
-        if (!n) continue;
-        scratch_.resize(n);
-        if (!in.read(scratch_.data(), n)) return 0;
-        sv_di_detail::require(child_.deserialize(tmp.rows_[i], scratch_.data(), n) == n);
-    }
-    sv_di_detail::require(in.remaining == 0);
-    in.remaining = tail; index.swap(tmp); return in.pos - start;
+        size_t row_bytes;
+        if (!bm::sv_di_detail::read_size(in, row_bytes))
+        {
+            return 0;
+        }
+        bm::serialization_require(row_bytes <= in.remaining &&
+                                  rows - i - 1 <= (in.remaining - row_bytes) / 8);
+        if (!row_bytes)
+        {
+            continue;
+        }
+        scratch_.resize(row_bytes, false);
+        if (!in.read(scratch_.data(), row_bytes))
+        {
+            return 0;
+        }
+        const size_t consumed = child_.deserialize(tmp.rows_[i], scratch_.data(), row_bytes);
+        bm::serialization_require(consumed == row_bytes);
+    } // for i
+    bm::serialization_require(in.remaining == 0);
+    in.remaining = tail;
+    index.swap(tmp);
+
+    return in.pos - start;
 }
 
 } // namespace bm
