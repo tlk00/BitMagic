@@ -10,7 +10,7 @@
     BLOBs. It does not participate in compressor trials or winner selection,
     and ordinary serialization does not invoke it. Tests use it to verify
     opcode coverage; inv_list uses it for opcode reports and surveys. Sparse
-    vector tests profile individual serialized bit-plane BLOBs with this API.
+    vectors can be profiled as complete objects with profile_sparse_vector().
 
     A deserialization-index pass identifies and validates top-level record
     spans without scanning arbitrary payload bytes for opcode values. The
@@ -66,6 +66,7 @@ struct serialization_opcode_profile
     std::uint64_t arithmetic_0runs_modes[4][2] = {}; ///< Opcode 107 mode counts in the same four contexts.
     std::uint64_t blobs = 0; ///< Number of profiled BLOBs.
     std::uint64_t bytes = 0; ///< Total profiled BLOB bytes.
+    std::uint64_t container_bytes = 0; ///< Sparse-vector framing, offset table and optional remap data.
     std::uint64_t header_bytes = 0; ///< Headers preceding opcode records.
     std::uint64_t id_list_bytes = 0; ///< Complete marker-free ID-list BLOB bytes.
     std::uint64_t records = 0; ///< Total top-level opcode records.
@@ -181,6 +182,63 @@ public:
                   bm::serialization_opcode_profile& profile, Observer observe);
 };
 
+/** Profile one complete native-order, digest-table sparse-vector serialization.
+    @ingroup svserial
+    @tparam SV Matching integer, rank-compressed or string sparse-vector type.
+    @param data Serialized input borrowed for this call.
+    @param size Exact byte length of the complete object.
+    @return Combined top-level opcode counts for the value/NULL planes and
+        plane-presence digest. Container bytes account for the remaining data.
+    @throws std::exception On unsupported input or incomplete byte accounting.
+*/
+template<class SV>
+bm::serialization_opcode_profile profile_sparse_vector(const unsigned char* data,
+                                                       size_t size)
+{
+    bm::serialization_profile_streambuf view(data, size);
+    std::istream stream(&view);
+    bm::streams_sparse_vector_deserializer<SV> reader;
+    typename bm::streams_sparse_vector_deserializer<SV>::deserialization_index_type index;
+    size_t digest_size = 0;
+    if (!reader.construct_deserialization_index(index, stream, &digest_size) ||
+        stream.tellg() != std::streampos(std::streamoff(size)))
+    {
+        throw std::logic_error("Incomplete sparse-vector profile input");
+    }
+
+    bm::serialization_opcode_profile profile;
+    bm::serialization_opcode_collector<typename SV::bvector_type> collector;
+    size_t end = 0;
+    for (unsigned i = 0; i < index.rows(); ++i)
+    {
+        const size_t offset = index.plane_offset(i);
+        if (!offset)
+        {
+            continue;
+        }
+        const size_t length = index.plane_serialized_size(i);
+        if (offset < end || offset > index.digest_offset() ||
+            length > index.digest_offset() - offset)
+        {
+            throw std::logic_error("Invalid sparse-vector plane extent");
+        }
+        collector.add_blob(data + offset, length, profile);
+        end = offset + length;
+    } // for i
+    if (digest_size)
+    {
+        const size_t offset = index.digest_offset();
+        if (offset > size || digest_size > size - offset)
+        {
+            throw std::logic_error("Invalid sparse-vector digest extent");
+        }
+        collector.add_blob(data + offset, digest_size, profile);
+    }
+    profile.container_bytes = size - profile.bytes;
+    profile.bytes = size;
+    return profile;
+}
+
 // ----------------------------------------------------------------------
 
 inline
@@ -202,6 +260,7 @@ void serialization_opcode_profile::add(const bm::serialization_opcode_profile& r
     } // for context
     blobs += r.blobs;
     bytes += r.bytes;
+    container_bytes += r.container_bytes;
     header_bytes += r.header_bytes;
     id_list_bytes += r.id_list_bytes;
     records += r.records;
@@ -244,7 +303,7 @@ bool serialization_opcode_profile::reconciles() const noexcept
             return false;
         }
     } // for e
-    return count == records && header_bytes + id_list_bytes + record_bytes() == bytes;
+    return count == records && container_bytes + header_bytes + id_list_bytes + record_bytes() == bytes;
 }
 
 inline

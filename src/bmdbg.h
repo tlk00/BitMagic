@@ -446,6 +446,10 @@ void print_serialization_opcode_profile(Out& out,
         << " opcode_bytes=" << profile.records
         << " payload_bytes=" << (profile.record_bytes()-profile.records)
         << " reconciled=" << unsigned(profile.reconciles()) << '\n';
+    if (profile.container_bytes)
+    {
+        out << "Sparse-vector container_bytes=" << profile.container_bytes << '\n';
+    }
     out << "Opcode group                 Records     Marker bytes    Payload bytes      Total bytes   Percent\n";
     for (const auto& group : groups)
     {

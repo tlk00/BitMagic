@@ -586,20 +586,22 @@ public:
     /** Construct reusable plane indexes without restoring the full vector.
         @param index Output indexes for this exact BLOB.
         @param stream Seekable input positioned at the object start.
+        @param digest_size Optional output for the serialized plane-presence digest length.
         @return True on successful index construction and final positioning.
     */
     bool construct_deserialization_index(deserialization_index_type& index,
-                                         std::istream& stream);
+                                         std::istream& stream, size_t* digest_size = 0);
 private:
     /** Read metadata, then decode planes in dependency order.
         @param sv Destination or index-construction scratch vector.
         @param stream Borrowed input stream.
         @param mask Optional logical selection.
         @param build Optional index construction target.
+        @param digest_size Optional digest length output, valid on success.
         @return True if the complete operation succeeded.
     */
     bool read(SV& sv, std::istream& stream, const bvector_type* mask,
-              deserialization_index_type* build);
+              deserialization_index_type* build, size_t* digest_size = 0);
     /** Seek to a checked object-relative offset.
         @param stream Borrowed stream.
         @param origin Physical object start.
@@ -1238,16 +1240,16 @@ bool streams_sparse_vector_deserializer<SV>::deserialize(
 
 template<class SV>
 bool streams_sparse_vector_deserializer<SV>::construct_deserialization_index(
-    deserialization_index_type& index, std::istream& stream)
+    deserialization_index_type& index, std::istream& stream, size_t* digest_size)
 {
     SV scratch;
-    return read(scratch, stream, 0, &index);
+    return read(scratch, stream, 0, &index, digest_size);
 }
 
 template<class SV>
 bool streams_sparse_vector_deserializer<SV>::read(
     SV& sv, std::istream& stream, const bvector_type* mask,
-    deserialization_index_type* build)
+    deserialization_index_type* build, size_t* digest_size)
 {
     struct guard_type
     {
@@ -1274,6 +1276,10 @@ bool streams_sparse_vector_deserializer<SV>::read(
     if (header[1] == 'Z')
     {
         if (build) build->reset(0);
+        if (digest_size)
+        {
+            *digest_size = 0;
+        }
         return true;
     }
     if (header[1] != (sv.is_compressed() ? 'C' : 'M')) return false;
@@ -1299,6 +1305,10 @@ bool streams_sparse_vector_deserializer<SV>::read(
     this->plane_digest_bv_.clear();
     streams_decoder digest_input(stream);
     if (!reader_.deserialize(this->plane_digest_bv_, digest_input)) return false;
+    if (digest_size)
+    {
+        *digest_size = digest_input.tell();
+    }
     typename bvector_type::size_type last_plane = 0;
     if (this->plane_digest_bv_.find_reverse(last_plane) && last_plane >= planes) return false;
     const unsigned count = unsigned(this->plane_digest_bv_.count());

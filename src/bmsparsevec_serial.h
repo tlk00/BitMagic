@@ -111,6 +111,10 @@ struct sparse_vector_serial_layout
     const unsigned char* get_plane(unsigned i) const BMNOEXCEPT
         { return plane_ptrs_[i]; }
     
+    /// Get serialized byte length for a plane in the current layout.
+    size_t get_plane_size(unsigned i) const BMNOEXCEPT
+        { return plane_size_[i]; }
+
     /// Return serialization buffer pointer
     const unsigned char* buf() const BMNOEXCEPT { return buf_.buf();  }
     /// Return serialization buffer pointer
@@ -731,6 +735,13 @@ public:
         \return number of indexed plane rows
     */
     unsigned rows() const BMNOEXCEPT;
+
+    /** Get the full plane BLOB length, including for marker-free ID lists.
+        @param row Zero-based plane index.
+        @return Serialized bytes, or zero for an absent or out-of-range plane.
+    */
+    size_t plane_serialized_size(unsigned row) const BMNOEXCEPT
+        { return row < rows_.size() ? rows_[row].serialized_size() : 0; }
 
     /*!
         \brief Create or replace an index row for a serialized plane.
