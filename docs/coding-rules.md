@@ -58,6 +58,13 @@ Apply them to new and modified code; keep unrelated refactoring out of a change.
 
 ## Formatting and names
 
+- Make each code separator exactly 80 columns wide, including indentation.
+  Use two slashes, one space, and enough hyphens to reach column 80.
+
+  ```cpp
+  // -----------------------------------------------------------------------------
+  ```
+
 - Use readable spacing around operators and after control keywords.
 - Put control-structure braces on separate lines. Expand even short branches;
   use one statement per line rather than compressed statements.
