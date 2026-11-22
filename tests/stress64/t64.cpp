@@ -6883,6 +6883,58 @@ static void BVectorLargeSuperblockStreamGrowthTest()
     cout << "BVectorLargeSuperblockStreamGrowthTest() OK" << endl;
 }
 
+/** Verify GAP cutoff handling across the 32-bit position boundary. */
+static void TestXorGapCutoffRoundTrip64()
+{
+    const bvect::size_type boundary = bvect::size_type(1) << 32;
+    const bvect::size_type previous = boundary - bm::gap_max_bits;
+    bvect target, reference;
+    for (unsigned i = 1; i <= 40; ++i)
+    {
+        const unsigned offset = i * i + 7;
+        target.set(previous + offset);
+        target.set(boundary + offset);
+        reference.set(previous + offset);
+    } // for i
+    reference.set(boundary + 17);
+    reference.optimize();
+    target.optimize();
+
+    // The first GAP primes the scratch slot. The next GAP is exactly at the cutoff.
+    const auto& blocks = reference.get_blocks_manager();
+    unsigned i, j;
+    bm::get_block_coord(previous / bm::gap_max_bits, i, j);
+    const auto* first = blocks.get_block_ptr(i, j);
+    bm::get_block_coord(boundary / bm::gap_max_bits, i, j);
+    const auto* second = blocks.get_block_ptr(i, j);
+    assert(BM_IS_GAP(first) && BM_IS_GAP(second));
+    bm::xor_sim_params params;
+    params.min_gaps = bm::gap_length(BMGAP_PTR(second));
+    assert(params.min_gaps > 3 && bm::gap_length(BMGAP_PTR(first)) > params.min_gaps);
+
+    bm::bv_ref_vector<bvect> refs;
+    refs.add(&target, 0);
+    refs.add(&reference, 1);
+    bm::xor_sim_model<bvect> model;
+    bm::serializer<bvect> writer;
+    writer.set_compression_level(6);
+    writer.set_ref_vectors(&refs);
+    assert(writer.compute_sim_model(model, refs, params));
+    writer.set_sim_model(&model);
+    writer.set_curr_ref_idx(0);
+    bm::serializer<bvect>::buffer bytes;
+    writer.serialize(target, bytes);
+
+    bm::deserializer<bvect, bm::decoder> reader;
+    reader.set_ref_vectors(&refs);
+    bvect restored;
+    reader.deserialize(restored, bytes.data());
+    assert(restored == target);
+    assert(model.matr.get(0, 0).match == bm::e_xor_match_EQ);
+    assert(model.matr.get(0, 1).match == bm::e_no_xor_match);
+    assert(writer.get_compression_stat()[bm::set_block_ref_eq] == 1);
+}
+
 void BVectorStreamSerializationTest()
 {
     BVectorLargeSuperblockStreamGrowthTest();
@@ -27287,6 +27339,7 @@ void show_help()
         << "-bvb0, -bvb1a/b/c  - bit-vector basic subgroups" << endl
         << "-complexity           - vector/XOR complexity, all-pairs interval oracle" << endl
         << "-bvser (-bvset)       - bit-vector serialization " << endl
+        << "-xorser               - XOR GAP cutoff round trip across the 32-bit boundary" << endl
         << "-fileser              - file serialization beyond 32-bit space" << endl
         << "-svser                - sparse-vector level/opcode/index/gather tests" << endl
         << "-svfileser            - sparse-vector file streaming serialization" << endl
@@ -27332,6 +27385,7 @@ bool         is_bvbasic = false;
 bool         is_bvbasic_part[4] = {};
 bool         is_complexity = false;
 bool         is_bvser = false;
+bool         is_xor_ser = false;
 bool         is_sv_ser = false;
 bool         is_file_ser = false;
 bool         is_sv_file_ser = false;
@@ -27478,6 +27532,12 @@ int parse_args(int argc, char *argv[])
         {
             is_all = false;
             is_str_sv_stream = true;
+            continue;
+        }
+        if (arg == "-xorser")
+        {
+            is_all = false;
+            is_xor_ser = true;
             continue;
         }
         if (arg == "-bvser" || arg == "-bvset")
@@ -28099,6 +28159,12 @@ int main(int argc, char *argv[])
         sparse_serial_test::RunSuperblockFixtures<bvect>();
         CheckAllocLeaks(false);
         ReportTestBlockDone("-svser");
+    }
+    if (is_xor_ser || is_all || is_bvser || is_bvbasic)
+    {
+        TestXorGapCutoffRoundTrip64();
+        CheckAllocLeaks(false);
+        ReportTestBlockDone("-xorser");
     }
     if (is_file_ser || is_all || is_bvser || is_bvbasic)
     {

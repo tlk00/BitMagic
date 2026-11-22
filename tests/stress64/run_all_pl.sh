@@ -63,6 +63,7 @@ Test selectors verified against t64.cpp:
   -bvb0, -bvb1a/b/c     Independent bit-vector basic subgroups
   -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization tests
+  -xorser               XOR GAP cutoff round trip (included in -bvser)
   -fileser              File serialization tests
   -svser                Sparse-vector level/opcode/index/gather tests
   -svfileser            Sparse-vector file and stringstream tests
@@ -129,7 +130,7 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1[a-c]|-complexity|-bvser|-bvset|\
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1[a-c]|-complexity|-bvser|-bvset|-xorser|\
         -fileser|-svfileser|-svser|-svserquick|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl1|-bvops1|-bvl1[a-b]|-bvl2|-bvops2|-bvl2[a-b]|\
         -bvl3|-bvops3|-bvl3[a-b]|-bvl4|-bvops4|-bvl4[a-b]|-bvs|-bvshift|-bvs[0-3]|-rc|-rankc|-agg|-aggregator|\
