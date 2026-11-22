@@ -1275,8 +1275,10 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
     {
         const bm::gap_word_t* gap_s_block = BMGAP_PTR(s_block);
         s_gc = bm::gap_length(gap_s_block);
-        if (s_gc <= 3)
+        if (s_gc <= params.min_gaps)
+        {
             return e_no_xor_match;
+        }
         s_block = nb_blocks_vect_.at(s_ri);
         BM_ASSERT(s_block);
     }
@@ -1295,8 +1297,11 @@ xor_scanner<BV>::search_best_xor_mask(const bm::word_t* s_block,
         {
             const bm::gap_word_t* gap_ref_block = BMGAP_PTR(ref_block);
             unsigned r_gc = bm::gap_length(gap_ref_block);
-            if (r_gc <= 3)
+            // The scratch slot is current only for GAPs expanded at this coordinate.
+            if (r_gc <= params.min_gaps)
+            {
                 continue;
+            }
 
             if (s_gap) // both blocks GAPs - check if XOR does not make sense
             {

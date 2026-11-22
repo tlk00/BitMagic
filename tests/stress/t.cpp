@@ -19253,6 +19253,55 @@ void BVectorXorBenefitTest()
     CheckBVectorXorSerializationSize(true);
 }
 
+/** Verify that a skipped GAP cannot reuse the previous coordinate's equality match. */
+static void TestXorGapCutoffRoundTrip()
+{
+    bvect target, reference;
+    const unsigned base = bm::gap_max_bits;
+    for (unsigned i = 1; i <= 40; ++i)
+    {
+        const unsigned pos = i * i + 7;
+        target.set(pos);
+        target.set(base + pos);
+        reference.set(pos);
+    } // for i
+    reference.set(base + 17);
+    target.optimize();
+    reference.optimize();
+
+    // Block 0 primes the reference scratch slot with an exact copy of both
+    // target blocks. Block 1 is a different GAP exactly at the cutoff.
+    const auto& blocks = reference.get_blocks_manager();
+    const auto* first = blocks.get_block_ptr(0, 0);
+    const auto* second = blocks.get_block_ptr(0, 1);
+    assert(BM_IS_GAP(first) && BM_IS_GAP(second));
+    bm::xor_sim_params params;
+    params.min_gaps = bm::gap_length(BMGAP_PTR(second));
+    assert(params.min_gaps > 3 && bm::gap_length(BMGAP_PTR(first)) > params.min_gaps);
+
+    bm::bv_ref_vector<bvect> refs;
+    refs.add(&target, 0);
+    refs.add(&reference, 1);
+    bm::serializer<bvect> writer;
+    writer.set_compression_level(6);
+    writer.set_ref_vectors(&refs);
+    bm::xor_sim_model<bvect> model;
+    assert(writer.compute_sim_model(model, refs, params));
+    writer.set_sim_model(&model);
+    writer.set_curr_ref_idx(0);
+    bm::serializer<bvect>::buffer bytes;
+    writer.serialize(target, bytes);
+
+    bvect restored;
+    bm::deserializer<bvect, bm::decoder> reader;
+    reader.set_ref_vectors(&refs);
+    reader.deserialize(restored, bytes.data());
+    assert(restored == target);
+    assert(model.matr.get(0, 0).match == bm::e_xor_match_EQ);
+    assert(model.matr.get(0, 1).match == bm::e_no_xor_match);
+    assert(writer.get_compression_stat()[bm::set_block_ref_eq] == 1);
+}
+
 static void BuildBVectorXorMixedFixture(bvect& target, bvect& reference)
 {
     for (unsigned block : {0u, 1u, 3u})
@@ -57958,6 +58007,7 @@ return 0;
     if (is_xor_ser || is_file_ser || is_ser || is_all || is_bvser)
     {
         BVectorXorExpansionTest();
+        TestXorGapCutoffRoundTrip();
         BVectorXorBenefitTest();
         BVectorXorMixedSerializationTest();
         BVectorBicRawFallbackTest();
