@@ -51,6 +51,7 @@ For more information please visit:  http://bitmagic.io
 #include <bmaggregator.h>
 #include <bmutil.h>
 #include <bmserial.h>
+#include <bmserial_profile.h>
 #include <bmrandom.h>
 #include <bmvmin.h>
 #include <bmbmatrix.h>
@@ -79,6 +80,7 @@ using namespace std;
 //
 
 unsigned                                num_threads = 4;
+bool                                    gather_only = false;
 
 bm::chrono_taker<>::duration_map_type     timing_map;
 
@@ -299,6 +301,163 @@ void generate_df_svu32_set(sparse_vector_u32& sv1i,
     bi3.flush();
     bi4.flush();
 
+}
+
+
+/** Exercise L8 gather on a sparse vector with known per-wave donors.
+    @param label Fixture and pool name for the opcode report.
+    @param distant Use depth 16 beyond empty slots, mixed polarity, and the
+        optional runner-up policy. The other fixture rotates three donors.
+*/
+template<class Pool>
+static void TestParallelSV_Serial(const char* label, bool distant)
+{
+    sparse_vector_u32 sv;
+    constexpr unsigned blocks = 4;
+    std::mt19937 random(distant ? 1129 : 2027);
+    auto donor = [distant](unsigned wave, unsigned block)
+    {
+        if (distant && block == 1 && wave < 2)
+        {
+            return 3u; // GAP donor with a transition every 256 bits
+        }
+        return distant ? ((wave + block) % 2 ? 16u : 2u)
+                       : 1u + (wave + block) % 3;
+    };
+    auto inverted = [distant](unsigned wave)
+    {
+        return distant ? wave % 3 == 0 : wave % 4 == 0;
+    };
+    {
+        auto out = sv.get_back_inserter();
+        for (unsigned nb = 0; nb < blocks; ++nb)
+        {
+            if (distant && nb == 2)
+            {
+                // Leave an empty coordinate so matrix rank differs from block index.
+                for (unsigned bit = 0; bit < bm::gap_max_bits; ++bit)
+                {
+                    out = 0;
+                } // for bit
+            }
+            for (unsigned bit = 0; bit < bm::gap_max_bits; ++bit)
+            {
+                const unsigned wave = bit / 1024;
+                unsigned planes = random() & (distant ? 0x1fffeu : 0xeu);
+                if (distant && nb)
+                {
+                    // Retain the original depth of row 16 after the holes.
+                    planes &= (1u << 16) | (1u << 2);
+                    if (nb == 1 && (bit & 256))
+                    {
+                        planes |= 1u << 3;
+                    }
+                    if (nb == 2)
+                    {
+                        planes |= 1u << 4; // Full reference slot.
+                    }
+                }
+                const unsigned noise = (bit % 1024 == (37 * wave + nb) % 1024);
+                const unsigned target = ((planes >> donor(wave, nb)) & 1) ^ inverted(wave) ^ noise;
+                out = planes | (distant && wave == 63 ? 0u : target);
+            } // for bit
+        } // for nb
+        out.flush();
+    }
+    sv.optimize();
+    using serializer_type = bm::sparse_vector_serializer<sparse_vector_u32>;
+    serializer_type serializer;
+    serializer.set_compression_level(8);
+    auto& bv_serializer = serializer.get_bv_serializer();
+    bv_serializer.set_xor_gather_runner_up(distant);
+    serializer_type::bv_ref_vector_type refs;
+    refs.add_vectors(sv.get_bmatrix());
+    serializer.set_xor_ref(&refs);
+    bm::xor_sim_params params;
+    if (distant)
+    {
+        // Gather must compete even without an admitted classic XOR recipe.
+        params.max_lookup_depth = 0;
+    }
+    serializer_type::xor_sim_model_type control, model;
+    serializer.compute_sim_model(control, refs, params);
+    assert(control.four_candidates && !control.gather.is_init());
+    serializer.set_sim_model(&control);
+    bm::sparse_vector_serial_layout<sparse_vector_u32> baseline, parallel;
+    serializer.serialize(sv, baseline);
+
+    bm::compute_sim_matrix_plan_builder<bvect> builder;
+    bm::compute_sim_matrix_plan_builder<bvect>::task_batch batch;
+    builder.build_plan(batch, model, refs, params, &bv_serializer);
+    Pool pool;
+    pool.start(num_threads);
+    bm::thread_pool_executor<Pool> exec;
+    exec.run(pool, batch, true);
+    pool.set_stop_mode(Pool::stop_when_done);
+    pool.join();
+    assert(model.four_candidates && model.gather.cols() == blocks);
+    assert(model.runners.is_init() == distant);
+    Check_SimModel(control, model);
+    for (unsigned k = 0; k < 3; ++k)
+    {
+        assert(model.alternatives[k].equal(control.alternatives[k]));
+    } // for k
+    if (distant)
+    {
+        assert(!model.bv_blocks.test(2) && model.bv_blocks.test(4));
+        const auto* gap = refs.get_bv(3)->get_blocks_manager().get_block(0, 1);
+        assert(BM_IS_GAP(gap));
+        assert(IS_FULL_BLOCK(refs.get_bv(4)->get_blocks_manager().get_block(0, 3)));
+    }
+    for (unsigned nb = 0; nb < blocks; ++nb)
+    {
+        const auto& recipe = model.gather.row(0)[nb];
+        assert(recipe.mask == (~bm::id64_t(0) >> unsigned(distant)));
+        if (distant)
+        {
+            assert(model.matr.get(0, nb).match == bm::e_no_xor_match);
+        }
+        for (unsigned wave = 0; wave < 64 - unsigned(distant); ++wave)
+        {
+            assert(recipe.slot(wave) + 1 == donor(wave, nb));
+            assert(((recipe.dense >> wave) & 1) == inverted(wave));
+        } // for wave
+    } // for nb
+    serializer.set_sim_model(&model);
+    serializer.serialize(sv, parallel);
+    assert(parallel.size() == baseline.size());
+    assert(!std::memcmp(parallel.buf(), baseline.buf(), parallel.size()));
+    const auto original = bm::profile_sparse_vector<sparse_vector_u32>(baseline.buf(), baseline.size());
+    const auto planned = bm::profile_sparse_vector<sparse_vector_u32>(parallel.buf(), parallel.size());
+    assert(original.reconciles() && planned.reconciles());
+    for (unsigned op = 0; op < 256; ++op)
+    {
+        assert(original.opcode[op].count == planned.opcode[op].count);
+    } // for op
+
+    // Inspect plane zero specifically: each emitted gather must belong to a
+    // target whose wave-to-reference choices were checked above.
+    bm::serialization_opcode_collector<bvect> collector;
+    bm::serialization_opcode_profile target;
+    collector.add_blob(parallel.get_plane(0), parallel.get_plane_size(0), target);
+    const auto legacy = target.opcode[bm::set_block_xor_gather].count;
+    const auto shared = target.opcode[bm::set_block_xor_parallel_gather].count;
+    assert(target.reconciles() && legacy + shared == blocks);
+
+    sparse_vector_u32 restored;
+    bm::sparse_vector_deserializer<sparse_vector_u32> reader;
+    reader.deserialize_structure(restored, parallel.buf());
+    serializer_type::bv_ref_vector_type decode_refs;
+    decode_refs.add_vectors(restored.get_bmatrix());
+    reader.set_xor_ref(&decode_refs);
+    reader.deserialize(restored, parallel.buf(), false);
+    assert(restored.equal(sv));
+
+    // Reusing the model for an inline build must invalidate all gather rows.
+    serializer.compute_sim_model(model, refs, params);
+    assert(!model.gather.is_init() && !model.runners.is_init());
+    cout << label << " target plane: opcode 100=" << legacy
+         << " opcode 102=" << shared << " bytes=" << parallel.size() << endl;
 }
 
 
@@ -607,6 +766,7 @@ void show_help()
 {
     std::cerr
         << "BitMagic C++ stress test for parallel algorithms " << endl
+        << "--gather                - run only L8 gather parity fixtures" << endl
         << "-h                      - help" << endl
         << "-j <number-of-threads>  - set number of threads to run" << endl
         ;
@@ -623,6 +783,11 @@ int parse_args(int argc, char *argv[])
         {
             show_help();
             return 1;
+        }
+        if (arg == "--gather")
+        {
+            gather_only = true;
+            continue;
         }
         if (arg == "-j")
         {
@@ -687,6 +852,14 @@ int main(int argc, char *argv[])
         cout << endl;
 
 
+        TestParallelSV_Serial<pool_spin_type>("L8 rotating donors (spin)", false);
+        TestParallelSV_Serial<pool_spin_type>("L8 distant donors (spin)", true);
+        TestParallelSV_Serial<pool_mutex_type>("L8 rotating donors (mutex)", false);
+        TestParallelSV_Serial<pool_mutex_type>("L8 distant donors (mutex)", true);
+        if (gather_only)
+        {
+            return 0;
+        }
         TestSimpleQueue();
 
         TestTaskDescr();
