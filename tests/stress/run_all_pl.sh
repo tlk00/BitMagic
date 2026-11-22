@@ -64,6 +64,7 @@ Test selectors from t.cpp:
   -bvb1d0/1/2           Rank/mutation / mutation operations / block/import checks
   -complexity           Vector/XOR complexity all-pairs validation
   -bvser, -bvset        Bit-vector serialization and indexed-gather tests
+  -xorser               XOR serialization size and round-trip tests
   -fileser              File serialization/deserialization, including -svfileser
   -svfileser            Sparse-vector file and stringstream tests
   -svser                Sparse-vector level/opcode/index/gather tests
@@ -134,7 +135,7 @@ Test selectors from t.cpp:
   -svf1a               Runner group for the three plain float index/gather parts
   -svf1b               Runner group for the three RSC parts and scanner
   -svserquick           Runner group for sparse-vector serialization/index/streams
-  -serquick             Runner group for file and sparse serialization checks
+  -serquick             Runner group for XOR, file and sparse serialization checks
   -bvlquick             Runner group for short logical-operation checks
   -csvsetquick          Runner group for the four set/null stress shards
 
@@ -159,7 +160,7 @@ EOF
 is_valid_test()
 {
     case "$1" in
-        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvb1[a-d]|-bvb1d[0-2]|-complexity|-bvser|-bvset|-fileser|-svfileser|-svser|-svserquick|-serquick|-strsvstream|-svfstream|-svindex|\
+        -ll|-llevel|-s|-support|-bvb|-bvbasic|-bvb0|-bvb1|-bvb1[a-d]|-bvb1d[0-2]|-complexity|-bvser|-bvset|-xorser|-fileser|-svfileser|-svser|-svserquick|-serquick|-strsvstream|-svfstream|-svindex|\
         -bvo|-bvops|-bvl|-bvl0|-bvops0|-bvl0[a-b]|-bvl0b[0-2]|-bvl1|-bvops1|-bvl1[a-d]|-bvl1b[0-2]|-bvl2|-bvops2|-bvl2[a-c]|-bvlquick|\
         -bvs|-bvshift|-bvs[0-3]|-bvs0[a-d]|-rc|-rankc|-agg|-aggregator|\
         -sv|-sv0|-sv1|-sv1a|-sv1a[0-1]|-sv1a2[a-d]|-sv1b|-sv1b[0-3]|-sv1bq[0-3]|-sv1c|-sort|--sort|\
@@ -455,7 +456,7 @@ start_test()
 
     case "$test_opt" in
         -serquick)
-            worker_args=(-fileser -svser -svindex -strsvstream -svfstream -silent)
+            worker_args=(-xorser -fileser -svser -svindex -strsvstream -svfstream -silent)
             ;;
         -bvlquick)
             worker_args=(-bvl0a -bvl1a -bvl1c -silent)
