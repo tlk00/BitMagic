@@ -1,7 +1,7 @@
 #ifndef BMSPARSEVEC_PARALLEL__H__INCLUDED__
 #define BMSPARSEVEC_PARALLEL__H__INCLUDED__
 /*
-Copyright(c) 2020 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
+Copyright(c) 2020-2026 Anatoliy Kuznetsov(anatoliy_kuznetsov at yahoo.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -116,33 +116,65 @@ public:
     };
 
     /**
-        Construct task batch for parallel execution. (Every task is a lambda).
+        Append one task per occupied block coordinate. The reference collection
+        and destination model must outlive execution. Each task owns one column.
+        @param batch Batch receiving the tasks.
+        @param sim_model Destination model, reset before scheduling.
+        @param ref_vect Immutable reference planes in decode dependency order.
+        @param xs_params Scanner bounds copied into the tasks.
+        @param policy Optional serializer supplying level and gather policy.
+            Omitting it preserves the original single-incumbent search.
      */
     void build_plan(task_batch& batch,
                     bm::xor_sim_model<BV>& sim_model,
                     const bv_ref_vector_type& ref_vect,
-                    const bm::xor_sim_params& xs_params)
+                    const bm::xor_sim_params& xs_params,
+                    const bm::serializer<BV>* policy = nullptr)
     {
-        sim_model.bv_blocks.clear(true);
-        ref_vect.build_nb_digest_and_xor_matrix(sim_model.matr,
-                                                sim_model.bv_blocks);
+        bm::xor_sim_params params = xs_params;
+        sim_model.four_candidates = false;
+        if (policy)
+        {
+            policy->configure_xor_search(sim_model, params);
+        }
+        if (!sim_model.init(ref_vect, policy && policy->gather_enabled(),
+                            policy && policy->gather_runner_enabled()))
+        {
+            return;
+        }
 
         typename bvector_type::size_type nb_count = sim_model.bv_blocks.count();
         typename task_batch::task_vector_type& tv = batch.get_task_vector();
         tv.reserve(nb_count);
-
-        typename xor_sim_model<BV>::matrix_chain_type &sm_matr = sim_model.matr;
 
         typename bvector_type::enumerator en(sim_model.bv_blocks);
         for (size_type col = 0; en.valid(); ++en, ++col)
         {
             size_type nb = *en;
             bm::task_function_t task(
-            [nb, col, &xs_params, &sm_matr, &ref_vect] (void* /*argp*/) {
+            [nb, col, params, &sim_model, &ref_vect] (void* /*argp*/) {
                 thread_local bm::xor_scanner<BV> xor_scan;
                 xor_scan.set_ref_vector(&ref_vect);
                 xor_scan.sync_nb_vect();
-                xor_scan.compute_sim_model(sm_matr, nb, col, xs_params);
+                xor_scan.compute_sim_model(sim_model.matr, nb, col, params,
+                                           sim_model.four_candidates ? &sim_model : nullptr);
+                if (sim_model.gather.is_init())
+                {
+                    thread_local bm::gather_window<BV> window;
+                    unsigned i, j;
+                    bm::get_block_coord(nb, i, j);
+                    for (size_type row = 0; row + 1 < ref_vect.size(); ++row)
+                    {
+                        auto* target = ref_vect.get_bv(row)->get_blocks_manager().get_block(i, j);
+                        if (!target || IS_FULL_BLOCK(target) || BM_IS_GAP(target))
+                        {
+                            continue;
+                        }
+                        window.init(ref_vect, row, nb);
+                        bm::search_gather_waves(target, window, sim_model.gather.row(row)[col],
+                            sim_model.runners.is_init() ? &sim_model.runners.row(row)[col] : nullptr);
+                    } // for row
+                }
                 return 0;
             });
             batch.add(task, 0);

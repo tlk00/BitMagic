@@ -525,6 +525,16 @@ public:
                            const bv_ref_vector_type& ref_vect,
                            const bm::xor_sim_params& params);
 
+    /** Apply serializer search policy to a new model build.
+        @param model Destination whose four-candidate flag is updated.
+        @param params Input/output search bounds; an explicit admission ceiling is preserved.
+    */
+    void configure_xor_search(xor_sim_model_type& model, bm::xor_sim_params& params) const;
+    /// Return whether this serializer requests wave gather.
+    bool gather_enabled() const BMNOEXCEPT { return xor_gather_; }
+    /// Return whether this serializer requests the optional runner-up search.
+    bool gather_runner_enabled() const BMNOEXCEPT { return gather_runner_up_; }
+
     /**
         Atach XOR similarity model (must be computed by the same ref vector)
         @internal
@@ -929,12 +939,14 @@ protected:
         @param blk Original BIT block, borrowed.
         @param sub_stat Existing block survey.
         @param nb Block index.
+        @param rank One-based digest rank, or zero if the block is unindexed.
         @param begin Start of the existing winner in enc.
         @param before Compression counters before the baseline block.
         @param enc Writable output, positioned after the winner.
     */
     void encode_gather_block(const bm::word_t* blk, const bm::bv_sub_survey& sub_stat,
-                            block_idx_type nb, unsigned char* begin, const size_type* before, bm::encoder& enc);
+                            block_idx_type nb, size_type rank, unsigned char* begin,
+                            const size_type* before, bm::encoder& enc);
 
     void encode_xor_block(const bm::word_t* blk,
                          const bm::bv_sub_survey& sub_stat, block_idx_type nb,
@@ -1171,7 +1183,8 @@ private:
     xor_trial_statistics xor_trial_stats_; ///< Optional-mode counters; no dynamic storage.
     bool joint_wire_ = false; ///< Enable shared reference and residual bit packing.
     unsigned single_delta_trials_ = 0; ///< Direct and inverted single-reference trial count.
-    bm::word_t* gather_workspace_ = nullptr; ///< Eighteen aligned blocks for lazy depth-16 gather trials.
+    bm::gather_window<BV> gather_window_; ///< Borrowed reference blocks and retained GAP expansions.
+    bm::word_t* gather_workspace_ = nullptr; ///< Base residual and polarity trial block.
     bool gather_deltas_ = false; ///< Allow positive plane distances in gather records.
     bool gather_runner_up_ = false; ///< Enable one extra gather compression trial.
     bool xor_gather_ = false; ///< Enable depth-16 parallel gather.
@@ -3725,7 +3738,7 @@ serializer<BV>::~serializer()
 
     if (gather_workspace_)
     {
-        alloc_.free_bit_block(gather_workspace_, 18);
+        alloc_.free_bit_block(gather_workspace_, 2);
     }
 }
 
@@ -3866,8 +3879,16 @@ bool serializer<BV>::compute_sim_model(xor_sim_model_type&       sim_model,
                                        const bv_ref_vector_type& ref_vect,
                                        const bm::xor_sim_params& params)
 {
-    sim_model.four_candidates = xor_candidate_trials_;
     bm::xor_sim_params effective_params = params;
+    configure_xor_search(sim_model, effective_params);
+    return xor_scan_.compute_sim_model(sim_model, ref_vect, effective_params);
+}
+
+template<class BV>
+void serializer<BV>::configure_xor_search(xor_sim_model_type& sim_model,
+                                          bm::xor_sim_params& effective_params) const
+{
+    sim_model.four_candidates = xor_candidate_trials_;
     if (!effective_params.admission_max_metric)
     {
         // Level 7 admits medium-density residuals for the real codec trial.
@@ -3875,7 +3896,6 @@ bool serializer<BV>::compute_sim_model(xor_sim_model_type&       sim_model,
         effective_params.admission_max_metric = compression_level_ >= 7 ?
             unsigned(float(bm::gap_max_bits) / 2.2f) : bm::gap_max_bits / 3;
     }
-    return xor_scan_.compute_sim_model(sim_model, ref_vect, effective_params);
 }
 
 template<class BV>
@@ -7476,143 +7496,66 @@ bool serializer<BV>::pack_shared_xor_residual(bm::encoder& trial, unsigned char*
 
 template<class BV>
 void serializer<BV>::encode_gather_block(const bm::word_t* blk,
-    const bm::bv_sub_survey& sub_stat, block_idx_type nb,
+    const bm::bv_sub_survey& sub_stat, block_idx_type nb, size_type rank,
     unsigned char* begin, const size_type* before, bm::encoder& enc)
 {
-    // Sixteen reference slots and two scratch blocks; missing blocks still
-    // consume search depth. Reference waves stay at their original offsets.
+    bm::gather_recipe recipe;
+    bm::gather_shortlist shortlist;
+    shortlist.size = 0;
+    const bool cached = rank && sim_model_->gather.is_init() &&
+                        (!gather_runner_up_ || sim_model_->runners.is_init());
+    if (cached)
+    {
+        const auto col = rank - 1;
+        recipe = sim_model_->gather.get(ref_idx_, col);
+        if (!recipe.mask)
+        {
+            return;
+        }
+        if (gather_runner_up_)
+        {
+            shortlist = sim_model_->runners.get(ref_idx_, col);
+        }
+    }
+    gather_window_.init(*ref_vect_, ref_idx_, nb);
+    if (!cached)
+    {
+        bm::search_gather_waves(blk, gather_window_, recipe,
+                                gather_runner_up_ ? &shortlist : nullptr);
+        if (!recipe.mask)
+        {
+            return;
+        }
+    }
+    const auto mask = recipe.mask;
+    bm::id64_t polarity_masks[3] = {0, recipe.dense, mask ^ recipe.dense};
+    auto row_id = [&](unsigned slot) { return ref_vect_->get_row_idx(ref_idx_ + slot + 1); };
     if (!gather_workspace_)
     {
-        gather_workspace_ = alloc_.alloc_bit_block(18);
+        gather_workspace_ = alloc_.alloc_bit_block(2);
     }
-    bm::word_t* sources = gather_workspace_;
-    size_type rows[16];
-    unsigned count = 0, i0, j0;
-    bm::get_block_coord(nb, i0, j0);
-    for (unsigned depth = 1; depth <= 16 && ref_idx_ + depth < ref_vect_->size(); ++depth)
-    {
-        const auto index = ref_idx_ + depth;
-        const auto* source = ref_vect_->get_bv(index)->get_blocks_manager().get_block(i0, j0);
-        if (!source) continue;
-        if (IS_FULL_BLOCK(source))
-            ::memset(sources + count * bm::set_block_size, 255, sizeof(bm::word_t) * bm::set_block_size);
-        else if (BM_IS_GAP(source))
-            bm::gap_convert_to_bitset(sources + count * bm::set_block_size, BMGAP_PTR(source));
-        else
-            ::memcpy(sources + count * bm::set_block_size, source, sizeof(bm::word_t) * bm::set_block_size);
-        rows[count++] = ref_vect_->get_row_idx(index);
-    } // for depth
-    bm::word_t* residual = sources + 16 * bm::set_block_size;
+    bm::word_t* residual = gather_workspace_;
     ::memcpy(residual, blk, bm::set_block_size * sizeof(bm::word_t));
-    /// One alternative reference and its changes relative to the greedy wave.
-    struct wave_alternative
-    {
-        unsigned wave;
-        unsigned row;
-        unsigned score_gap;
-        double residual_delta;
-    };
-    wave_alternative shortlist[4];
-    unsigned shortlist_size = 0;
-    unsigned selected[64] = {};
-    bm::id64_t mask = 0;
-    bm::id64_t polarity_masks[3] = {};
-    // For each 1024-bit target wave, compare no reference with each available
-    // same-position reference wave, using a density/run heuristic.
     for (unsigned wave = 0; wave < 64; ++wave)
     {
-        // Symmetric density/run score, matching the shadow experiment.
-        int minority, runs;
-        auto score = [&](const bm::word_t* source, bool& invert_wave)
+        if ((mask >> wave) & 1)
         {
-            unsigned ones = 0, transitions = 0, previous = 0;
-            for (unsigned word = 0; word < 32; ++word)
+            const auto* source = gather_window_.block(recipe.slot(wave));
+            BM_ASSERT(source);
+            const unsigned offset = wave * 32;
+            for (unsigned word = offset; word < offset + 32; ++word)
             {
-                const unsigned value = blk[wave * 32 + word] ^ (source ? source[word] : 0u);
-                ones += bm::word_bitcount(value);
-                transitions += bm::word_bitcount(
-                    (value ^ ((value << 1) | previous)) & (word ? ~0u : ~1u));
-                previous = value >> 31;
+                residual[word] ^= source[word];
             } // for word
-            invert_wave = ones > 512;
-            unsigned best = ones < 1024 - ones ? ones : 1024 - ones;
-            minority = int(best);
-            runs = int(transitions + 1);
-            return best < transitions + 1 ? best : transitions + 1;
-        };
-        bool invert_wave = false;
-        unsigned best = score(nullptr, invert_wave);
-        unsigned second = ~0u, second_row = 0;
-        int best_minority = minority, best_runs = runs;
-        int second_minority = 0, second_runs = 0;
-        for (unsigned row = 0; row < count; ++row)
-        {
-            const unsigned cost = score(sources + row * bm::set_block_size + wave * 32,
-                                        invert_wave);
-            if (gather_runner_up_)
-            {
-                if (cost < best)
-                {
-                    if (mask & (bm::id64_t(1) << wave))
-                    {
-                        second = best;
-                        second_row = selected[wave];
-                        second_minority = best_minority;
-                        second_runs = best_runs;
-                    }
-                    best_minority = minority;
-                    best_runs = runs;
-                }
-                else if (cost < second)
-                {
-                    second = cost;
-                    second_row = row;
-                    second_minority = minority;
-                    second_runs = runs;
-                }
-            }
-            if (cost >= best) continue;
-            best = cost;
-            selected[wave] = row;
-            const bm::id64_t wave_bit = bm::id64_t(1) << wave;
-            mask |= wave_bit;
-            // A later winner can change either polarity. Replace its bit.
-            polarity_masks[1] = (polarity_masks[1] & ~wave_bit) |
-                               (invert_wave ? wave_bit : 0);
-
-        } // for row
-        if (!((mask >> wave) & 1)) continue;
-        if (gather_runner_up_ && second != ~0u)
-        {
-            // Stable insertion preserves wave order on equal score gaps.
-            unsigned pos = shortlist_size;
-            while (pos && second - best < shortlist[pos - 1].score_gap)
-            {
-                if (pos < 4)
-                    shortlist[pos] = shortlist[pos - 1];
-                --pos;
-            } // while pos
-            if (pos < 4)
-            {
-                // Pooled NED fit, in residual bits per minority bit and per run.
-                double estimate = 0.448563202253 * (second_minority - best_minority)
-                                + 0.509053005571 * (second_runs - best_runs);
-                shortlist[pos] = {wave, second_row, second - best, estimate};
-                if (shortlist_size < 4)
-                    ++shortlist_size;
-            }
         }
-        for (unsigned word = 0; word < 32; ++word)
-            residual[wave * 32 + word] ^= sources[selected[wave] * bm::set_block_size + wave * 32 + word];
     } // for wave
-    if (!mask) return;
     const auto target_row = ref_vect_->get_row_idx(ref_idx_);
     // Relative row IDs are usable only when every selected row follows the
     // target and each encoded positive distance fits the gamma writer.
     bool relative = gather_deltas_;
     for (unsigned wave = 0; relative && wave < 64; ++wave)
     {
-        if (((mask >> wave) & 1) && rows[selected[wave]] <= target_row)
+        if (((mask >> wave) & 1) && row_id(recipe.slot(wave)) <= target_row)
             relative = false;
     } // for wave
     // The gamma writer accepts a positive 32-bit value. Wider external row
@@ -7620,7 +7563,7 @@ void serializer<BV>::encode_gather_block(const bm::word_t* blk,
     for (unsigned wave = 0; wave < 64; ++wave)
     {
         if (!((mask >> wave) & 1)) continue;
-        const size_type row = rows[selected[wave]];
+        const size_type row = row_id(recipe.slot(wave));
         if (relative ? row - target_row > ~0u : row >= ~0u)
             return;
     } // for wave
@@ -7632,7 +7575,6 @@ void serializer<BV>::encode_gather_block(const bm::word_t* blk,
     size_t best_size = size_t(enc.get_pos() - begin);
     // Both polarity rules partition the selected waves. An empty partition
     // leaves the original residual intact, with one extra flag per wave.
-    polarity_masks[2] = mask ^ polarity_masks[1];
     const bool reuse_unmodified = !polarity_masks[1] || !polarity_masks[2];
     if (reuse_unmodified && residual_layout_buffer_.size() < capacity)
     {
@@ -7647,9 +7589,9 @@ void serializer<BV>::encode_gather_block(const bm::word_t* blk,
     alternate.best_size = size_t(-1);
     // Three complete records compete. Current polarity has priority on ties.
     unsigned winning_polarity = 0;
-    for (unsigned attempt = 0; attempt < (shortlist_size ? 4u : 3u); ++attempt)
+    for (unsigned attempt = 0; attempt < (shortlist.size ? 4u : 3u); ++attempt)
     {
-        bm::word_t* trial_block = sources + 17 * bm::set_block_size;
+        bm::word_t* trial_block = residual + bm::set_block_size;
         ::memcpy(trial_block, residual, bm::set_block_size * sizeof(bm::word_t));
         const bool substitute = attempt == 3;
         const unsigned polarity = substitute ? winning_polarity : attempt;
@@ -7659,32 +7601,32 @@ void serializer<BV>::encode_gather_block(const bm::word_t* blk,
         {
             if (*begin != bm::set_block_xor_parallel_gather)
                 break;
-            unsigned pick = shortlist_size;
+            unsigned pick = shortlist.size;
             double best_estimate = 0;
-            for (unsigned j = 0; j < shortlist_size; ++j)
+            for (unsigned j = 0; j < shortlist.size; ++j)
             {
-                const auto& alt = shortlist[j];
-                const size_type row = rows[alt.row];
+                const auto& alt = shortlist.entries[j];
+                const size_type row = row_id(alt.row);
                 if (relative ? (row <= target_row || row - target_row > ~0u) : row >= ~0u)
                     continue;
-                const size_type old = rows[selected[alt.wave]];
+                const size_type old = row_id(recipe.slot(alt.wave));
                 const unsigned old_code = unsigned(relative ? old - target_row : old + 1);
                 const unsigned new_code = unsigned(relative ? row - target_row : row + 1);
                 const int gamma_delta = 2 * (int(bm::bit_scan_reverse(new_code)) -
                                              int(bm::bit_scan_reverse(old_code)));
                 const double estimate = alt.residual_delta + gamma_delta;
-                if (pick == shortlist_size || estimate < best_estimate)
+                if (pick == shortlist.size || estimate < best_estimate)
                 {
                     pick = j;
                     best_estimate = estimate;
                 }
             } // for j
-            if (pick == shortlist_size)
+            if (pick == shortlist.size)
                 break;
-            const auto& alt = shortlist[pick];
-            selected[alt.wave] = alt.row;
+            const auto& alt = shortlist.entries[pick];
+            recipe.set_slot(alt.wave, alt.row);
             const unsigned offset = alt.wave * 32;
-            const bm::word_t* source = sources + alt.row * bm::set_block_size;
+            const bm::word_t* source = gather_window_.block(alt.row);
             for (unsigned word = offset; word < offset + 32; ++word)
             {
                 trial_block[word] = blk[word] ^ source[word];
@@ -7713,7 +7655,7 @@ void serializer<BV>::encode_gather_block(const bm::word_t* blk,
             for (unsigned wave = 0; wave < 64; ++wave)
             {
                 if (!((mask >> wave) & 1)) continue;
-                const size_type row = rows[selected[wave]];
+                const size_type row = row_id(recipe.slot(wave));
                 bits.gamma(relative ? unsigned(row - target_row) : unsigned(row + 1));
                 if (polarity) bits.put_bit(unsigned((inverted >> wave) & 1));
             } // for wave
@@ -8577,6 +8519,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             ::memcpy(gather_stats, compression_stat_, sizeof(gather_stats));
         unsigned char* gather_begin = enc.get_pos();
 
+        size_type rank = 0;
         if (ref_vect_) // XOR candidates are accepted independently per block
         {
             BM_ASSERT(sim_model_);
@@ -8584,7 +8527,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             BM_ASSERT(nb_indexed);
             if (nb_indexed)
             {
-                size_type rank = sim_model_->bv_blocks.count_range(0, i);
+                rank = sim_model_->bv_blocks.count_range(0, i);
                 BM_ASSERT(rank);
                 const block_match_chain_type mchain =
                     sim_model_->matr.get(ref_idx_, rank - 1);
@@ -8593,7 +8536,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
                 {
                     encode_xor_block(blk, sub_stat, i, mchain, enc);
                     if (xor_gather_ && !BM_IS_GAP(blk))
-                        encode_gather_block(blk, sub_stat, i, gather_begin, gather_stats, enc);
+                        encode_gather_block(blk, sub_stat, i, rank, gather_begin, gather_stats, enc);
                     if (free_)
                         const_cast<blocks_manager_type&>(bman).zero_block(i);
                     continue;
@@ -8610,7 +8553,7 @@ bool serializer<BV>::serialize_to(const BV& bv, OUT& out)
             goto full_block;
 
         if (xor_gather_ && ref_vect_ && !BM_IS_GAP(blk))
-            encode_gather_block(blk, sub_stat, i, gather_begin, gather_stats, enc);
+            encode_gather_block(blk, sub_stat, i, rank, gather_begin, gather_stats, enc);
         if (gap_route_diagnostics_)
         {
             const bm::id64_t bytes = bm::id64_t(enc.get_pos() - route_begin);

@@ -780,8 +780,243 @@ protected:
 };
 
 // --------------------------------------------------------------------------
-//
+// Implementations
 // --------------------------------------------------------------------------
+
+/** Per-block gather choices. Slots are zero-based distances in the original
+    16-entry reference window, including holes. @internal @ingroup bvserial */
+struct gather_recipe
+{
+    bm::id64_t mask; ///< Selected same-position waves.
+    bm::id64_t dense; ///< Selected XOR waves with more than half their bits set.
+    unsigned char slots[32]; ///< Two 4-bit reference choices per byte.
+
+    /// Return the slot for selected wave w (0..63).
+    unsigned slot(unsigned w) const { return (slots[w / 2] >> (4 * (w % 2))) & 15; }
+
+    /// Record reference slot s (0..15) for wave w (0..63).
+    void set_slot(unsigned w, unsigned s);
+};
+
+inline
+void gather_recipe::set_slot(unsigned w, unsigned s)
+{
+    BM_ASSERT(w < 64 && s < 16);
+    const unsigned shift = 4 * (w % 2);
+    slots[w / 2] = static_cast<unsigned char>((slots[w / 2] & ~(15u << shift)) | (s << shift));
+}
+
+/** Optional runner-up for a selected wave. @internal @ingroup bvserial */
+struct gather_alternative
+{
+    unsigned wave; ///< Target wave.
+    unsigned row; ///< Zero-based reference slot.
+    unsigned score_gap; ///< Ranking key for the bounded shortlist.
+    double residual_delta; ///< Estimated change in residual bits.
+};
+
+/** Ordered alternatives for the experimental fourth trial. @internal @ingroup bvserial */
+struct gather_shortlist
+{
+    unsigned size; ///< Number of valid entries.
+    bm::gather_alternative entries[4]; ///< Stable order breaks equal estimated costs.
+};
+
+/** Gather reference window for a single worker or serializer. BIT and full
+    blocks are borrowed. Expanded GAP scratch is owned and retained per slot.
+    @internal @ingroup bvserial */
+template<class BV>
+struct gather_window
+{
+    gather_window() = default;
+    gather_window(const gather_window&) = delete;
+    gather_window& operator=(const gather_window&) = delete;
+    /// Release all retained GAP scratch.
+    ~gather_window();
+
+    /** Bind one coordinate from refs after target. GAP expansion is deferred until use.
+        All references must remain live and immutable through recipe use.
+        @param refs Ordered reference collection.
+        @param target Target index in refs.
+        @param nb Block coordinate shared by the window.
+    */
+    void init(const bm::bv_ref_vector<BV>& refs, typename BV::size_type target,
+              typename BV::size_type nb);
+
+    unsigned size = 0; ///< Window length, including missing blocks.
+    /// Return slot's block, expanding a GAP into owned scratch on first access.
+    const bm::word_t* block(unsigned slot);
+private:
+    const bm::word_t* blocks_[16]; ///< Borrowed blocks or cached GAP expansions.
+    typename BV::allocator_type alloc_; ///< Application block allocator.
+    bm::word_t* scratch_[16] = {}; ///< Reusable GAP expansions.
+};
+
+template<class BV>
+gather_window<BV>::~gather_window()
+{
+    for (auto block : scratch_)
+    {
+        if (block)
+        {
+            alloc_.free_bit_block(block);
+        }
+    } // for block
+}
+
+template<class BV>
+void gather_window<BV>::init(const bm::bv_ref_vector<BV>& refs,
+                             typename BV::size_type target, typename BV::size_type nb)
+{
+    BM_ASSERT(target < refs.size());
+    unsigned i, j;
+    bm::get_block_coord(nb, i, j);
+    const auto remaining = refs.size() - target - 1;
+    size = remaining < 16 ? unsigned(remaining) : 16;
+    for (unsigned slot = 0; slot < size; ++slot)
+    {
+        blocks_[slot] = refs.get_bv(target + slot + 1)->get_blocks_manager().get_block(i, j);
+    } // for slot
+}
+
+template<class BV>
+const bm::word_t* gather_window<BV>::block(unsigned slot)
+{
+    BM_ASSERT(slot < size);
+    if (BM_IS_GAP(blocks_[slot]))
+    {
+        if (!scratch_[slot])
+        {
+            scratch_[slot] = alloc_.alloc_bit_block();
+        }
+        bm::gap_convert_to_bitset(scratch_[slot], BMGAP_PTR(blocks_[slot]));
+        blocks_[slot] = scratch_[slot];
+    }
+    return blocks_[slot];
+}
+
+/** Score same-position reference waves, preserving discovery order on ties.
+    @internal @ingroup bvserial
+    @param blk Live target BIT block.
+    @param window Reference blocks at the target coordinate. Retains GAP expansions.
+    @param recipe Output, overwritten even when no reference improves the target.
+    @param runners Optional output for the runner-up trial.
+*/
+template<class BV>
+void search_gather_waves(const bm::word_t* blk, bm::gather_window<BV>& window,
+                         bm::gather_recipe& recipe, bm::gather_shortlist* runners)
+{
+    recipe = {};
+    if (runners)
+    {
+        runners->size = 0;
+    }
+    const bm::word_t* sources[16];
+    for (unsigned slot = 0; slot < window.size; ++slot)
+    {
+        sources[slot] = window.block(slot);
+    } // for slot
+    // For each 1024-bit target wave, compare no reference with each available
+    // same-position reference wave, using a density/run heuristic.
+    for (unsigned wave = 0; wave < 64; ++wave)
+    {
+        // Symmetric density/run score, matching the shadow experiment.
+        int minority, runs;
+        auto score = [&](const bm::word_t* source, bool& invert_wave)
+        {
+            unsigned ones = 0, transitions = 0, previous = 0;
+            for (unsigned word = 0; word < 32; ++word)
+            {
+                const unsigned value = blk[wave * 32 + word] ^ (source ? source[word] : 0u);
+                ones += bm::word_bitcount(value);
+                transitions += bm::word_bitcount(
+                    (value ^ ((value << 1) | previous)) & (word ? ~0u : ~1u));
+                previous = value >> 31;
+            } // for word
+            invert_wave = ones > 512;
+            unsigned best = ones < 1024 - ones ? ones : 1024 - ones;
+            minority = int(best);
+            runs = int(transitions + 1);
+            return best < transitions + 1 ? best : transitions + 1;
+        };
+        bool invert_wave = false;
+        unsigned best = score(nullptr, invert_wave);
+        unsigned second = ~0u, second_row = 0;
+        int best_minority = minority, best_runs = runs;
+        int second_minority = 0, second_runs = 0;
+        for (unsigned row = 0; row < window.size; ++row)
+        {
+            if (!sources[row])
+            {
+                continue;
+            }
+            const unsigned cost = score(sources[row] + wave * 32,
+                                        invert_wave);
+            if (runners)
+            {
+                if (cost < best)
+                {
+                    if (recipe.mask & (bm::id64_t(1) << wave))
+                    {
+                        second = best;
+                        second_row = recipe.slot(wave);
+                        second_minority = best_minority;
+                        second_runs = best_runs;
+                    }
+                    best_minority = minority;
+                    best_runs = runs;
+                }
+                else if (cost < second)
+                {
+                    second = cost;
+                    second_row = row;
+                    second_minority = minority;
+                    second_runs = runs;
+                }
+            }
+            if (cost >= best)
+            {
+                continue;
+            }
+            best = cost;
+            recipe.set_slot(wave, row);
+            const bm::id64_t wave_bit = bm::id64_t(1) << wave;
+            recipe.mask |= wave_bit;
+            // A later winner can change either polarity. Replace its bit.
+            recipe.dense = (recipe.dense & ~wave_bit) |
+                               (invert_wave ? wave_bit : 0);
+
+        } // for row
+        if (!((recipe.mask >> wave) & 1))
+        {
+            continue;
+        }
+        if (runners && second != ~0u)
+        {
+            // Stable insertion preserves wave order on equal score gaps.
+            unsigned pos = runners->size;
+            while (pos && second - best < runners->entries[pos - 1].score_gap)
+            {
+                if (pos < 4)
+                {
+                    runners->entries[pos] = runners->entries[pos - 1];
+                }
+                --pos;
+            } // while pos
+            if (pos < 4)
+            {
+                // Pooled NED fit, in residual bits per minority bit and per run.
+                double estimate = 0.448563202253 * (second_minority - best_minority)
+                                + 0.509053005571 * (second_runs - best_runs);
+                runners->entries[pos] = {wave, second_row, second - best, estimate};
+                if (runners->size < 4)
+                {
+                    ++runners->size;
+                }
+            }
+        }
+    } // for wave
+}
 
 /**
     XOR similarity model
@@ -806,14 +1041,66 @@ public:
     // Rows address reference-vector entries; columns address the set block
     // indices in bv_blocks. Recipes use collection indices, not external row IDs.
     bool four_candidates = false; ///< Retain incumbent plus up to three alternatives for actual serialization trials.
+    bm::dynamic_heap_matrix<bm::gather_recipe, bv_allocator_type> gather; ///< Optional parallel recipes.
+    bm::dynamic_heap_matrix<bm::gather_shortlist, bv_allocator_type> runners; ///< Optional runner-up data.
+
+    /** Prepare all model matrices before workers write distinct columns.
+        @param refs Reference planes for this build.
+        @param gather_enabled Allocate a gather recipe per cell.
+        @param runner_enabled Include runner-up data when gather is enabled.
+        @return True when at least one occupied block exists.
+    */
+    bool init(const bm::bv_ref_vector<BV>& refs, bool gather_enabled, bool runner_enabled);
+
     matrix_chain_type alternatives[3]; ///< Single-reference recipes at the same coordinates as matr; zero chain_size means unused.
     matrix_chain_type  matr; ///< model matrix
     bvector_type       bv_blocks;  ///< blocks digest
+private:
+    /** Size and clear an enabled matrix to match the incumbent geometry.
+        @param matrix Destination optional recipe matrix.
+        @param enabled Allocate entries if true, otherwise release storage.
+    */
+    template<class Matrix>
+    void prepare_matrix(Matrix& matrix, bool enabled);
 };
 
 // --------------------------------------------------------------------------
-//
+// xor_sim_model<
 // --------------------------------------------------------------------------
+
+template<class BV>
+template<class Matrix>
+void xor_sim_model<BV>::prepare_matrix(Matrix& matrix, bool enabled)
+{
+    if (enabled)
+    {
+        matrix.resize(matr.rows(), matr.cols(), false);
+        matrix.set_zero();
+    }
+    else
+    {
+        matrix.free();
+    }
+}
+
+template<class BV>
+bool xor_sim_model<BV>::init(const bm::bv_ref_vector<BV>& refs, bool gather_enabled,
+                             bool runner_enabled)
+{
+    bv_blocks.clear(false);
+    const bool occupied = refs.build_nb_digest_and_xor_matrix(matr, bv_blocks);
+    if (!occupied)
+    {
+        matr.free();
+    }
+    for (auto& alternative : alternatives)
+    {
+        prepare_matrix(alternative, occupied && four_candidates);
+    } // for alternative
+    prepare_matrix(gather, occupied && gather_enabled);
+    prepare_matrix(runners, occupied && gather_enabled && runner_enabled);
+    return occupied;
+}
 
 /**
     XOR scanner to search for complement-similarities in
@@ -1464,21 +1751,9 @@ bool xor_scanner<BV>::compute_sim_model(bm::xor_sim_model<BV>& sim_model,
 {
     BM_ASSERT(ref_vect_);
 
-    sim_model.bv_blocks.clear(false);
-    bool ret = ref_vect_->build_nb_digest_and_xor_matrix(sim_model.matr,
-                                                         sim_model.bv_blocks);
-    if (!ret)
-        return ret;
-
-    // Match the incumbent matrix geometry. Zeroed entries denote absent
-    // alternatives, including rows skipped by the bounded reference search.
-    if (sim_model.four_candidates)
+    if (!sim_model.init(*ref_vect_, false, false))
     {
-        for (unsigned k = 0; k < 3; ++k)
-        {
-            sim_model.alternatives[k].resize(sim_model.matr.rows(), sim_model.matr.cols(), false);
-            sim_model.alternatives[k].set_zero();
-        } // for k
+        return false;
     }
     sync_nb_vect();
 
