@@ -530,6 +530,16 @@ the group logs. A failed group stops sibling jobs and reports its variant,
 group and diagnostic log. Perf timings during concurrent testing are not
 intended as isolated performance measurements.
 
+After perf and before stress, Parallel Test Station runs the scalar release
+and each supported SIMD release of `tests/test_threads`. SSE2, SSE4.2 and AVX2
+are built on x86, with AVX-512 opt-in, and NEON is built on ARM. The existing
+build script also produces a debug binary. Each release variant runs the full
+`ptest` workload with `-j` set to TAgent's worker budget. Variants run one at a
+time in every mode, including both legs of an express-to-normal cycle.
+Dispatch announces departure and each passing variant over the train ambience.
+The cycle retains `build-test_threads.log` and `test_threads/<variant>/ptest.log`
+and records the stage and variants in the travel journal.
+
 In normal and pedantic stress cycles, the supported `stress_release_sse42`
 variant runs first when present. Fast cycles retain their scalar and fastest
 SIMD selection; the normal-cycle GCC release remains last and uses fast mode.

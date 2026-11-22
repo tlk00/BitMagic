@@ -260,6 +260,14 @@ class SupervisorTests(unittest.TestCase):
                 (directory / 'run_all_pl.sh').write_text(
                     '#!/bin/bash\nset -eu\nshift\n"$1"\n')
 
+        threads = self.root / 'tests' / 'test_threads'
+        threads.mkdir()
+        lines = ['#!/bin/bash', 'set -eu', 'cd "$(dirname "$0")"']
+        for name in self.agent.builds('test_threads'):
+            lines += ["cat > " + name + " <<'JOB'", '#!/bin/sh',
+                      'test "$1" = -j && test "$2" -gt 0', 'JOB', 'chmod +x ' + name]
+        (threads / 'build_all.sh').write_text('\n'.join(lines) + '\n')
+
         inv = self.root / 'utils' / 'inv_list'
         inv.mkdir(parents=True)
         lines = ['#!/bin/bash', 'set -eu', 'cd "$(dirname "$0")"']
@@ -969,6 +977,35 @@ class SupervisorTests(unittest.TestCase):
             self.assertNotIn('--fast', argv)
             self.assertEqual(argv[argv.index('--start-level') + 1], '1')
 
+    def test_thread_variants_are_serial_and_stop_on_failure(self):
+        """Run supported SIMD in order and announce only successfully completed variants."""
+        self.agent.arm = False
+        self.agent.flags = {'sse2', 'sse4_2', 'avx2'}
+        self.agent.args.avx512 = True
+        binary_dir = self.root / 'tests/test_threads'
+        binary_dir.mkdir(parents=True)
+        variants = self.agent.builds('test_threads')
+        for name in variants:
+            binary = binary_dir / name
+            binary.write_text('#!/bin/sh\nprintf "%s %s\\n" "$1" "$2"\nexit ' +
+                              ('7' if name == 'ptest_release_sse42' else '0') + '\n')
+            binary.chmod(0o755)
+        run = self.root / 'thread-run'
+        self.agent.journal_parent = self.agent.journal.start('test_threads')
+        with patch.object(self.agent, 'update_waiting', return_value=False), \
+             patch.object(self.agent, 'sound') as sound, \
+             self.assertRaisesRegex(ta.CommandFailure, 'exit 7.*ptest_release_sse42'):
+            self.agent.test_threads_stage(run, {'builds': {'test_threads': variants}})
+        self.assertEqual(sorted(path.parent.name for path in run.glob('test_threads/*/ptest.log')),
+                         ['ptest_release', 'ptest_release_sse2', 'ptest_release_sse42'])
+        self.assertIn('-j ' + str(self.agent.jobs), (run / 'test_threads/ptest_release/ptest.log').read_text())
+        announcements = [call.kwargs['workers'] for call in sound.call_args_list
+                         if call.args[0] == 'parallel-test-announcement']
+        self.assertEqual(len(announcements), 3)
+        self.assertTrue(all(message.startswith('Dispatch to BitMagic.') for message in announcements))
+        self.assertIn('Parallel Test Station', announcements[0])
+        self.assertIn('S S E two', announcements[2])
+
     def test_stress_allocator_enabled_in_all_modes(self):
         """Every scheduled release/debug stress runner receives allocator setup."""
         self.fixture()
@@ -1530,7 +1567,10 @@ class SupervisorTests(unittest.TestCase):
         start = events.index('upgrade-dispatch')
         self.assertEqual(events[start:start + 4],
                          ['upgrade-dispatch', 'upgrade-conductor', 'upgrade-engineer', 'upgrade-depart'])
-        self.assertEqual(events.count('train-stop'), 1)
+        self.assertEqual(events.count('train-stop'), 2)
+        for directory in (run, run / 'normal'):
+            self.assertEqual(sorted(p.parent.name for p in directory.glob('test_threads/*/ptest.log')),
+                             ['ptest_release', 'ptest_release_neon'])
 
     def test_fast_cycle_skips_normal_when_update_arrives(self):
         """An update at the upgrade boundary takes priority over normal testing."""
@@ -1542,7 +1582,7 @@ class SupervisorTests(unittest.TestCase):
             return True
         with patch.object(self.agent, 'test_perf_stage', side_effect=stage), \
              patch.object(self.agent, 'test_stress_stage', side_effect=stage), \
-             patch.object(self.agent, 'update_waiting', side_effect=[False, False, True]), \
+             patch.object(self.agent, 'update_waiting', side_effect=[False, False, False, False, True]), \
              patch.object(self.agent, 'sound') as sound:
             self.assertEqual(self.agent.cycle(), 'updated')
         self.assertEqual(observed, [True, True])
@@ -1597,7 +1637,7 @@ class SupervisorTests(unittest.TestCase):
                       (self.agent.home / 'agent.log').read_text())
 
     def test_single_worker_serializes_builds(self):
-        """A one-worker budget serializes all four build families."""
+        """A one-worker budget serializes all build families."""
         self.fixture()
         self.agent.jobs = 1
         active = [0, 0]
@@ -1605,7 +1645,7 @@ class SupervisorTests(unittest.TestCase):
         original = self.agent.command
         def command(argv, log=None, *args, **kwargs):
             """Record overlap while the synthetic builds run."""
-            if not log or log.name not in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log'):
+            if not log or log.name not in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log', 'build-test_threads.log'):
                 return original(argv, log, *args, **kwargs)
             with mutex:
                 active[0] += 1

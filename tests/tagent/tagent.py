@@ -100,15 +100,15 @@ def build_status_label(argv, log):
     for name in names:
         name = name.removesuffix('.exe')
         family, separator, configuration = name.partition('_')
-        if separator and family in ('bminv', 'perf', 'stress', 'stress64'):
+        if separator and family in ('bminv', 'perf', 'ptest', 'stress', 'stress64'):
             parts = configuration.split('_')
             return ' '.join(part if part in ('debug', 'release') else
                             display.get(part, part.upper()) for part in parts)
     return ''
 
 
-def spoken_stress_name(name):
-    """Convert a stress executable name into a pronounceable variant label."""
+def spoken_test_variant(name):
+    """Convert a test executable name into a pronounceable variant label."""
     parts = name.split('_')[1:]
     names = {'sse2': 'S S E two', 'sse42': 'S S E four point two',
              'avx2': 'A V X two', 'avx512': 'A V X five twelve',
@@ -810,7 +810,7 @@ class Agent:
         temp_dir overrides the shared temporary directory for isolated workloads.
         """
         entry = None
-        if log and log.name in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log', 'perf.log', 'runner.log', 'inv-runner.log', 'xsample05.log'):
+        if log and log.name in ('build-perf.log', 'build-stress.log', 'build-inv_list.log', 'build-samples.log', 'build-test_threads.log', 'ptest.log', 'perf.log', 'runner.log', 'inv-runner.log', 'xsample05.log'):
             name = log.stem.replace('build-', '') if log.name.startswith('build-') else log.parent.name
             entry = self.journal.start(name, self.journal_parent, log)
         output = None
@@ -821,7 +821,7 @@ class Agent:
                 if self.stopping.is_set():
                     raise Failure('Job cancelled')
                 if log and self.pending_tip and (log.name == 'perf.log' or
-                        (self.args.restart_on_update and log.name in ('sample.log', 'xsample05.log', 'runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'))):
+                        (self.args.restart_on_update and log.name in ('sample.log', 'xsample05.log', 'ptest.log', 'runner.log', 'inv-runner.log', 'build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log', 'build-test_threads.log'))):
                     self.perf_skipped = True
                     return 'skipped-update'
                 scratch = temp_dir or self.temp_dir
@@ -857,7 +857,7 @@ class Agent:
                         raise CommandFailure('Command timed out: ' + shlex.join(map(str, argv)))
                     if self.stopping.is_set():
                         raise Failure('Job cancelled')
-                    if log and log.name in ('build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log'):
+                    if log and log.name in ('build-perf.log', 'build-stress.log', 'build-samples.log', 'build-inv_list.log', 'build-test_threads.log'):
                         self.build_progress(log)
                         if self.args.restart_on_update:
                             self.poll_remote()
@@ -866,7 +866,7 @@ class Agent:
                                 return 'skipped-update'
                     else:
                         now = time.monotonic()
-                        is_test = log and log.name in ('sample.log', 'xsample05.log', 'perf.log', 'runner.log', 'inv-runner.log')
+                        is_test = log and log.name in ('sample.log', 'xsample05.log', 'ptest.log', 'perf.log', 'runner.log', 'inv-runner.log')
                         if not is_test or self.test_started_at is None or now >= next_job_message:
                             if log:
                                 mode = 'Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'
@@ -889,7 +889,7 @@ class Agent:
                         if self.args.restart_on_update and self.pending_tip:
                             self.check_update_failure(proc, log)
                             return 'skipped-update'
-                    if log and log.name in ('sample.log', 'xsample05.log'):
+                    if log and log.name in ('sample.log', 'xsample05.log', 'ptest.log'):
                         if log.name == 'xsample05.log':
                             progress = log.parent / 'results/progress.json'
                             try:
@@ -2051,7 +2051,7 @@ class Agent:
                                                         length_scale=1.18 if event == 'inv-progress' else 1.0)
                 if duration is None:
                     return False
-            elif event == 'samples-announcement':
+            elif event in ('samples-announcement', 'parallel-test-announcement'):
                 self.say('DISPATCH: ' + workers)
                 duration = self.synthesize_announcement(path, workers, self.dispatcher_voice, 50, background='train')
                 if duration is None:
@@ -2306,6 +2306,11 @@ class Agent:
 
     def builds(self, family):
         """Return explicit expected build names for perf or stress."""
+        if family == 'test_threads':
+            suffixes = ['neon'] if self.arm else ['sse2', 'sse42', 'avx2']
+            if not self.arm and self.args.avx512:
+                suffixes.append('avx512')
+            return ['ptest_debug', 'ptest_release', *('ptest_release_' + suffix for suffix in suffixes)]
         modes = ['debug', 'release']
         names = [family + '_' + mode for mode in modes]
         if self.arm:
@@ -2422,6 +2427,7 @@ class Agent:
                          'Pulling into Validation Junction. Reference validation is complete.'),
             'perf': ('Arriving at Performance Terminal. Speed trials are complete.',
                      'Pulling into Performance Terminal. The speed tests are complete.'),
+            'test_threads': ('Arriving at Parallel Test Station. Thread tests are complete.',),
             'stress': ('Arriving at Stress Test Station. The stress run is complete.',
                        'Pulling into Stress Test Station. Stress testing is complete.'),
         }
@@ -2701,6 +2707,33 @@ class Agent:
             return 'updated'
         return True
 
+    def test_threads_stage(self, run, manifest):
+        """Run the platform release matrix sequentially with the full worker budget."""
+        self.memory_phase = 'test_threads'
+        if self.depot:
+            self.depot.set_mode('train-normal' if not self.args.fast and not self.args.pedantic else 'train')
+        self.sound('parallel-test-announcement', workers=(
+            'Dispatch to BitMagic. You are cleared to depart for Parallel Test Station.'))
+        for name in manifest['builds']['test_threads']:
+            if name == 'ptest_debug':
+                continue
+            if not self.supported(name):
+                self.say('SKIP unsupported ' + name)
+                continue
+            work = run / 'test_threads' / name
+            work.mkdir(parents=True)
+            log = work / 'ptest.log'
+            argv = [str(self.repo / 'tests/test_threads' / name), '-j', str(self.jobs)]
+            self.say('PARALLEL TEST START | {} | {} threads | {}'.format(name, self.jobs, log))
+            if self.command(argv, log, cwd=work, temp_dir=work, test_allocator=True) == 'skipped-update':
+                return 'updated'
+            self.say('PARALLEL TEST PASS | {} | {}'.format(name, log))
+            self.sound('parallel-test-announcement', workers=(
+                'Dispatch to BitMagic. The {} parallel test has passed.'.format(spoken_test_variant(name))))
+            if self.update_waiting():
+                return 'updated'
+        return True
+
     def test_stress_stage(self, run, manifest):
         """Execute supported stress variants for this cycle."""
         self.memory_phase = 'stress'
@@ -2733,7 +2766,7 @@ class Agent:
             if index == 0:
                 mode = stress_mode(name)
                 self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, self.jobs))
-                self.sound('stress-transition', workers='Conductor to Dispatch. {} stress run is starting. {} mode. {} test crews at work.'.format(spoken_stress_name(name), mode, self.jobs))
+                self.sound('stress-transition', workers='Conductor to Dispatch. {} stress run is starting. {} mode. {} test crews at work.'.format(spoken_test_variant(name), mode, self.jobs))
             work = run / name
             work.mkdir()
             # Runner selects groups; wrapper gives each invocation its own cwd.
@@ -2770,12 +2803,12 @@ class Agent:
             if self.update_waiting():
                 return 'updated'
             next_name = stress_names[index + 1] if index + 1 < len(stress_names) else None
-            completed = '{} stress run completed successfully.'.format(spoken_stress_name(name))
+            completed = '{} stress run completed successfully.'.format(spoken_test_variant(name))
             if next_name:
                 if not self.args.fast and not self.args.pedantic:
                     self.sound('train-stop')
                 self.sound('station-manchuria')
-                core = completed + ' The {} stress run is next.'.format(spoken_stress_name(next_name))
+                core = completed + ' The {} stress run is next.'.format(spoken_test_variant(next_name))
                 mode = stress_mode(next_name)
                 self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
                 message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, self.jobs)
@@ -2834,11 +2867,12 @@ class Agent:
                     'no_debug': self.args.no_debug, 'builds': {},
                     'inv_read_memory_mib': self.args.inv_read_memory_mib,
                     'inv_read_mmap': self.args.inv_read_mmap}
-        manifest['builds'] = {family: self.builds(family) for family in ('perf', 'stress')}
+        test_build_families = ('perf', 'stress', 'test_threads')
+        manifest['builds'] = {family: self.builds(family) for family in test_build_families}
         (run / 'manifest.json').write_text(json.dumps(manifest, indent=2))
-        self.build_logs = [run / ('build-' + family + '.log') for family in ('perf', 'stress', 'samples', 'inv_list')]
+        self.build_logs = [run / ('build-' + family + '.log') for family in (*test_build_families, 'samples', 'inv_list')]
         build_tasks = []
-        for family in ('perf', 'stress'):
+        for family in test_build_families:
             directory = self.repo / 'tests' / family
             names = self.builds(family)
             manifest['builds'][family] = names
@@ -2847,7 +2881,7 @@ class Agent:
             argv = ['bash', str(directory / 'build_all.sh')]
             if family == 'stress':
                 argv += ['--jobs', str(self.jobs), '--build-dir', str(run / 'stress-builds')]
-            if self.args.avx512:
+            if self.args.avx512 and (family != 'test_threads' or not self.arm):
                 argv.append('--avx512')
             if family == 'perf' and self.args.pedantic:
                 argv.append('--pedantic')
@@ -2939,7 +2973,7 @@ class Agent:
         self.sound('compilation-depot-end', workers='Dispatch to BitMagic. Compilation Depot reports all builds complete. The freight is cleared to begin testing.')
         # Test execution order is configured here; each stage owns its scheduling.
         stages = (('samples', self.test_samples_stage), ('xsample05', self.test_xsample05_stage), ('inv_list', self.test_inv_stage), ('perf', self.test_perf_stage),
-                  ('stress', self.test_stress_stage))
+                  ('test_threads', self.test_threads_stage), ('stress', self.test_stress_stage))
         requested_fast = self.args.fast
         try:
             self.say('TEST MODE | ' + ('Fast!' if self.args.fast else 'SloMo' if self.args.pedantic else 'Norm'))
