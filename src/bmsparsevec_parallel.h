@@ -22,6 +22,7 @@ For more information please visit:  http://bitmagic.io
     \brief Parallel planner for operations with sparse vectors
 */
 
+#include <algorithm>
 #include "bmsparsevec_serial.h"
 
 namespace bm
@@ -96,7 +97,7 @@ public:
 
 /**
     Parallel plan builder for the XOR filter scanner.
-    Parallelization principle here is based on makig a task per 64K bit block (task per NP)
+    Each task searches the occupied block coordinates in one superblock-local range.
     @ingroup bmtasks
  */
 template<typename BV>
@@ -115,21 +116,49 @@ public:
         typedef typename parent_type::task_vector_type  task_vector_type;
     };
 
+    /** Choose a superblock-local range width from the XOR group height.
+        @param reference_count Number of registered reference bit-vectors.
+        @return 256 block coordinates for up to five vectors, 128 for six to
+            ten, and 64 for larger groups. An empty group schedules no work.
+    */
+    static unsigned automatic_task_width(size_type reference_count) BMNOEXCEPT;
+
+    /** Append a search plan using the width selected for the entire group.
+        @param batch Batch receiving the tasks.
+        @param sim_model Destination model, reset before scheduling.
+        @param ref_vect Immutable reference planes. These and sim_model must
+            outlive execution.
+        @param xs_params Scanner bounds copied into the tasks.
+        @param policy Optional serializer supplying level and gather policy.
+    */
+    void build_plan_auto(task_batch& batch, bm::xor_sim_model<BV>& sim_model,
+                         const bv_ref_vector_type& ref_vect,
+                         const bm::xor_sim_params& xs_params,
+                         const bm::serializer<BV>* policy = nullptr)
+    {
+        build_plan(batch, sim_model, ref_vect, xs_params, policy, automatic_task_width(ref_vect.size()));
+    }
+
     /**
-        Append one task per occupied block coordinate. The reference collection
-        and destination model must outlive execution. Each task owns one column.
+        Append one task per nonempty range. The reference collection and
+        destination model must outlive execution. Each task owns consecutive
+        digest columns and processes only occupied coordinates.
         @param batch Batch receiving the tasks.
         @param sim_model Destination model, reset before scheduling.
         @param ref_vect Immutable reference planes in decode dependency order.
         @param xs_params Scanner bounds copied into the tasks.
         @param policy Optional serializer supplying level and gather policy.
             Omitting it preserves the original single-incumbent search.
+        @param blocks_per_task Width in block coordinates, clamped to 1..256.
+            Ranges start at each superblock boundary. One restores single-block
+            scheduling and 256 assigns one task per occupied superblock.
      */
     void build_plan(task_batch& batch,
                     bm::xor_sim_model<BV>& sim_model,
                     const bv_ref_vector_type& ref_vect,
                     const bm::xor_sim_params& xs_params,
-                    const bm::serializer<BV>* policy = nullptr)
+                    const bm::serializer<BV>* policy = nullptr,
+                    unsigned blocks_per_task = 64)
     {
         bm::xor_sim_params params = xs_params;
         sim_model.four_candidates = false;
@@ -143,44 +172,69 @@ public:
             return;
         }
 
-        typename bvector_type::size_type nb_count = sim_model.bv_blocks.count();
-        typename task_batch::task_vector_type& tv = batch.get_task_vector();
-        tv.reserve(nb_count);
-
+        const unsigned width = (std::min)((std::max)(blocks_per_task, 1u), bm::set_sub_array_size);
         typename bvector_type::enumerator en(sim_model.bv_blocks);
-        for (size_type col = 0; en.valid(); ++en, ++col)
+        size_type col = 0;
+        while (en.valid())
         {
-            size_type nb = *en;
+            const size_type first = *en;
+            const unsigned offset = unsigned(first % bm::set_sub_array_size);
+            const unsigned remaining = bm::set_sub_array_size - offset;
+            const unsigned span = width - offset % width;
+            const size_type last = first + (std::min)(span, remaining) - 1;
+            const size_type first_col = col;
+            do
+            {
+                ++en;
+                ++col;
+            } while (en.valid() && *en <= last);
+
             bm::task_function_t task(
-            [nb, col, params, &sim_model, &ref_vect] (void* /*argp*/) {
+            [first, first_col, col, params, &sim_model, &ref_vect] (void* /*argp*/) {
                 thread_local bm::xor_scanner<BV> xor_scan;
                 xor_scan.set_ref_vector(&ref_vect);
                 xor_scan.sync_nb_vect();
-                xor_scan.compute_sim_model(sim_model.matr, nb, col, params,
-                                           sim_model.four_candidates ? &sim_model : nullptr);
-                if (sim_model.gather.is_init())
+                typename bvector_type::enumerator blocks(sim_model.bv_blocks, first);
+                for (size_type k = first_col; k < col; ++k, ++blocks)
                 {
-                    thread_local bm::gather_window<BV> window;
-                    unsigned i, j;
-                    bm::get_block_coord(nb, i, j);
-                    for (size_type row = 0; row + 1 < ref_vect.size(); ++row)
+                    const size_type nb = *blocks;
+                    xor_scan.compute_sim_model(sim_model.matr, nb, k, params,
+                                               sim_model.four_candidates ? &sim_model : nullptr);
+                    if (sim_model.gather.is_init())
                     {
-                        auto* target = ref_vect.get_bv(row)->get_blocks_manager().get_block(i, j);
-                        if (!target || IS_FULL_BLOCK(target) || BM_IS_GAP(target))
+                        thread_local bm::gather_window<BV> window;
+                        unsigned i, j;
+                        bm::get_block_coord(nb, i, j);
+                        for (size_type row = 0; row + 1 < ref_vect.size(); ++row)
                         {
-                            continue;
-                        }
-                        window.init(ref_vect, row, nb);
-                        bm::search_gather_waves(target, window, sim_model.gather.row(row)[col],
-                            sim_model.runners.is_init() ? &sim_model.runners.row(row)[col] : nullptr);
-                    } // for row
-                }
+                            auto* target = ref_vect.get_bv(row)->get_blocks_manager().get_block(i, j);
+                            if (!target || IS_FULL_BLOCK(target) || BM_IS_GAP(target))
+                            {
+                                continue;
+                            }
+                            window.init(ref_vect, row, nb);
+                            bm::search_gather_waves(target, window, sim_model.gather.row(row)[k],
+                                sim_model.runners.is_init() ? &sim_model.runners.row(row)[k] : nullptr);
+                        } // for row
+                    }
+                } // for k
                 return 0;
             });
             batch.add(task, 0);
-        } // for en
+        } // while en
     }
 };
+
+
+template<typename BV>
+unsigned compute_sim_matrix_plan_builder<BV>::automatic_task_width(size_type reference_count) BMNOEXCEPT
+{
+    if (reference_count <= 5)
+    {
+        return bm::set_sub_array_size;
+    }
+    return reference_count <= 10 ? bm::set_sub_array_size / 2 : bm::set_sub_array_size / 4;
+}
 
 
 

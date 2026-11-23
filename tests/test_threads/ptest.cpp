@@ -304,13 +304,64 @@ void generate_df_svu32_set(sparse_vector_u32& sv1i,
 }
 
 
+/** Exercise automatic width planning at both group-height cutoffs. */
+static void TestAutomaticXorPlan()
+{
+    using planner_type = bm::compute_sim_matrix_plan_builder<bvect>;
+    planner_type planner;
+    bm::bv_ref_vector<bvect> refs;
+    bvect planes[11];
+    bm::serializer<bvect> serializer;
+    serializer.set_compression_level(8);
+    bm::xor_sim_params params;
+    bm::xor_sim_model<bvect> model, control;
+    pool_mutex_type pool;
+    pool.start(num_threads);
+    bm::thread_pool_executor<pool_mutex_type> executor;
+    for (unsigned height = 0; height <= 11; ++height)
+    {
+        if (height)
+        {
+            auto& plane = planes[height - 1];
+            // The first superblock occupies all four quarters, the second only one.
+            for (unsigned nb : {0u, 64u, 128u, 192u, 256u})
+            {
+                plane.set(nb * bm::gap_max_bits + height);
+            } // for nb
+            refs.add(&plane, height - 1);
+        }
+        planner_type::task_batch batch;
+        planner.build_plan_auto(batch, model, refs, params, &serializer);
+        if (!height)
+        {
+            assert(batch.size() == 0);
+            continue;
+        }
+        // Independent expectations at heights 1..11, including 5/6 and 10/11.
+        const unsigned widths[] = {256, 256, 256, 256, 256, 128, 128, 128, 128, 128, 64};
+        const unsigned jobs[] = {2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 5};
+        assert(planner.automatic_task_width(refs.size()) == widths[height - 1]);
+        assert(batch.size() == jobs[height - 1]);
+        executor.run(pool, batch, true);
+        serializer.compute_sim_model(control, refs, params);
+        Check_SimModel(control, model);
+        assert(model.gather.is_init() && model.four_candidates);
+    } // for height
+    pool.set_stop_mode(pool_mutex_type::stop_when_done);
+    pool.join();
+    cout << "Automatic XOR widths and model parity OK" << endl;
+}
+
 /** Exercise L8 gather on a sparse vector with known per-wave donors.
     @param label Fixture and pool name for the opcode report.
     @param distant Use depth 16 beyond empty slots, mixed polarity, and the
         optional runner-up policy. The other fixture rotates three donors.
+    @param width Maximum block coordinates per job.
+    @param expected_tasks Expected number of nonempty ranges.
 */
 template<class Pool>
-static void TestParallelSV_Serial(const char* label, bool distant)
+static void TestParallelSV_SerialGather(const char* label, bool distant, unsigned width,
+                                        unsigned expected_tasks)
 {
     sparse_vector_u32 sv;
     constexpr unsigned blocks = 4;
@@ -329,17 +380,14 @@ static void TestParallelSV_Serial(const char* label, bool distant)
         return distant ? wave % 3 == 0 : wave % 4 == 0;
     };
     {
-        auto out = sv.get_back_inserter();
+        const unsigned distant_coords[blocks] = {63, 64, 255, 256};
         for (unsigned nb = 0; nb < blocks; ++nb)
         {
-            if (distant && nb == 2)
+            if (distant)
             {
-                // Leave an empty coordinate so matrix rank differs from block index.
-                for (unsigned bit = 0; bit < bm::gap_max_bits; ++bit)
-                {
-                    out = 0;
-                } // for bit
+                sv.resize(distant_coords[nb] * bm::gap_max_bits);
             }
+            auto out = sv.get_back_inserter();
             for (unsigned bit = 0; bit < bm::gap_max_bits; ++bit)
             {
                 const unsigned wave = bit / 1024;
@@ -361,8 +409,8 @@ static void TestParallelSV_Serial(const char* label, bool distant)
                 const unsigned target = ((planes >> donor(wave, nb)) & 1) ^ inverted(wave) ^ noise;
                 out = planes | (distant && wave == 63 ? 0u : target);
             } // for bit
+            out.flush();
         } // for nb
-        out.flush();
     }
     sv.optimize();
     using serializer_type = bm::sparse_vector_serializer<sparse_vector_u32>;
@@ -388,7 +436,8 @@ static void TestParallelSV_Serial(const char* label, bool distant)
 
     bm::compute_sim_matrix_plan_builder<bvect> builder;
     bm::compute_sim_matrix_plan_builder<bvect>::task_batch batch;
-    builder.build_plan(batch, model, refs, params, &bv_serializer);
+    builder.build_plan(batch, model, refs, params, &bv_serializer, width);
+    assert(batch.size() == expected_tasks);
     Pool pool;
     pool.start(num_threads);
     bm::thread_pool_executor<Pool> exec;
@@ -404,10 +453,10 @@ static void TestParallelSV_Serial(const char* label, bool distant)
     } // for k
     if (distant)
     {
-        assert(!model.bv_blocks.test(2) && model.bv_blocks.test(4));
-        const auto* gap = refs.get_bv(3)->get_blocks_manager().get_block(0, 1);
+        assert(!model.bv_blocks.test(65) && model.bv_blocks.test(256));
+        const auto* gap = refs.get_bv(3)->get_blocks_manager().get_block(0, 64);
         assert(BM_IS_GAP(gap));
-        assert(IS_FULL_BLOCK(refs.get_bv(4)->get_blocks_manager().get_block(0, 3)));
+        assert(IS_FULL_BLOCK(refs.get_bv(4)->get_blocks_manager().get_block(0, 255)));
     }
     for (unsigned nb = 0; nb < blocks; ++nb)
     {
@@ -456,7 +505,7 @@ static void TestParallelSV_Serial(const char* label, bool distant)
     // Reusing the model for an inline build must invalidate all gather rows.
     serializer.compute_sim_model(model, refs, params);
     assert(!model.gather.is_init() && !model.runners.is_init());
-    cout << label << " target plane: opcode 100=" << legacy
+    cout << label << " width=" << width << " jobs=" << batch.size() << " target plane: opcode 100=" << legacy
          << " opcode 102=" << shared << " bytes=" << parallel.size() << endl;
 }
 
@@ -525,8 +574,18 @@ void TestParallelSV_Serial(const char* test_label,
                 bm::compute_sim_matrix_plan_builder<bvect> pbuilder;
                 bm::compute_sim_matrix_plan_builder<bvect>::task_batch tbatch;
 
-                pbuilder.build_plan(tbatch, sim_model,
-                                    bv_ref, xor_search_params);
+                // Check both batch widths on the dense 50M-element fixture.
+                if (check_sim && pass)
+                {
+                    pbuilder.build_plan(tbatch, sim_model, bv_ref, xor_search_params,
+                                        nullptr, bm::set_sub_array_size);
+                    assert(tbatch.size() == (sv1i.size() - 1) / bm::set_sub_total_bits + 1);
+                }
+                else
+                {
+                    pbuilder.build_plan(tbatch, sim_model, bv_ref, xor_search_params);
+                    assert(tbatch.size() == (sv1i.size() - 1) / (64u * bm::gap_max_bits) + 1);
+                }
 
                 {
                     bm::thread_pool_executor<pool_type> exec;
@@ -852,10 +911,13 @@ int main(int argc, char *argv[])
         cout << endl;
 
 
-        TestParallelSV_Serial<pool_spin_type>("L8 rotating donors (spin)", false);
-        TestParallelSV_Serial<pool_spin_type>("L8 distant donors (spin)", true);
-        TestParallelSV_Serial<pool_mutex_type>("L8 rotating donors (mutex)", false);
-        TestParallelSV_Serial<pool_mutex_type>("L8 distant donors (mutex)", true);
+        TestAutomaticXorPlan();
+        TestParallelSV_SerialGather<pool_spin_type>("L8 rotating donors (spin)", false, 64, 1);
+        TestParallelSV_SerialGather<pool_spin_type>("L8 distant donors (spin)", true, 64, 4);
+        TestParallelSV_SerialGather<pool_spin_type>("L8 distant donors (spin)", true, 128, 3);
+        TestParallelSV_SerialGather<pool_mutex_type>("L8 rotating donors (mutex)", false, 1, 4);
+        TestParallelSV_SerialGather<pool_mutex_type>("L8 distant donors (mutex)", true, 256, 2);
+        TestParallelSV_SerialGather<pool_mutex_type>("L8 distant donors (mutex)", true, 96, 3);
         if (gather_only)
         {
             return 0;
