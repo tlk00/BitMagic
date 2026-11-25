@@ -2753,6 +2753,28 @@ class Agent:
         """Run the original stress suite."""
         return self.run_stress_suite(run, manifest, 'stress')
 
+    def stress64_worker_limit(self):
+        """Budget concurrent Linux stress64 groups against available RAM and --jobs."""
+        if platform.system() != 'Linux':
+            return self.jobs
+        try:
+            sample = memory_monitor.MemoryMonitor(self).sample()
+            available = sample['available']
+            if available is None:
+                return self.jobs
+            limit = sample.get('cgroup_limit')
+            if limit is not None:
+                available = min(available, limit - sample['cgroup_current'])
+        except (OSError, KeyError, ValueError) as error:
+            self.say('STRESS64 RAM sample unavailable | {}'.format(error))
+            return self.jobs
+        # WIN1 observed individual logical-operation groups above 5 GiB RSS.
+        worker_bytes = 6 * 1024**3
+        jobs = min(self.jobs, max(1, available // worker_bytes))
+        self.say('STRESS64 RAM | {} MiB available | 6 GiB per group | {} of {} workers'.format(
+            max(0, available) // 1024**2, jobs, self.jobs))
+        return jobs
+
     def run_stress_suite(self, run, manifest, family):
         """Run supported variants in order with per-group process isolation."""
         self.memory_phase = family
@@ -2784,11 +2806,12 @@ class Agent:
                 self.say('SKIP unsupported ' + name)
             else:
                 stress_names.append(name)
+        jobs = self.stress64_worker_limit() if family == 'stress64' else self.jobs
         for index, name in enumerate(stress_names):
             if index == 0:
                 mode = stress_mode(name)
-                self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, self.jobs))
-                self.sound('stress-transition', workers='Conductor to Dispatch. {} {} run is starting. {} mode. {} test crews at work.'.format(spoken_test_variant(name), suite, mode, self.jobs))
+                self.say('STRESS START | {} | {} mode | {} workers'.format(name, mode, jobs))
+                self.sound('stress-transition', workers='Conductor to Dispatch. {} {} run is starting. {} mode. {} test crews at work.'.format(spoken_test_variant(name), suite, mode, jobs))
             work = run / name
             work.mkdir()
             # Runner selects groups; wrapper gives each invocation its own cwd.
@@ -2801,7 +2824,7 @@ class Agent:
             wrapper.chmod(0o755)
             self.stress_stop_file = work / 'stop-for-update'
             argv = ['bash', str(runner), '--binary', './worker.sh',
-                    '--jobs', str(self.jobs), '--fail-fast',
+                    '--jobs', str(jobs), '--fail-fast',
                     '--order-file', str(self.home / (family + '-order.tsv')),
                     '--stop-file', str(self.stress_stop_file)]
             mode = stress_mode(name)
@@ -2832,8 +2855,8 @@ class Agent:
                 self.sound('station-manchuria')
                 core = completed + ' The {} {} run is next.'.format(spoken_test_variant(next_name), suite)
                 mode = stress_mode(next_name)
-                self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, self.jobs))
-                message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, self.jobs)
+                self.say('STRESS TRANSITION | {} completed | starting {} | {} mode | {} workers'.format(name, next_name, mode, jobs))
+                message = 'Conductor to Dispatch. {0} {0} {1} The next run is {2} mode, with {3} crews.'.format(core, random.choice(STRESS_TRANSITION_PHRASES), mode, jobs)
             else:
                 self.say('STRESS COMPLETE | {} | all stress variants completed'.format(name))
                 message = 'Conductor to Dispatch. {0} {0} All {1} runs are complete.'.format(completed, suite)

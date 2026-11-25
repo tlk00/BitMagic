@@ -545,8 +545,10 @@ The fast leg passes `--fast` to the 64-bit runner, and the normal leg reuses
 the builds for the normal workload. TAgent builds the platform matrix, including
 debug binaries, and runs all supported release variants in sequence.
 Pedantic excludes the stage. `--suppress stress64` skips its build and execution.
-Groups share the usual worker budget, with separate `stress64-order.tsv` timing
-history and per-variant logs. The journal records each variant and the first
+On Linux, TAgent budgets 6 GiB of available RAM per concurrent stress64 group,
+subject to the cgroup memory limit and the usual CPU worker limit. At least one
+group runs. The stage keeps separate `stress64-order.tsv` timing history and
+per-variant logs. The journal records each variant and the first
 failure follows the ordinary stress stop and diagnostic path.
 
 In normal and pedantic stress cycles, the supported `stress_release_sse42`

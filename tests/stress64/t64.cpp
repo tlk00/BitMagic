@@ -6089,7 +6089,7 @@ static void CheckStreamDeserialization(const bvect& original,
         file.write(reinterpret_cast<const char*>(magic), sizeof(magic));
         file.write(reinterpret_cast<const char*>(payload), sizeof(payload));
     }
-    file.flush(); assert(file.good()); file.seekg(6);
+    file.flush(); assert(file.good()); file_readback::seek(file, path, 6);
     bm::streams_decoder in(file);
     bm::streams_deserializer<bvect> reader; // reuse retained memory
     reader.set_ref_vectors(refs);
@@ -6111,7 +6111,7 @@ static void CheckStreamDeserialization(const bvect& original,
     }
     if (!selective) return;
     // Construction peeks at bookmark targets and restores its cursor.
-    file.seekg(6);
+    file_readback::seek(file, path, 6);
     bm::deserialization_index<bvect> index;
     reader.set_deserialization_index_construct(&index);
     bvect scratch;
@@ -6148,12 +6148,22 @@ static void CheckStreamDeserialization(const bvect& original,
         bvect expected(original, bm::finalization::READWRITE); expected &= mask;
         for (bool indexed : {false, true})
         {
-            file.seekg(6);
+            file_readback::seek(file, path, 6);
             if (indexed)
                 reader.set_deserialization_index_use(pattern & 1 ? &index : &ram_index);
             reader.set_block_digest_vector_use(&digest);
             bvect restored;
-            assert(reader.deserialize(restored, in));
+            errno = 0;
+            if (!reader.deserialize(restored, in))
+            {
+                const int io_errno = errno;
+                std::cerr << "Selective stream decode failed: path=" << path
+                          << " pattern=" << pattern << " indexed=" << indexed
+                          << " blob_bytes=" << size << " decoder_error=" << in.error()
+                          << " eof=" << file.eof() << " fail=" << file.fail()
+                          << " bad=" << file.bad() << " errno=" << io_errno << std::endl;
+                std::abort();
+            }
             restored &= mask; // decoder selection is at block granularity
             assert(restored == expected); check_end(0);
             reader.unset_deserialization_index(); reader.unset_block_digest_vector();
@@ -6162,7 +6172,7 @@ static void CheckStreamDeserialization(const bvect& original,
     for (auto point : {first, last})
     for (bool indexed : {false, true})
     {
-        file.seekg(6);
+        file_readback::seek(file, path, 6);
         if (indexed) reader.set_deserialization_index_use(&index);
         reader.set_range(point, point);
         bvect restored;
@@ -9907,11 +9917,12 @@ static void CheckGeneratedSerializationLevels(const bvect& source)
         bvect restored;
         bm::deserialize(restored, bytes.data());
         assert(restored == source);
-        bvect merged { 3, 65537 }, expected(merged);
-        expected |= source;
+        // The verified restore is already a complete independent OR oracle.
+        bvect merged { 3, 65537 };
+        restored |= merged;
         bm::operation_deserializer<bvect> od;
         od.deserialize(merged, bytes.data(), bm::set_OR);
-        assert(merged == expected);
+        assert(merged == restored);
     }
 }
 
@@ -10112,39 +10123,37 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
         switch(op)
         {
         case bm::set_OR:
+            bvt |= bv2;
             {
-                bvect bvc(bv1, bm::finalization::READWRITE);
-                bvc |= bv2;
                 bvect bv_merge1(bv1, bm::finalization::READWRITE);
                 bvect bv_merge2(bv2, bm::finalization::READWRITE);
                 bv_merge1.merge(bv_merge2);
                 
-                if (bv_merge1 != bvc)
+                if (bv_merge1 != bvt)
                 {
                     cerr << "Merge(OR) check error!" << endl;
                     assert(0);
                     exit(1);
                 }
-                // 2-way
+            }
+            // 2-way
+            {
+                bvect bvt1;
+                bvt1.bit_or(bv1, bv2, bvect::opt_none);
+                if (bvt1 != bvt)
                 {
-                    bvect bvt1;
-                    bvt1.bit_or(bv1, bv2, bvect::opt_none);
-                    if (bvt1 != bvc)
-                    {
-                        cerr << "1. OR 2-way check error!" << endl;
-                        assert(0);
-                        exit(1);
-                    }
-                    bvect bvt2;
-                    bvt2.bit_or(bv2, bv1, bvect::opt_compress);
-                    if (bvt2 != bvc)
-                    {
-                        cerr << "2. OR 2-way check error!" << endl;
-                        assert(0);exit(1);
-                    }
+                    cerr << "1. OR 2-way check error!" << endl;
+                    assert(0);
+                    exit(1);
+                }
+                bvect bvt2;
+                bvt2.bit_or(bv2, bv1, bvect::opt_compress);
+                if (bvt2 != bvt)
+                {
+                    cerr << "2. OR 2-way check error!" << endl;
+                    assert(0);exit(1);
                 }
             }
-            bvt |= bv2;
             agg.combine_or(bv_agg, agg_list, 2);
             agg_check = true;
             break;
@@ -10152,32 +10161,29 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             bvt ^= bv2;
             // 2-way
             {
-                bvect bvc(bv1, bm::finalization::READWRITE);
-                bvc ^= bv2;
-                
                 bvect bvt1;
                 bvt1.bit_xor(bv1, bv2, bvect::opt_none);
-                if (bvt1 != bvc)
+                if (bvt1 != bvt)
                 {
                     cerr << "1. XOR 2-way check error!" << endl;
                     cerr << "Run detailed check (1)..." << endl;
-                    DetailedCompareBVectors(bvt1, bvc);
+                    DetailedCompareBVectors(bvt1, bvt);
 
                     bvect bvt2;
                     bvt2.bit_xor(bv2, bv1, bvect::opt_compress);
-                    if (bvt2 != bvc)
+                    if (bvt2 != bvt)
                     {
                         cerr << "Reverse XOR 2-way check failed too!" << endl;
                     }
 
                     cerr << "Run detailed check (2)..." << endl;
-                    DetailedCompareBVectors(bvt2, bvc);
+                    DetailedCompareBVectors(bvt2, bvt);
                     assert(0);
                     exit(1);
                 }
                 bvect bvt2;
                 bvt2.bit_xor(bv2, bv1, bvect::opt_compress);
-                if (bvt2 != bvc)
+                if (bvt2 != bvt)
                 {
                     cerr << "2. XOR 2-way check error!" << endl;
                     assert(0);
@@ -10200,12 +10206,9 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             
             // 2-way
             {
-                bvect bvc(bv1, bm::finalization::READWRITE);
-                bvc &= bv2;
-                
                 bvect bvt1;
                 bvt1.bit_and(bv1, bv2, bvect::opt_none);
-                if (bvt1 != bvc)
+                if (bvt1 != bvt)
                 {
                     cerr << "1. AND 2-way check error!" << endl;
                     //print_bv(bvt1);
@@ -10216,7 +10219,7 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
                 }
                 bvect bvt2;
                 bvt2.bit_and(bv2, bv1, bvect::opt_compress);
-                if (bvt2 != bvc)
+                if (bvt2 != bvt)
                 {
                     cerr << "2. AND 2-way check error!" << endl;
                     assert(0); exit(1);
@@ -10240,19 +10243,18 @@ bvect::size_type SerializationOperation(bvect*     bv_target,
             agg_check = true;
             // 2-way
             {
-                bvect bvc1(bv1, bm::finalization::READWRITE);
-                bvect bvc2(bv2, bm::finalization::READWRITE);
-                bvc1 -= bv2;
-                bvc2 -= bv1;
-                
                 bvect bvt1;
                 bvt1.bit_sub(bv1, bv2, bvect::opt_compress);
-                if (bvt1 != bvc1)
+                if (bvt1 != bvt)
                 {
-                    DetailedCompareBVectors(bvt1, bvc1);
+                    DetailedCompareBVectors(bvt1, bvt);
                     cerr << "1. SUB 2-way check error!" << endl;
                     assert(0);exit(1);
                 }
+            }
+            {
+                bvect bvc2(bv2, bm::finalization::READWRITE);
+                bvc2 -= bv1;
                 bvect bvt2;
                 bvt2.bit_sub(bv2, bv1, bvect::opt_compress);
                 if (bvt2 != bvc2)

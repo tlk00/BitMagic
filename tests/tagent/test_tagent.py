@@ -811,6 +811,18 @@ class SupervisorTests(unittest.TestCase):
             saved = json.loads((run / 'inv_list/bminv_release_avx2/command.json').read_text())
             self.assertEqual(saved, argv)
 
+    def test_stress64_worker_limit(self):
+        """Heavy stress64 groups fit host and cgroup RAM within the CPU budget."""
+        self.agent.jobs = 22
+        gib = 1024**3
+        with patch.object(ta.platform, 'system', return_value='Linux'), \
+             patch.object(ta.memory_monitor.MemoryMonitor, 'sample') as sample:
+            for available, limit, current, expected in (
+                    (23, None, 0, 3), (40, 18, 5, 2), (1, 2, 3, 1), (256, None, 0, 22)):
+                sample.return_value = dict(available=available * gib, cgroup_current=current * gib,
+                                           cgroup_limit=limit * gib if limit else None)
+                self.assertEqual(self.agent.stress64_worker_limit(), expected)
+
     def test_inv_read_budget_uses_linux_available_ram(self):
         """Automatic sizing respects available RAM, cgroups, caps and explicit overrides."""
         self.agent.args.inv_read_memory_mib = None
