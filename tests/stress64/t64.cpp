@@ -204,6 +204,7 @@ bool is_fast = false;
 
 #include "../common/sparse_serial_levels_tests.h"
 #include "../common/serialization_allocator_tests.h"
+#include "../common/file_readback.h"
 
 template<class T> T* pool_allocate(T** pool, int& i, size_t n)
 {
@@ -5989,27 +5990,29 @@ static void CheckFileSerialization(const BV& bv, bm::serializer<BV>& ser,
     file.write(magic, sizeof(magic));
     file.write(reinterpret_cast<const char*>(payload), sizeof(payload));
     file.flush(); assert(file.good());
-    file.seekg(6);
+    file_readback::seek(file, fixture.path, 6);
     unsigned char bytes[65536];
     for (size_t offset = 0; offset < size; )
     {
         const size_t count = std::min(sizeof(bytes), size - offset);
-        file.read(reinterpret_cast<char*>(bytes), std::streamsize(count));
-        assert(file.good()); assert(!memcmp(bytes, ram + offset, count));
+        file_readback::read(file, fixture.path, 6 + offset,
+                            reinterpret_cast<char*>(bytes), std::streamsize(count));
+        assert(!memcmp(bytes, ram + offset, count));
         offset += count;
     }
     auto check_trailer = [&]()
     {
         assert(size_t(file.tellg()) == size + 6);
         char marker[sizeof(magic)]; unsigned char data[sizeof(payload)];
-        file.read(marker, sizeof(marker));
-        file.read(reinterpret_cast<char*>(data), sizeof(data));
-        assert(file.good()); assert(!memcmp(marker, magic, sizeof(magic)));
+        file_readback::read(file, fixture.path, 6 + size, marker, sizeof(marker));
+        file_readback::read(file, fixture.path, 6 + size + sizeof(marker),
+                            reinterpret_cast<char*>(data), sizeof(data));
+        assert(!memcmp(marker, magic, sizeof(magic)));
         assert(!memcmp(data, payload, sizeof(payload)));
     };
     bm::streams_decoder in(file);
     bm::streams_deserializer<BV> reader;
-    file.seekg(6);
+    file_readback::seek(file, fixture.path, 6);
     {
         BV restored;
         assert(reader.deserialize(restored, in)); assert(restored == bv);
@@ -6036,7 +6039,7 @@ static void CheckFileSerialization(const BV& bv, bm::serializer<BV>& ser,
     index_reader.deserialize(scratch, ram);
     reader.set_deserialization_index_use(&index);
     reader.set_block_digest_vector_use(&digest);
-    file.seekg(6);
+    file_readback::seek(file, fixture.path, 6);
     BV gathered;
     BV expected(bv, bm::finalization::READWRITE);
     expected &= mask;
