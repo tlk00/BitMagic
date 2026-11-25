@@ -33,7 +33,7 @@ initial targets are x86-64 Linux/WSL and Apple Silicon macOS, matching the curre
 - Default coverage runs supported perf variants and all release stress variants.
   Normal stress runs only generic debug and SSE4.2 debug (NEON on ARM), both
   in `--fast`. Pedantic skips all debug execution and expands release coverage.
-  Debug binaries are still built. Exclude stress64.
+  Debug binaries are still built. See below for the separate stress64 stage.
 - Run perf first, with a shared worker limit; timing comparisons are not an
   acceptance criterion. Then run every stress build using the existing parallel
   runner, one build at a time. All scheduled tests must succeed. Stress variants
@@ -539,6 +539,15 @@ time in every mode, including both legs of an express-to-normal cycle.
 Dispatch announces departure and each passing variant over the train ambience.
 The cycle retains `build-test_threads.log` and `test_threads/<variant>/ptest.log`
 and records the stage and variants in the travel journal.
+
+The 64-bit stress stage runs after ordinary stress in fast and normal modes.
+The fast leg passes `--fast` to the 64-bit runner, and the normal leg reuses
+the builds for the normal workload. TAgent builds the platform matrix, including
+debug binaries, and runs all supported release variants in sequence.
+Pedantic excludes the stage. `--suppress stress64` skips its build and execution.
+Groups share the usual worker budget, with separate `stress64-order.tsv` timing
+history and per-variant logs. The journal records each variant and the first
+failure follows the ordinary stress stop and diagnostic path.
 
 In normal and pedantic stress cycles, the supported `stress_release_sse42`
 variant runs first when present. Fast cycles retain their scalar and fastest

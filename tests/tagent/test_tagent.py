@@ -239,12 +239,15 @@ class SupervisorTests(unittest.TestCase):
             self.agent.prepare_generated_audio()
         self.assertEqual(self.agent.audio_dir, self.agent.home)
 
-    def fixture(self, fail=False):
+    def fixture(self, fail=False, stress64=False):
         """Create build scripts that produce tiny executable jobs; fail selects perf failure."""
         poll = patch.object(self.agent, 'poll_remote')
         poll.start()
         self.addCleanup(poll.stop)
-        for family in ('perf', 'stress'):
+        if not stress64:
+            self.agent.args.suppress.add('stress64')
+        families = ('perf', 'stress', 'stress64') if stress64 else ('perf', 'stress')
+        for family in families:
             directory = self.root / 'tests' / family
             directory.mkdir(parents=True)
             lines = ['#!/bin/bash', 'set -eu', 'cd "$(dirname "$0")"']
@@ -253,7 +256,7 @@ class SupervisorTests(unittest.TestCase):
                 lines += ["cat > " + name + " <<'JOB'", '#!/bin/bash',
                           'touch isolated-output', 'exit ' + str(status), 'JOB', 'chmod +x ' + name]
             (directory / 'build_all.sh').write_text('\n'.join(lines) + '\n')
-            if family == 'stress':
+            if family in ('stress', 'stress64'):
                 (directory / 'run_all_pl.sh').write_text(
                     '#!/bin/bash\nset -eu\ncd "$(dirname "$0")"\n"$2" -ll\n"$2" -s\n')
             else:
@@ -515,7 +518,7 @@ class SupervisorTests(unittest.TestCase):
 
     def test_pedantic_skips_all_debug_execution(self):
         """Pedantic builds debug binaries but executes only release perf and stress."""
-        self.fixture()
+        self.fixture(stress64=True)
         self.agent.args.pedantic = True
         calls = []
         original = self.agent.command
@@ -532,6 +535,8 @@ class SupervisorTests(unittest.TestCase):
         run = next(self.agent.home.glob('*abc123'))
         self.assertFalse(list(run.glob('perf_debug*/perf.log')))
         self.assertFalse(list(run.glob('stress_debug*/runner.log')))
+        self.assertFalse((run / 'build-stress64.log').exists())
+        self.assertFalse(list(run.glob('stress64_*')))
 
     def test_gcc_stress_is_fast_and_last_in_normal_cycles(self):
         """GCC goes last in normal mode; pedantic keeps its previous behavior."""
@@ -1546,7 +1551,7 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(stream.getnframes(), 80 * 22050)
     def test_fast_cycle_upgrades_to_normal_without_rebuilding(self):
         """A clear remote check runs normal stages on the existing binaries."""
-        self.fixture()
+        self.fixture(stress64=True)
         self.agent.args.fast = True
         observed = []
         def stage(run, manifest):
@@ -1567,8 +1572,10 @@ class SupervisorTests(unittest.TestCase):
         start = events.index('upgrade-dispatch')
         self.assertEqual(events[start:start + 4],
                          ['upgrade-dispatch', 'upgrade-conductor', 'upgrade-engineer', 'upgrade-depart'])
-        self.assertEqual(events.count('train-stop'), 2)
+        self.assertEqual(events.count('train-stop'), 4)
         for directory in (run, run / 'normal'):
+            self.assertEqual(sorted(p.parent.name for p in directory.glob('stress64_*/runner.log')),
+                             ['stress64_release', 'stress64_release_neon'])
             self.assertEqual(sorted(p.parent.name for p in directory.glob('test_threads/*/ptest.log')),
                              ['ptest_release', 'ptest_release_neon'])
 

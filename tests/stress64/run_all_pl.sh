@@ -12,6 +12,7 @@ JOBS=""
 RUN_NAME=""
 LOG_DIR="logs/parallel"
 ORDER_FILE=""
+STOP_FILE=""
 FAIL_FAST=0
 PEDANTIC_ARGS=()
 FAST=0
@@ -45,7 +46,8 @@ Runner options:
   -b BIN, --binary BIN  Use BIN as the test binary path/name (required unless
                         --build is used)
   -l DIR, --log-dir DIR Write logs below DIR (default: logs/parallel)
-  --fail-fast           Stop launching new groups after the first failure
+  --fail-fast           Stop all groups after the first failure
+  --stop-file FILE      Drain active groups without launching more, then exit 75
   --heavy-first         Use learned longest-first order (also the default).
                         New selectors run first; missing selectors are ignored.
                         History: ./logs/parallel/order.tsv, shared by all builds.
@@ -194,6 +196,11 @@ while [ "$#" -gt 0 ]; do
             # Compatibility option: learned scheduling is always enabled.
             shift
             ;;
+        --stop-file)
+            [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
+            STOP_FILE="$2"
+            shift 2
+            ;;
         --order-file)
             [ "$#" -ge 2 ] || { echo "Missing value for $1" >&2; exit 2; }
             ORDER_FILE="$2"
@@ -303,10 +310,9 @@ elif [ ! -f "$ORDER_FILE" ]; then
 fi
 
 # Unknown selectors precede timed selectors; ties preserve selection order.
-ORDERED_TESTS=()
-while IFS= read -r test_opt; do
-    ORDERED_TESTS[${#ORDERED_TESTS[@]}]="$test_opt"
-done < <(
+schedule_file="$(mktemp "$RUN_LOG_DIR/schedule.XXXXXX")" || exit 1
+if ! (
+    set -o pipefail
     printf '%s\n' "${TESTS[@]}" |
         awk 'FILENAME == ARGV[1] {
                  if (NF == 2 && $2 ~ /^[0-9]+$/) duration[$1] = $2
@@ -317,7 +323,15 @@ done < <(
             "$ORDER_INPUT" - |
         LC_ALL=C sort -k1,1n -k2,2nr -k3,3n |
         awk '{ print $4 }'
-)
+) >"$schedule_file"; then
+    echo "ERROR: cannot construct complete stress schedule" >&2
+    exit 1
+fi
+ORDERED_TESTS=()
+while IFS= read -r test_opt; do
+    ORDERED_TESTS[${#ORDERED_TESTS[@]}]="$test_opt"
+done < "$schedule_file"
+[ "${#ORDERED_TESTS[@]}" -eq "${#TESTS[@]}" ] || { echo "Incomplete stress schedule" >&2; exit 1; }
 TESTS=("${ORDERED_TESTS[@]}")
 
 # Persist each completed job so a later interruption retains earlier results.
@@ -340,7 +354,31 @@ record_timing()
     return 1
 }
 
+STOP_REQUESTED=0
+rm -f first-failure.txt || exit 1
 PIDS=()
+stop_workers()
+{
+    local worker_pid active=0
+    for worker_pid in "${PIDS[@]}"; do
+        if [ -n "$worker_pid" ]; then
+            active=1
+            kill -TERM "$worker_pid" 2>/dev/null || true
+        fi
+    done
+    [ "$active" -eq 1 ] || return 0
+    sleep 0.2
+    for worker_pid in "${PIDS[@]}"; do
+        if [ -n "$worker_pid" ]; then
+            kill -KILL "$worker_pid" 2>/dev/null || true
+            wait "$worker_pid" 2>/dev/null || true
+        fi
+    done
+}
+trap stop_workers EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 PID_TESTS=()
 PID_LOGS=()
 PID_STARTS=()
@@ -350,7 +388,6 @@ FAILED_TESTS=()
 FAILED_LOGS=()
 FAILED_STATUS=()
 FAILURES=0
-STOP_LAUNCHING=0
 RUNNING_COUNT=0
 
 format_duration()
@@ -457,6 +494,11 @@ reap_finished()
                 echo "FAIL   ${PID_TESTS[$index]} (exit $status, $(format_duration "$elapsed"))"
                 echo "       Details: ${PID_LOGS[$index]}"
 
+                if [ ! -e first-failure.txt ]; then
+                    printf '%s exit %s log %s\n' "${PID_TESTS[$index]}" "$status" "${PID_LOGS[$index]}" > first-failure.txt.tmp
+                    mv first-failure.txt.tmp first-failure.txt
+                fi
+
                 failure_index=${#FAILED_TESTS[@]}
                 FAILED_TESTS[$failure_index]="${PID_TESTS[$index]}"
                 FAILED_LOGS[$failure_index]="${PID_LOGS[$index]}"
@@ -464,7 +506,8 @@ reap_finished()
                 FAILURES=$((FAILURES + 1))
 
                 if [ "$FAIL_FAST" -ne 0 ]; then
-                    STOP_LAUNCHING=1
+                    PIDS[$index]=""
+                    exit 1
                 fi
             fi
 
@@ -513,7 +556,10 @@ echo
 test_index=0
 
 while [ "$test_index" -lt "${#TESTS[@]}" ]; do
-    [ "$STOP_LAUNCHING" -ne 0 ] && break
+    if [ -n "$STOP_FILE" ] && [ -e "$STOP_FILE" ]; then
+        STOP_REQUESTED=1
+        break
+    fi
 
     count_running
     if [ "$RUNNING_COUNT" -lt "$JOBS" ]; then
@@ -554,9 +600,12 @@ if [ "$FAILURES" -ne 0 ]; then
     exit 1
 fi
 
-if [ "$STOP_LAUNCHING" -ne 0 ]; then
-    echo "Stopped before all groups were launched."
-    exit 1
+if [ -n "$STOP_FILE" ] && [ -e "$STOP_FILE" ]; then
+    STOP_REQUESTED=1
+fi
+if [ "$STOP_REQUESTED" -ne 0 ]; then
+    echo "Update requested; active groups finished."
+    exit 75
 fi
 
 echo "All ${#TESTS[@]} test groups passed."
