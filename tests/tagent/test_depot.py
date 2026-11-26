@@ -10,7 +10,7 @@ import unittest
 import wave
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import depot
 import generate_depot_ambient
@@ -18,6 +18,46 @@ import generate_depot_ambient
 
 class DepotTests(unittest.TestCase):
     """Exercise fades and failed players without a physical sound device."""
+
+    def test_garratt_waits_for_announcements_and_keeps_its_due_time(self):
+        """A queued announcement defers the departure and then the due return."""
+        agent = SimpleNamespace(audio_thread=Mock(), say=Mock())
+        worker = depot.Depot(agent)
+        worker.set_mode('train-stress64')
+        current = worker.request
+        garratt = depot.Garratt(1, array.array('h', [2000]) * 167)
+        with patch.object(depot.time, 'monotonic', return_value=100) as clock, \
+             patch.object(depot.random, 'uniform', side_effect=[1800, 3000]) as interval:
+            agent.audio_thread.is_alive.return_value = True
+            worker.start_garratt(garratt, current)
+            self.assertFalse(garratt.departed)
+            agent.audio_thread.is_alive.return_value = False
+            worker.start_garratt(garratt, current)
+            self.assertEqual((garratt.length, garratt.next_at), (40, 1900))
+            self.assertEqual(list(garratt.mix([500], 0, 41))[::20], [500, 2000, 500])
+            garratt.position = garratt.length
+            clock.return_value = 1899
+            worker.start_garratt(garratt, current)
+            self.assertEqual(garratt.position, 40)
+            clock.return_value = 1900
+            agent.audio_thread.is_alive.return_value = True
+            worker.start_garratt(garratt, current)
+            self.assertEqual(garratt.next_at, 1900)
+            agent.audio_thread.is_alive.return_value = False
+            worker.pause.set()
+            worker.start_garratt(garratt, current)
+            self.assertEqual(garratt.position, 40)
+            worker.pause.clear()
+            clock.return_value = 1910
+            worker.start_garratt(garratt, current)
+            self.assertEqual((garratt.length, garratt.next_at), (167, 4910))
+            self.assertEqual(list(garratt.mix([500], 0, 168))[::83], [500, 2000, 500])
+            interval.assert_called_with(1800, 3000)
+            worker.set_mode('train-normal')
+            worker.set_mode('train-stress64')
+            clock.return_value = 5000
+            worker.start_garratt(garratt, current)
+            self.assertEqual(agent.say.call_count, 2)
 
     def test_sherman_passage_has_no_scripted_gaps(self):
         """A steady source remains audible throughout the generated depot loop."""

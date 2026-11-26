@@ -551,6 +551,25 @@ group runs. The stage keeps separate `stress64-order.tsv` timing history and
 per-variant logs. The journal records each variant and the first
 failure follows the ordinary stress stop and diagnostic path.
 
+The steampunk stress64 background opens with Garratt 406 departing once per
+stage, including a fresh departure on the normal leg after an express run.
+It crossfades into a looping wooden carriage interior. Every 30–50 minutes
+Garratt starts again and rolls past, with a smooth blend into and out of the
+carriage recording. A due passage waits for the foreground audio queue to
+clear. Announcements that arrive during a passage use the usual background
+ducking. `--no-depot` disables this background along with the other loops.
+`--sound-preview stress64-train` and `--sound-demo` demonstrate both transitions
+and include the Conductor when TTS is available.
+
+Source recordings, both listed as CC0 1.0 on 2026-11-26:
+
+- [Steam Train Interior](https://freesound.org/people/allh/sounds/133099/) by
+  allh. The public high-quality preview was converted to mono, level-matched,
+  and crossfaded across the loop boundary for `assets/stress64-carriage.wav`.
+- [South Australian Railways Garratt 406 starts off](https://commons.wikimedia.org/wiki/File:South_Australian_Railways_Garratt_406_starts_off.ogg)
+  by SCHolar44. The first 167 seconds were level-matched and converted to mono
+  for `assets/stress64-garratt.wav`.
+
 In normal and pedantic stress cycles, the supported `stress_release_sse42`
 variant runs first when present. Fast cycles retain their scalar and fastest
 SIMD selection; the normal-cycle GCC release remains last and uses fast mode.

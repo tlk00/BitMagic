@@ -369,6 +369,9 @@ class SoundtrackTests(unittest.TestCase):
                 agent.render_station_report(Path(directory) / 'out.wav', True)
                 self.assertIn('Stress Test Station', speech.call_args.args[1])
                 self.assertIn('express service, with reduced checks', speech.call_args.args[1])
+                agent.render_station_report(Path(directory) / 'out.wav', True, stress64=True)
+                self.assertIn('Sixty Four Bit Stress Test Station', speech.call_args.args[1])
+                self.assertIn('express testing schedule', speech.call_args.args[1])
                 agent.args.fast = False
                 agent.render_station_report(Path(directory) / 'out.wav', True)
                 self.assertNotIn('express', speech.call_args.args[1])
@@ -493,15 +496,17 @@ class SoundtrackTests(unittest.TestCase):
                  patch.object(agent, 'command', return_value='') as command, \
                  patch.object(tagent.random, 'choice', side_effect=AssertionError('random demo')):
                 self.assertEqual(agent.run(), 0)
-                self.assertEqual(command.call_count, 19)
-                with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
+                played = [Path(call.args[0][1]).name for call in command.call_args_list]
+                self.assertIn('sound-steampunk-dispatch.wav', played)
+                self.assertIn('sound-steampunk-stress64-train.wav', played)
+                with wave.open(str(agent.audio_dir / 'demo-steampunk.wav')) as stream:
                     self.assertEqual(stream.getnchannels(), 1)
                     self.assertGreater(stream.getnframes() / stream.getframerate(), 5)
-                with wave.open(str(Path(directory) / 'sound-steampunk-dispatch.wav')) as stream:
+                with wave.open(str(agent.audio_dir / 'sound-steampunk-dispatch.wav')) as stream:
                     self.assertEqual(stream.getnchannels(), 1)
 
     def test_bare_sound_preview_plays_all_assets(self):
-        """A bare preview includes both backgrounds and produces a correctly timed demo."""
+        """A bare preview includes the background assets and the stress64 sequence."""
         with tempfile.TemporaryDirectory() as directory, patch('sys.argv', [
                 'tagent', '--sound-preview', '--tts', 'off', '--state-dir', directory]):
             agent = tagent.Agent(tagent.arguments())
@@ -522,11 +527,12 @@ class SoundtrackTests(unittest.TestCase):
                  patch.object(tagent.shutil, 'which', return_value='/fake/afplay'), \
                  patch.object(agent, 'command', return_value='') as command:
                 self.assertEqual(agent.run(), 0)
-                self.assertEqual(command.call_count, 21)
-                self.assertEqual(events, ['depot', 'train'])
-            with wave.open(str(Path(directory) / 'demo-steampunk.wav')) as stream:
+                played = [Path(call.args[0][1]).name for call in command.call_args_list]
+                self.assertIn('sound-steampunk-stress64-train.wav', played)
+                self.assertEqual(events, ['depot', 'train', 'train-normal'])
+            with wave.open(str(agent.audio_dir / 'demo-steampunk.wav')) as stream:
                 self.assertEqual(stream.getnchannels(), 1)
-                # Two 0.2-second backgrounds keep their duration after upsampling.
+                self.assertEqual(stream.getframerate(), soundtrack.RATE)
                 self.assertGreater(stream.getnframes() / stream.getframerate(), 7.5)
 
     def test_steam_train_schedule(self):

@@ -1526,6 +1526,7 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(self.agent.run(), 0)
         events = [call.args[0] for call in sound.call_args_list]
         self.assertIn('train-normal-demo', events)
+        self.assertIn('stress64-train', events)
         self.assertIn('toronto', events)
         self.assertIn('train-stop', events)
         self.assertIn('station-manchuria', events)
@@ -1565,6 +1566,7 @@ class SupervisorTests(unittest.TestCase):
         """A clear remote check runs normal stages on the existing binaries."""
         self.fixture(stress64=True)
         self.agent.args.fast = True
+        self.agent.depot = unittest.mock.Mock()
         observed = []
         def stage(run, manifest):
             observed.append((self.agent.args.fast, run.name))
@@ -1585,6 +1587,8 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(events[start:start + 4],
                          ['upgrade-dispatch', 'upgrade-conductor', 'upgrade-engineer', 'upgrade-depart'])
         self.assertEqual(events.count('train-stop'), 4)
+        modes = [call.args[0] for call in self.agent.depot.set_mode.call_args_list]
+        self.assertEqual(modes.count('train-stress64'), 2)
         for directory in (run, run / 'normal'):
             self.assertEqual(sorted(p.parent.name for p in directory.glob('stress64_*/runner.log')),
                              ['stress64_release', 'stress64_release_neon'])
